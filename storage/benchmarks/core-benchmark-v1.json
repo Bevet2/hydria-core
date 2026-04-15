@@ -1,0 +1,206 @@
+{
+  "benchmarkId": "core-benchmark-v1",
+  "name": "Hydria Core Benchmark V1",
+  "prompts": [
+    {
+      "id": "incident-01",
+      "category": "incident_response",
+      "question": "Design a 4-step incident response plan after accidental exposure of a production API key."
+    },
+    {
+      "id": "incident-02",
+      "category": "incident_response",
+      "question": "Outline a rollback-safe response plan for a secrets leak discovered in CI logs during a release."
+    },
+    {
+      "id": "incident-03",
+      "category": "incident_response",
+      "question": "Propose a practical first-hour response when a customer reports suspicious activity tied to an internal service token."
+    },
+    {
+      "id": "incident-04",
+      "category": "incident_response",
+      "question": "Write a 5-step plan to handle a database credential compromise without losing forensic evidence."
+    },
+    {
+      "id": "incident-05",
+      "category": "incident_response",
+      "question": "Describe how to contain and recover from accidental deployment of debug logging that may expose secrets."
+    },
+    {
+      "id": "incident-06",
+      "category": "incident_response",
+      "question": "Create a pragmatic response procedure for a production outage caused by an expired signing certificate."
+    },
+    {
+      "id": "incident-07",
+      "category": "incident_response",
+      "question": "Give a 4-step plan for handling an incident where a third-party webhook secret may have been leaked."
+    },
+    {
+      "id": "architecture-01",
+      "category": "architecture_design",
+      "question": "Design a pragmatic migration path from a Node.js monolith to modular services with minimal operational risk."
+    },
+    {
+      "id": "architecture-02",
+      "category": "architecture_design",
+      "question": "Propose an architecture for a multi-tenant internal API platform with strong isolation and low operational overhead."
+    },
+    {
+      "id": "architecture-03",
+      "category": "architecture_design",
+      "question": "Design a resilient event-driven workflow for order processing that must tolerate retries and partial failures."
+    },
+    {
+      "id": "architecture-04",
+      "category": "architecture_design",
+      "question": "Explain how you would design a feature-flag platform for Node.js services that supports safe rollout and rollback."
+    },
+    {
+      "id": "architecture-05",
+      "category": "architecture_design",
+      "question": "Create a simple architecture for local-first LLM orchestration with OpenRouter fallback and auditable history."
+    },
+    {
+      "id": "architecture-06",
+      "category": "architecture_design",
+      "question": "Propose a backend design for storing and replaying benchmark runs for an internal AI evaluation tool."
+    },
+    {
+      "id": "architecture-07",
+      "category": "architecture_design",
+      "question": "Design a low-complexity observability stack for a pipeline that makes several sequential LLM calls."
+    },
+    {
+      "id": "explanation-01",
+      "category": "technical_explanation",
+      "question": "Explain the difference between retries, idempotency, and deduplication in backend systems."
+    },
+    {
+      "id": "explanation-02",
+      "category": "technical_explanation",
+      "question": "Explain to a senior engineer how rate limiting, backpressure, and queueing interact in distributed systems."
+    },
+    {
+      "id": "explanation-03",
+      "category": "technical_explanation",
+      "question": "Clarify the tradeoffs between JSON local storage, SQLite, and Postgres for an internal evaluation tool."
+    },
+    {
+      "id": "explanation-04",
+      "category": "technical_explanation",
+      "question": "Explain why secret rotation can break systems even when the new secret is technically valid."
+    },
+    {
+      "id": "explanation-05",
+      "category": "technical_explanation",
+      "question": "Explain how LLM hallucination risk differs from ordinary software bugs in internal tooling."
+    },
+    {
+      "id": "explanation-06",
+      "category": "technical_explanation",
+      "question": "Explain the purpose of a red-team step in a multi-stage answer generation pipeline."
+    },
+    {
+      "id": "explanation-07",
+      "category": "technical_explanation",
+      "question": "Describe the difference between a benchmark metric, a verdict, and a product decision in an LLM pipeline."
+    },
+    {
+      "id": "debug-01",
+      "category": "debug_diagnostic",
+      "question": "A Node.js service intermittently returns 401 after secret rotation. Propose a structured diagnostic plan."
+    },
+    {
+      "id": "debug-02",
+      "category": "debug_diagnostic",
+      "question": "A React playground page loads but shows stale benchmark data after a benchmark run. Diagnose the likely causes."
+    },
+    {
+      "id": "debug-03",
+      "category": "debug_diagnostic",
+      "question": "An Express route sometimes hangs when several LLM calls are chained. Give a careful debugging approach."
+    },
+    {
+      "id": "debug-04",
+      "category": "debug_diagnostic",
+      "question": "A benchmark summary shows high latency but low gain. Propose a debugging checklist for the pipeline."
+    },
+    {
+      "id": "debug-05",
+      "category": "debug_diagnostic",
+      "question": "A secrets update succeeds in the secret manager but some containers still use the old value. How would you debug it?"
+    },
+    {
+      "id": "debug-06",
+      "category": "debug_diagnostic",
+      "question": "A background benchmark runner stops halfway with partial data in JSON storage. Propose a recovery and debugging plan."
+    },
+    {
+      "id": "debug-07",
+      "category": "debug_diagnostic",
+      "question": "A red-team step outputs malformed JSON intermittently. Give a practical diagnostic plan and mitigation path."
+    },
+    {
+      "id": "product-01",
+      "category": "product_strategy",
+      "question": "Propose a product strategy for rolling out an internal LLM benchmarking tool to engineering teams in three phases."
+    },
+    {
+      "id": "product-02",
+      "category": "product_strategy",
+      "question": "Define the first useful KPI set for an internal AI tooling team that wants to justify refine-stage cost."
+    },
+    {
+      "id": "product-03",
+      "category": "product_strategy",
+      "question": "Suggest how to prioritize between accuracy, latency, and explainability for an internal LLM workflow product."
+    },
+    {
+      "id": "product-04",
+      "category": "product_strategy",
+      "question": "How would you decide whether to keep a refine step in production when it improves some categories but not others?"
+    },
+    {
+      "id": "product-05",
+      "category": "product_strategy",
+      "question": "Propose a roadmap for taking a local benchmark tool to a trusted internal decision aid without over-engineering."
+    },
+    {
+      "id": "product-06",
+      "category": "product_strategy",
+      "question": "Describe how to communicate benchmark results to skeptical engineering leadership without overstating AI quality."
+    },
+    {
+      "id": "writing-01",
+      "category": "operational_writing",
+      "question": "Write a concise incident update for engineers after a leaked API key was contained but customer impact is still under review."
+    },
+    {
+      "id": "writing-02",
+      "category": "operational_writing",
+      "question": "Draft a clear internal runbook intro that explains when to use an LLM benchmark versus a single-round playground."
+    },
+    {
+      "id": "writing-03",
+      "category": "operational_writing",
+      "question": "Write a short engineering note explaining why a benchmark result of low gain may still be useful."
+    },
+    {
+      "id": "writing-04",
+      "category": "operational_writing",
+      "question": "Draft a rollback checklist for rotating production credentials during business hours."
+    },
+    {
+      "id": "writing-05",
+      "category": "operational_writing",
+      "question": "Write a brief postmortem summary for a failed benchmark run caused by malformed JSON from one model."
+    },
+    {
+      "id": "writing-06",
+      "category": "operational_writing",
+      "question": "Draft a practical internal guideline for how engineers should interpret a 'Refine Worth It: NO' result."
+    }
+  ]
+}

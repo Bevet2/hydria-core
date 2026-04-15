@@ -1,0 +1,27 @@
+import type { ModelSelection } from "../types/arena.js";
+
+export const OFFICIAL_BASELINE_RUN_ID =
+  "5626878c-70e3-4848-9409-1e8870581852";
+export const OFFICIAL_BASELINE_LABEL = "Hydria Core Official Baseline";
+export const OFFICIAL_BASELINE_FROZEN_AT = "2026-04-15T00:00:00.000Z";
+
+export const OFFICIAL_BASELINE_MODELS: ModelSelection = {
+  respondentA: "openai/gpt-5.4-mini",
+  respondentB: "openai/gpt-5.4-mini",
+  redTeam: "openai/gpt-5.4-mini",
+  judge: "openai/gpt-5.4-mini",
+  synthesizer: "openai/gpt-5.4-mini"
+};
+
+export const OFFICIAL_BASELINE_SUMMARY = {
+  totalRuns: 40,
+  successfulRuns: 38,
+  failedRuns: 2,
+  averageGlobalGain: 12.3,
+  medianGlobalGain: 11,
+  worthItRate: 100,
+  degradingRate: 0,
+  averageTotalLatency: 31262.8,
+  averageRefineLatencyShare: 36.8,
+  refineExecutionRate: 100
+};

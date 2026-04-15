@@ -1,0 +1,13 @@
+node_modules
+dist
+coverage
+.env
+*.log
+apps/server/dist
+apps/web/dist
+apps/web/.vite
+storage/history/history.json
+storage/history/*.html
+storage/history/*.log
+models/local/ollama-store/
+!apps/server/src/storage/history.json

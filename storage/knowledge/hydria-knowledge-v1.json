@@ -1,0 +1,1525 @@
+{
+  "version": "hydria-knowledge-v1",
+  "builtAt": "2026-04-15T14:51:19.092Z",
+  "sourceStats": {
+    "benchmarkRunsAnalyzed": 30,
+    "benchmarkPromptResultsAnalyzed": 637,
+    "roundDatasetEntriesAnalyzed": 265,
+    "curatedStudentExamples": 80
+  },
+  "globalSummary": {
+    "officialBaselineRunId": "5626878c-70e3-4848-9409-1e8870581852",
+    "averageCoreGain": 8.6,
+    "medianCoreGain": 10,
+    "strongestCategories": [
+      "operational_writing",
+      "mixed_reasoning",
+      "incident_response"
+    ],
+    "weakestCategories": [
+      "product_strategy",
+      "technical_explanation",
+      "debug_diagnostic"
+    ],
+    "note": "Offline knowledge layer built from stored benchmark runs and curated round datasets. Use it to steer routing and student preparation without calling external APIs."
+  },
+  "categories": [
+    {
+      "category": "incident_response",
+      "benchmark": {
+        "sampleSize": 80,
+        "averageGain": 10.2,
+        "medianGain": 11,
+        "worthItRate": 85,
+        "degradingRate": 8.8,
+        "refineExecutionRate": 100,
+        "researchUsageRate": 0,
+        "respondentPrimarySuccessRate": 84.9
+      },
+      "winningPatterns": [
+        {
+          "text": "Add concrete risks, dependencies, and fallback conditions.",
+          "count": 40,
+          "exampleRoundIds": [
+            "bbb9bfa0-afcf-49b5-9c9d-4ac7c16ec33a",
+            "c8b6c970-a943-4cb2-9fcd-49d806d59c63",
+            "a798b519-13d1-46e5-928b-c772d95845d0",
+            "d425ed71-e1c5-4ba8-a995-a15d4f787853",
+            "331dd925-c86a-4a40-a3e3-9b5d4907bf65"
+          ]
+        },
+        {
+          "text": "Preserve evidence and name concrete validation checks.",
+          "count": 38,
+          "exampleRoundIds": [
+            "bbb9bfa0-afcf-49b5-9c9d-4ac7c16ec33a",
+            "c8b6c970-a943-4cb2-9fcd-49d806d59c63",
+            "a798b519-13d1-46e5-928b-c772d95845d0",
+            "d425ed71-e1c5-4ba8-a995-a15d4f787853",
+            "331dd925-c86a-4a40-a3e3-9b5d4907bf65"
+          ]
+        },
+        {
+          "text": "State assumptions, constraints, and uncertainties explicitly.",
+          "count": 30,
+          "exampleRoundIds": [
+            "bbb9bfa0-afcf-49b5-9c9d-4ac7c16ec33a",
+            "c8b6c970-a943-4cb2-9fcd-49d806d59c63",
+            "d425ed71-e1c5-4ba8-a995-a15d4f787853",
+            "331dd925-c86a-4a40-a3e3-9b5d4907bf65",
+            "86a520e1-ea2e-4cd2-bd86-0476a2bc2636"
+          ]
+        },
+        {
+          "text": "Improve pedagogy with examples, contrasts, and clearer definitions.",
+          "count": 25,
+          "exampleRoundIds": [
+            "c8b6c970-a943-4cb2-9fcd-49d806d59c63",
+            "a798b519-13d1-46e5-928b-c772d95845d0",
+            "d425ed71-e1c5-4ba8-a995-a15d4f787853",
+            "331dd925-c86a-4a40-a3e3-9b5d4907bf65",
+            "598dad0b-9bd2-42a4-8df6-2212542b7e56"
+          ]
+        },
+        {
+          "text": "Make step ordering and execution sequence explicit.",
+          "count": 18,
+          "exampleRoundIds": [
+            "bbb9bfa0-afcf-49b5-9c9d-4ac7c16ec33a",
+            "29946454-f55c-4994-95b8-cf07ffe2f3d6",
+            "3fba0849-b65d-41e7-bda1-010419e49140",
+            "fa77f5ab-0813-4b98-b626-72c60048a12e",
+            "678faad9-7fa1-43f9-877e-6e786be2b136"
+          ]
+        },
+        {
+          "text": "Clarify tradeoffs instead of presenting one perfect answer.",
+          "count": 14,
+          "exampleRoundIds": [
+            "a798b519-13d1-46e5-928b-c772d95845d0",
+            "598dad0b-9bd2-42a4-8df6-2212542b7e56",
+            "86a520e1-ea2e-4cd2-bd86-0476a2bc2636",
+            "29946454-f55c-4994-95b8-cf07ffe2f3d6",
+            "fd911961-fe79-45e4-a11e-f4ea2d8851e2"
+          ]
+        },
+        {
+          "text": "Reduce hallucination risk by qualifying provider- or context-specific claims.",
+          "count": 11,
+          "exampleRoundIds": [
+            "bbb9bfa0-afcf-49b5-9c9d-4ac7c16ec33a",
+            "86a520e1-ea2e-4cd2-bd86-0476a2bc2636",
+            "07ebf351-6764-4b98-9a01-0d44bdd73c3b",
+            "b234acca-4d79-4372-bc69-d125d1a86423",
+            "0e75f212-dc81-49e8-9615-032bf357a741"
+          ]
+        },
+        {
+          "text": "Add metrics, success criteria, or validation signals.",
+          "count": 5,
+          "exampleRoundIds": [
+            "a798b519-13d1-46e5-928b-c772d95845d0",
+            "07ebf351-6764-4b98-9a01-0d44bdd73c3b",
+            "a2f35167-e50b-45d3-8872-a679296f2d5f",
+            "b987e810-5998-464b-b3bb-21bdba56e2bc",
+            "def3ddbe-8763-4e15-8e1d-65c2e69ff22f"
+          ]
+        }
+      ],
+      "losingPatterns": [],
+      "bestRounds": [
+        {
+          "roundId": "da8ba03f-6c77-47da-8974-69ae2e37f0ab",
+          "prompt": "Write a structured incident report after a database outage affecting 30% of users.",
+          "gain": 20,
+          "note": "hallucination risk reduction"
+        },
+        {
+          "roundId": "d6f88170-d858-4c5a-8272-4d2b77d0a81e",
+          "prompt": "Write a structured incident report after a database outage affecting 30% of users.",
+          "gain": 20,
+          "note": "hallucination risk reduction"
+        },
+        {
+          "roundId": "c8b6c970-a943-4cb2-9fcd-49d806d59c63",
+          "prompt": "Write a structured incident report after a database outage affecting 30% of users.",
+          "gain": 19,
+          "note": "robustness increase"
+        }
+      ],
+      "worstRounds": [
+        {
+          "roundId": "f8e2c4b2-adda-4615-b33e-7dd4375187ea",
+          "prompt": "An OAuth client secret appears inside a frontend bundle shipped to production. Propose a response plan grounded in how OAuth clients, redirects, and secret rotation actually work.",
+          "gain": 7,
+          "note": "Low-gain round that exposes a weak orchestration pattern."
+        },
+        {
+          "roundId": "d1ff228b-4d7b-456a-a5e1-7d028d979e16",
+          "prompt": "Write a structured incident report after a database outage affecting 30% of users.",
+          "gain": 7,
+          "note": "Refine preserved the original answer instead of delivering a validated improvement."
+        },
+        {
+          "roundId": "4a0e3592-bf36-4512-ac99-fe93ca812cc6",
+          "prompt": "Write a response plan after suspicious traffic suggesting a possible breach.",
+          "gain": 8,
+          "note": "Low-gain round that exposes a weak orchestration pattern."
+        }
+      ],
+      "strategy": {
+        "routingRecommendation": "selective",
+        "routerBias": 10,
+        "toolRecommendation": "verify_only",
+        "refineWhen": {
+          "minRiskScore": 87,
+          "minDirectCritiques": 5,
+          "minStructuralRiskCount": 6,
+          "maxQualityScore": 53
+        },
+        "skipWhen": {
+          "maxRiskScore": 28,
+          "minQualityScore": 84,
+          "maxDirectCritiques": 1,
+          "maxStructuralRiskCount": 2
+        },
+        "highValueSignals": [
+          "High factual or operational risk",
+          "Evidence preservation missing",
+          "Rollback or validation not explicit",
+          "Add concrete risks, dependencies, and fallback conditions.",
+          "Preserve evidence and name concrete validation checks.",
+          "State assumptions, constraints, and uncertainties explicitly."
+        ],
+        "lowValueSignals": [
+          "Already concrete and low risk",
+          "Mostly stylistic clean-up",
+          "No provider-specific claim to verify"
+        ],
+        "note": "Refine helps when incident handling is concrete, operational, and risk-aware. Observed avg gain 10.2 with worth-it 85%. Winning pattern: Add concrete risks, dependencies, and fallback conditions."
+      }
+    },
+    {
+      "category": "architecture_design",
+      "benchmark": {
+        "sampleSize": 63,
+        "averageGain": 9.4,
+        "medianGain": 11,
+        "worthItRate": 79.4,
+        "degradingRate": 6.3,
+        "refineExecutionRate": 86.5,
+        "researchUsageRate": 0,
+        "respondentPrimarySuccessRate": 67.7
+      },
+      "winningPatterns": [
+        {
+          "text": "Add concrete risks, dependencies, and fallback conditions.",
+          "count": 29,
+          "exampleRoundIds": [
+            "d1b28844-fcba-4bbe-a90f-807c00c5a1fd",
+            "f57d330e-a4fc-4ee4-9fb1-6ccfad613cfa",
+            "ccd8f96e-6150-4019-8d66-bf72e1665625",
+            "826647b4-b6b4-4eeb-8b12-3fa92658a928",
+            "0ab7ede3-c3f1-4776-8ce5-28347ff5967f"
+          ]
+        },
+        {
+          "text": "Improve pedagogy with examples, contrasts, and clearer definitions.",
+          "count": 29,
+          "exampleRoundIds": [
+            "d1b28844-fcba-4bbe-a90f-807c00c5a1fd",
+            "f57d330e-a4fc-4ee4-9fb1-6ccfad613cfa",
+            "ccd8f96e-6150-4019-8d66-bf72e1665625",
+            "826647b4-b6b4-4eeb-8b12-3fa92658a928",
+            "0ab7ede3-c3f1-4776-8ce5-28347ff5967f"
+          ]
+        },
+        {
+          "text": "State assumptions, constraints, and uncertainties explicitly.",
+          "count": 28,
+          "exampleRoundIds": [
+            "d1b28844-fcba-4bbe-a90f-807c00c5a1fd",
+            "f57d330e-a4fc-4ee4-9fb1-6ccfad613cfa",
+            "ccd8f96e-6150-4019-8d66-bf72e1665625",
+            "826647b4-b6b4-4eeb-8b12-3fa92658a928",
+            "0ab7ede3-c3f1-4776-8ce5-28347ff5967f"
+          ]
+        },
+        {
+          "text": "Clarify tradeoffs instead of presenting one perfect answer.",
+          "count": 18,
+          "exampleRoundIds": [
+            "d1b28844-fcba-4bbe-a90f-807c00c5a1fd",
+            "f57d330e-a4fc-4ee4-9fb1-6ccfad613cfa",
+            "bd790d0e-4431-4191-8c2d-055688f44aa1",
+            "9cffdfe8-df7a-4ee5-85b2-5b879270e02f",
+            "776eb2af-8061-447a-89d5-a0ed4151bae4"
+          ]
+        },
+        {
+          "text": "Preserve evidence and name concrete validation checks.",
+          "count": 11,
+          "exampleRoundIds": [
+            "d1b28844-fcba-4bbe-a90f-807c00c5a1fd",
+            "f57d330e-a4fc-4ee4-9fb1-6ccfad613cfa",
+            "ccd8f96e-6150-4019-8d66-bf72e1665625",
+            "776eb2af-8061-447a-89d5-a0ed4151bae4",
+            "b59af4d6-b447-49e2-888d-d057ae605f57"
+          ]
+        },
+        {
+          "text": "Add metrics, success criteria, or validation signals.",
+          "count": 7,
+          "exampleRoundIds": [
+            "bd790d0e-4431-4191-8c2d-055688f44aa1",
+            "b59af4d6-b447-49e2-888d-d057ae605f57",
+            "10da3de8-5da9-4f82-8292-887bba8603b9",
+            "0b8385b6-423b-4c0b-b49d-0f47a3640ba4",
+            "fff67c76-ac19-498b-95b1-cd18898544fb"
+          ]
+        },
+        {
+          "text": "Make step ordering and execution sequence explicit.",
+          "count": 7,
+          "exampleRoundIds": [
+            "0ab7ede3-c3f1-4776-8ce5-28347ff5967f",
+            "639d4570-2f12-4700-8d88-f4b43dfe40c2",
+            "893ad940-b2ad-49c0-8af1-d8769d88d3d8",
+            "fff67c76-ac19-498b-95b1-cd18898544fb",
+            "fe5bd81f-938a-4274-bd18-13cd74105e4b"
+          ]
+        },
+        {
+          "text": "Reduce hallucination risk by qualifying provider- or context-specific claims.",
+          "count": 6,
+          "exampleRoundIds": [
+            "bd790d0e-4431-4191-8c2d-055688f44aa1",
+            "9cffdfe8-df7a-4ee5-85b2-5b879270e02f",
+            "1e0e305e-3048-4055-abf3-8d41b716b38c",
+            "85286914-f598-405f-a1cd-0b50566eae15",
+            "0b8385b6-423b-4c0b-b49d-0f47a3640ba4"
+          ]
+        }
+      ],
+      "losingPatterns": [
+        {
+          "text": "Avoid unsupported specificity or potentially false claims.",
+          "count": 1,
+          "exampleRoundIds": [
+            "50569640-2a2e-4ca4-9ad0-0013f495e1a3"
+          ]
+        }
+      ],
+      "bestRounds": [
+        {
+          "roundId": "b07ea06f-2d90-4f46-a865-223f29ab8713",
+          "prompt": "Propose a multi-region deployment architecture with failover.",
+          "gain": 17,
+          "note": "hallucination risk reduction"
+        },
+        {
+          "roundId": "30d40dd4-85ca-4f5b-8c9f-36e05b94764f",
+          "prompt": "How would you design a system to handle millions of concurrent users?",
+          "gain": 16,
+          "note": "hallucination risk reduction"
+        },
+        {
+          "roundId": "bd790d0e-4431-4191-8c2d-055688f44aa1",
+          "prompt": "How would you design a system to handle millions of concurrent users?",
+          "gain": 15,
+          "note": "robustness increase"
+        }
+      ],
+      "worstRounds": [
+        {
+          "roundId": "50569640-2a2e-4ca4-9ad0-0013f495e1a3",
+          "prompt": "Propose an architecture for real-time event processing using Kafka.",
+          "gain": -6,
+          "note": "Robustness dropped by 64 points."
+        },
+        {
+          "roundId": "893ad940-b2ad-49c0-8af1-d8769d88d3d8",
+          "prompt": "Design a modular backend architecture for rapid feature iteration.",
+          "gain": 7,
+          "note": "Low-gain round that exposes a weak orchestration pattern."
+        },
+        {
+          "roundId": "4e8c7a85-df74-4176-b245-f1a419005d31",
+          "prompt": "Design a modular backend architecture for rapid feature iteration.",
+          "gain": 8,
+          "note": "Low-gain round that exposes a weak orchestration pattern."
+        }
+      ],
+      "strategy": {
+        "routingRecommendation": "selective",
+        "routerBias": 5,
+        "toolRecommendation": "conditional",
+        "refineWhen": {
+          "minRiskScore": 90,
+          "minDirectCritiques": 5,
+          "minStructuralRiskCount": 3,
+          "maxQualityScore": 46
+        },
+        "skipWhen": {
+          "maxRiskScore": 26,
+          "minQualityScore": 84,
+          "maxDirectCritiques": 1,
+          "maxStructuralRiskCount": 2
+        },
+        "highValueSignals": [
+          "Tradeoffs are missing",
+          "Constraints or scale assumptions are weak",
+          "A specific provider constraint needs validation",
+          "Add concrete risks, dependencies, and fallback conditions.",
+          "Improve pedagogy with examples, contrasts, and clearer definitions.",
+          "State assumptions, constraints, and uncertainties explicitly."
+        ],
+        "lowValueSignals": [
+          "Already balanced on tradeoffs",
+          "Purely generic system-design search query",
+          "Good answer with low structural risk",
+          "Avoid unsupported specificity or potentially false claims."
+        ],
+        "note": "Architecture refine is valuable when it sharpens constraints and tradeoffs, not when it adds generic system-design prose. Observed avg gain 9.4 with worth-it 79.4%. Winning pattern: Add concrete risks, dependencies, and fallback conditions. Recurring failure: Avoid unsupported specificity or potentially false claims."
+      }
+    },
+    {
+      "category": "technical_explanation",
+      "benchmark": {
+        "sampleSize": 73,
+        "averageGain": 7.7,
+        "medianGain": 9,
+        "worthItRate": 79.5,
+        "degradingRate": 2.7,
+        "refineExecutionRate": 86.3,
+        "researchUsageRate": 0,
+        "respondentPrimarySuccessRate": 90.6
+      },
+      "winningPatterns": [
+        {
+          "text": "Add concrete risks, dependencies, and fallback conditions.",
+          "count": 43,
+          "exampleRoundIds": [
+            "ff928ca0-cd7f-4bdd-9bd5-e88b59cefda5",
+            "7164a623-e7e3-4a3c-a3e9-1c8264c96f48",
+            "c3429980-a247-441e-a9b5-73c652a3a7ff",
+            "31d9dfa6-4836-4e7a-8b3c-bc26c204e0e4",
+            "c63e3374-0a57-47a6-bcdc-3f26eeb743ab"
+          ]
+        },
+        {
+          "text": "Improve pedagogy with examples, contrasts, and clearer definitions.",
+          "count": 43,
+          "exampleRoundIds": [
+            "ff928ca0-cd7f-4bdd-9bd5-e88b59cefda5",
+            "7164a623-e7e3-4a3c-a3e9-1c8264c96f48",
+            "c3429980-a247-441e-a9b5-73c652a3a7ff",
+            "31d9dfa6-4836-4e7a-8b3c-bc26c204e0e4",
+            "c63e3374-0a57-47a6-bcdc-3f26eeb743ab"
+          ]
+        },
+        {
+          "text": "State assumptions, constraints, and uncertainties explicitly.",
+          "count": 32,
+          "exampleRoundIds": [
+            "ff928ca0-cd7f-4bdd-9bd5-e88b59cefda5",
+            "7164a623-e7e3-4a3c-a3e9-1c8264c96f48",
+            "c3429980-a247-441e-a9b5-73c652a3a7ff",
+            "31d9dfa6-4836-4e7a-8b3c-bc26c204e0e4",
+            "c63e3374-0a57-47a6-bcdc-3f26eeb743ab"
+          ]
+        },
+        {
+          "text": "Clarify tradeoffs instead of presenting one perfect answer.",
+          "count": 31,
+          "exampleRoundIds": [
+            "ff928ca0-cd7f-4bdd-9bd5-e88b59cefda5",
+            "7164a623-e7e3-4a3c-a3e9-1c8264c96f48",
+            "31d9dfa6-4836-4e7a-8b3c-bc26c204e0e4",
+            "33f91c0b-5312-43d4-9259-6001cd7e7db7",
+            "feeeb79e-2f25-4e50-8f98-7e091e6d475b"
+          ]
+        },
+        {
+          "text": "Add metrics, success criteria, or validation signals.",
+          "count": 11,
+          "exampleRoundIds": [
+            "c3475b00-c1a4-4e6a-9bbc-4b451aaeb39d",
+            "80572e40-583f-422d-bb47-25224da2dc38",
+            "f10dc648-90c3-4d2b-b2aa-2d95e4879630",
+            "751f5cf7-9a77-4507-80a9-3b548a672d1f",
+            "a2217288-2895-433b-af29-020c9fef01c9"
+          ]
+        },
+        {
+          "text": "Reduce hallucination risk by qualifying provider- or context-specific claims.",
+          "count": 11,
+          "exampleRoundIds": [
+            "c63e3374-0a57-47a6-bcdc-3f26eeb743ab",
+            "c3475b00-c1a4-4e6a-9bbc-4b451aaeb39d",
+            "a30ee3bc-12b7-4b76-a09f-0100bb214e30",
+            "53194614-7f71-42c4-ac82-8b9d6d1241c7",
+            "ccae14f7-5da5-4465-9bdd-8e67883f429c"
+          ]
+        },
+        {
+          "text": "Preserve evidence and name concrete validation checks.",
+          "count": 1,
+          "exampleRoundIds": [
+            "3bbf4151-af77-4c13-847c-7a7b9262c3d5"
+          ]
+        }
+      ],
+      "losingPatterns": [],
+      "bestRounds": [
+        {
+          "roundId": "10eb6b66-4d47-4754-8f90-c1cd347cd912",
+          "prompt": "Explain how retries, idempotency, and deduplication work together.",
+          "gain": 15,
+          "note": "hallucination risk reduction"
+        },
+        {
+          "roundId": "8a4fcf3d-6b62-46f3-93ae-f7378d464d0d",
+          "prompt": "Explain token bucket versus leaky bucket rate limiting and when each is appropriate.",
+          "gain": 15,
+          "note": "hallucination risk reduction"
+        },
+        {
+          "roundId": "98231ae8-1b08-431b-a496-31ec73d2f091",
+          "prompt": "Explain how retries, idempotency, and deduplication work together.",
+          "gain": 14,
+          "note": "hallucination risk reduction"
+        }
+      ],
+      "worstRounds": [
+        {
+          "roundId": "6369be8b-e677-4fc0-9e33-311c514ea8a4",
+          "prompt": "Explain rate limiting strategies in APIs.",
+          "gain": 6,
+          "note": "Clarity dropped by 4 points."
+        },
+        {
+          "roundId": "3bbf4151-af77-4c13-847c-7a7b9262c3d5",
+          "prompt": "Explain HTTP idempotency and which HTTP methods are considered idempotent.",
+          "gain": 7,
+          "note": "Low-gain round that exposes a weak orchestration pattern."
+        },
+        {
+          "roundId": "e230b0c7-73cd-42e9-b384-bc9790289f41",
+          "prompt": "Explain rate limiting strategies in APIs.",
+          "gain": 7,
+          "note": "Low-gain round that exposes a weak orchestration pattern."
+        }
+      ],
+      "strategy": {
+        "routingRecommendation": "prefer_refine",
+        "routerBias": 10,
+        "toolRecommendation": "prefer_grounded",
+        "refineWhen": {
+          "minRiskScore": 83,
+          "minDirectCritiques": 5,
+          "minStructuralRiskCount": 7,
+          "maxQualityScore": 55
+        },
+        "skipWhen": {
+          "maxRiskScore": 22,
+          "minQualityScore": 88,
+          "maxDirectCritiques": 1,
+          "maxStructuralRiskCount": 2
+        },
+        "highValueSignals": [
+          "Definition or mechanism is under-specified",
+          "Provider, standard, or protocol claim appears",
+          "Examples or contrasts are missing",
+          "Add concrete risks, dependencies, and fallback conditions.",
+          "Improve pedagogy with examples, contrasts, and clearer definitions.",
+          "State assumptions, constraints, and uncertainties explicitly."
+        ],
+        "lowValueSignals": [
+          "Already precise and well-scaffolded",
+          "No factual claim worth grounding",
+          "Purely stylistic rewrite"
+        ],
+        "note": "Technical explanation is a strong category when refine improves pedagogy and factual precision together. Observed avg gain 7.7 with worth-it 79.5%. Winning pattern: Add concrete risks, dependencies, and fallback conditions."
+      }
+    },
+    {
+      "category": "debug_diagnostic",
+      "benchmark": {
+        "sampleSize": 66,
+        "averageGain": 8.2,
+        "medianGain": 9,
+        "worthItRate": 75.8,
+        "degradingRate": 1.5,
+        "refineExecutionRate": 81.8,
+        "researchUsageRate": 0,
+        "respondentPrimarySuccessRate": 87.9
+      },
+      "winningPatterns": [
+        {
+          "text": "Add concrete risks, dependencies, and fallback conditions.",
+          "count": 42,
+          "exampleRoundIds": [
+            "0f364d42-23a9-430a-938a-1cfdc531fbca",
+            "695ebc5f-b9a8-4f91-bc08-25cd9ce2c4b4",
+            "979055e1-e968-43ba-b379-2ede785c9fc5",
+            "57b3eb01-afb0-4fa4-b6db-91bcbaacd309",
+            "ae6cd442-b1b2-4a7d-bc5f-2264754f43b1"
+          ]
+        },
+        {
+          "text": "Preserve evidence and name concrete validation checks.",
+          "count": 41,
+          "exampleRoundIds": [
+            "0f364d42-23a9-430a-938a-1cfdc531fbca",
+            "695ebc5f-b9a8-4f91-bc08-25cd9ce2c4b4",
+            "979055e1-e968-43ba-b379-2ede785c9fc5",
+            "57b3eb01-afb0-4fa4-b6db-91bcbaacd309",
+            "ae6cd442-b1b2-4a7d-bc5f-2264754f43b1"
+          ]
+        },
+        {
+          "text": "State assumptions, constraints, and uncertainties explicitly.",
+          "count": 37,
+          "exampleRoundIds": [
+            "0f364d42-23a9-430a-938a-1cfdc531fbca",
+            "695ebc5f-b9a8-4f91-bc08-25cd9ce2c4b4",
+            "979055e1-e968-43ba-b379-2ede785c9fc5",
+            "57b3eb01-afb0-4fa4-b6db-91bcbaacd309",
+            "ae6cd442-b1b2-4a7d-bc5f-2264754f43b1"
+          ]
+        },
+        {
+          "text": "Add metrics, success criteria, or validation signals.",
+          "count": 22,
+          "exampleRoundIds": [
+            "0f364d42-23a9-430a-938a-1cfdc531fbca",
+            "695ebc5f-b9a8-4f91-bc08-25cd9ce2c4b4",
+            "979055e1-e968-43ba-b379-2ede785c9fc5",
+            "57b3eb01-afb0-4fa4-b6db-91bcbaacd309",
+            "1ddf5953-acf5-498d-a091-2edf58ee5d9a"
+          ]
+        },
+        {
+          "text": "Improve pedagogy with examples, contrasts, and clearer definitions.",
+          "count": 18,
+          "exampleRoundIds": [
+            "0f364d42-23a9-430a-938a-1cfdc531fbca",
+            "1ddf5953-acf5-498d-a091-2edf58ee5d9a",
+            "2bac103c-caa9-4a1d-8680-96b494d211fe",
+            "f8446cc3-87f4-46fa-83ac-89b44c2025fa",
+            "f147ceb0-3711-411b-ae1a-85915e3e578a"
+          ]
+        },
+        {
+          "text": "Make step ordering and execution sequence explicit.",
+          "count": 18,
+          "exampleRoundIds": [
+            "0f364d42-23a9-430a-938a-1cfdc531fbca",
+            "695ebc5f-b9a8-4f91-bc08-25cd9ce2c4b4",
+            "57b3eb01-afb0-4fa4-b6db-91bcbaacd309",
+            "ae6cd442-b1b2-4a7d-bc5f-2264754f43b1",
+            "06f97fe5-367c-4268-922c-4109f943e3a2"
+          ]
+        },
+        {
+          "text": "Clarify tradeoffs instead of presenting one perfect answer.",
+          "count": 9,
+          "exampleRoundIds": [
+            "979055e1-e968-43ba-b379-2ede785c9fc5",
+            "2bac103c-caa9-4a1d-8680-96b494d211fe",
+            "f8446cc3-87f4-46fa-83ac-89b44c2025fa",
+            "32b9a611-7d4c-46a3-b4d3-3496ec47ca63",
+            "2714c4a8-cc12-4f6e-b1bb-577e8e5ce319"
+          ]
+        },
+        {
+          "text": "Reduce hallucination risk by qualifying provider- or context-specific claims.",
+          "count": 7,
+          "exampleRoundIds": [
+            "979055e1-e968-43ba-b379-2ede785c9fc5",
+            "ae6cd442-b1b2-4a7d-bc5f-2264754f43b1",
+            "72b5cad0-f541-49da-8ca2-159e0c80f6b9",
+            "08cfdfa7-62cc-4e89-ba3f-80e93fcd127b",
+            "56f99489-f2b2-4017-bf0f-818c3c3e30ed"
+          ]
+        }
+      ],
+      "losingPatterns": [
+        {
+          "text": "Avoid generic best-practice language that does not change execution.",
+          "count": 2,
+          "exampleRoundIds": [
+            "edeb2c9f-88c4-49f4-aa35-c4373b29d4f5",
+            "0f9b76ae-201d-4144-9ab3-240c846b537d"
+          ]
+        },
+        {
+          "text": "Avoid plans without prioritization or sequencing.",
+          "count": 2,
+          "exampleRoundIds": [
+            "edeb2c9f-88c4-49f4-aa35-c4373b29d4f5",
+            "0f9b76ae-201d-4144-9ab3-240c846b537d"
+          ]
+        },
+        {
+          "text": "Avoid weak tradeoff handling and missing constraints.",
+          "count": 1,
+          "exampleRoundIds": [
+            "0f9b76ae-201d-4144-9ab3-240c846b537d"
+          ]
+        }
+      ],
+      "bestRounds": [
+        {
+          "roundId": "d6a7355b-6ee4-4273-bb0a-f28e5ae87d62",
+          "prompt": "PostgreSQL started reporting deadlocks after a new transaction path was added. Diagnose likely causes and list the checks you would run.",
+          "gain": 19,
+          "note": "hallucination risk reduction"
+        },
+        {
+          "roundId": "2714c4a8-cc12-4f6e-b1bb-577e8e5ce319",
+          "prompt": "A production API sometimes returns stale data. Diagnose.",
+          "gain": 16,
+          "note": "hallucination risk reduction"
+        },
+        {
+          "roundId": "1ddf5953-acf5-498d-a091-2edf58ee5d9a",
+          "prompt": "A Node.js API returns intermittent 500 errors. Diagnose possible causes.",
+          "gain": 15,
+          "note": "robustness increase"
+        }
+      ],
+      "worstRounds": [
+        {
+          "roundId": "edeb2c9f-88c4-49f4-aa35-c4373b29d4f5",
+          "prompt": "Users report random logout issues. Propose a debugging plan.",
+          "gain": 5,
+          "note": "Low-gain round that exposes a weak orchestration pattern."
+        },
+        {
+          "roundId": "4aa68e46-6632-4176-8a83-2dd30e70f4f3",
+          "prompt": "Users report random logout issues. Propose a debugging plan.",
+          "gain": 6,
+          "note": "Low-gain round that exposes a weak orchestration pattern."
+        },
+        {
+          "roundId": "e361ddc9-10fa-490b-93be-c1d79b901e7a",
+          "prompt": "OAuth login works locally but fails in production with redirect_uri_mismatch. Diagnose likely causes using realistic provider and deployment constraints.",
+          "gain": 7,
+          "note": "Low-gain round that exposes a weak orchestration pattern."
+        }
+      ],
+      "strategy": {
+        "routingRecommendation": "selective",
+        "routerBias": 7,
+        "toolRecommendation": "conditional",
+        "refineWhen": {
+          "minRiskScore": 83,
+          "minDirectCritiques": 5,
+          "minStructuralRiskCount": 8,
+          "maxQualityScore": 55
+        },
+        "skipWhen": {
+          "maxRiskScore": 30,
+          "minQualityScore": 82,
+          "maxDirectCritiques": 1,
+          "maxStructuralRiskCount": 2
+        },
+        "highValueSignals": [
+          "Diagnosis sounds too certain",
+          "Checks or next steps are missing",
+          "Known product behavior or error semantics must be verified",
+          "Add concrete risks, dependencies, and fallback conditions.",
+          "Preserve evidence and name concrete validation checks.",
+          "State assumptions, constraints, and uncertainties explicitly."
+        ],
+        "lowValueSignals": [
+          "Already hypothesis-driven and cautious",
+          "Search would only pull generic troubleshooting lists",
+          "Little factual claim to verify",
+          "Avoid generic best-practice language that does not change execution.",
+          "Avoid plans without prioritization or sequencing.",
+          "Avoid weak tradeoff handling and missing constraints."
+        ],
+        "note": "Debug refine helps when it keeps the answer evidence-driven and prevents overconfident diagnosis. Observed avg gain 8.2 with worth-it 75.8%. Winning pattern: Add concrete risks, dependencies, and fallback conditions. Recurring failure: Avoid generic best-practice language that does not change execution."
+      }
+    },
+    {
+      "category": "product_strategy",
+      "benchmark": {
+        "sampleSize": 125,
+        "averageGain": 4.3,
+        "medianGain": 6,
+        "worthItRate": 50.4,
+        "degradingRate": 20.8,
+        "refineExecutionRate": 85.2,
+        "researchUsageRate": 0,
+        "respondentPrimarySuccessRate": 92.3
+      },
+      "winningPatterns": [
+        {
+          "text": "Add concrete risks, dependencies, and fallback conditions.",
+          "count": 29,
+          "exampleRoundIds": [
+            "ee74b839-e612-49a5-bde6-6e6acb0b00ef",
+            "b0268452-c26f-47a4-b426-cbfee9752891",
+            "926e8579-94ab-42a9-bd03-08b959de29d0",
+            "d1fb107d-6082-45db-8b94-93972f7b8feb",
+            "1753ddef-6679-40c2-92db-a4405269bef1"
+          ]
+        },
+        {
+          "text": "Add metrics, success criteria, or validation signals.",
+          "count": 29,
+          "exampleRoundIds": [
+            "ee74b839-e612-49a5-bde6-6e6acb0b00ef",
+            "b0268452-c26f-47a4-b426-cbfee9752891",
+            "926e8579-94ab-42a9-bd03-08b959de29d0",
+            "d1fb107d-6082-45db-8b94-93972f7b8feb",
+            "1753ddef-6679-40c2-92db-a4405269bef1"
+          ]
+        },
+        {
+          "text": "Make step ordering and execution sequence explicit.",
+          "count": 24,
+          "exampleRoundIds": [
+            "b0268452-c26f-47a4-b426-cbfee9752891",
+            "926e8579-94ab-42a9-bd03-08b959de29d0",
+            "d1fb107d-6082-45db-8b94-93972f7b8feb",
+            "1753ddef-6679-40c2-92db-a4405269bef1",
+            "b1bc1b43-22b6-45c9-8d91-bdb331f9602c"
+          ]
+        },
+        {
+          "text": "Improve pedagogy with examples, contrasts, and clearer definitions.",
+          "count": 22,
+          "exampleRoundIds": [
+            "ee74b839-e612-49a5-bde6-6e6acb0b00ef",
+            "d1fb107d-6082-45db-8b94-93972f7b8feb",
+            "1753ddef-6679-40c2-92db-a4405269bef1",
+            "b1bc1b43-22b6-45c9-8d91-bdb331f9602c",
+            "5af1546e-db28-41ea-8e75-9d1c6057a467"
+          ]
+        },
+        {
+          "text": "State assumptions, constraints, and uncertainties explicitly.",
+          "count": 20,
+          "exampleRoundIds": [
+            "ee74b839-e612-49a5-bde6-6e6acb0b00ef",
+            "b0268452-c26f-47a4-b426-cbfee9752891",
+            "d1fb107d-6082-45db-8b94-93972f7b8feb",
+            "1753ddef-6679-40c2-92db-a4405269bef1",
+            "b1bc1b43-22b6-45c9-8d91-bdb331f9602c"
+          ]
+        },
+        {
+          "text": "Preserve evidence and name concrete validation checks.",
+          "count": 12,
+          "exampleRoundIds": [
+            "1753ddef-6679-40c2-92db-a4405269bef1",
+            "5af1546e-db28-41ea-8e75-9d1c6057a467",
+            "b1941c6a-bf49-40ed-b700-a337f1103026",
+            "e115c0bc-22f6-4632-b0ce-38e70d7ab77c",
+            "4cd541a5-f3a9-419e-a615-2117392957b0"
+          ]
+        },
+        {
+          "text": "Clarify tradeoffs instead of presenting one perfect answer.",
+          "count": 8,
+          "exampleRoundIds": [
+            "e115c0bc-22f6-4632-b0ce-38e70d7ab77c",
+            "45b30b51-c872-4ba8-b190-a98403abd6a8",
+            "a4e47592-eaf8-4040-b4a1-83fdb7b7b24f",
+            "db25e867-1c87-4d50-b623-7aedf5c224ff",
+            "7ffb7af0-371f-4506-8132-e282c707b083"
+          ]
+        },
+        {
+          "text": "Reduce hallucination risk by qualifying provider- or context-specific claims.",
+          "count": 7,
+          "exampleRoundIds": [
+            "1753ddef-6679-40c2-92db-a4405269bef1",
+            "5771ffbf-449b-48c3-9866-2b1361bb8dd0",
+            "4cd541a5-f3a9-419e-a615-2117392957b0",
+            "cbb68cb1-ea63-439c-88a5-98d3694cbd60",
+            "1c080fe9-3750-4885-a615-3f3ab5f9abc4"
+          ]
+        }
+      ],
+      "losingPatterns": [
+        {
+          "text": "Avoid missing metrics, success criteria, or validation gates.",
+          "count": 7,
+          "exampleRoundIds": [
+            "89a9ccd3-bd25-426d-a2a1-f412e9b5f15e",
+            "eb8ae5da-f421-47d0-b09e-653622424599",
+            "c1866dbe-ea85-4c58-9873-233650662d69",
+            "666b1132-67d7-4141-a064-350d94b9b406",
+            "7a6a2b71-ca5c-47d3-9072-d781b96b456f"
+          ]
+        },
+        {
+          "text": "Avoid weak tradeoff handling and missing constraints.",
+          "count": 5,
+          "exampleRoundIds": [
+            "89a9ccd3-bd25-426d-a2a1-f412e9b5f15e",
+            "08ffc5dc-13dd-46a9-89c2-d4ef866b02bc",
+            "eb8ae5da-f421-47d0-b09e-653622424599",
+            "666b1132-67d7-4141-a064-350d94b9b406",
+            "8230fd3d-7c93-4ae0-8be8-ff920d70c24d"
+          ]
+        },
+        {
+          "text": "Avoid generic best-practice language that does not change execution.",
+          "count": 4,
+          "exampleRoundIds": [
+            "89a9ccd3-bd25-426d-a2a1-f412e9b5f15e",
+            "eb8ae5da-f421-47d0-b09e-653622424599",
+            "8230fd3d-7c93-4ae0-8be8-ff920d70c24d",
+            "8f559df3-7d6a-4cef-824a-b7b2526cc4e7"
+          ]
+        },
+        {
+          "text": "Avoid plans without prioritization or sequencing.",
+          "count": 4,
+          "exampleRoundIds": [
+            "89a9ccd3-bd25-426d-a2a1-f412e9b5f15e",
+            "08ffc5dc-13dd-46a9-89c2-d4ef866b02bc",
+            "c1866dbe-ea85-4c58-9873-233650662d69",
+            "63fc40e5-f5f7-4b22-8457-98b217524b91"
+          ]
+        },
+        {
+          "text": "Avoid unsupported specificity or potentially false claims.",
+          "count": 3,
+          "exampleRoundIds": [
+            "89a9ccd3-bd25-426d-a2a1-f412e9b5f15e",
+            "7a6a2b71-ca5c-47d3-9072-d781b96b456f",
+            "8230fd3d-7c93-4ae0-8be8-ff920d70c24d"
+          ]
+        }
+      ],
+      "bestRounds": [
+        {
+          "roundId": "b80f9401-b01e-4be6-adbe-11dc58665fde",
+          "prompt": "How would you measure success of a new internal tool?",
+          "gain": 17,
+          "note": "clearer risks and dependencies"
+        },
+        {
+          "roundId": "ee74b839-e612-49a5-bde6-6e6acb0b00ef",
+          "prompt": "Propose a strategy to roll out an internal LLM tool to engineering teams.",
+          "gain": 13,
+          "note": "clearer risks and dependencies"
+        },
+        {
+          "roundId": "5771ffbf-449b-48c3-9866-2b1361bb8dd0",
+          "prompt": "How would you measure success of a new internal tool?",
+          "gain": 12,
+          "note": "better prioritization and sequencing"
+        }
+      ],
+      "worstRounds": [
+        {
+          "roundId": "8f559df3-7d6a-4cef-824a-b7b2526cc4e7",
+          "prompt": "Propose a go-to-market strategy for an AI product.",
+          "gain": -3,
+          "note": "Refine preserved the original answer instead of delivering a validated improvement."
+        },
+        {
+          "roundId": "63fc40e5-f5f7-4b22-8457-98b217524b91",
+          "prompt": "Design a roadmap for launching a developer platform.",
+          "gain": 1,
+          "note": "Refine preserved the original answer instead of delivering a validated improvement."
+        },
+        {
+          "roundId": "c1866dbe-ea85-4c58-9873-233650662d69",
+          "prompt": "Propose a strategy to roll out an internal LLM tool to engineering teams.",
+          "gain": 3,
+          "note": "Refine preserved the original answer instead of delivering a validated improvement."
+        }
+      ],
+      "strategy": {
+        "routingRecommendation": "selective",
+        "routerBias": 3,
+        "toolRecommendation": "avoid",
+        "refineWhen": {
+          "minRiskScore": 89,
+          "minDirectCritiques": 5,
+          "minStructuralRiskCount": 6,
+          "maxQualityScore": 54
+        },
+        "skipWhen": {
+          "maxRiskScore": 70,
+          "minQualityScore": 55,
+          "maxDirectCritiques": 4,
+          "maxStructuralRiskCount": 5
+        },
+        "highValueSignals": [
+          "Priorities or phases are missing",
+          "No metrics or validation gates",
+          "Strategy sounds polished but non-actionable",
+          "Add concrete risks, dependencies, and fallback conditions.",
+          "Add metrics, success criteria, or validation signals.",
+          "Make step ordering and execution sequence explicit."
+        ],
+        "lowValueSignals": [
+          "Already concrete with sequencing and metrics",
+          "External grounding would just add generic market advice",
+          "Low-risk answer with explicit tradeoffs",
+          "Avoid missing metrics, success criteria, or validation gates.",
+          "Avoid weak tradeoff handling and missing constraints.",
+          "Avoid generic best-practice language that does not change execution."
+        ],
+        "note": "Product strategy gains mostly from prioritization, metrics, and anti-fluff discipline, not from web enrichment. Observed avg gain 4.3 with worth-it 50.4%. Winning pattern: Add concrete risks, dependencies, and fallback conditions. Recurring failure: Avoid missing metrics, success criteria, or validation gates."
+      }
+    },
+    {
+      "category": "operational_writing",
+      "benchmark": {
+        "sampleSize": 54,
+        "averageGain": 14.9,
+        "medianGain": 18,
+        "worthItRate": 81.5,
+        "degradingRate": 11.1,
+        "refineExecutionRate": 100,
+        "researchUsageRate": 0,
+        "respondentPrimarySuccessRate": 92
+      },
+      "winningPatterns": [
+        {
+          "text": "Add concrete risks, dependencies, and fallback conditions.",
+          "count": 23,
+          "exampleRoundIds": [
+            "00382468-be77-456c-87f2-4706b1ef635b",
+            "ac5205e6-c741-4596-aff2-7e77686a2855",
+            "0fbbaab6-aeb1-4458-b873-87d0b69767c0",
+            "d95dec69-3929-40b9-8336-1d53676d8a0e",
+            "a12e7ed8-de80-46e3-a42f-6e4a726c7019"
+          ]
+        },
+        {
+          "text": "Preserve evidence and name concrete validation checks.",
+          "count": 17,
+          "exampleRoundIds": [
+            "00382468-be77-456c-87f2-4706b1ef635b",
+            "0fbbaab6-aeb1-4458-b873-87d0b69767c0",
+            "d95dec69-3929-40b9-8336-1d53676d8a0e",
+            "d76d7d23-972d-4d75-97fd-0fc0ac340b20",
+            "5853a4d5-57e8-479b-8e34-15122807299f"
+          ]
+        },
+        {
+          "text": "State assumptions, constraints, and uncertainties explicitly.",
+          "count": 13,
+          "exampleRoundIds": [
+            "00382468-be77-456c-87f2-4706b1ef635b",
+            "0fbbaab6-aeb1-4458-b873-87d0b69767c0",
+            "d95dec69-3929-40b9-8336-1d53676d8a0e",
+            "a12e7ed8-de80-46e3-a42f-6e4a726c7019",
+            "d76d7d23-972d-4d75-97fd-0fc0ac340b20"
+          ]
+        },
+        {
+          "text": "Add metrics, success criteria, or validation signals.",
+          "count": 11,
+          "exampleRoundIds": [
+            "0fbbaab6-aeb1-4458-b873-87d0b69767c0",
+            "d95dec69-3929-40b9-8336-1d53676d8a0e",
+            "a12e7ed8-de80-46e3-a42f-6e4a726c7019",
+            "d76d7d23-972d-4d75-97fd-0fc0ac340b20",
+            "5853a4d5-57e8-479b-8e34-15122807299f"
+          ]
+        },
+        {
+          "text": "Make step ordering and execution sequence explicit.",
+          "count": 6,
+          "exampleRoundIds": [
+            "bae64ecc-a173-4c6b-8ea4-572a98b9a1a7",
+            "434f897b-3ac3-47dd-afc0-dae2ed3f8028",
+            "b2ecf49b-ebfe-446b-8a42-0c7eaf1c8b46",
+            "f9be64d1-0607-48ef-9704-2b9b8d2b8e37",
+            "c02ca9ac-b7f0-405d-95cd-9a3aa3d2772d"
+          ]
+        },
+        {
+          "text": "Improve pedagogy with examples, contrasts, and clearer definitions.",
+          "count": 5,
+          "exampleRoundIds": [
+            "00382468-be77-456c-87f2-4706b1ef635b",
+            "5853a4d5-57e8-479b-8e34-15122807299f",
+            "d37a1b5c-5406-4798-bc02-4e03ee91658e",
+            "0418297c-a0ea-45be-8d46-f773a66a00a3",
+            "616304e0-b312-4a59-922e-af027568fb4f"
+          ]
+        },
+        {
+          "text": "Reduce hallucination risk by qualifying provider- or context-specific claims.",
+          "count": 3,
+          "exampleRoundIds": [
+            "00382468-be77-456c-87f2-4706b1ef635b",
+            "33002325-2ce6-4441-bd12-116fbb71dbb3",
+            "434f897b-3ac3-47dd-afc0-dae2ed3f8028"
+          ]
+        },
+        {
+          "text": "Clarify tradeoffs instead of presenting one perfect answer.",
+          "count": 2,
+          "exampleRoundIds": [
+            "00382468-be77-456c-87f2-4706b1ef635b",
+            "d37a1b5c-5406-4798-bc02-4e03ee91658e"
+          ]
+        }
+      ],
+      "losingPatterns": [
+        {
+          "text": "Avoid generic best-practice language that does not change execution.",
+          "count": 7,
+          "exampleRoundIds": [
+            "f4a4bcbe-1139-4bba-8f9c-8036f53aa75d",
+            "0229ce33-0e99-4667-8361-c41a9f0f9e78",
+            "3d57c236-2039-4883-8645-87f453f26cb5",
+            "99d3b0b3-331a-41c3-9dbb-b9d3397ffc60",
+            "d8516477-6a9b-40f1-84ff-aefecacae0b6"
+          ]
+        },
+        {
+          "text": "Avoid missing metrics, success criteria, or validation gates.",
+          "count": 6,
+          "exampleRoundIds": [
+            "f4a4bcbe-1139-4bba-8f9c-8036f53aa75d",
+            "0229ce33-0e99-4667-8361-c41a9f0f9e78",
+            "3d57c236-2039-4883-8645-87f453f26cb5",
+            "99d3b0b3-331a-41c3-9dbb-b9d3397ffc60",
+            "fb208c52-68b4-453f-8854-2ddb3eb46400"
+          ]
+        },
+        {
+          "text": "Avoid plans without prioritization or sequencing.",
+          "count": 5,
+          "exampleRoundIds": [
+            "f4a4bcbe-1139-4bba-8f9c-8036f53aa75d",
+            "0229ce33-0e99-4667-8361-c41a9f0f9e78",
+            "99d3b0b3-331a-41c3-9dbb-b9d3397ffc60",
+            "d8516477-6a9b-40f1-84ff-aefecacae0b6",
+            "e6c9cdd6-da21-4bb1-ba6d-83943de42a59"
+          ]
+        },
+        {
+          "text": "Avoid weak tradeoff handling and missing constraints.",
+          "count": 5,
+          "exampleRoundIds": [
+            "0229ce33-0e99-4667-8361-c41a9f0f9e78",
+            "3d57c236-2039-4883-8645-87f453f26cb5",
+            "99d3b0b3-331a-41c3-9dbb-b9d3397ffc60",
+            "d8516477-6a9b-40f1-84ff-aefecacae0b6",
+            "fb208c52-68b4-453f-8854-2ddb3eb46400"
+          ]
+        }
+      ],
+      "bestRounds": [
+        {
+          "roundId": "0fbbaab6-aeb1-4458-b873-87d0b69767c0",
+          "prompt": "Write a postmortem summary after a production failure.",
+          "gain": 20,
+          "note": "hallucination risk reduction"
+        },
+        {
+          "roundId": "d95dec69-3929-40b9-8336-1d53676d8a0e",
+          "prompt": "Write a clear engineering update for a product release.",
+          "gain": 20,
+          "note": "hallucination risk reduction"
+        },
+        {
+          "roundId": "5853a4d5-57e8-479b-8e34-15122807299f",
+          "prompt": "Write a technical summary of a system migration.",
+          "gain": 20,
+          "note": "hallucination risk reduction"
+        }
+      ],
+      "worstRounds": [
+        {
+          "roundId": "d8516477-6a9b-40f1-84ff-aefecacae0b6",
+          "prompt": "Write a risk assessment for a new system deployment.",
+          "gain": -5,
+          "note": "Refine preserved the original answer instead of delivering a validated improvement."
+        },
+        {
+          "roundId": "e6c9cdd6-da21-4bb1-ba6d-83943de42a59",
+          "prompt": "Write a risk assessment for a new system deployment.",
+          "gain": -4,
+          "note": "Refine preserved the original answer instead of delivering a validated improvement."
+        },
+        {
+          "roundId": "3d57c236-2039-4883-8645-87f453f26cb5",
+          "prompt": "Write a risk assessment for a new system deployment.",
+          "gain": -4,
+          "note": "Refine preserved the original answer instead of delivering a validated improvement."
+        }
+      ],
+      "strategy": {
+        "routingRecommendation": "prefer_refine",
+        "routerBias": 16,
+        "toolRecommendation": "avoid",
+        "refineWhen": {
+          "minRiskScore": 83,
+          "minDirectCritiques": 5,
+          "minStructuralRiskCount": 13,
+          "maxQualityScore": 50
+        },
+        "skipWhen": {
+          "maxRiskScore": 70,
+          "minQualityScore": 55,
+          "maxDirectCritiques": 4,
+          "maxStructuralRiskCount": 9
+        },
+        "highValueSignals": [
+          "Structure is unclear",
+          "Too much noise for an execution-oriented message",
+          "Operational hierarchy is weak",
+          "Add concrete risks, dependencies, and fallback conditions.",
+          "Preserve evidence and name concrete validation checks.",
+          "State assumptions, constraints, and uncertainties explicitly."
+        ],
+        "lowValueSignals": [
+          "Already concise and directly usable",
+          "Grounding would add templates rather than value",
+          "Low-risk answer with clean structure",
+          "Avoid generic best-practice language that does not change execution.",
+          "Avoid missing metrics, success criteria, or validation gates.",
+          "Avoid plans without prioritization or sequencing."
+        ],
+        "note": "Operational writing benefits from sharper structure and signal density, not from more external content. Observed avg gain 14.9 with worth-it 81.5%. Winning pattern: Add concrete risks, dependencies, and fallback conditions. Recurring failure: Avoid generic best-practice language that does not change execution."
+      }
+    },
+    {
+      "category": "mixed_reasoning",
+      "benchmark": {
+        "sampleSize": 69,
+        "averageGain": 11.4,
+        "medianGain": 12,
+        "worthItRate": 82.6,
+        "degradingRate": 11.6,
+        "refineExecutionRate": 100,
+        "researchUsageRate": 0,
+        "respondentPrimarySuccessRate": 92.7
+      },
+      "winningPatterns": [
+        {
+          "text": "State assumptions, constraints, and uncertainties explicitly.",
+          "count": 31,
+          "exampleRoundIds": [
+            "db9f7f2b-cc1c-4e25-beef-eb48b07b075d",
+            "c627f813-9836-4796-89e5-be04dec03158",
+            "12bd9244-6299-4338-b726-374419e679b5",
+            "8fb51dae-1e51-4619-9c84-1fc3c8820759",
+            "1fabe1e2-6415-4106-914b-6212d7afb1a1"
+          ]
+        },
+        {
+          "text": "Add concrete risks, dependencies, and fallback conditions.",
+          "count": 30,
+          "exampleRoundIds": [
+            "db9f7f2b-cc1c-4e25-beef-eb48b07b075d",
+            "c627f813-9836-4796-89e5-be04dec03158",
+            "8fb51dae-1e51-4619-9c84-1fc3c8820759",
+            "1fabe1e2-6415-4106-914b-6212d7afb1a1",
+            "e7e55611-20dc-4902-80b8-fa975abe3598"
+          ]
+        },
+        {
+          "text": "Clarify tradeoffs instead of presenting one perfect answer.",
+          "count": 21,
+          "exampleRoundIds": [
+            "db9f7f2b-cc1c-4e25-beef-eb48b07b075d",
+            "c627f813-9836-4796-89e5-be04dec03158",
+            "12bd9244-6299-4338-b726-374419e679b5",
+            "8fb51dae-1e51-4619-9c84-1fc3c8820759",
+            "1fabe1e2-6415-4106-914b-6212d7afb1a1"
+          ]
+        },
+        {
+          "text": "Improve pedagogy with examples, contrasts, and clearer definitions.",
+          "count": 20,
+          "exampleRoundIds": [
+            "db9f7f2b-cc1c-4e25-beef-eb48b07b075d",
+            "c627f813-9836-4796-89e5-be04dec03158",
+            "12bd9244-6299-4338-b726-374419e679b5",
+            "8fb51dae-1e51-4619-9c84-1fc3c8820759",
+            "b1baafcf-0aa3-411d-9e09-3d2ba7630d73"
+          ]
+        },
+        {
+          "text": "Add metrics, success criteria, or validation signals.",
+          "count": 18,
+          "exampleRoundIds": [
+            "db9f7f2b-cc1c-4e25-beef-eb48b07b075d",
+            "c627f813-9836-4796-89e5-be04dec03158",
+            "8fb51dae-1e51-4619-9c84-1fc3c8820759",
+            "1fabe1e2-6415-4106-914b-6212d7afb1a1",
+            "7f62319a-63a1-4dd3-9560-e0f80511de11"
+          ]
+        },
+        {
+          "text": "Reduce hallucination risk by qualifying provider- or context-specific claims.",
+          "count": 15,
+          "exampleRoundIds": [
+            "8fb51dae-1e51-4619-9c84-1fc3c8820759",
+            "1fabe1e2-6415-4106-914b-6212d7afb1a1",
+            "74f25b14-432b-43ef-935e-46971912dc22",
+            "b6b8f6ce-ff36-402a-a5e0-ff9673bcf499",
+            "9085b453-c241-4b51-aff8-147602fc826e"
+          ]
+        },
+        {
+          "text": "Make step ordering and execution sequence explicit.",
+          "count": 14,
+          "exampleRoundIds": [
+            "db9f7f2b-cc1c-4e25-beef-eb48b07b075d",
+            "8fb51dae-1e51-4619-9c84-1fc3c8820759",
+            "b6b8f6ce-ff36-402a-a5e0-ff9673bcf499",
+            "caa73fc1-e732-41a9-99bb-0aeb1dab25fb",
+            "ed6830d4-b76b-4bcf-a4fd-f96956214af8"
+          ]
+        },
+        {
+          "text": "Preserve evidence and name concrete validation checks.",
+          "count": 13,
+          "exampleRoundIds": [
+            "8fb51dae-1e51-4619-9c84-1fc3c8820759",
+            "7f62319a-63a1-4dd3-9560-e0f80511de11",
+            "74f25b14-432b-43ef-935e-46971912dc22",
+            "ed6830d4-b76b-4bcf-a4fd-f96956214af8",
+            "9085b453-c241-4b51-aff8-147602fc826e"
+          ]
+        }
+      ],
+      "losingPatterns": [],
+      "bestRounds": [
+        {
+          "roundId": "12bd9244-6299-4338-b726-374419e679b5",
+          "prompt": "Explain a concept AND apply it to a real-world case.",
+          "gain": 20,
+          "note": "relevance improvement"
+        },
+        {
+          "roundId": "b1baafcf-0aa3-411d-9e09-3d2ba7630d73",
+          "prompt": "Explain a concept AND apply it to a real-world case.",
+          "gain": 20,
+          "note": "relevance improvement"
+        },
+        {
+          "roundId": "eb8547fe-a652-4bd0-95b6-2dacb9cd42e7",
+          "prompt": "Explain a concept AND apply it to a real-world case.",
+          "gain": 20,
+          "note": "relevance improvement"
+        }
+      ],
+      "worstRounds": [
+        {
+          "roundId": "62d10b5c-a82c-469b-af46-10fa1b1ab280",
+          "prompt": "Propose a strategy AND list risks for implementing it.",
+          "gain": 8,
+          "note": "Low-gain round that exposes a weak orchestration pattern."
+        },
+        {
+          "roundId": "c627f813-9836-4796-89e5-be04dec03158",
+          "prompt": "Propose a strategy AND list risks for implementing it.",
+          "gain": 9,
+          "note": "Low-gain round that exposes a weak orchestration pattern."
+        },
+        {
+          "roundId": "db9f7f2b-cc1c-4e25-beef-eb48b07b075d",
+          "prompt": "Design a system AND explain tradeoffs for scaling it.",
+          "gain": 9,
+          "note": "Low-gain round that exposes a weak orchestration pattern."
+        }
+      ],
+      "strategy": {
+        "routingRecommendation": "prefer_refine",
+        "routerBias": 11,
+        "toolRecommendation": "conditional",
+        "refineWhen": {
+          "minRiskScore": 83,
+          "minDirectCritiques": 5,
+          "minStructuralRiskCount": 14,
+          "maxQualityScore": 54
+        },
+        "skipWhen": {
+          "maxRiskScore": 26,
+          "minQualityScore": 86,
+          "maxDirectCritiques": 1,
+          "maxStructuralRiskCount": 2
+        },
+        "highValueSignals": [
+          "Theory and application are disconnected",
+          "One subpart contains factual risk",
+          "Reasoning needs explicit limits or tradeoffs",
+          "State assumptions, constraints, and uncertainties explicitly.",
+          "Add concrete risks, dependencies, and fallback conditions.",
+          "Clarify tradeoffs instead of presenting one perfect answer."
+        ],
+        "lowValueSignals": [
+          "Reasoning is already balanced",
+          "Grounding would over-weight the factual subpart",
+          "Low-risk answer with strong structure"
+        ],
+        "note": "Mixed reasoning works best when refine keeps breadth but tightens the factual subpart and the decision logic. Observed avg gain 11.4 with worth-it 82.6%. Winning pattern: State assumptions, constraints, and uncertainties explicitly."
+      }
+    },
+    {
+      "category": "other",
+      "benchmark": {
+        "sampleSize": 24,
+        "averageGain": 5.1,
+        "medianGain": 8.5,
+        "worthItRate": 62.5,
+        "degradingRate": 37.5,
+        "refineExecutionRate": 100,
+        "researchUsageRate": 0,
+        "respondentPrimarySuccessRate": 100
+      },
+      "winningPatterns": [
+        {
+          "text": "Add concrete risks, dependencies, and fallback conditions.",
+          "count": 8,
+          "exampleRoundIds": [
+            "1abfd598-c996-48f8-bc7e-2cb05f87eb1c",
+            "7bb84c91-3c0e-4737-99c1-10cd69acef15",
+            "1ad5c4b5-b6b2-43b8-8d8a-096559577d0b",
+            "20a58768-766d-436b-8514-f004aee9a5b9",
+            "0170496f-6c50-4642-858a-33ce933829ff"
+          ]
+        },
+        {
+          "text": "Improve pedagogy with examples, contrasts, and clearer definitions.",
+          "count": 8,
+          "exampleRoundIds": [
+            "1abfd598-c996-48f8-bc7e-2cb05f87eb1c",
+            "7bb84c91-3c0e-4737-99c1-10cd69acef15",
+            "1ad5c4b5-b6b2-43b8-8d8a-096559577d0b",
+            "20a58768-766d-436b-8514-f004aee9a5b9",
+            "0170496f-6c50-4642-858a-33ce933829ff"
+          ]
+        },
+        {
+          "text": "Preserve evidence and name concrete validation checks.",
+          "count": 7,
+          "exampleRoundIds": [
+            "7bb84c91-3c0e-4737-99c1-10cd69acef15",
+            "1ad5c4b5-b6b2-43b8-8d8a-096559577d0b",
+            "20a58768-766d-436b-8514-f004aee9a5b9",
+            "0170496f-6c50-4642-858a-33ce933829ff",
+            "53715bca-cbf8-4e3c-a950-247f79a7ab9d"
+          ]
+        },
+        {
+          "text": "State assumptions, constraints, and uncertainties explicitly.",
+          "count": 6,
+          "exampleRoundIds": [
+            "7bb84c91-3c0e-4737-99c1-10cd69acef15",
+            "1ad5c4b5-b6b2-43b8-8d8a-096559577d0b",
+            "20a58768-766d-436b-8514-f004aee9a5b9",
+            "53715bca-cbf8-4e3c-a950-247f79a7ab9d",
+            "fca01821-3f2e-45ec-9ec4-643acb13a365"
+          ]
+        },
+        {
+          "text": "Clarify tradeoffs instead of presenting one perfect answer.",
+          "count": 5,
+          "exampleRoundIds": [
+            "1abfd598-c996-48f8-bc7e-2cb05f87eb1c",
+            "7bb84c91-3c0e-4737-99c1-10cd69acef15",
+            "0170496f-6c50-4642-858a-33ce933829ff",
+            "53715bca-cbf8-4e3c-a950-247f79a7ab9d",
+            "320f4311-4e26-49e4-a010-624cb0a9bdb5"
+          ]
+        },
+        {
+          "text": "Reduce hallucination risk by qualifying provider- or context-specific claims.",
+          "count": 2,
+          "exampleRoundIds": [
+            "1abfd598-c996-48f8-bc7e-2cb05f87eb1c",
+            "53715bca-cbf8-4e3c-a950-247f79a7ab9d"
+          ]
+        },
+        {
+          "text": "Make step ordering and execution sequence explicit.",
+          "count": 1,
+          "exampleRoundIds": [
+            "fca01821-3f2e-45ec-9ec4-643acb13a365"
+          ]
+        }
+      ],
+      "losingPatterns": [],
+      "bestRounds": [
+        {
+          "roundId": "fca01821-3f2e-45ec-9ec4-643acb13a365",
+          "prompt": "Design a feature flag service with low-latency global evaluation and auditability. Use real implementation constraints rather than generic best practices.",
+          "gain": 14,
+          "note": "hallucination risk reduction"
+        },
+        {
+          "roundId": "1abfd598-c996-48f8-bc7e-2cb05f87eb1c",
+          "prompt": "What are feature flags and how do they work?",
+          "gain": 11,
+          "note": "robustness increase"
+        },
+        {
+          "roundId": "7bb84c91-3c0e-4737-99c1-10cd69acef15",
+          "prompt": "What are feature flags and how do they work?",
+          "gain": 11,
+          "note": "hallucination risk reduction"
+        }
+      ],
+      "worstRounds": [
+        {
+          "roundId": "1ad5c4b5-b6b2-43b8-8d8a-096559577d0b",
+          "prompt": "What are feature flags and how do they work?",
+          "gain": 9,
+          "note": "Low-gain round that exposes a weak orchestration pattern."
+        },
+        {
+          "roundId": "0170496f-6c50-4642-858a-33ce933829ff",
+          "prompt": "What are feature flags and how do they work?",
+          "gain": 10,
+          "note": "Low-gain round that exposes a weak orchestration pattern."
+        },
+        {
+          "roundId": "320f4311-4e26-49e4-a010-624cb0a9bdb5",
+          "prompt": "Choose between SQS and Kafka for order processing with auditability and near exactly-once behavior, then explain the tradeoffs.",
+          "gain": 11,
+          "note": "Low-gain round that exposes a weak orchestration pattern."
+        }
+      ],
+      "strategy": {
+        "routingRecommendation": "selective",
+        "routerBias": -3,
+        "toolRecommendation": "conditional",
+        "refineWhen": {
+          "minRiskScore": 83,
+          "minDirectCritiques": 5,
+          "minStructuralRiskCount": 10,
+          "maxQualityScore": 54
+        },
+        "skipWhen": {
+          "maxRiskScore": 25,
+          "minQualityScore": 84,
+          "maxDirectCritiques": 1,
+          "maxStructuralRiskCount": 2
+        },
+        "highValueSignals": [
+          "High risk and clear critique volume",
+          "Add concrete risks, dependencies, and fallback conditions.",
+          "Improve pedagogy with examples, contrasts, and clearer definitions.",
+          "Preserve evidence and name concrete validation checks."
+        ],
+        "lowValueSignals": [
+          "Low risk and already strong quality"
+        ],
+        "note": "Fallback strategy used when category-specific evidence is sparse. Observed avg gain 5.1 with worth-it 62.5%. Winning pattern: Add concrete risks, dependencies, and fallback conditions."
+      }
+    }
+  ]
+}

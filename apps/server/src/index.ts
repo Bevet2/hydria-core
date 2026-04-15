@@ -1,0 +1,136 @@
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import cors from "cors";
+import express, { type NextFunction, type Request, type Response } from "express";
+import { ZodError } from "zod";
+import { createArenaRouter } from "./routes/arena.js";
+import { createBenchmarkRouter } from "./routes/benchmark.js";
+import { createHistoryRouter } from "./routes/history.js";
+import { createLocalModelRouter } from "./routes/localModel.js";
+import {
+  OFFICIAL_BASELINE_FROZEN_AT,
+  OFFICIAL_BASELINE_LABEL,
+  OFFICIAL_BASELINE_MODELS,
+  OFFICIAL_BASELINE_RUN_ID,
+  OFFICIAL_BASELINE_SUMMARY
+} from "./data/officialBaseline.js";
+import { ArenaRunner } from "./services/arenaRunner.js";
+import { BenchmarkService } from "./services/benchmarkService.js";
+import { BenchmarkStore } from "./services/benchmarkStore.js";
+import { HistoryStore } from "./services/historyStore.js";
+import { LocalModelService } from "./services/localModel.js";
+import { OpenRouterService } from "./services/openrouter.js";
+import { ResearchToolService } from "./services/researchToolService.js";
+import { RefineRouterService } from "./services/refineRouter.js";
+import { defaultArenaModels, env } from "./utils/env.js";
+import { logger } from "./utils/logger.js";
+
+const historyStore = new HistoryStore();
+const localModelService = new LocalModelService();
+const openRouterService = new OpenRouterService();
+const benchmarkStore = new BenchmarkStore();
+const refineRouterService = new RefineRouterService();
+const researchToolService = new ResearchToolService();
+const arenaRunner = new ArenaRunner(
+  openRouterService,
+  localModelService,
+  historyStore,
+  refineRouterService,
+  researchToolService
+);
+const benchmarkService = new BenchmarkService(arenaRunner, benchmarkStore);
+const currentDir = dirname(fileURLToPath(import.meta.url));
+const webDistDir = join(currentDir, "../../web/dist");
+const webIndexPath = join(webDistDir, "index.html");
+const hasBuiltWebApp = existsSync(webIndexPath);
+
+await historyStore.ensureReady();
+await benchmarkService.ensureReady();
+
+const app = express();
+app.use(
+  cors({
+    origin: env.WEB_ORIGIN
+  })
+);
+app.use(express.json({ limit: "2mb" }));
+
+app.get("/api/health", async (_request, response) => {
+  const local = await localModelService.healthcheck();
+  response.json({
+    status: "ok",
+    defaultArenaModels,
+    officialBaseline: {
+      label: OFFICIAL_BASELINE_LABEL,
+      frozenAt: OFFICIAL_BASELINE_FROZEN_AT,
+      runId: OFFICIAL_BASELINE_RUN_ID,
+      models: OFFICIAL_BASELINE_MODELS,
+      summary: OFFICIAL_BASELINE_SUMMARY
+    },
+    fallbackConfig: {
+      refineFallbackModel: env.ARENA_REFINE_FALLBACK_MODEL,
+      localStudentFallbackModel: env.LOCAL_STUDENT_FALLBACK_MODEL
+    },
+    localModel: local
+  });
+});
+
+app.use("/api/arena", createArenaRouter(arenaRunner));
+app.use("/api/arena/history", createHistoryRouter(historyStore));
+app.use("/api/benchmark", createBenchmarkRouter(benchmarkService));
+app.use("/api/local-model", createLocalModelRouter(localModelService));
+
+if (hasBuiltWebApp) {
+  app.use(express.static(webDistDir));
+  app.get(/^(?!\/api(?:\/|$)).*/, (_request, response) => {
+    response.sendFile(webIndexPath);
+  });
+} else {
+  app.get("/", (_request, response) => {
+    response.status(503).type("html").send(`
+      <!doctype html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <title>Hydria Core Playground</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 32px; line-height: 1.5; }
+            code { background: #f3f3f3; padding: 2px 6px; border-radius: 6px; }
+          </style>
+        </head>
+        <body>
+          <h1>Hydria Core Playground</h1>
+          <p>The API server is running, but the web build is not available yet.</p>
+          <p>Run <code>npm.cmd run build</code> to serve the built UI on this port, or start the Vite dev server with <code>npm.cmd run dev</code>.</p>
+        </body>
+      </html>
+    `);
+  });
+}
+
+app.use((error: unknown, _request: Request, response: Response, _next: NextFunction) => {
+  if (error instanceof ZodError) {
+    response.status(400).json({
+      error: "Validation failed",
+      details: error.issues
+    });
+    return;
+  }
+
+  logger.error("Unhandled server error", {
+    error: String(error)
+  });
+
+  response.status(500).json({
+    error: error instanceof Error ? error.message : "Unexpected server error"
+  });
+});
+
+app.listen(env.SERVER_PORT, () => {
+  logger.info("Hydria Arena server listening", {
+    port: env.SERVER_PORT,
+    webOrigin: env.WEB_ORIGIN
+  });
+});

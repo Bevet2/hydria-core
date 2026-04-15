@@ -1,0 +1,23 @@
+{
+  "name": "hydria-arena",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hydria Arena V1 - multi-LLM arena with OpenRouter and a local student model.",
+  "workspaces": [
+    "apps/server",
+    "apps/web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c cyan,yellow \"npm run dev -w @hydria-arena/server\" \"npm run dev -w @hydria-arena/web\"",
+    "build": "npm run build -w @hydria-arena/server && npm run build -w @hydria-arena/web",
+    "check": "npm run check -w @hydria-arena/server && npm run build -w @hydria-arena/web",
+    "start": "npm run start -w @hydria-arena/server",
+    "knowledge:refresh": "npm run knowledge:refresh -w @hydria-arena/server",
+    "sync:openrouter": "powershell -ExecutionPolicy Bypass -File ./scripts/sync-openrouter-key.ps1",
+    "setup:local-model": "powershell -ExecutionPolicy Bypass -File ./scripts/setup-local-model.ps1",
+    "dev:ps": "powershell -ExecutionPolicy Bypass -File ./scripts/dev.ps1"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
