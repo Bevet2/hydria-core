@@ -7,6 +7,7 @@ import {
   historyFileSchema,
   judgeOutputSchema,
   modelSelectionSchema,
+  orchestrationPolicySchema,
   questionCategorySchema,
   researchToolLogSchema,
   redTeamOutputSchema,
@@ -22,6 +23,7 @@ import {
   type RespondentOutput
 } from "../types/arena.js";
 import { env } from "../utils/env.js";
+import { buildLegacyOrchestrationPolicy } from "./orchestrationPolicy.js";
 import { buildLegacyRouterDecision } from "./refineRouter.js";
 import { deriveRoundMetrics } from "./roundMetrics.js";
 import { RoundDatasetStore } from "./roundDatasetStore.js";
@@ -203,6 +205,11 @@ export class HistoryStore {
       category: normalizedCategory,
       outputs: normalizedOutputs,
       trace: normalizedTrace,
+      orchestration: orchestrationPolicySchema.parse(
+        typeof current.orchestration === "object" && current.orchestration !== null
+          ? current.orchestration
+          : buildLegacyOrchestrationPolicy(question)
+      ),
       router: normalizedRouter,
       research: researchToolLogSchema.parse({
         ...defaultResearch,

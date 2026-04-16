@@ -2,7 +2,8 @@ import { KnowledgeLayerService } from "../services/knowledgeLayerService.js";
 
 async function main() {
   const service = new KnowledgeLayerService();
-  const { knowledgeLayer, curatedStudentExamples } = await service.buildAndPersist();
+  const { knowledgeLayer, curatedStudentExamples, contrastiveStudentExamples } =
+    await service.buildAndPersist();
 
   const strongest = knowledgeLayer.globalSummary.strongestCategories.join(", ");
   const weakest = knowledgeLayer.globalSummary.weakestCategories.join(", ");
@@ -15,6 +16,7 @@ async function main() {
         benchmarkRunsAnalyzed: knowledgeLayer.sourceStats.benchmarkRunsAnalyzed,
         roundDatasetEntriesAnalyzed: knowledgeLayer.sourceStats.roundDatasetEntriesAnalyzed,
         curatedStudentExamples: curatedStudentExamples.length,
+        contrastiveStudentExamples: contrastiveStudentExamples.length,
         strongestCategories: strongest,
         weakestCategories: weakest
       },

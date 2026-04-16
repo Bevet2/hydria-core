@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import {
+  type OrchestrationPolicyDetails,
   type QuestionCategory,
   type RedTeamOutput,
   type RefineRouterDecisionDetails,
@@ -148,6 +149,9 @@ export function buildLegacyRouterDecision(question: string): RefineRouterDecisio
       averageGain: 0,
       worthItRate: 0,
       fallbackRate: 0,
+      noOpRate: 0,
+      staticFallbackRate: 0,
+      positiveResearchImpactRate: 0,
       routingRecommendation: getStaticRoutingRecommendation(category)
     },
     sideSignals: {
@@ -176,7 +180,10 @@ export class RefineRouterService {
     this.knowledgeLayerService = new KnowledgeLayerService();
   }
 
-  async decide(context: RefineRouterContext): Promise<RefineRouterDecisionDetails> {
+  async decide(
+    context: RefineRouterContext,
+    orchestration: OrchestrationPolicyDetails | null = null
+  ): Promise<RefineRouterDecisionDetails> {
     const category = classifyQuestion(context.question);
     const benchmarkInsight = await this.loadBenchmarkInsight(category);
     const knowledgeInsight = await this.loadKnowledgeInsight(category);
@@ -186,7 +193,9 @@ export class RefineRouterService {
       respondent: context.respondentA,
       redTeam: context.redTeam,
       benchmarkInsight,
-      knowledgeStrategy: knowledgeInsight?.strategy ?? null
+      knowledgeInsight,
+      knowledgeStrategy: knowledgeInsight?.strategy ?? null,
+      orchestration
     });
     const sideB = this.evaluateSide({
       slot: "B",
@@ -194,7 +203,9 @@ export class RefineRouterService {
       respondent: context.respondentB,
       redTeam: context.redTeam,
       benchmarkInsight,
-      knowledgeStrategy: knowledgeInsight?.strategy ?? null
+      knowledgeInsight,
+      knowledgeStrategy: knowledgeInsight?.strategy ?? null,
+      orchestration
     });
 
     const globalStrategy =
@@ -212,6 +223,12 @@ export class RefineRouterService {
       knowledgeInsight
         ? `Knowledge layer bias for ${category}: ${knowledgeInsight.strategy.routingRecommendation}, router bias ${knowledgeInsight.strategy.routerBias}. ${knowledgeInsight.strategy.note}`
         : "Knowledge layer not available yet; router is using benchmark signal plus category priors only.",
+      knowledgeInsight
+        ? `Knowledge signals: no-op ${knowledgeInsight.benchmark.noOpRate}%, static refine fallback ${knowledgeInsight.benchmark.staticFallbackRate}%, positive research impact ${knowledgeInsight.benchmark.positiveResearchImpactRate}%.`
+        : "Knowledge benchmark signals unavailable.",
+      orchestration
+        ? `Orchestration focus ${orchestration.focus}: refine ${orchestration.refinePolicy}, research ${orchestration.researchPolicy}, cost ${orchestration.costPolicy}.`
+        : "No orchestration policy was available for this round.",
       `A: quality ${sideA.signal.qualityScore}, risk ${sideA.signal.riskScore}, estimated value ${sideA.estimatedValue} -> ${sideA.shouldRefine ? "refine" : "skip"}.`,
       `B: quality ${sideB.signal.qualityScore}, risk ${sideB.signal.riskScore}, estimated value ${sideB.estimatedValue} -> ${sideB.shouldRefine ? "refine" : "skip"}.`,
       globalStrategy === "skip_refine"
@@ -248,6 +265,9 @@ export class RefineRouterService {
         averageGain: 0,
         worthItRate: 0,
         fallbackRate: 0,
+        noOpRate: 0,
+        staticFallbackRate: 0,
+        positiveResearchImpactRate: 0,
         routingRecommendation: "insufficient_data"
       };
     }
@@ -313,6 +333,9 @@ export class RefineRouterService {
         averageGain,
         worthItRate,
         fallbackRate,
+        noOpRate: 0,
+        staticFallbackRate: 0,
+        positiveResearchImpactRate: 0,
         routingRecommendation: deriveRoutingRecommendation({
           category,
           sampleSize,
@@ -330,6 +353,9 @@ export class RefineRouterService {
         averageGain: 0,
         worthItRate: 0,
         fallbackRate: 0,
+        noOpRate: 0,
+        staticFallbackRate: 0,
+        positiveResearchImpactRate: 0,
         routingRecommendation: getStaticRoutingRecommendation(category)
       };
     }
@@ -352,7 +378,9 @@ export class RefineRouterService {
     respondent: RespondentOutput;
     redTeam: RedTeamOutput;
     benchmarkInsight: RouterCategoryBenchmarkInsight;
+    knowledgeInsight: KnowledgeCategoryInsight | null;
     knowledgeStrategy: KnowledgeCategoryStrategy | null;
+    orchestration: OrchestrationPolicyDetails | null;
   }) {
     const directCritiques =
       args.slot === "A" ? args.redTeam.attacks_on_a.length : args.redTeam.attacks_on_b.length;
@@ -402,12 +430,17 @@ export class RefineRouterService {
       0,
       100
     );
+    const noOpRate = args.knowledgeInsight?.benchmark.noOpRate ?? 0;
+    const staticFallbackRate = args.knowledgeInsight?.benchmark.staticFallbackRate ?? 0;
+    const positiveResearchImpactRate =
+      args.knowledgeInsight?.benchmark.positiveResearchImpactRate ?? 0;
 
     let expectedValueScore =
       42 +
       categoryBias[args.category] +
       this.getBenchmarkBias(args.benchmarkInsight.routingRecommendation) +
       (args.knowledgeStrategy?.routerBias ?? 0) +
+      (args.orchestration?.refineBias ?? 0) +
       Math.round((riskScore - 50) / 2) +
       Math.round((60 - qualityScore) / 2);
 
@@ -441,6 +474,24 @@ export class RefineRouterService {
     if (args.category === "product_strategy" && qualityScore <= 58) {
       expectedValueScore += 10;
     }
+    if (noOpRate >= 40) {
+      expectedValueScore -= 10;
+    } else if (noOpRate <= 12) {
+      expectedValueScore += 3;
+    }
+    if (staticFallbackRate >= 20) {
+      expectedValueScore -= 14;
+    } else if (staticFallbackRate >= 10) {
+      expectedValueScore -= 7;
+    }
+    if (
+      positiveResearchImpactRate >= 35 &&
+      args.orchestration?.researchPolicy !== "off" &&
+      (args.orchestration?.focus === "factual_grounding" ||
+        args.orchestration?.focus === "pedagogy_precision")
+    ) {
+      expectedValueScore += 4;
+    }
 
     expectedValueScore = clamp(expectedValueScore, 0, 100);
 
@@ -455,7 +506,9 @@ export class RefineRouterService {
       directCritiques,
       structuralRiskCount,
       benchmarkInsight: args.benchmarkInsight,
-      knowledgeStrategy: args.knowledgeStrategy
+      knowledgeInsight: args.knowledgeInsight,
+      knowledgeStrategy: args.knowledgeStrategy,
+      orchestration: args.orchestration
     });
 
     const signal: RouterSideSignal = {
@@ -496,14 +549,83 @@ export class RefineRouterService {
     directCritiques: number;
     structuralRiskCount: number;
     benchmarkInsight: RouterCategoryBenchmarkInsight;
+    knowledgeInsight: KnowledgeCategoryInsight | null;
     knowledgeStrategy: KnowledgeCategoryStrategy | null;
+    orchestration: OrchestrationPolicyDetails | null;
   }) {
+    const noOpRate = args.knowledgeInsight?.benchmark.noOpRate ?? 0;
+    const staticFallbackRate = args.knowledgeInsight?.benchmark.staticFallbackRate ?? 0;
+    const positiveResearchImpactRate =
+      args.knowledgeInsight?.benchmark.positiveResearchImpactRate ?? 0;
+
+    if (
+      args.orchestration?.refinePolicy === "aggressive" &&
+      (args.riskScore >= 48 || args.structuralRiskCount >= 5) &&
+      args.directCritiques >= 1
+    ) {
+      return true;
+    }
+
+    if (
+      args.orchestration?.refinePolicy === "conservative" &&
+      args.qualityScore >= 74 &&
+      args.riskScore <= 35 &&
+      args.directCritiques <= 2 &&
+      args.expectedValueScore < 78
+    ) {
+      return false;
+    }
+
+    if (
+      args.orchestration?.costPolicy === "latency_guarded" &&
+      args.expectedValueScore < 70 &&
+      args.riskScore < 60 &&
+      args.directCritiques < 4
+    ) {
+      return false;
+    }
+
+    if (
+      args.orchestration?.costPolicy === "quality_first" &&
+      args.riskScore >= 55 &&
+      args.directCritiques >= 1
+    ) {
+      return true;
+    }
+
+    if (
+      staticFallbackRate >= 25 &&
+      args.expectedValueScore < 78 &&
+      args.riskScore < 75 &&
+      args.directCritiques < 4
+    ) {
+      return false;
+    }
+
+    if (
+      noOpRate >= 45 &&
+      args.expectedValueScore < 70 &&
+      args.directCritiques < 3 &&
+      args.structuralRiskCount < 5
+    ) {
+      return false;
+    }
+
     if (
       args.knowledgeStrategy &&
       this.matchesKnowledgeSkip(args, args.knowledgeStrategy) &&
       args.expectedValueScore < 78
     ) {
       return false;
+    }
+
+    if (
+      positiveResearchImpactRate >= 40 &&
+      args.orchestration?.researchPolicy !== "off" &&
+      args.expectedValueScore >= 60 &&
+      args.riskScore >= 45
+    ) {
+      return true;
     }
 
     if (

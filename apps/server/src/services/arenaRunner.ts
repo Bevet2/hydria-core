@@ -63,8 +63,10 @@ import {
   parseSynthesizerOutput
 } from "../utils/synthesizerOutput.js";
 import { HistoryStore } from "./historyStore.js";
+import { executeOpenRouterStructuredStep } from "./arena/openRouterStructuredStep.js";
 import { LocalModelService } from "./localModel.js";
 import { OpenRouterService } from "./openrouter.js";
+import { OrchestrationPolicyService } from "./orchestrationPolicy.js";
 import { classifyQuestion } from "./questionClassifier.js";
 import { ResearchToolService } from "./researchToolService.js";
 import { RefineRouterService } from "./refineRouter.js";
@@ -123,6 +125,7 @@ export class ArenaRunner {
     private readonly openRouterService: OpenRouterService,
     private readonly localModelService: LocalModelService,
     private readonly historyStore: HistoryStore,
+    private readonly orchestrationPolicyService: OrchestrationPolicyService,
     private readonly refineRouterService: RefineRouterService,
     private readonly researchToolService: ResearchToolService
   ) {}
@@ -163,12 +166,19 @@ export class ArenaRunner {
       request.models.redTeam,
       "Primary OpenRouter red-team step produced validated JSON."
     );
+    const orchestration = await this.orchestrationPolicyService.planRound({
+      question: request.question,
+      category: detectedCategory,
+      respondentA: respondentAResult.parsed,
+      respondentB: respondentBResult.parsed,
+      redTeam: redTeamResult.parsed
+    });
     const router = await this.refineRouterService.decide({
       question: request.question,
       respondentA: respondentAResult.parsed,
       respondentB: respondentBResult.parsed,
       redTeam: redTeamResult.parsed
-    });
+    }, orchestration);
     const researchBeforeRefine = await this.researchToolService.maybeCollect({
       question: request.question,
       category: router.category,
@@ -176,7 +186,8 @@ export class ArenaRunner {
       respondentB: respondentBResult.parsed,
       redTeam: redTeamResult.parsed,
       shouldRefineA: router.shouldRefineA,
-      shouldRefineB: router.shouldRefineB
+      shouldRefineB: router.shouldRefineB,
+      orchestration
     });
 
     const [refineAResult, refineBResult] = await Promise.all([
@@ -334,6 +345,7 @@ export class ArenaRunner {
         synthesizer: synthesizerResult.trace,
         localStudent: localStudentResult.trace
       },
+      orchestration,
       router,
       research: finalizedResearch,
       refineProfile: {
@@ -739,96 +751,43 @@ export class ArenaRunner {
     refineA: RefinerOutput;
     refineB: RefinerOutput;
   }): Promise<StepResult<JudgeOutput>> {
-    const startedAt = performance.now();
-    const modelChain = [args.primaryModel, ...args.fallbackModels];
-    const baseUserPrompt = buildJudgeUserPrompt(
-      args.category,
-      args.question,
-      args.respondentA,
-      args.respondentB,
-      args.redTeam,
-      args.refineA,
-      args.refineB
-    );
-
-    let lastError: unknown = null;
-    let lastRawResponse = "";
-    let validationFailures = 0;
-    const attempts: ExecutionAttempt[] = [];
-
-    for (const [index, model] of modelChain.entries()) {
-      try {
-        attempts.push({
-          provider: "openrouter",
-          model,
-          mode: index === 0 ? "primary" : "fallback"
-        });
-        const response = await this.openRouterService.complete({
-          model,
-          systemPrompt: buildJudgeSystemPrompt(args.category),
-          userPrompt:
-            index === 0
-              ? baseUserPrompt
-              : buildJudgeRepairUserPrompt({
-                  category: args.category,
-                  question: args.question,
-                  respondentA: args.respondentA,
-                  respondentB: args.respondentB,
-                  redTeam: args.redTeam,
-                  refineA: args.refineA,
-                  refineB: args.refineB,
-                  previousResponse: lastRawResponse || "(empty response)",
-                  validationIssues: this.getJudgeValidationIssues(lastError)
-                }),
-          maxTokens: 850,
-          temperature: index === 0 ? 0.1 : 0
-        });
-        lastRawResponse = response.content;
-        const parsed = parseJudgeOutput({
-          raw: response.content,
+    const result = await executeOpenRouterStructuredStep({
+      openRouterService: this.openRouterService,
+      primaryModel: args.primaryModel,
+      fallbackModels: args.fallbackModels,
+      systemPrompt: buildJudgeSystemPrompt(args.category),
+      buildPrimaryUserPrompt: () =>
+        buildJudgeUserPrompt(
+          args.category,
+          args.question,
+          args.respondentA,
+          args.respondentB,
+          args.redTeam,
+          args.refineA,
+          args.refineB
+        ),
+      buildRepairUserPrompt: ({ previousResponse, validationIssues }) =>
+        buildJudgeRepairUserPrompt({
+          category: args.category,
+          question: args.question,
+          respondentA: args.respondentA,
+          respondentB: args.respondentB,
+          redTeam: args.redTeam,
+          refineA: args.refineA,
+          refineB: args.refineB,
+          previousResponse,
+          validationIssues
+        }),
+      parse: (raw) =>
+        parseJudgeOutput({
+          raw,
           label: "Judge"
-        });
-
-        if (index > 0) {
-          logger.info("Judge fallback succeeded", {
-            fallbackModel: model,
-            primaryModel: args.primaryModel,
-            attempt: index + 1
-          });
-        }
-
-        return {
-          output: parsed,
-          trace: {
-            requestedProvider: "openrouter",
-            requestedModel: args.primaryModel,
-            attempts,
-            finalProvider: "openrouter",
-            finalModel: model,
-            usedRetry: attempts.some((attempt) => attempt.mode === "repair_retry"),
-            usedFallback: index > 0,
-            validationFailures,
-            outcome:
-              index === 0
-                ? "success"
-                : attempts.some((attempt) => attempt.mode === "fallback")
-                  ? "fallback_success"
-                  : "retry_success",
-            note:
-              index > 0 && attempts.some((attempt) => attempt.mode === "fallback")
-                ? "Primary judge output failed validation; fallback OpenRouter model produced validated judge JSON."
-                : index > 0
-                  ? "Primary judge output failed validation; repair retry produced validated judge JSON."
-                  : "Primary OpenRouter judge step produced validated JSON."
-          },
-          durationMs: Math.round(performance.now() - startedAt)
-        };
-      } catch (error) {
-        lastError = error;
-        if (error instanceof JudgeValidationError) {
-          validationFailures += 1;
-        }
-        const isLastAttempt = index === modelChain.length - 1;
+        }),
+      maxTokens: 850,
+      primaryTemperature: 0.1,
+      countValidationFailure: (error) => error instanceof JudgeValidationError,
+      getValidationIssues: (error) => this.getJudgeValidationIssues(error),
+      onAttemptFailure: ({ model, primaryModel, nextModel, attempt, error, isLastAttempt, index }) =>
         logger.warn(
           isLastAttempt
             ? "Judge attempt failed with no more models available"
@@ -837,82 +796,52 @@ export class ArenaRunner {
               : "Judge attempt failed; retrying with fallback model",
           {
             model,
-            primaryModel: args.primaryModel,
-            nextModel:
-              isLastAttempt
-                ? null
-                : index === 0
-                  ? args.primaryModel
-                  : modelChain[index + 1],
-            attempt: index + 1,
+            primaryModel,
+            nextModel,
+            attempt,
             error: String(error)
           }
-        );
+        ),
+      onRetryFailure: ({ model, nextModel, error }) =>
+        logger.warn("Judge repair retry failed", {
+          model,
+          nextModel,
+          error: String(error)
+        }),
+      onFallbackSuccess: ({ model, primaryModel, attempt }) =>
+        logger.info("Judge fallback succeeded", {
+          fallbackModel: model,
+          primaryModel,
+          attempt
+        })
+    });
 
-        if (index === 0) {
-          try {
-            attempts.push({
-              provider: "openrouter",
-              model,
-              mode: "repair_retry"
-            });
-            const retryResponse = await this.openRouterService.complete({
-              model,
-              systemPrompt: buildJudgeSystemPrompt(args.category),
-              userPrompt: buildJudgeRepairUserPrompt({
-                category: args.category,
-                question: args.question,
-                respondentA: args.respondentA,
-                respondentB: args.respondentB,
-                redTeam: args.redTeam,
-                refineA: args.refineA,
-                refineB: args.refineB,
-                previousResponse: lastRawResponse || "(empty response)",
-                validationIssues: this.getJudgeValidationIssues(lastError)
-              }),
-              maxTokens: 850,
-              temperature: 0
-            });
-            lastRawResponse = retryResponse.content;
-            const parsed = parseJudgeOutput({
-              raw: retryResponse.content,
-              label: "Judge"
-            });
-
-            return {
-              output: parsed,
-              trace: {
-                requestedProvider: "openrouter",
-                requestedModel: args.primaryModel,
-                attempts,
-                finalProvider: "openrouter",
-                finalModel: model,
-                usedRetry: true,
-                usedFallback: false,
-                validationFailures,
-                outcome: "retry_success",
-                note: "Primary judge output failed validation; repair retry produced validated judge JSON."
-              },
-              durationMs: Math.round(performance.now() - startedAt)
-            };
-          } catch (retryError) {
-            lastError = retryError;
-            if (retryError instanceof JudgeValidationError) {
-              validationFailures += 1;
-            }
-            logger.warn("Judge repair retry failed", {
-              model,
-              nextModel: modelChain[index + 1] ?? null,
-              error: String(retryError)
-            });
-          }
-        }
-      }
+    if (result.status === "failure") {
+      throw result.lastError instanceof Error
+        ? result.lastError
+        : new Error("Judge failed to produce validated JSON after all attempts.");
     }
 
-    throw lastError instanceof Error
-      ? lastError
-      : new Error("Judge failed to produce validated JSON after all attempts.");
+    return {
+      output: result.output,
+      trace: {
+        requestedProvider: "openrouter",
+        requestedModel: args.primaryModel,
+        attempts: result.attempts,
+        finalProvider: "openrouter",
+        finalModel: result.finalModel,
+        usedRetry: result.usedRetry,
+        usedFallback: result.usedFallback,
+        validationFailures: result.validationFailures,
+        outcome: result.usedFallback ? "fallback_success" : result.usedRetry ? "retry_success" : "success",
+        note: result.usedFallback
+          ? "Primary judge output failed validation; fallback OpenRouter model produced validated judge JSON."
+          : result.usedRetry
+            ? "Primary judge output failed validation; repair retry produced validated judge JSON."
+            : "Primary OpenRouter judge step produced validated JSON."
+      },
+      durationMs: result.durationMs
+    };
   }
 
   private async runSynthesizerStep(args: {
@@ -926,96 +855,43 @@ export class ArenaRunner {
     redTeam: RedTeamOutput;
     judge: JudgeOutput;
   }): Promise<StepResult<SynthesizerOutput>> {
-    const startedAt = performance.now();
-    const modelChain = [args.primaryModel, ...args.fallbackModels];
-    const baseUserPrompt = buildSynthesizerUserPrompt(
-      args.question,
-      args.respondentA,
-      args.respondentB,
-      args.refineA,
-      args.refineB,
-      args.redTeam,
-      args.judge
-    );
-
-    let lastError: unknown = null;
-    let lastRawResponse = "";
-    let validationFailures = 0;
-    const attempts: ExecutionAttempt[] = [];
-
-    for (const [index, model] of modelChain.entries()) {
-      try {
-        attempts.push({
-          provider: "openrouter",
-          model,
-          mode: index === 0 ? "primary" : "fallback"
-        });
-        const response = await this.openRouterService.complete({
-          model,
-          systemPrompt: synthesizerSystemPrompt,
-          userPrompt:
-            index === 0
-              ? baseUserPrompt
-              : buildSynthesizerRepairUserPrompt(
-                  args.question,
-                  args.respondentA,
-                  args.respondentB,
-                  args.refineA,
-                  args.refineB,
-                  args.redTeam,
-                  args.judge,
-                  lastRawResponse || "(empty response)",
-                  this.getSynthesizerValidationIssues(lastError)
-                ),
-          maxTokens: 1000,
-          temperature: index === 0 ? 0.2 : 0
-        });
-        lastRawResponse = response.content;
-        const parsed = parseSynthesizerOutput({
-          raw: response.content,
+    const result = await executeOpenRouterStructuredStep({
+      openRouterService: this.openRouterService,
+      primaryModel: args.primaryModel,
+      fallbackModels: args.fallbackModels,
+      systemPrompt: synthesizerSystemPrompt,
+      buildPrimaryUserPrompt: () =>
+        buildSynthesizerUserPrompt(
+          args.question,
+          args.respondentA,
+          args.respondentB,
+          args.refineA,
+          args.refineB,
+          args.redTeam,
+          args.judge
+        ),
+      buildRepairUserPrompt: ({ previousResponse, validationIssues }) =>
+        buildSynthesizerRepairUserPrompt(
+          args.question,
+          args.respondentA,
+          args.respondentB,
+          args.refineA,
+          args.refineB,
+          args.redTeam,
+          args.judge,
+          previousResponse,
+          validationIssues
+        ),
+      parse: (raw) =>
+        parseSynthesizerOutput({
+          raw,
           label: "Synthesizer"
-        });
-
-        if (index > 0) {
-          logger.info("Synthesizer fallback succeeded", {
-            fallbackModel: model,
-            primaryModel: args.primaryModel,
-            attempt: index + 1
-          });
-        }
-
-        return {
-          output: parsed,
-          trace: {
-            requestedProvider: "openrouter",
-            requestedModel: args.primaryModel,
-            attempts,
-            finalProvider: "openrouter",
-            finalModel: model,
-            usedRetry: attempts.some((attempt) => attempt.mode === "repair_retry"),
-            usedFallback: index > 0,
-            validationFailures,
-            outcome:
-              index === 0
-                ? "success"
-                : attempts.some((attempt) => attempt.mode === "fallback")
-                  ? "fallback_success"
-                  : "retry_success",
-            note:
-              index > 0 && attempts.some((attempt) => attempt.mode === "fallback")
-                ? "Primary synthesizer output failed validation; fallback OpenRouter model produced validated synthesizer JSON."
-                : index > 0
-                  ? "Primary synthesizer output failed validation; repair retry produced validated synthesizer JSON."
-                  : "Primary OpenRouter synthesizer produced validated JSON."
-          },
-          durationMs: Math.round(performance.now() - startedAt)
-        };
-      } catch (error) {
-        lastError = error;
-        if (error instanceof SynthesizerValidationError) {
-          validationFailures += 1;
-        }
-        const isLastAttempt = index === modelChain.length - 1;
+        }),
+      maxTokens: 1000,
+      primaryTemperature: 0.2,
+      countValidationFailure: (error) => error instanceof SynthesizerValidationError,
+      getValidationIssues: (error) => this.getSynthesizerValidationIssues(error),
+      onAttemptFailure: ({ model, primaryModel, nextModel, attempt, error, isLastAttempt, index }) =>
         logger.warn(
           isLastAttempt
             ? "Synthesizer attempt failed with no more models available"
@@ -1024,82 +900,52 @@ export class ArenaRunner {
               : "Synthesizer attempt failed; retrying with fallback model",
           {
             model,
-            primaryModel: args.primaryModel,
-            nextModel:
-              isLastAttempt
-                ? null
-                : index === 0
-                  ? args.primaryModel
-                  : modelChain[index + 1],
-            attempt: index + 1,
+            primaryModel,
+            nextModel,
+            attempt,
             error: String(error)
           }
-        );
+        ),
+      onRetryFailure: ({ model, nextModel, error }) =>
+        logger.warn("Synthesizer repair retry failed", {
+          model,
+          nextModel,
+          error: String(error)
+        }),
+      onFallbackSuccess: ({ model, primaryModel, attempt }) =>
+        logger.info("Synthesizer fallback succeeded", {
+          fallbackModel: model,
+          primaryModel,
+          attempt
+        })
+    });
 
-        if (index === 0) {
-          try {
-            attempts.push({
-              provider: "openrouter",
-              model,
-              mode: "repair_retry"
-            });
-            const retryResponse = await this.openRouterService.complete({
-              model,
-              systemPrompt: synthesizerSystemPrompt,
-              userPrompt: buildSynthesizerRepairUserPrompt(
-                args.question,
-                args.respondentA,
-                args.respondentB,
-                args.refineA,
-                args.refineB,
-                args.redTeam,
-                args.judge,
-                lastRawResponse || "(empty response)",
-                this.getSynthesizerValidationIssues(lastError)
-              ),
-              maxTokens: 1000,
-              temperature: 0
-            });
-            lastRawResponse = retryResponse.content;
-            const parsed = parseSynthesizerOutput({
-              raw: retryResponse.content,
-              label: "Synthesizer"
-            });
-
-            return {
-              output: parsed,
-              trace: {
-                requestedProvider: "openrouter",
-                requestedModel: args.primaryModel,
-                attempts,
-                finalProvider: "openrouter",
-                finalModel: model,
-                usedRetry: true,
-                usedFallback: false,
-                validationFailures,
-                outcome: "retry_success",
-                note: "Primary synthesizer output failed validation; repair retry produced validated synthesizer JSON."
-              },
-              durationMs: Math.round(performance.now() - startedAt)
-            };
-          } catch (retryError) {
-            lastError = retryError;
-            if (retryError instanceof SynthesizerValidationError) {
-              validationFailures += 1;
-            }
-            logger.warn("Synthesizer repair retry failed", {
-              model,
-              nextModel: modelChain[index + 1] ?? null,
-              error: String(retryError)
-            });
-          }
-        }
-      }
+    if (result.status === "failure") {
+      throw result.lastError instanceof Error
+        ? result.lastError
+        : new Error("Synthesizer failed to produce validated JSON after all attempts.");
     }
 
-    throw lastError instanceof Error
-      ? lastError
-      : new Error("Synthesizer failed to produce validated JSON after all attempts.");
+    return {
+      output: result.output,
+      trace: {
+        requestedProvider: "openrouter",
+        requestedModel: args.primaryModel,
+        attempts: result.attempts,
+        finalProvider: "openrouter",
+        finalModel: result.finalModel,
+        usedRetry: result.usedRetry,
+        usedFallback: result.usedFallback,
+        validationFailures: result.validationFailures,
+        outcome: result.usedFallback ? "fallback_success" : result.usedRetry ? "retry_success" : "success",
+        note: result.usedFallback
+          ? "Primary synthesizer output failed validation; fallback OpenRouter model produced validated synthesizer JSON."
+          : result.usedRetry
+            ? "Primary synthesizer output failed validation; repair retry produced validated synthesizer JSON."
+            : "Primary OpenRouter synthesizer produced validated JSON."
+      },
+      durationMs: result.durationMs
+    };
   }
 
   private async runRefinement(args: {
@@ -1112,94 +958,44 @@ export class ArenaRunner {
     redTeam: RedTeamOutput;
     research?: ResearchToolLog | null;
   }): Promise<StepResult<RefinerOutput>> {
-    const startedAt = performance.now();
-    const modelChain = [args.primaryModel, ...args.fallbackModels];
     const maxTokens = args.category === "product_strategy" ? 560 : 900;
-    const baseUserPrompt = buildRefineUserPrompt({
-      question: args.question,
-      slot: args.slot,
-      category: args.category,
-      originalResponse: args.respondent,
-      redTeam: args.redTeam,
-      research: args.research
-    });
-
-    let lastError: unknown = null;
-    let lastRawResponse = "";
-    let validationFailures = 0;
-    const attempts: ExecutionAttempt[] = [];
-
-    for (const [index, model] of modelChain.entries()) {
-      try {
-        attempts.push({
-          provider: "openrouter",
-          model,
-          mode: index === 0 ? "primary" : "fallback"
-        });
-        const response = await this.openRouterService.complete({
-          model,
-          systemPrompt: buildRefineSystemPrompt(args.category),
-          userPrompt:
-            index === 0
-              ? baseUserPrompt
-              : buildRefineRepairUserPrompt({
-                  question: args.question,
-                  slot: args.slot,
-                  category: args.category,
-                  originalResponse: args.respondent,
-                  redTeam: args.redTeam,
-                  previousResponse: lastRawResponse || "(empty response)",
-                  validationIssues: this.getRefineValidationIssues(lastError),
-                  research: args.research
-                }),
-          maxTokens,
-          temperature: index === 0 ? 0.15 : 0
-        });
-        lastRawResponse = response.content;
-        const parsed = parseRefinerOutput({
-          raw: response.content,
+    const result = await executeOpenRouterStructuredStep({
+      openRouterService: this.openRouterService,
+      primaryModel: args.primaryModel,
+      fallbackModels: args.fallbackModels,
+      systemPrompt: buildRefineSystemPrompt(args.category),
+      buildPrimaryUserPrompt: () =>
+        buildRefineUserPrompt({
+          question: args.question,
+          slot: args.slot,
+          category: args.category,
+          originalResponse: args.respondent,
+          redTeam: args.redTeam,
+          research: args.research
+        }),
+      buildRepairUserPrompt: ({ previousResponse, validationIssues }) =>
+        buildRefineRepairUserPrompt({
+          question: args.question,
+          slot: args.slot,
+          category: args.category,
+          originalResponse: args.respondent,
+          redTeam: args.redTeam,
+          previousResponse,
+          validationIssues,
+          research: args.research
+        }),
+      parse: (raw) =>
+        parseRefinerOutput({
+          raw,
           label: `Refine ${args.slot}`,
           category: args.category,
           originalResponse: args.respondent
-        });
-
-        if (index > 0) {
-          logger.info("Refinement fallback succeeded", {
-            slot: args.slot,
-            fallbackModel: model,
-            primaryModel: args.primaryModel,
-            attempt: index + 1
-          });
-        }
-
-        return {
-          output: parsed,
-          trace: {
-            requestedProvider: "openrouter",
-            requestedModel: args.primaryModel,
-            attempts,
-            finalProvider: "openrouter",
-            finalModel: model,
-            usedRetry: attempts.some((attempt) => attempt.mode === "repair_retry"),
-            usedFallback: index > 0,
-            validationFailures,
-            outcome:
-              index === 0 ? "success" : attempts.some((attempt) => attempt.mode === "repair_retry") && !attempts.some((attempt) => attempt.mode === "fallback")
-                ? "retry_success"
-                : "fallback_success",
-            note:
-              index > 0 && attempts.some((attempt) => attempt.mode === "fallback")
-                ? `Primary refiner failed; fallback OpenRouter model produced validated JSON for the ${args.category} profile.`
-                : index > 0
-                  ? `Primary refiner output failed validation; repair retry produced validated JSON for the ${args.category} profile.`
-                : `Primary OpenRouter refiner produced validated JSON for the ${args.category} profile.`
-          },
-          durationMs: Math.round(performance.now() - startedAt)
-        };
-      } catch (error) {
-        lastError = error;
-        validationFailures += 1;
-        const isLastAttempt = index === modelChain.length - 1;
+        }),
+      maxTokens,
+      primaryTemperature: 0.15,
+      countValidationFailure: () => true,
+      getValidationIssues: (error) => this.getRefineValidationIssues(error),
+      onAttemptFailure: ({ model, primaryModel, nextModel, attempt, error, isLastAttempt, index }) =>
         logger.warn(
           isLastAttempt
             ? "Refinement attempt failed with no more models available"
@@ -1209,94 +1005,66 @@ export class ArenaRunner {
           {
             slot: args.slot,
             model,
-            primaryModel: args.primaryModel,
-            nextModel:
-              isLastAttempt
-                ? null
-                : index === 0
-                  ? args.primaryModel
-                  : modelChain[index + 1],
-            attempt: index + 1,
+            primaryModel,
+            nextModel,
+            attempt,
             error: String(error)
           }
-        );
+        ),
+      onRetryFailure: ({ model, nextModel, error }) =>
+        logger.warn("Refinement repair retry failed", {
+          slot: args.slot,
+          model,
+          nextModel,
+          error: String(error)
+        }),
+      onFallbackSuccess: ({ model, primaryModel, attempt }) =>
+        logger.info("Refinement fallback succeeded", {
+          slot: args.slot,
+          fallbackModel: model,
+          primaryModel,
+          attempt
+        })
+    });
 
-        if (index === 0) {
-          try {
-            attempts.push({
-              provider: "openrouter",
-              model,
-              mode: "repair_retry"
-            });
-            const retryResponse = await this.openRouterService.complete({
-              model,
-              systemPrompt: buildRefineSystemPrompt(args.category),
-              userPrompt: buildRefineRepairUserPrompt({
-                question: args.question,
-                slot: args.slot,
-                category: args.category,
-                originalResponse: args.respondent,
-                redTeam: args.redTeam,
-                previousResponse: lastRawResponse || "(empty response)",
-                validationIssues: this.getRefineValidationIssues(lastError),
-                research: args.research
-              }),
-              maxTokens,
-              temperature: 0
-            });
-            lastRawResponse = retryResponse.content;
-            const parsed = parseRefinerOutput({
-              raw: retryResponse.content,
-              label: `Refine ${args.slot}`,
-              category: args.category,
-              originalResponse: args.respondent
-            });
-
-            return {
-              output: parsed,
-              trace: {
-                requestedProvider: "openrouter",
-                requestedModel: args.primaryModel,
-                attempts,
-                finalProvider: "openrouter",
-                finalModel: model,
-                usedRetry: true,
-                usedFallback: false,
-                validationFailures,
-                outcome: "retry_success",
-                note: `Primary refiner output failed validation; repair retry produced validated JSON for the ${args.category} profile.`
-              },
-              durationMs: Math.round(performance.now() - startedAt)
-            };
-          } catch (retryError) {
-            lastError = retryError;
-            validationFailures += 1;
-            logger.warn("Refinement repair retry failed", {
-              slot: args.slot,
-              model,
-              nextModel: modelChain[index + 1] ?? null,
-              error: String(retryError)
-            });
-          }
-        }
-      }
+    if (result.status === "failure") {
+      return {
+        output: this.buildRefinementFallback(args.respondent, args.slot, result.lastError),
+        trace: {
+          requestedProvider: "openrouter",
+          requestedModel: args.primaryModel,
+          attempts: result.attempts,
+          finalProvider: "fallback",
+          finalModel: "original-response-preserved",
+          usedRetry: result.usedRetry,
+          usedFallback: true,
+          validationFailures: result.validationFailures,
+          outcome: "static_fallback",
+          note: `All refiner attempts failed for the ${args.category} profile; the original answer was preserved.`
+        },
+        durationMs: result.durationMs
+      };
     }
 
     return {
-      output: this.buildRefinementFallback(args.respondent, args.slot, lastError),
+      output: result.output,
       trace: {
         requestedProvider: "openrouter",
         requestedModel: args.primaryModel,
-        attempts,
-        finalProvider: "fallback",
-        finalModel: "original-response-preserved",
-        usedRetry: attempts.some((attempt) => attempt.mode === "repair_retry"),
-        usedFallback: true,
-        validationFailures,
-        outcome: "static_fallback",
-        note: `All refiner attempts failed for the ${args.category} profile; the original answer was preserved.`
+        attempts: result.attempts,
+        finalProvider: "openrouter",
+        finalModel: result.finalModel,
+        usedRetry: result.usedRetry,
+        usedFallback: result.usedFallback,
+        validationFailures: result.validationFailures,
+        outcome: result.usedFallback ? "fallback_success" : result.usedRetry ? "retry_success" : "success",
+        note: result.usedFallback
+          ? `Primary refiner failed; fallback OpenRouter model produced validated JSON for the ${args.category} profile.`
+          : result.usedRetry
+            ? `Primary refiner output failed validation; repair retry produced validated JSON for the ${args.category} profile.`
+            : `Primary OpenRouter refiner produced validated JSON for the ${args.category} profile.`
       },
-      durationMs: Math.round(performance.now() - startedAt)
+      durationMs: result.durationMs
     };
   }
 
@@ -1368,17 +1136,9 @@ export class ArenaRunner {
     primaryModel: string,
     models: ArenaRunRequest["models"]
   ) {
-    const candidates = [
-      env.ARENA_REFINE_FALLBACK_MODEL,
-      models.judge,
-      models.redTeam
-    ];
-
-    return candidates.filter(
-      (candidate, index, list) =>
-        candidate.trim().length > 0 &&
-        candidate !== primaryModel &&
-        list.indexOf(candidate) === index
+    return this.filterFallbackModels(
+      [env.ARENA_REFINE_FALLBACK_MODEL, models.judge, models.redTeam],
+      { exclude: [primaryModel] }
     );
   }
 
@@ -1386,17 +1146,9 @@ export class ArenaRunner {
     primaryModel: string,
     models: ArenaRunRequest["models"]
   ) {
-    const candidates = [
-      env.ARENA_REFINE_FALLBACK_MODEL,
-      models.redTeam,
-      models.synthesizer
-    ];
-
-    return candidates.filter(
-      (candidate, index, list) =>
-        candidate.trim().length > 0 &&
-        candidate !== primaryModel &&
-        list.indexOf(candidate) === index
+    return this.filterFallbackModels(
+      [env.ARENA_REFINE_FALLBACK_MODEL, models.redTeam, models.synthesizer],
+      { exclude: [primaryModel] }
     );
   }
 
@@ -1404,17 +1156,9 @@ export class ArenaRunner {
     primaryModel: string,
     models: ArenaRunRequest["models"]
   ) {
-    const candidates = [
-      env.ARENA_REFINE_FALLBACK_MODEL,
-      models.judge,
-      models.redTeam
-    ];
-
-    return candidates.filter(
-      (candidate, index, list) =>
-        candidate.trim().length > 0 &&
-        candidate !== primaryModel &&
-        list.indexOf(candidate) === index
+    return this.filterFallbackModels(
+      [env.ARENA_REFINE_FALLBACK_MODEL, models.judge, models.redTeam],
+      { exclude: [primaryModel] }
     );
   }
 
@@ -1572,15 +1316,25 @@ export class ArenaRunner {
   }
 
   private resolveLocalStudentFallbackModels(models: ArenaRunRequest["models"]) {
-    const candidates = [
+    return this.filterFallbackModels([
       env.LOCAL_STUDENT_FALLBACK_MODEL,
       models.synthesizer,
       models.judge
-    ];
+    ]);
+  }
 
+  private filterFallbackModels(
+    candidates: string[],
+    options?: {
+      exclude?: string[];
+    }
+  ) {
+    const excluded = new Set(options?.exclude ?? []);
     return candidates.filter(
       (candidate, index, list) =>
-        candidate.trim().length > 0 && list.indexOf(candidate) === index
+        candidate.trim().length > 0 &&
+        !excluded.has(candidate) &&
+        list.indexOf(candidate) === index
     );
   }
 

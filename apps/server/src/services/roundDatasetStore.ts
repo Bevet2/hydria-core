@@ -39,6 +39,7 @@ export class RoundDatasetStore {
       question: round.question,
       category: round.category,
       models: round.models,
+      orchestration: round.orchestration,
       router: round.router,
       research: round.research,
       refineProfile: round.refineProfile,

@@ -51,7 +51,10 @@ export const knowledgeCategoryBenchmarkSnapshotSchema = z.object({
   worthItRate: boundedPctSchema,
   degradingRate: boundedPctSchema,
   refineExecutionRate: boundedPctSchema,
+  noOpRate: boundedPctSchema,
+  staticFallbackRate: boundedPctSchema,
   researchUsageRate: boundedPctSchema,
+  positiveResearchImpactRate: boundedPctSchema,
   respondentPrimarySuccessRate: boundedPctSchema
 });
 
@@ -79,12 +82,38 @@ export const studentCuratedExampleSchema = z.object({
   category: questionCategorySchema,
   prompt: z.string().min(1),
   targetAnswer: z.string().min(1),
+  targetSource: z.enum(["synthesizer", "winner_refined"]),
   preferredWinner: z.enum(["A", "B", "tie"]),
   globalGain: z.number(),
   refinedAverageScore: boundedPctSchema,
   researchUsed: z.boolean(),
+  selectionScore: boundedPctSchema,
+  selectionTier: z.enum(["gold", "silver", "bronze"]),
   coachingNotes: z.array(z.string().min(1).max(240)).min(1).max(12),
-  winningPatterns: z.array(z.string().min(1).max(140)).max(6)
+  winningPatterns: z.array(z.string().min(1).max(140)).max(6),
+  antiPatterns: z.array(z.string().min(1).max(140)).max(6),
+  strategyNote: z.string().min(1).max(400)
+});
+
+export const studentContrastiveExampleSchema = z.object({
+  datasetVersion: z.literal("hydria-student-contrast-v1"),
+  roundId: z.string().uuid(),
+  createdAt: z.string().datetime(),
+  category: questionCategorySchema,
+  prompt: z.string().min(1),
+  sourceAnswer: z.string().min(1),
+  sourceSource: z.enum(["initial_A", "initial_B"]),
+  targetAnswer: z.string().min(1),
+  targetSource: z.enum(["synthesizer", "winner_refined"]),
+  preferredWinner: z.enum(["A", "B", "tie"]),
+  globalGain: z.number(),
+  improvedDelta: z.number(),
+  researchUsed: z.boolean(),
+  selectionScore: boundedPctSchema,
+  selectionTier: z.enum(["gold", "silver", "bronze"]),
+  transformationNotes: z.array(z.string().min(1).max(240)).min(1).max(14),
+  antiPatterns: z.array(z.string().min(1).max(140)).max(6),
+  strategyNote: z.string().min(1).max(400)
 });
 
 export const knowledgeGlobalSummarySchema = z.object({
@@ -113,4 +142,5 @@ export type KnowledgePattern = z.infer<typeof knowledgePatternSchema>;
 export type KnowledgeCategoryStrategy = z.infer<typeof knowledgeCategoryStrategySchema>;
 export type KnowledgeCategoryInsight = z.infer<typeof knowledgeCategoryInsightSchema>;
 export type StudentCuratedExample = z.infer<typeof studentCuratedExampleSchema>;
+export type StudentContrastiveExample = z.infer<typeof studentContrastiveExampleSchema>;
 export type KnowledgeLayer = z.infer<typeof knowledgeLayerSchema>;

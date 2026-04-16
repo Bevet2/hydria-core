@@ -21,6 +21,7 @@ import { BenchmarkStore } from "./services/benchmarkStore.js";
 import { HistoryStore } from "./services/historyStore.js";
 import { LocalModelService } from "./services/localModel.js";
 import { OpenRouterService } from "./services/openrouter.js";
+import { OrchestrationPolicyService } from "./services/orchestrationPolicy.js";
 import { ResearchToolService } from "./services/researchToolService.js";
 import { RefineRouterService } from "./services/refineRouter.js";
 import { defaultArenaModels, env } from "./utils/env.js";
@@ -30,12 +31,14 @@ const historyStore = new HistoryStore();
 const localModelService = new LocalModelService();
 const openRouterService = new OpenRouterService();
 const benchmarkStore = new BenchmarkStore();
+const orchestrationPolicyService = new OrchestrationPolicyService();
 const refineRouterService = new RefineRouterService();
 const researchToolService = new ResearchToolService();
 const arenaRunner = new ArenaRunner(
   openRouterService,
   localModelService,
   historyStore,
+  orchestrationPolicyService,
   refineRouterService,
   researchToolService
 );

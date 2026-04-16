@@ -41,6 +41,33 @@ export const refineRouterStrategySchema = z.enum([
   "refine_selective",
   "skip_refine"
 ]);
+export const orchestrationFocusSchema = z.enum([
+  "risk_containment",
+  "execution_clarity",
+  "tradeoff_clarity",
+  "pedagogy_precision",
+  "diagnostic_caution",
+  "strategy_actionability",
+  "balanced_reasoning",
+  "factual_grounding",
+  "general_quality"
+]);
+export const orchestrationRefinePolicySchema = z.enum([
+  "aggressive",
+  "balanced",
+  "conservative"
+]);
+export const orchestrationResearchPolicySchema = z.enum([
+  "off",
+  "verify_only",
+  "ground_if_needed",
+  "targeted"
+]);
+export const orchestrationCostPolicySchema = z.enum([
+  "latency_guarded",
+  "balanced",
+  "quality_first"
+]);
 export const researchRouteSchema = z.enum(["not_needed", "used", "failed"]);
 export const researchDecisionModeSchema = z.enum([
   "off",
@@ -251,6 +278,9 @@ export const routerCategoryBenchmarkInsightSchema = z.object({
   averageGain: z.number(),
   worthItRate: boundedScoreSchema,
   fallbackRate: boundedScoreSchema,
+  noOpRate: boundedScoreSchema.default(0),
+  staticFallbackRate: boundedScoreSchema.default(0),
+  positiveResearchImpactRate: boundedScoreSchema.default(0),
   routingRecommendation: routingRecommendationSchema
 });
 
@@ -282,6 +312,19 @@ export const refineRouterDecisionSchema = z.object({
 export const refineProfileSchema = z.object({
   A: questionCategorySchema,
   B: questionCategorySchema
+});
+
+export const orchestrationPolicySchema = z.object({
+  category: questionCategorySchema,
+  focus: orchestrationFocusSchema,
+  refinePolicy: orchestrationRefinePolicySchema,
+  researchPolicy: orchestrationResearchPolicySchema,
+  costPolicy: orchestrationCostPolicySchema,
+  refineBias: z.number().int().min(-20).max(20),
+  researchBias: z.number().int().min(-20).max(20),
+  targetOutcomes: z.array(z.string()).max(8),
+  prioritySignals: z.array(z.string()).max(10),
+  reasoning: z.array(z.string()).min(1).max(12)
 });
 
 export const researchSourceSchema = z.object({
@@ -413,6 +456,7 @@ export const arenaRoundSchema = z.object({
     localStudent: localStudentRoundOutputSchema
   }),
   trace: arenaTraceSchema,
+  orchestration: orchestrationPolicySchema,
   router: refineRouterDecisionSchema,
   research: researchToolLogSchema,
   refineProfile: refineProfileSchema,
@@ -448,6 +492,10 @@ export type ScoreExplanationDetail = z.infer<typeof scoreExplanationDetailSchema
 export type RoutingRecommendation = z.infer<typeof routingRecommendationSchema>;
 export type RouterEstimatedValue = z.infer<typeof routerEstimatedValueSchema>;
 export type RefineRouterStrategy = z.infer<typeof refineRouterStrategySchema>;
+export type OrchestrationFocus = z.infer<typeof orchestrationFocusSchema>;
+export type OrchestrationRefinePolicy = z.infer<typeof orchestrationRefinePolicySchema>;
+export type OrchestrationResearchPolicy = z.infer<typeof orchestrationResearchPolicySchema>;
+export type OrchestrationCostPolicy = z.infer<typeof orchestrationCostPolicySchema>;
 export type ResearchDecisionMode = z.infer<typeof researchDecisionModeSchema>;
 export type ResearchIntent = z.infer<typeof researchIntentSchema>;
 export type ResearchExpectedValue = z.infer<typeof researchExpectedValueSchema>;
@@ -458,6 +506,7 @@ export type RouterCategoryBenchmarkInsight = z.infer<
 export type RouterSideSignal = z.infer<typeof routerSideSignalSchema>;
 export type RefineRouterDecisionDetails = z.infer<typeof refineRouterDecisionSchema>;
 export type RefineProfile = z.infer<typeof refineProfileSchema>;
+export type OrchestrationPolicyDetails = z.infer<typeof orchestrationPolicySchema>;
 export type ResearchSource = z.infer<typeof researchSourceSchema>;
 export type ResearchVerification = z.infer<typeof researchVerificationSchema>;
 export type ResearchDecisionDetails = z.infer<typeof researchDecisionDetailsSchema>;

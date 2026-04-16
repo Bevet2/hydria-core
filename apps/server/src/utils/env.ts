@@ -59,6 +59,10 @@ const envSchema = z.object({
     .string()
     .min(1)
     .default("F:/hydria-arena/storage/datasets/student-qwen-curated.jsonl"),
+  STUDENT_CONTRASTIVE_DATASET_FILE: z
+    .string()
+    .min(1)
+    .default("F:/hydria-arena/storage/datasets/student-qwen-contrastive.jsonl"),
   LOCAL_MODEL_PROVIDER: z.literal("ollama").default("ollama"),
   LOCAL_MODEL_NAME: z.string().min(1).default("qwen2.5:3b"),
   LOCAL_MODEL_BASE_URL: z.string().url().default("http://127.0.0.1:11435"),
