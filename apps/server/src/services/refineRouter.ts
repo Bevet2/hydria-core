@@ -14,6 +14,7 @@ import type { KnowledgeCategoryInsight, KnowledgeCategoryStrategy } from "../typ
 import { env } from "../utils/env.js";
 import { classifyQuestion } from "./questionClassifier.js";
 import { KnowledgeLayerService } from "./knowledgeLayerService.js";
+import { KnowledgeMemoryService } from "./knowledgeMemoryService.js";
 
 type RefineRouterContext = {
   question: string;
@@ -75,6 +76,10 @@ function countWords(value: string) {
     .trim()
     .split(/\s+/)
     .filter(Boolean).length;
+}
+
+function uniqueStrings(values: string[]) {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
 function getStaticRoutingRecommendation(category: QuestionCategory): RoutingRecommendation {
@@ -175,9 +180,11 @@ export function buildLegacyRouterDecision(question: string): RefineRouterDecisio
 
 export class RefineRouterService {
   private readonly knowledgeLayerService: KnowledgeLayerService;
+  private readonly knowledgeMemoryService: KnowledgeMemoryService;
 
   constructor(private readonly benchmarkRunsFile = env.BENCHMARK_RUNS_FILE) {
     this.knowledgeLayerService = new KnowledgeLayerService();
+    this.knowledgeMemoryService = new KnowledgeMemoryService();
   }
 
   async decide(
@@ -187,6 +194,38 @@ export class RefineRouterService {
     const category = classifyQuestion(context.question);
     const benchmarkInsight = await this.loadBenchmarkInsight(category);
     const knowledgeInsight = await this.loadKnowledgeInsight(category);
+    const globalSignals = uniqueStrings([
+      context.redTeam.factual_risk_level >= 70 ? "high_factual_risk" : "",
+      context.redTeam.factual_risk_level >= 55 ? "medium_factual_risk" : "",
+      context.redTeam.reasoning_risk_level >= 70 ? "high_reasoning_risk" : "",
+      context.redTeam.potentially_false_claims.length > 0 ? "factual_claims" : "",
+      (context.redTeam.attacks_on_a.length + context.redTeam.attacks_on_b.length) >= 3
+        ? "direct_critiques"
+        : "",
+      (context.redTeam.shared_risks.length +
+        context.redTeam.failure_scenarios.length +
+        context.redTeam.hidden_assumptions.length) >= 5
+        ? "structural_risk"
+        : "",
+      (knowledgeInsight?.benchmark.noOpRate ?? 0) >= 35 ? "no_op_high" : "",
+      (knowledgeInsight?.benchmark.staticFallbackRate ?? 0) >= 15 ? "static_fallback_high" : "",
+      (knowledgeInsight?.benchmark.worthItRate ?? 0) >= 55 ? "positive_refine_roi" : "",
+      (knowledgeInsight?.benchmark.positiveResearchImpactRate ?? 0) >= 35
+        ? "positive_tool_roi"
+        : ""
+    ]);
+    const memoryRules = await this.knowledgeMemoryService.getRelevantRules({
+      category,
+      activeSignals: globalSignals,
+      domains: ["routing", "refine"],
+      limit: 4
+    });
+    const memoryBias = memoryRules.reduce(
+      (sum, rule) =>
+        sum +
+        Math.round((rule.influence.routingBias + rule.influence.refineBias) * rule.confidence),
+      0
+    );
     const sideA = this.evaluateSide({
       slot: "A",
       category,
@@ -195,7 +234,8 @@ export class RefineRouterService {
       benchmarkInsight,
       knowledgeInsight,
       knowledgeStrategy: knowledgeInsight?.strategy ?? null,
-      orchestration
+      orchestration,
+      memoryBias
     });
     const sideB = this.evaluateSide({
       slot: "B",
@@ -205,7 +245,8 @@ export class RefineRouterService {
       benchmarkInsight,
       knowledgeInsight,
       knowledgeStrategy: knowledgeInsight?.strategy ?? null,
-      orchestration
+      orchestration,
+      memoryBias
     });
 
     const globalStrategy =
@@ -226,6 +267,10 @@ export class RefineRouterService {
       knowledgeInsight
         ? `Knowledge signals: no-op ${knowledgeInsight.benchmark.noOpRate}%, static refine fallback ${knowledgeInsight.benchmark.staticFallbackRate}%, positive research impact ${knowledgeInsight.benchmark.positiveResearchImpactRate}%.`
         : "Knowledge benchmark signals unavailable.",
+      ...memoryRules.map(
+        (rule) =>
+          `Knowledge memory ${rule.domain}: ${rule.lesson} Strategy: ${rule.recommendedStrategy} (confidence ${Math.round(rule.confidence * 100)}%).`
+      ),
       orchestration
         ? `Orchestration focus ${orchestration.focus}: refine ${orchestration.refinePolicy}, research ${orchestration.researchPolicy}, cost ${orchestration.costPolicy}.`
         : "No orchestration policy was available for this round.",
@@ -381,6 +426,7 @@ export class RefineRouterService {
     knowledgeInsight: KnowledgeCategoryInsight | null;
     knowledgeStrategy: KnowledgeCategoryStrategy | null;
     orchestration: OrchestrationPolicyDetails | null;
+    memoryBias: number;
   }) {
     const directCritiques =
       args.slot === "A" ? args.redTeam.attacks_on_a.length : args.redTeam.attacks_on_b.length;
@@ -440,6 +486,7 @@ export class RefineRouterService {
       categoryBias[args.category] +
       this.getBenchmarkBias(args.benchmarkInsight.routingRecommendation) +
       (args.knowledgeStrategy?.routerBias ?? 0) +
+      args.memoryBias +
       (args.orchestration?.refineBias ?? 0) +
       Math.round((riskScore - 50) / 2) +
       Math.round((60 - qualityScore) / 2);

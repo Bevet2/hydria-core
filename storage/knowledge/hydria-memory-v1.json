@@ -1,0 +1,1208 @@
+{
+  "version": "hydria-memory-v1",
+  "builtAt": "2026-04-17T00:36:52.247Z",
+  "sourceStats": {
+    "benchmarkRunsAnalyzed": 30,
+    "roundDatasetEntriesAnalyzed": 265,
+    "studentSessionsAnalyzed": 58,
+    "lessonsLearnedAnalyzed": 72
+  },
+  "categories": [
+    {
+      "category": "incident_response",
+      "summary": "Best refine gains come from this pattern: Add concrete risks, dependencies, and fallback conditions. Use tools in incident_response only for narrow fact checking, not for generic expansion. Use incident_response memory as a bias layer, not as a hard override.",
+      "rules": [
+        {
+          "ruleId": "incident_response-refine-core",
+          "category": "incident_response",
+          "domain": "refine",
+          "conditions": [
+            "Refine is usually useful when it applies category-specific structure.",
+            "Add concrete risks, dependencies, and fallback conditions.",
+            "Avoid generic filler and unsupported claims."
+          ],
+          "conditionSignals": [
+            "direct_critiques",
+            "structural_risk",
+            "risk_or_tradeoff"
+          ],
+          "lesson": "Best refine gains come from this pattern: Add concrete risks, dependencies, and fallback conditions.",
+          "recommendedStrategy": "Use refine in incident_response to add concrete risks, dependencies, and fallback conditions. and explicitly avoid: avoid generic filler and unsupported claims.",
+          "confidence": 0.95,
+          "evidence": {
+            "benchmarkSignals": [
+              "avg gain 10.2",
+              "worth-it 85%",
+              "no-op 0%",
+              "static fallback 1.3%"
+            ],
+            "roundCount": 80,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 3,
+            "refineBias": 7,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "incident_response-reasoning-baseline",
+          "category": "incident_response",
+          "domain": "reasoning",
+          "conditions": [
+            "Add concrete risks, dependencies, and fallback conditions."
+          ],
+          "conditionSignals": [
+            "reasoning_gap",
+            "risk_or_tradeoff"
+          ],
+          "lesson": "Reasoning improves when the answer follows this pattern: Add concrete risks, dependencies, and fallback conditions.",
+          "recommendedStrategy": "Keep add concrete risks, dependencies, and fallback conditions.",
+          "confidence": 0.95,
+          "evidence": {
+            "benchmarkSignals": [
+              "winning pattern Add concrete risks, dependencies, and fallback conditions."
+            ],
+            "roundCount": 80,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 0,
+            "refineBias": 2,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "incident_response-routing-core",
+          "category": "incident_response",
+          "domain": "routing",
+          "conditions": [
+            "High factual or operational risk",
+            "Evidence preservation missing",
+            "Already concrete and low risk"
+          ],
+          "conditionSignals": [
+            "selective_refine",
+            "mixed_signal"
+          ],
+          "lesson": "This category needs selective refine based on live critique and risk signals.",
+          "recommendedStrategy": "Use category-specific signals to decide refine on incident_response, not a blanket policy.",
+          "confidence": 0.9,
+          "evidence": {
+            "benchmarkSignals": [
+              "avg gain 10.2",
+              "worth-it 85%",
+              "no-op 0%",
+              "static fallback 1.3%"
+            ],
+            "roundCount": 80,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 2,
+            "refineBias": 1,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "incident_response-tool-core",
+          "category": "incident_response",
+          "domain": "tool_usage",
+          "conditions": [
+            "High factual or operational risk",
+            "Evidence preservation missing",
+            "Already concrete and low risk"
+          ],
+          "conditionSignals": [
+            "factual_claims",
+            "tool_conditional"
+          ],
+          "lesson": "Grounding should be targeted at the factual sub-problem, not used as broad enrichment.",
+          "recommendedStrategy": "Use tools in incident_response only for narrow fact checking, not for generic expansion.",
+          "confidence": 0.9,
+          "evidence": {
+            "benchmarkSignals": [
+              "tool recommendation verify_only",
+              "research usage 0%",
+              "positive research impact 0%"
+            ],
+            "roundCount": 80,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 0,
+            "refineBias": 0,
+            "researchBias": -2
+          }
+        }
+      ]
+    },
+    {
+      "category": "architecture_design",
+      "summary": "Best refine gains come from this pattern: Add concrete risks, dependencies, and fallback conditions. Use tools in architecture_design only for narrow fact checking, not for generic expansion. Use architecture_design memory as a bias layer, not as a hard override.",
+      "rules": [
+        {
+          "ruleId": "architecture_design-refine-core",
+          "category": "architecture_design",
+          "domain": "refine",
+          "conditions": [
+            "Refine is usually useful when it applies category-specific structure.",
+            "Add concrete risks, dependencies, and fallback conditions.",
+            "Avoid unsupported specificity or potentially false claims."
+          ],
+          "conditionSignals": [
+            "direct_critiques",
+            "structural_risk",
+            "risk_or_tradeoff"
+          ],
+          "lesson": "Best refine gains come from this pattern: Add concrete risks, dependencies, and fallback conditions.",
+          "recommendedStrategy": "Use refine in architecture_design to add concrete risks, dependencies, and fallback conditions. and explicitly avoid: avoid unsupported specificity or potentially false claims.",
+          "confidence": 0.95,
+          "evidence": {
+            "benchmarkSignals": [
+              "avg gain 9.4",
+              "worth-it 79.4%",
+              "no-op 0%",
+              "static fallback 0%"
+            ],
+            "roundCount": 63,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 3,
+            "refineBias": 7,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "architecture_design-reasoning-baseline",
+          "category": "architecture_design",
+          "domain": "reasoning",
+          "conditions": [
+            "Add concrete risks, dependencies, and fallback conditions."
+          ],
+          "conditionSignals": [
+            "reasoning_gap",
+            "risk_or_tradeoff"
+          ],
+          "lesson": "Reasoning improves when the answer follows this pattern: Add concrete risks, dependencies, and fallback conditions.",
+          "recommendedStrategy": "Keep add concrete risks, dependencies, and fallback conditions.",
+          "confidence": 0.95,
+          "evidence": {
+            "benchmarkSignals": [
+              "winning pattern Add concrete risks, dependencies, and fallback conditions."
+            ],
+            "roundCount": 63,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 0,
+            "refineBias": 2,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "architecture_design-routing-core",
+          "category": "architecture_design",
+          "domain": "routing",
+          "conditions": [
+            "Tradeoffs are missing",
+            "Constraints or scale assumptions are weak",
+            "Already balanced on tradeoffs"
+          ],
+          "conditionSignals": [
+            "selective_refine",
+            "mixed_signal"
+          ],
+          "lesson": "This category needs selective refine based on live critique and risk signals.",
+          "recommendedStrategy": "Use category-specific signals to decide refine on architecture_design, not a blanket policy.",
+          "confidence": 0.9,
+          "evidence": {
+            "benchmarkSignals": [
+              "avg gain 9.4",
+              "worth-it 79.4%",
+              "no-op 0%",
+              "static fallback 0%"
+            ],
+            "roundCount": 63,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 2,
+            "refineBias": 1,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "architecture_design-tool-core",
+          "category": "architecture_design",
+          "domain": "tool_usage",
+          "conditions": [
+            "Tradeoffs are missing",
+            "Constraints or scale assumptions are weak",
+            "Already balanced on tradeoffs"
+          ],
+          "conditionSignals": [
+            "factual_claims",
+            "tool_conditional"
+          ],
+          "lesson": "Grounding should be targeted at the factual sub-problem, not used as broad enrichment.",
+          "recommendedStrategy": "Use tools in architecture_design only for narrow fact checking, not for generic expansion.",
+          "confidence": 0.9,
+          "evidence": {
+            "benchmarkSignals": [
+              "tool recommendation conditional",
+              "research usage 0%",
+              "positive research impact 0%"
+            ],
+            "roundCount": 63,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 0,
+            "refineBias": 0,
+            "researchBias": -2
+          }
+        }
+      ]
+    },
+    {
+      "category": "technical_explanation",
+      "summary": "This category usually benefits from refine when critique pressure or structural risk is explicit. Use targeted verification in technical_explanation when protocols, standards, or provider details appear. Use technical_explanation memory as a bias layer, not as a hard override.",
+      "rules": [
+        {
+          "ruleId": "technical_explanation-routing-core",
+          "category": "technical_explanation",
+          "domain": "routing",
+          "conditions": [
+            "Definition or mechanism is under-specified",
+            "Provider, standard, or protocol claim appears",
+            "Examples or contrasts are missing"
+          ],
+          "conditionSignals": [
+            "direct_critiques",
+            "structural_risk",
+            "positive_refine_roi"
+          ],
+          "lesson": "This category usually benefits from refine when critique pressure or structural risk is explicit.",
+          "recommendedStrategy": "Keep refine active when Red Team surfaces concrete issues in technical_explanation.",
+          "confidence": 0.95,
+          "evidence": {
+            "benchmarkSignals": [
+              "avg gain 7.7",
+              "worth-it 79.5%",
+              "no-op 0%",
+              "static fallback 0%"
+            ],
+            "roundCount": 73,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 8,
+            "refineBias": 6,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "technical_explanation-refine-core",
+          "category": "technical_explanation",
+          "domain": "refine",
+          "conditions": [
+            "Refine is usually useful when it applies category-specific structure.",
+            "Add concrete risks, dependencies, and fallback conditions.",
+            "Avoid generic filler and unsupported claims."
+          ],
+          "conditionSignals": [
+            "direct_critiques",
+            "structural_risk",
+            "risk_or_tradeoff"
+          ],
+          "lesson": "Best refine gains come from this pattern: Add concrete risks, dependencies, and fallback conditions.",
+          "recommendedStrategy": "Use refine in technical_explanation to add concrete risks, dependencies, and fallback conditions. and explicitly avoid: avoid generic filler and unsupported claims.",
+          "confidence": 0.95,
+          "evidence": {
+            "benchmarkSignals": [
+              "avg gain 7.7",
+              "worth-it 79.5%",
+              "no-op 0%",
+              "static fallback 0%"
+            ],
+            "roundCount": 73,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 3,
+            "refineBias": 7,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "technical_explanation-reasoning-baseline",
+          "category": "technical_explanation",
+          "domain": "reasoning",
+          "conditions": [
+            "Add concrete risks, dependencies, and fallback conditions."
+          ],
+          "conditionSignals": [
+            "reasoning_gap",
+            "risk_or_tradeoff"
+          ],
+          "lesson": "Reasoning improves when the answer follows this pattern: Add concrete risks, dependencies, and fallback conditions.",
+          "recommendedStrategy": "Keep add concrete risks, dependencies, and fallback conditions.",
+          "confidence": 0.95,
+          "evidence": {
+            "benchmarkSignals": [
+              "winning pattern Add concrete risks, dependencies, and fallback conditions."
+            ],
+            "roundCount": 73,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 0,
+            "refineBias": 2,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "technical_explanation-tool-core",
+          "category": "technical_explanation",
+          "domain": "tool_usage",
+          "conditions": [
+            "Definition or mechanism is under-specified",
+            "Provider, standard, or protocol claim appears",
+            "Examples or contrasts are missing"
+          ],
+          "conditionSignals": [
+            "factual_claims",
+            "provider_specific",
+            "concept_question"
+          ],
+          "lesson": "Grounding helps when the answer depends on externally checkable facts.",
+          "recommendedStrategy": "Use targeted verification in technical_explanation when protocols, standards, or provider details appear.",
+          "confidence": 0.65,
+          "evidence": {
+            "benchmarkSignals": [
+              "tool recommendation prefer_grounded",
+              "research usage 0%",
+              "positive research impact 0%"
+            ],
+            "roundCount": 73,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 0,
+            "refineBias": 0,
+            "researchBias": 8
+          }
+        }
+      ]
+    },
+    {
+      "category": "debug_diagnostic",
+      "summary": "Best refine gains come from this pattern: Add concrete risks, dependencies, and fallback conditions. Use tools in debug_diagnostic only for narrow fact checking, not for generic expansion. Use debug_diagnostic memory as a bias layer, not as a hard override.",
+      "rules": [
+        {
+          "ruleId": "debug_diagnostic-refine-core",
+          "category": "debug_diagnostic",
+          "domain": "refine",
+          "conditions": [
+            "Refine is usually useful when it applies category-specific structure.",
+            "Add concrete risks, dependencies, and fallback conditions.",
+            "Avoid generic best-practice language that does not change execution."
+          ],
+          "conditionSignals": [
+            "direct_critiques",
+            "structural_risk",
+            "risk_or_tradeoff"
+          ],
+          "lesson": "Best refine gains come from this pattern: Add concrete risks, dependencies, and fallback conditions.",
+          "recommendedStrategy": "Use refine in debug_diagnostic to add concrete risks, dependencies, and fallback conditions. and explicitly avoid: avoid generic best-practice language that does not change execution.",
+          "confidence": 0.95,
+          "evidence": {
+            "benchmarkSignals": [
+              "avg gain 8.2",
+              "worth-it 75.8%",
+              "no-op 0%",
+              "static fallback 0%"
+            ],
+            "roundCount": 66,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 3,
+            "refineBias": 7,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "debug_diagnostic-reasoning-baseline",
+          "category": "debug_diagnostic",
+          "domain": "reasoning",
+          "conditions": [
+            "Add concrete risks, dependencies, and fallback conditions."
+          ],
+          "conditionSignals": [
+            "reasoning_gap",
+            "risk_or_tradeoff"
+          ],
+          "lesson": "Reasoning improves when the answer follows this pattern: Add concrete risks, dependencies, and fallback conditions.",
+          "recommendedStrategy": "Keep add concrete risks, dependencies, and fallback conditions.",
+          "confidence": 0.95,
+          "evidence": {
+            "benchmarkSignals": [
+              "winning pattern Add concrete risks, dependencies, and fallback conditions."
+            ],
+            "roundCount": 66,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 0,
+            "refineBias": 2,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "debug_diagnostic-routing-core",
+          "category": "debug_diagnostic",
+          "domain": "routing",
+          "conditions": [
+            "Diagnosis sounds too certain",
+            "Checks or next steps are missing",
+            "Already hypothesis-driven and cautious"
+          ],
+          "conditionSignals": [
+            "selective_refine",
+            "mixed_signal"
+          ],
+          "lesson": "This category needs selective refine based on live critique and risk signals.",
+          "recommendedStrategy": "Use category-specific signals to decide refine on debug_diagnostic, not a blanket policy.",
+          "confidence": 0.9,
+          "evidence": {
+            "benchmarkSignals": [
+              "avg gain 8.2",
+              "worth-it 75.8%",
+              "no-op 0%",
+              "static fallback 0%"
+            ],
+            "roundCount": 66,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 2,
+            "refineBias": 1,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "debug_diagnostic-tool-core",
+          "category": "debug_diagnostic",
+          "domain": "tool_usage",
+          "conditions": [
+            "Diagnosis sounds too certain",
+            "Checks or next steps are missing",
+            "Already hypothesis-driven and cautious"
+          ],
+          "conditionSignals": [
+            "factual_claims",
+            "tool_conditional"
+          ],
+          "lesson": "Grounding should be targeted at the factual sub-problem, not used as broad enrichment.",
+          "recommendedStrategy": "Use tools in debug_diagnostic only for narrow fact checking, not for generic expansion.",
+          "confidence": 0.9,
+          "evidence": {
+            "benchmarkSignals": [
+              "tool recommendation conditional",
+              "research usage 0%",
+              "positive research impact 0%"
+            ],
+            "roundCount": 66,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 0,
+            "refineBias": 0,
+            "researchBias": -2
+          }
+        }
+      ]
+    },
+    {
+      "category": "product_strategy",
+      "summary": "Grounding usually adds noise here unless the round contains explicit external claims. Keep tools off by default in product_strategy; only verify explicit factual claims. Use product_strategy memory as a bias layer, not as a hard override.",
+      "rules": [
+        {
+          "ruleId": "product_strategy-tool-core",
+          "category": "product_strategy",
+          "domain": "tool_usage",
+          "conditions": [
+            "Already concrete with sequencing and metrics",
+            "External grounding would just add generic market advice",
+            "Low-risk answer with explicit tradeoffs"
+          ],
+          "conditionSignals": [
+            "generic_noise",
+            "low_external_value"
+          ],
+          "lesson": "Grounding usually adds noise here unless the round contains explicit external claims.",
+          "recommendedStrategy": "Keep tools off by default in product_strategy; only verify explicit factual claims.",
+          "confidence": 0.95,
+          "evidence": {
+            "benchmarkSignals": [
+              "tool recommendation avoid",
+              "research usage 0%",
+              "positive research impact 0%"
+            ],
+            "roundCount": 125,
+            "studentSessionCount": 2,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 0,
+            "refineBias": 0,
+            "researchBias": -10
+          }
+        },
+        {
+          "ruleId": "product_strategy-routing-core",
+          "category": "product_strategy",
+          "domain": "routing",
+          "conditions": [
+            "Priorities or phases are missing",
+            "No metrics or validation gates",
+            "Already concrete with sequencing and metrics"
+          ],
+          "conditionSignals": [
+            "selective_refine",
+            "mixed_signal"
+          ],
+          "lesson": "This category needs selective refine based on live critique and risk signals.",
+          "recommendedStrategy": "Use category-specific signals to decide refine on product_strategy, not a blanket policy.",
+          "confidence": 0.9,
+          "evidence": {
+            "benchmarkSignals": [
+              "avg gain 4.3",
+              "worth-it 50.4%",
+              "no-op 0%",
+              "static fallback 9.2%"
+            ],
+            "roundCount": 125,
+            "studentSessionCount": 2,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 2,
+            "refineBias": 1,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "product_strategy-refine-core",
+          "category": "product_strategy",
+          "domain": "refine",
+          "conditions": [
+            "Refine is usually useful when it applies category-specific structure.",
+            "Add concrete risks, dependencies, and fallback conditions.",
+            "Avoid missing metrics, success criteria, or validation gates."
+          ],
+          "conditionSignals": [
+            "direct_critiques",
+            "structural_risk",
+            "risk_or_tradeoff"
+          ],
+          "lesson": "Best refine gains come from this pattern: Add concrete risks, dependencies, and fallback conditions.",
+          "recommendedStrategy": "Use refine in product_strategy to add concrete risks, dependencies, and fallback conditions. and explicitly avoid: avoid missing metrics, success criteria, or validation gates.",
+          "confidence": 0.9,
+          "evidence": {
+            "benchmarkSignals": [
+              "avg gain 4.3",
+              "worth-it 50.4%",
+              "no-op 0%",
+              "static fallback 9.2%"
+            ],
+            "roundCount": 125,
+            "studentSessionCount": 2,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 3,
+            "refineBias": 7,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "product_strategy-reasoning-1",
+          "category": "product_strategy",
+          "domain": "reasoning",
+          "conditions": [
+            "Question expects a structured answer with explicit decision logic.",
+            "Category signal: Priorities or phases are missing",
+            "Current error pattern indicates too generic.",
+            "The sequence is weakly justified: it says 'identify needs,' 'align goals,' then 'use MoSCoW,' but never explains what evidence outweighs what, or what to do wh…"
+          ],
+          "conditionSignals": [
+            "reasoning_gap",
+            "too_generic",
+            "pedagogy_gap",
+            "sequencing_missing",
+            "generic_noise"
+          ],
+          "lesson": "Recurring too generic pattern: Expand beyond a minimal definition and cover the real scope of the question.",
+          "recommendedStrategy": "Expand beyond a minimal definition and cover the real scope of the question.",
+          "confidence": 0.89,
+          "evidence": {
+            "benchmarkSignals": [
+              "Add concrete risks, dependencies, and fallback conditions.",
+              "Add metrics, success criteria, or validation signals.",
+              "Question expects a structured answer with explicit decision logic.",
+              "Category signal: Priorities or phases are missing"
+            ],
+            "roundCount": 125,
+            "studentSessionCount": 2,
+            "repeatedLessonCount": 12
+          },
+          "influence": {
+            "routingBias": 0,
+            "refineBias": 2,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "product_strategy-reasoning-2",
+          "category": "product_strategy",
+          "domain": "reasoning",
+          "conditions": [
+            "Question expects a structured answer with explicit decision logic.",
+            "Category signal: Priorities or phases are missing",
+            "Current error pattern indicates missing examples.",
+            "It conflates prioritization with measurement. Diagnostics like tickets and satisfaction help observe outcomes, but they do not by themselves decide what to bui…"
+          ],
+          "conditionSignals": [
+            "reasoning_gap",
+            "missing_examples",
+            "pedagogy_gap",
+            "sequencing_missing"
+          ],
+          "lesson": "Recurring missing examples pattern: Add one concrete example or contrast to anchor the explanation.",
+          "recommendedStrategy": "Add one concrete example or contrast to anchor the explanation.",
+          "confidence": 0.85,
+          "evidence": {
+            "benchmarkSignals": [
+              "Add concrete risks, dependencies, and fallback conditions.",
+              "Add metrics, success criteria, or validation signals.",
+              "Question expects a structured answer with explicit decision logic.",
+              "Category signal: Priorities or phases are missing"
+            ],
+            "roundCount": 125,
+            "studentSessionCount": 2,
+            "repeatedLessonCount": 8
+          },
+          "influence": {
+            "routingBias": 0,
+            "refineBias": 2,
+            "researchBias": 0
+          }
+        }
+      ]
+    },
+    {
+      "category": "operational_writing",
+      "summary": "This category usually benefits from refine when critique pressure or structural risk is explicit. Keep tools off by default in operational_writing; only verify explicit factual claims. Use operational_writing memory as a bias layer, not as a hard override.",
+      "rules": [
+        {
+          "ruleId": "operational_writing-routing-core",
+          "category": "operational_writing",
+          "domain": "routing",
+          "conditions": [
+            "Structure is unclear",
+            "Too much noise for an execution-oriented message",
+            "Operational hierarchy is weak"
+          ],
+          "conditionSignals": [
+            "direct_critiques",
+            "structural_risk",
+            "positive_refine_roi"
+          ],
+          "lesson": "This category usually benefits from refine when critique pressure or structural risk is explicit.",
+          "recommendedStrategy": "Keep refine active when Red Team surfaces concrete issues in operational_writing.",
+          "confidence": 0.95,
+          "evidence": {
+            "benchmarkSignals": [
+              "avg gain 14.9",
+              "worth-it 81.5%",
+              "no-op 0%",
+              "static fallback 15%"
+            ],
+            "roundCount": 54,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 8,
+            "refineBias": 6,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "operational_writing-refine-core",
+          "category": "operational_writing",
+          "domain": "refine",
+          "conditions": [
+            "Refine often no-ops or falls back on weak signals.",
+            "Use refine only when critique pressure is concrete.",
+            "Avoid generic best-practice language that does not change execution."
+          ],
+          "conditionSignals": [
+            "no_op_high",
+            "static_fallback_high",
+            "direct_critiques"
+          ],
+          "lesson": "Refine should stay disciplined and only fire on explicit weaknesses.",
+          "recommendedStrategy": "Only refine operational_writing when critiques are explicit; otherwise preserve strong drafts and avoid decorative rewrites.",
+          "confidence": 0.95,
+          "evidence": {
+            "benchmarkSignals": [
+              "avg gain 14.9",
+              "worth-it 81.5%",
+              "no-op 0%",
+              "static fallback 15%"
+            ],
+            "roundCount": 54,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": -3,
+            "refineBias": -6,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "operational_writing-tool-core",
+          "category": "operational_writing",
+          "domain": "tool_usage",
+          "conditions": [
+            "Already concise and directly usable",
+            "Grounding would add templates rather than value",
+            "Low-risk answer with clean structure"
+          ],
+          "conditionSignals": [
+            "generic_noise",
+            "low_external_value"
+          ],
+          "lesson": "Grounding usually adds noise here unless the round contains explicit external claims.",
+          "recommendedStrategy": "Keep tools off by default in operational_writing; only verify explicit factual claims.",
+          "confidence": 0.95,
+          "evidence": {
+            "benchmarkSignals": [
+              "tool recommendation avoid",
+              "research usage 0%",
+              "positive research impact 0%"
+            ],
+            "roundCount": 54,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 0,
+            "refineBias": 0,
+            "researchBias": -10
+          }
+        },
+        {
+          "ruleId": "operational_writing-reasoning-baseline",
+          "category": "operational_writing",
+          "domain": "reasoning",
+          "conditions": [
+            "Add concrete risks, dependencies, and fallback conditions."
+          ],
+          "conditionSignals": [
+            "reasoning_gap",
+            "risk_or_tradeoff"
+          ],
+          "lesson": "Reasoning improves when the answer follows this pattern: Add concrete risks, dependencies, and fallback conditions.",
+          "recommendedStrategy": "Keep add concrete risks, dependencies, and fallback conditions.",
+          "confidence": 0.95,
+          "evidence": {
+            "benchmarkSignals": [
+              "winning pattern Add concrete risks, dependencies, and fallback conditions."
+            ],
+            "roundCount": 54,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 0,
+            "refineBias": 2,
+            "researchBias": 0
+          }
+        }
+      ]
+    },
+    {
+      "category": "mixed_reasoning",
+      "summary": "This category usually benefits from refine when critique pressure or structural risk is explicit. Use tools in mixed_reasoning only for narrow fact checking, not for generic expansion. Use mixed_reasoning memory as a bias layer, not as a hard override.",
+      "rules": [
+        {
+          "ruleId": "mixed_reasoning-routing-core",
+          "category": "mixed_reasoning",
+          "domain": "routing",
+          "conditions": [
+            "Theory and application are disconnected",
+            "One subpart contains factual risk",
+            "Reasoning needs explicit limits or tradeoffs"
+          ],
+          "conditionSignals": [
+            "direct_critiques",
+            "structural_risk",
+            "positive_refine_roi"
+          ],
+          "lesson": "This category usually benefits from refine when critique pressure or structural risk is explicit.",
+          "recommendedStrategy": "Keep refine active when Red Team surfaces concrete issues in mixed_reasoning.",
+          "confidence": 0.95,
+          "evidence": {
+            "benchmarkSignals": [
+              "avg gain 11.4",
+              "worth-it 82.6%",
+              "no-op 0%",
+              "static fallback 0%"
+            ],
+            "roundCount": 69,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 8,
+            "refineBias": 6,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "mixed_reasoning-refine-core",
+          "category": "mixed_reasoning",
+          "domain": "refine",
+          "conditions": [
+            "Refine is usually useful when it applies category-specific structure.",
+            "State assumptions, constraints, and uncertainties explicitly.",
+            "Avoid generic filler and unsupported claims."
+          ],
+          "conditionSignals": [
+            "direct_critiques",
+            "structural_risk",
+            "uncertainty",
+            "risk_or_tradeoff"
+          ],
+          "lesson": "Best refine gains come from this pattern: State assumptions, constraints, and uncertainties explicitly.",
+          "recommendedStrategy": "Use refine in mixed_reasoning to state assumptions, constraints, and uncertainties explicitly. and explicitly avoid: avoid generic filler and unsupported claims.",
+          "confidence": 0.95,
+          "evidence": {
+            "benchmarkSignals": [
+              "avg gain 11.4",
+              "worth-it 82.6%",
+              "no-op 0%",
+              "static fallback 0%"
+            ],
+            "roundCount": 69,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 3,
+            "refineBias": 7,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "mixed_reasoning-reasoning-baseline",
+          "category": "mixed_reasoning",
+          "domain": "reasoning",
+          "conditions": [
+            "State assumptions, constraints, and uncertainties explicitly."
+          ],
+          "conditionSignals": [
+            "reasoning_gap",
+            "uncertainty",
+            "risk_or_tradeoff"
+          ],
+          "lesson": "Reasoning improves when the answer follows this pattern: State assumptions, constraints, and uncertainties explicitly.",
+          "recommendedStrategy": "Keep state assumptions, constraints, and uncertainties explicitly.",
+          "confidence": 0.95,
+          "evidence": {
+            "benchmarkSignals": [
+              "winning pattern State assumptions, constraints, and uncertainties explicitly."
+            ],
+            "roundCount": 69,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 0,
+            "refineBias": 2,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "mixed_reasoning-tool-core",
+          "category": "mixed_reasoning",
+          "domain": "tool_usage",
+          "conditions": [
+            "Theory and application are disconnected",
+            "One subpart contains factual risk",
+            "Already balanced across theory and application"
+          ],
+          "conditionSignals": [
+            "factual_claims",
+            "tool_conditional"
+          ],
+          "lesson": "Grounding should be targeted at the factual sub-problem, not used as broad enrichment.",
+          "recommendedStrategy": "Use tools in mixed_reasoning only for narrow fact checking, not for generic expansion.",
+          "confidence": 0.9,
+          "evidence": {
+            "benchmarkSignals": [
+              "tool recommendation conditional",
+              "research usage 0%",
+              "positive research impact 0%"
+            ],
+            "roundCount": 69,
+            "studentSessionCount": 0,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 0,
+            "refineBias": 0,
+            "researchBias": -2
+          }
+        }
+      ]
+    },
+    {
+      "category": "other",
+      "summary": "Recurring missing examples pattern: Add one concrete example or contrast to anchor the explanation. Use tools in other only for narrow fact checking, not for generic expansion. Use other memory as a bias layer, not as a hard override.",
+      "rules": [
+        {
+          "ruleId": "other-reasoning-1",
+          "category": "other",
+          "domain": "reasoning",
+          "conditions": [
+            "Student answer is short relative to the question scope.",
+            "Category signal: High risk and clear critique volume",
+            "Current error pattern indicates missing examples.",
+            "Question is open-ended and expects more than a narrow definition."
+          ],
+          "conditionSignals": [
+            "reasoning_gap",
+            "missing_examples",
+            "risk_or_tradeoff",
+            "pedagogy_gap"
+          ],
+          "lesson": "Recurring missing examples pattern: Add one concrete example or contrast to anchor the explanation.",
+          "recommendedStrategy": "Add one concrete example or contrast to anchor the explanation.",
+          "confidence": 0.95,
+          "evidence": {
+            "benchmarkSignals": [
+              "Add concrete risks, dependencies, and fallback conditions.",
+              "Improve pedagogy with examples, contrasts, and clearer definitions.",
+              "Student answer is short relative to the question scope.",
+              "Category signal: High risk and clear critique volume"
+            ],
+            "roundCount": 24,
+            "studentSessionCount": 56,
+            "repeatedLessonCount": 490
+          },
+          "influence": {
+            "routingBias": 0,
+            "refineBias": 2,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "other-reasoning-2",
+          "category": "other",
+          "domain": "reasoning",
+          "conditions": [
+            "Student answer is short relative to the question scope.",
+            "Question is open-ended and expects more than a narrow definition.",
+            "Current error pattern indicates too generic.",
+            "Category signal: High risk and clear critique volume"
+          ],
+          "conditionSignals": [
+            "reasoning_gap",
+            "too_generic",
+            "risk_or_tradeoff",
+            "pedagogy_gap",
+            "generic_noise"
+          ],
+          "lesson": "Recurring too generic pattern: Expand beyond a minimal definition and cover the real scope of the question.",
+          "recommendedStrategy": "Expand beyond a minimal definition and cover the real scope of the question.",
+          "confidence": 0.95,
+          "evidence": {
+            "benchmarkSignals": [
+              "Add concrete risks, dependencies, and fallback conditions.",
+              "Improve pedagogy with examples, contrasts, and clearer definitions.",
+              "Student answer is short relative to the question scope.",
+              "Question is open-ended and expects more than a narrow definition."
+            ],
+            "roundCount": 24,
+            "studentSessionCount": 56,
+            "repeatedLessonCount": 243
+          },
+          "influence": {
+            "routingBias": 0,
+            "refineBias": 2,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "other-reasoning-3",
+          "category": "other",
+          "domain": "reasoning",
+          "conditions": [
+            "Student answer is short relative to the question scope.",
+            "Question is open-ended and expects more than a narrow definition.",
+            "Current error pattern indicates unsupported claim.",
+            "The answer makes a sweeping negative claim — \"No recent major updates in AI were found\" — without showing any search method, sources, or coverage. That is not…"
+          ],
+          "conditionSignals": [
+            "reasoning_gap",
+            "unsupported_claim",
+            "pedagogy_gap",
+            "factual_claims"
+          ],
+          "lesson": "Recurring unsupported claim pattern: Ground externally dependent claims in verifiable facts or reliable sources.",
+          "recommendedStrategy": "Ground externally dependent claims in verifiable facts or reliable sources.",
+          "confidence": 0.95,
+          "evidence": {
+            "benchmarkSignals": [
+              "Add concrete risks, dependencies, and fallback conditions.",
+              "Improve pedagogy with examples, contrasts, and clearer definitions.",
+              "Student answer is short relative to the question scope.",
+              "Question is open-ended and expects more than a narrow definition."
+            ],
+            "roundCount": 24,
+            "studentSessionCount": 56,
+            "repeatedLessonCount": 12
+          },
+          "influence": {
+            "routingBias": 0,
+            "refineBias": 2,
+            "researchBias": 2
+          }
+        },
+        {
+          "ruleId": "other-refine-core",
+          "category": "other",
+          "domain": "refine",
+          "conditions": [
+            "Refine is usually useful when it applies category-specific structure.",
+            "Add concrete risks, dependencies, and fallback conditions.",
+            "Avoid generic filler and unsupported claims."
+          ],
+          "conditionSignals": [
+            "direct_critiques",
+            "structural_risk",
+            "risk_or_tradeoff"
+          ],
+          "lesson": "Best refine gains come from this pattern: Add concrete risks, dependencies, and fallback conditions.",
+          "recommendedStrategy": "Use refine in other to add concrete risks, dependencies, and fallback conditions. and explicitly avoid: avoid generic filler and unsupported claims.",
+          "confidence": 0.9,
+          "evidence": {
+            "benchmarkSignals": [
+              "avg gain 5.1",
+              "worth-it 62.5%",
+              "no-op 0%",
+              "static fallback 0%"
+            ],
+            "roundCount": 24,
+            "studentSessionCount": 56,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 3,
+            "refineBias": 7,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "other-routing-core",
+          "category": "other",
+          "domain": "routing",
+          "conditions": [
+            "High risk and clear critique volume",
+            "Add concrete risks, dependencies, and fallback conditions.",
+            "Low risk and already strong quality"
+          ],
+          "conditionSignals": [
+            "selective_refine",
+            "mixed_signal"
+          ],
+          "lesson": "This category needs selective refine based on live critique and risk signals.",
+          "recommendedStrategy": "Use category-specific signals to decide refine on other, not a blanket policy.",
+          "confidence": 0.84,
+          "evidence": {
+            "benchmarkSignals": [
+              "avg gain 5.1",
+              "worth-it 62.5%",
+              "no-op 0%",
+              "static fallback 0%"
+            ],
+            "roundCount": 24,
+            "studentSessionCount": 56,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 2,
+            "refineBias": 1,
+            "researchBias": 0
+          }
+        },
+        {
+          "ruleId": "other-tool-core",
+          "category": "other",
+          "domain": "tool_usage",
+          "conditions": [
+            "High risk and clear critique volume",
+            "Add concrete risks, dependencies, and fallback conditions.",
+            "Low risk and already strong quality"
+          ],
+          "conditionSignals": [
+            "factual_claims",
+            "tool_conditional"
+          ],
+          "lesson": "Grounding should be targeted at the factual sub-problem, not used as broad enrichment.",
+          "recommendedStrategy": "Use tools in other only for narrow fact checking, not for generic expansion.",
+          "confidence": 0.84,
+          "evidence": {
+            "benchmarkSignals": [
+              "tool recommendation conditional",
+              "research usage 0%",
+              "positive research impact 0%"
+            ],
+            "roundCount": 24,
+            "studentSessionCount": 56,
+            "repeatedLessonCount": 0
+          },
+          "influence": {
+            "routingBias": 0,
+            "refineBias": 0,
+            "researchBias": -2
+          }
+        }
+      ]
+    }
+  ]
+}

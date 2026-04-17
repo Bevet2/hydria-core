@@ -1,11 +1,19 @@
 import { buildLocalStudentPrompt, localStudentSystemPrompt } from "../prompts/localStudent.js";
+import {
+  buildStudentAnswerPrompt,
+  buildStudentAnswerRepairPrompt,
+  studentDirectSystemPrompt
+} from "../prompts/localStudent.js";
 import type {
   JudgeOutput,
+  QuestionCategory,
   RefinerOutput,
+  ResearchToolLog,
   RedTeamOutput,
   RespondentOutput,
   SynthesizerOutput
 } from "../types/arena.js";
+import type { KnowledgeInjection } from "../types/knowledge.js";
 import {
   localModelHealthSchema,
   localModelTestResponseSchema,
@@ -15,6 +23,11 @@ import {
   type LocalStudentOutput
 } from "../types/localModel.js";
 import { parseStructuredOutput } from "../utils/jsonRepair.js";
+import {
+  studentAnswerSchema,
+  type StudentAnswer,
+  type StudentResponseStrategy
+} from "../types/student.js";
 import { env } from "../utils/env.js";
 
 type OllamaTagsResponse = {
@@ -134,5 +147,80 @@ export class LocalModelService {
   async observeRound(args: LocalObservationArgs): Promise<LocalStudentOutput> {
     const result = await this.observeRoundDetailed(args);
     return result.output;
+  }
+
+  async answerQuestionDetailed(args: {
+    question: string;
+    category: QuestionCategory;
+    strategy: StudentResponseStrategy;
+    knowledge?: KnowledgeInjection | null;
+    research?: ResearchToolLog | null;
+  }) {
+    let previousResponse = "";
+    let lastError: unknown = null;
+
+    try {
+      const primary = await this.testPrompt(
+        buildStudentAnswerPrompt(args),
+        studentDirectSystemPrompt
+      );
+      previousResponse = primary.response;
+      return {
+        output: parseStructuredOutput(
+          primary.response,
+          studentAnswerSchema,
+          "Local student direct answer"
+        ),
+        durationMs: primary.durationMs,
+        raw: primary.response,
+        usedRetry: false
+      };
+    } catch (error) {
+      lastError = error;
+    }
+
+    const repair = await this.testPrompt(
+      buildStudentAnswerRepairPrompt({
+        question: args.question,
+        category: args.category,
+        strategy: args.strategy,
+        previousResponse: previousResponse || "(empty response)",
+        validationIssues: this.getValidationIssues(lastError),
+        knowledge: args.knowledge,
+        research: args.research
+      }),
+      studentDirectSystemPrompt
+    );
+    previousResponse = repair.response;
+
+    return {
+      output: parseStructuredOutput(
+        repair.response,
+        studentAnswerSchema,
+        "Local student direct answer"
+      ),
+      durationMs: repair.durationMs,
+      raw: repair.response,
+      usedRetry: true
+    };
+  }
+
+  async answerQuestion(args: {
+    question: string;
+    category: QuestionCategory;
+    strategy: StudentResponseStrategy;
+    knowledge?: KnowledgeInjection | null;
+    research?: ResearchToolLog | null;
+  }): Promise<StudentAnswer> {
+    const result = await this.answerQuestionDetailed(args);
+    return result.output;
+  }
+
+  private getValidationIssues(error: unknown) {
+    if (error instanceof Error) {
+      return [error.message];
+    }
+
+    return [String(error)];
   }
 }

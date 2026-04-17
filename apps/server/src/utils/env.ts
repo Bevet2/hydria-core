@@ -51,6 +51,10 @@ const envSchema = z.object({
     .string()
     .min(1)
     .default("F:/hydria-arena/storage/knowledge/hydria-knowledge-v1.json"),
+  KNOWLEDGE_MEMORY_FILE: z
+    .string()
+    .min(1)
+    .default("F:/hydria-arena/storage/knowledge/hydria-memory-v1.json"),
   ROUND_DATASET_FILE: z
     .string()
     .min(1)
@@ -63,6 +67,34 @@ const envSchema = z.object({
     .string()
     .min(1)
     .default("F:/hydria-arena/storage/datasets/student-qwen-contrastive.jsonl"),
+  STUDENT_SESSION_HISTORY_FILE: z
+    .string()
+    .min(1)
+    .default("F:/hydria-arena/storage/history/student-sessions.json"),
+  STUDENT_SESSION_DATASET_FILE: z
+    .string()
+    .min(1)
+    .default("F:/hydria-arena/storage/datasets/student-cycles.jsonl"),
+  STUDENT_RULE_IMPACT_FILE: z
+    .string()
+    .min(1)
+    .default("F:/hydria-arena/storage/knowledge/student-rule-impact-v1.json"),
+  STUDENT_TOOL_IMPACT_FILE: z
+    .string()
+    .min(1)
+    .default("F:/hydria-arena/storage/knowledge/student-tool-impact-v1.json"),
+  STUDENT_STRATEGY_IMPACT_FILE: z
+    .string()
+    .min(1)
+    .default("F:/hydria-arena/storage/knowledge/student-strategy-impact-v1.json"),
+  STUDENT_STRATEGY_DISCOVERY_FILE: z
+    .string()
+    .min(1)
+    .default("F:/hydria-arena/storage/knowledge/student-strategy-discovery-v1.json"),
+  STUDENT_STRATEGY_ASSETS_FILE: z
+    .string()
+    .min(1)
+    .default("F:/hydria-arena/storage/knowledge/student-strategy-assets-v1.json"),
   LOCAL_MODEL_PROVIDER: z.literal("ollama").default("ollama"),
   LOCAL_MODEL_NAME: z.string().min(1).default("qwen2.5:3b"),
   LOCAL_MODEL_BASE_URL: z.string().url().default("http://127.0.0.1:11435"),

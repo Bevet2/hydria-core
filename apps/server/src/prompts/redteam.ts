@@ -94,3 +94,43 @@ ${categoryChecks.map((item) => `- ${item}`).join("\n")}
 
 Return strict JSON only.`;
 }
+
+export function buildStudentRedTeamUserPrompt(args: {
+  category: QuestionCategory;
+  question: string;
+  studentAnswer: RespondentOutput;
+}) {
+  const categoryChecks =
+    args.category === "product_strategy"
+      ? [
+          "generic strategy buzzwords with no decision",
+          "missing prioritization or sequencing",
+          "missing metrics, risks, or dependencies",
+          "non-actionable strategy prose"
+        ]
+      : [
+          "hidden assumptions",
+          "failure scenarios",
+          "claims that may be false or unverifiable",
+          "places where the student sounds too certain"
+        ];
+
+  return `Question:
+${args.question}
+
+Detected category:
+${args.category}
+
+Student answer:
+${JSON.stringify(args.studentAnswer, null, 2)}
+
+Instructions:
+- critique the student answer as if it were Response A
+- leave attacks_on_b empty
+- shared_risks should capture global weaknesses of the student answer
+
+Look for:
+${categoryChecks.map((item) => `- ${item}`).join("\n")}
+
+Return strict JSON only.`;
+}

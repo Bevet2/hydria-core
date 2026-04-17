@@ -196,6 +196,28 @@ export type RefineProfile = {
   B: QuestionCategory;
 };
 
+export type OrchestrationPolicyDetails = {
+  category: QuestionCategory;
+  focus:
+    | "risk_containment"
+    | "execution_clarity"
+    | "tradeoff_clarity"
+    | "pedagogy_precision"
+    | "diagnostic_caution"
+    | "strategy_actionability"
+    | "balanced_reasoning"
+    | "factual_grounding"
+    | "general_quality";
+  refinePolicy: "aggressive" | "balanced" | "conservative";
+  researchPolicy: "off" | "verify_only" | "ground_if_needed" | "targeted";
+  costPolicy: "latency_guarded" | "balanced" | "quality_first";
+  refineBias: number;
+  researchBias: number;
+  targetOutcomes: string[];
+  prioritySignals: string[];
+  reasoning: string[];
+};
+
 export type ResearchSource = {
   title: string;
   url: string;
@@ -221,6 +243,13 @@ export type ResearchIntent =
 
 export type ResearchExpectedValue = "low" | "medium" | "high";
 export type ResearchNetImpact = "positive" | "neutral" | "negative" | "unknown";
+export type ResearchTruth = {
+  verified_facts: string[];
+  uncertain_claims: string[];
+  conflicting_info: string[];
+  confidence_score: number;
+  no_reliable_source: boolean;
+};
 
 export type ResearchToolLog = {
   considered: boolean;
@@ -252,6 +281,7 @@ export type ResearchToolLog = {
     extractedSourceCount: number;
     corroboratedSignals: string[];
   };
+  truth: ResearchTruth;
   appliedTo: {
     A: boolean;
     B: boolean;
@@ -367,6 +397,326 @@ export type LocalModelTestResponse = {
   model: string;
   provider: "ollama";
   response: string;
+  durationMs: number;
+};
+
+export type KnowledgeInjection = {
+  category: QuestionCategory;
+  routingRecommendation: RoutingRecommendation;
+  toolRecommendation: "avoid" | "verify_only" | "prefer_grounded" | "conditional";
+  strategyNote: string;
+  winningPatterns: string[];
+  antiPatterns: string[];
+  highValueSignals: string[];
+  lowValueSignals: string[];
+  coachingHints: string[];
+  bestRoundReferences: Array<{
+    roundId: string;
+    gain: number;
+    note: string;
+  }>;
+  memorySummary: string;
+  memoryRules: Array<{
+    domain: "routing" | "refine" | "reasoning" | "tool_usage";
+    lesson: string;
+    recommendedStrategy: string;
+    confidence: number;
+  }>;
+  studentMemorySummary: string;
+  studentMemoryRules: Array<{
+    ruleId: string;
+    failureType: string;
+    rule: string;
+    confidence: number;
+    activationConfidence: number;
+    activationMode: "contextual" | "overall" | "fallback";
+    activationReason: string;
+    evidenceCount: number;
+    conditions: string[];
+  }>;
+};
+
+export type StudentAnswer = {
+  modelRole: "student";
+  answer: string;
+  key_points: string[];
+  assumptions: string[];
+  confidence: number;
+};
+
+export type StudentAnswerPreview = {
+  question: string;
+  category: QuestionCategory;
+  knowledge: KnowledgeInjection | null;
+  strategy: StudentResponseStrategy;
+  student: {
+    draft: StudentAnswer;
+    baselineDraft: StudentAnswer | null;
+  };
+  trace: {
+    student: ExecutionTrace;
+  };
+  durationMs: number;
+};
+
+export type StudentJudgeOutput = {
+  modelRole: "student_judge";
+  initial_score: JudgeSideScores;
+  improved_score: JudgeSideScores;
+  verdict: "improved" | "minor" | "needs_work" | "regressed";
+  worthIt: "YES" | "NO";
+  reasoning: string;
+  weak_points: string[];
+  strong_points: string[];
+};
+
+export type StudentLessonLearned = {
+  lessonId: string;
+  failureType:
+    | "too_generic"
+    | "vague_definition"
+    | "missing_examples"
+    | "missing_limits"
+    | "unsupported_claim"
+    | "missing_metrics"
+    | "missing_risk_tradeoff"
+    | "hidden_assumptions"
+    | "weak_structure"
+    | "low_actionability"
+    | "diagnostic_overclaim"
+    | "other";
+  error: string;
+  correction: string;
+  rule: string;
+  conditions: string[];
+  confidence: number;
+  evidenceCount: number;
+};
+
+export type StudentProgression = {
+  sessionScore: number;
+  deltaOverall: number;
+  draftOverall: number;
+  improvedOverall: number;
+  verdictWeight: number;
+  trend: "up" | "flat" | "down";
+};
+
+export type StudentRuleImpact = {
+  compared: boolean;
+  baselineAvailable: boolean;
+  context: {
+    questionType: "open" | "factual" | "explanatory" | "strategic";
+    promptLength: "short" | "medium" | "long";
+    promptWordCount: number;
+    signals: Array<"uncertainty" | "claims" | "abstraction">;
+  };
+  activatedRuleIds: string[];
+  judge: {
+    initial_score: JudgeSideScores;
+    improved_score: JudgeSideScores;
+    verdict: "improved" | "minor" | "needs_work" | "regressed";
+    worthIt: "YES" | "NO";
+    reasoning: string;
+  } | null;
+  metrics: {
+    judgeOverallDelta: number;
+    gainGlobal: number;
+    lengthDeltaWords: number;
+    keyPointsDelta: number;
+    assumptionsDelta: number;
+    structureDelta: number;
+    success: boolean;
+  };
+  perRule: Array<{
+    ruleId: string;
+    failureType: string;
+    rule: string;
+    activationConfidence: number;
+    evidenceCount: number;
+    conditions: string[];
+    metrics: {
+      judgeOverallDelta: number;
+      gainGlobal: number;
+      lengthDeltaWords: number;
+      keyPointsDelta: number;
+      assumptionsDelta: number;
+      structureDelta: number;
+      success: boolean;
+    };
+  }>;
+};
+
+export type StudentResponseStrategy = {
+  strategyId:
+    | "open_short"
+    | "open_scope_anchor"
+    | "open_medium"
+    | "open_long"
+    | "factual_short"
+    | "factual_medium"
+    | "factual_verify_first"
+    | "factual_long"
+    | "explanatory_short"
+    | "explanatory_compact_example"
+    | "explanatory_medium"
+    | "explanatory_long"
+    | "reasoning_bridge_medium"
+    | "strategic_short"
+    | "strategic_medium"
+    | "strategic_long";
+  context: {
+    questionType: "open" | "factual" | "explanatory" | "strategic";
+    promptLength: "short" | "medium" | "long";
+    promptWordCount: number;
+    signals: Array<"uncertainty" | "claims" | "abstraction">;
+  };
+  impactStatus: "active" | "cautious" | "inactive";
+  activationMode: "contextual" | "overall" | "fallback";
+  impactConfidence: number;
+  impactReason: string;
+  targetLengthWords: {
+    min: number;
+    max: number;
+  };
+  directives: string[];
+  avoidances: string[];
+  influencedBy: {
+    signals: string[];
+    studentRuleIds: string[];
+    memoryDomains: string[];
+    winningPatterns: string[];
+  };
+  reasoning: string[];
+};
+
+export type StudentStrategyImpact = {
+  compared: boolean;
+  baselineAvailable: boolean;
+  strategyId: StudentResponseStrategy["strategyId"];
+  activationMode: "contextual" | "overall" | "fallback";
+  impactStatus: "active" | "cautious" | "inactive";
+  impactConfidence: number;
+  context: {
+    questionType: "open" | "factual" | "explanatory" | "strategic";
+    promptLength: "short" | "medium" | "long";
+    promptWordCount: number;
+    signals: Array<"uncertainty" | "claims" | "abstraction">;
+  };
+  judge: {
+    initial_score: JudgeSideScores;
+    improved_score: JudgeSideScores;
+    verdict: "improved" | "minor" | "needs_work" | "regressed";
+    worthIt: "YES" | "NO";
+    reasoning: string;
+  } | null;
+  metrics: {
+    judgeOverallDelta: number;
+    gainGlobal: number;
+    lengthDeltaWords: number;
+    keyPointsDelta: number;
+    assumptionsDelta: number;
+    structureDelta: number;
+    success: boolean;
+  };
+};
+
+export type StudentToolImpact = {
+  toolUsed: boolean;
+  toolReason: string;
+  toolImpact:
+    | "improved_factual_accuracy"
+    | "reduced_uncertainty"
+    | "no_impact"
+    | "no_reliable_source"
+    | "negative";
+  compared: boolean;
+  baselineAvailable: boolean;
+  context: {
+    questionType: "open" | "factual" | "explanatory" | "strategic";
+    promptLength: "short" | "medium" | "long";
+    promptWordCount: number;
+    signals: Array<"uncertainty" | "claims" | "abstraction">;
+  };
+  noReliableSource: boolean;
+  confidenceScore: number;
+  judge: {
+    initial_score: JudgeSideScores;
+    improved_score: JudgeSideScores;
+    verdict: "improved" | "minor" | "needs_work" | "regressed";
+    worthIt: "YES" | "NO";
+    reasoning: string;
+  } | null;
+  metrics: {
+    judgeOverallDelta: number;
+    gainGlobal: number;
+    lengthDeltaWords: number;
+    keyPointsDelta: number;
+    assumptionsDelta: number;
+    structureDelta: number;
+    success: boolean;
+  };
+};
+
+export type StudentCompressedCycle = {
+  input: string;
+  weakAnswer: string;
+  correctedAnswer: string;
+  keyCorrection: string;
+};
+
+export type StudentProgressSummary = {
+  totalSessions: number;
+  averageSessionScore: number;
+  latestSessionScore: number;
+  averageDeltaOverall: number;
+  improvedRate: number;
+  worthItRate: number;
+  recentTrend: "up" | "flat" | "down";
+  categoryHighlights: Array<{
+    category: QuestionCategory;
+    averageSessionScore: number;
+    sessions: number;
+  }>;
+};
+
+export type StudentSession = {
+  sessionId: string;
+  createdAt: string;
+  question: string;
+  category: QuestionCategory;
+  models: {
+    studentLocalModel: string;
+    teacherModel: string;
+    redTeamModel: string;
+    judgeModel: string;
+  };
+  orchestration: OrchestrationPolicyDetails;
+  knowledge: KnowledgeInjection | null;
+  strategy: StudentResponseStrategy;
+  research: ResearchToolLog;
+  student: {
+    draft: StudentAnswer;
+    final: StudentAnswer;
+    toolApplied: boolean;
+  };
+  redTeam: RedTeamOutput;
+  judge: StudentJudgeOutput;
+  teacher: RefinerOutput;
+  weakPoints: string[];
+  coachingNotes: string[];
+  lessonsLearned: StudentLessonLearned[];
+  progression: StudentProgression;
+  compressedCycle: StudentCompressedCycle;
+  tooling: StudentToolImpact;
+  ruleImpact: StudentRuleImpact;
+  strategyImpact: StudentStrategyImpact;
+  traces: {
+    student: ExecutionTrace;
+    redTeam: ExecutionTrace;
+    teacher: ExecutionTrace;
+    judge: ExecutionTrace;
+  };
   durationMs: number;
 };
 
@@ -655,6 +1005,41 @@ export async function testLocalModel(prompt: string) {
     method: "POST",
     body: JSON.stringify({ prompt })
   });
+}
+
+export async function runStudentSession(question: string) {
+  return request<StudentSession>("/api/student/run", {
+    method: "POST",
+    body: JSON.stringify({ question })
+  });
+}
+
+export async function answerStudentQuestion(question: string) {
+  return request<StudentAnswerPreview>("/api/student/answer", {
+    method: "POST",
+    body: JSON.stringify({ question })
+  });
+}
+
+export async function analyzeStudentDraft(args: {
+  question: string;
+  category: QuestionCategory;
+  draft: StudentAnswer;
+  baselineDraft?: StudentAnswer | null;
+  trace: ExecutionTrace;
+}) {
+  return request<StudentSession>("/api/student/analyze", {
+    method: "POST",
+    body: JSON.stringify(args)
+  });
+}
+
+export async function fetchStudentSessions() {
+  return request<{ sessions: StudentSession[]; summary: StudentProgressSummary }>("/api/student/history");
+}
+
+export async function fetchStudentSession(sessionId: string) {
+  return request<StudentSession>(`/api/student/history/${sessionId}`);
 }
 
 export async function startBenchmarkRun(body?: {

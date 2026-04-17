@@ -340,6 +340,14 @@ export const researchVerificationSchema = z.object({
   corroboratedSignals: z.array(z.string()).max(8)
 });
 
+export const researchTruthSchema = z.object({
+  verified_facts: z.array(z.string()).max(8).default([]),
+  uncertain_claims: z.array(z.string()).max(8).default([]),
+  conflicting_info: z.array(z.string()).max(6).default([]),
+  confidence_score: z.number().min(0).max(1).default(0),
+  no_reliable_source: z.boolean().default(false)
+});
+
 export const researchDecisionDetailsSchema = z.object({
   shouldUse: z.boolean(),
   mode: researchDecisionModeSchema,
@@ -379,6 +387,13 @@ export const researchToolLogSchema = z.object({
   summary: z.array(z.string()).max(8),
   sources: z.array(researchSourceSchema).max(5),
   verification: researchVerificationSchema,
+  truth: researchTruthSchema.default({
+    verified_facts: [],
+    uncertain_claims: [],
+    conflicting_info: [],
+    confidence_score: 0,
+    no_reliable_source: false
+  }),
   appliedTo: z.object({
     A: z.boolean(),
     B: z.boolean()
@@ -509,6 +524,7 @@ export type RefineProfile = z.infer<typeof refineProfileSchema>;
 export type OrchestrationPolicyDetails = z.infer<typeof orchestrationPolicySchema>;
 export type ResearchSource = z.infer<typeof researchSourceSchema>;
 export type ResearchVerification = z.infer<typeof researchVerificationSchema>;
+export type ResearchTruth = z.infer<typeof researchTruthSchema>;
 export type ResearchDecisionDetails = z.infer<typeof researchDecisionDetailsSchema>;
 export type ResearchQueryPlan = z.infer<typeof researchQueryPlanSchema>;
 export type ResearchImpact = z.infer<typeof researchImpactSchema>;

@@ -1,11 +1,13 @@
 import type {
   ResearchNetImpact,
   ResearchSource,
+  ResearchTruth,
   ResearchToolLog,
   RespondentOutput
 } from "../../types/arena.js";
 import {
   extractTerms,
+  getSourceTrustScore,
   normalizeSpace,
   splitSentences,
   type ResearchDecision,
@@ -50,11 +52,18 @@ export class ResearchVerifier {
       .map((source) => `${source.title}: ${splitSentences(source.excerpt)[0] ?? source.snippet}`)
       .map((entry) => normalizeSpace(entry))
       .slice(0, 4);
+    const truth = this.buildTruth({ decision, args, sources, corroboratedSignals });
+    const used =
+      sources.length > 0 &&
+      !truth.no_reliable_source &&
+      (truth.verified_facts.length > 0 ||
+        truth.uncertain_claims.length > 0 ||
+        truth.conflicting_info.length > 0);
 
     return {
       considered: true,
-      used: sources.length > 0,
-      route: sources.length > 0 ? "used" : "failed",
+      used,
+      route: used ? "used" : "failed",
       decision: {
         shouldUse: true,
         mode: decision.plan?.mode ?? "off",
@@ -81,9 +90,10 @@ export class ResearchVerifier {
         extractedSourceCount: sources.length,
         corroboratedSignals
       },
+      truth,
       appliedTo: {
-        A: args.shouldRefineA && sources.length > 0,
-        B: args.shouldRefineB && sources.length > 0
+        A: args.shouldRefineA && used,
+        B: args.shouldRefineB && used
       },
       impact: {
         refineChangedBecauseOfTool: false,
@@ -95,12 +105,15 @@ export class ResearchVerifier {
           sourceTexts
         ),
         costSharePct: 0,
-        netImpact: sources.length > 0 ? "neutral" : "negative"
+        netImpact: used ? "neutral" : "negative"
       },
-      impactNotes:
-        sources.length > 0
-          ? [`Research injected ${sources.length} extracted sources into the refine step.`]
-          : ["Research was triggered, but no extractable sources were recovered."],
+      impactNotes: used
+        ? [
+            `Truth engine produced ${truth.verified_facts.length} verified fact(s), ${truth.uncertain_claims.length} uncertain claim(s), and ${truth.conflicting_info.length} conflict marker(s).`
+          ]
+        : truth.no_reliable_source
+          ? ["Research ran, but no reliable source could verify the target claim set."]
+          : ["Research was triggered, but no usable truth payload was recovered."],
       durationMs: Date.now() - startedAt
     };
   }
@@ -136,6 +149,13 @@ export class ResearchVerifier {
         extractedSourceCount: 0,
         corroboratedSignals: []
       },
+      truth: {
+        verified_facts: [],
+        uncertain_claims: decision.targetClaims.slice(0, 4),
+        conflicting_info: [],
+        confidence_score: 0,
+        no_reliable_source: true
+      },
       appliedTo: {
         A: false,
         B: false
@@ -154,13 +174,16 @@ export class ResearchVerifier {
   }
 
   finalizeImpact(args: FinalizeImpactArgs): ResearchToolLog {
-    if (!args.log.used) {
+    if (!args.log.decision.shouldUse) {
       return args.log;
     }
 
-    const sourceText = [...args.log.summary, ...args.log.sources.map((source) => source.excerpt)].join(
-      " "
-    );
+    const sourceText = [
+      ...args.log.truth.verified_facts,
+      ...args.log.truth.uncertain_claims,
+      ...args.log.summary,
+      ...args.log.sources.map((source) => source.excerpt)
+    ].join(" ");
     const sourceTerms = extractTerms(sourceText).slice(0, 20);
     const beforeText = `${args.respondentA.answer} ${args.respondentB.answer}`;
     const afterText = `${args.refineA.improved_answer} ${args.refineB.improved_answer}`;
@@ -208,12 +231,12 @@ export class ResearchVerifier {
     return {
       ...args.log,
       impact: {
-        ...args.log.impact,
-        refineChangedBecauseOfTool,
-        addedFactsCount: Math.min(20, addedFactsCount),
-        correctedClaimsCount: Math.min(12, correctedClaimsCount),
-        sourceBackedClaimsCount: Math.min(12, sourceBackedClaimsCount),
-        netImpact
+      ...args.log.impact,
+      refineChangedBecauseOfTool,
+      addedFactsCount: Math.min(20, addedFactsCount),
+      correctedClaimsCount: Math.min(12, correctedClaimsCount),
+      sourceBackedClaimsCount: Math.min(12, sourceBackedClaimsCount),
+      netImpact: args.log.truth.no_reliable_source && !refineChangedBecauseOfTool ? "neutral" : netImpact
       },
       impactNotes: impactNotes.slice(0, 12)
     };
@@ -285,5 +308,184 @@ export class ResearchVerifier {
 
       return presentAfter && absentBefore;
     }).length;
+  }
+
+  private buildTruth(args: {
+    decision: ResearchDecision;
+    args: ResearchDecisionArgs;
+    sources: ResearchSource[];
+    corroboratedSignals: string[];
+  }): ResearchTruth {
+    const preferredDomains = args.decision.plan?.preferredDomains ?? [];
+    const genericTerms = new Set([
+      "official",
+      "documentation",
+      "reference",
+      "company",
+      "general-purpose",
+      "artificial",
+      "intelligence",
+      "released",
+      "announced",
+      "general",
+      "purpose",
+      "update",
+      "updates",
+      "latest",
+      "major",
+      "model",
+      "models",
+      "guidance",
+      "policy",
+      "weeks",
+      "week"
+    ]);
+    const requiredTerms = [
+      ...(args.decision.plan?.requiredTerms ?? []),
+      ...(args.decision.plan?.factFocusTerms ?? []),
+      ...extractTerms(args.decision.targetClaims.join(" ")).slice(0, 6)
+    ];
+    const claimAnchorTerms = this.uniqueNormalized(
+      extractTerms(args.decision.targetClaims.join(" ")).filter(
+        (term) => !genericTerms.has(term.toLowerCase())
+      )
+    ).slice(0, 8);
+    const fallbackFocusTerms = this.uniqueNormalized(
+      extractTerms(
+        `${args.args.question} ${args.args.respondentA.answer} ${args.args.respondentB.answer}`
+      ).filter((term) => !genericTerms.has(term.toLowerCase()))
+    ).slice(0, 8);
+    const focusTerms = claimAnchorTerms.length > 0 ? claimAnchorTerms : fallbackFocusTerms;
+    const reliableSources = args.sources
+      .map((source) => ({
+        source,
+        trustScore: getSourceTrustScore(source.url, preferredDomains)
+      }))
+      .filter((entry) => entry.trustScore >= 26);
+
+    const candidateFacts = reliableSources
+      .flatMap((entry) =>
+        splitSentences(entry.source.excerpt).map((sentence, index) => ({
+          sentence: normalizeSpace(sentence),
+          score: this.scoreFactSentence(
+            sentence,
+            requiredTerms,
+            focusTerms,
+            entry.trustScore,
+            index
+          ),
+          trustScore: entry.trustScore
+        }))
+      )
+      .filter((entry) => entry.score >= 6)
+      .sort((left, right) => right.score - left.score || right.trustScore - left.trustScore)
+      .map((entry) => entry.sentence);
+
+    const verifiedFacts = this.uniqueNormalized(candidateFacts).slice(0, 6);
+    const sourceText = reliableSources
+      .map((entry) => `${entry.source.title} ${entry.source.snippet} ${entry.source.excerpt}`)
+      .join(" ")
+      .toLowerCase();
+    const uncertainClaims = this.uniqueNormalized(
+      args.decision.targetClaims
+        .filter((claim) => !this.claimSupported(claim, sourceText, verifiedFacts))
+        .slice(0, 5)
+    );
+    const conflictingInfo = this.detectConflicts(args.decision.targetClaims, verifiedFacts);
+    const noReliableSource = reliableSources.length === 0 || verifiedFacts.length === 0;
+    const confidenceScore = noReliableSource
+      ? 0
+      : Math.max(
+          0,
+          Math.min(
+            1,
+            0.3 +
+              Math.min(reliableSources.length, 3) * 0.15 +
+              Math.min(args.corroboratedSignals.length, 3) * 0.08 +
+              Math.min(verifiedFacts.length, 3) * 0.08 -
+              Math.min(uncertainClaims.length, 3) * 0.08 -
+              Math.min(conflictingInfo.length, 2) * 0.12
+          )
+        );
+
+    return {
+      verified_facts: verifiedFacts,
+      uncertain_claims: noReliableSource
+        ? uncertainClaims.length > 0
+          ? uncertainClaims
+          : ["The requested claim could not be verified from reliable sources."]
+        : uncertainClaims,
+      conflicting_info: conflictingInfo,
+      confidence_score: Math.round(confidenceScore * 100) / 100,
+      no_reliable_source: noReliableSource
+    };
+  }
+
+  private scoreFactSentence(
+    sentence: string,
+    requiredTerms: string[],
+    focusTerms: string[],
+    trustScore: number,
+    index: number
+  ) {
+    const normalized = sentence.toLowerCase();
+    let score = Math.min(5, Math.round(trustScore / 10));
+
+    score += requiredTerms.reduce(
+      (total, term) => total + (term.length >= 4 && normalized.includes(term.toLowerCase()) ? 3 : 0),
+      0
+    );
+    const focusHits = focusTerms.filter(
+      (term) => term.length >= 4 && normalized.includes(term.toLowerCase())
+    ).length;
+    if (focusTerms.length > 0 && focusHits === 0) {
+      return -10;
+    }
+    score += focusHits * 4;
+    score += /\b\d{4}\b/.test(sentence) ? 2 : 0;
+    score += /\b\d+(?:\.\d+)?%?\b/.test(sentence) ? 1 : 0;
+    score += /\b(is|are|means|refers to|announced|released|updated|requires?)\b/i.test(sentence)
+      ? 2
+      : 0;
+    score -= /\b(may|might|could|appears|seems)\b/i.test(sentence) ? 2 : 0;
+    score -= index > 3 ? 1 : 0;
+
+    return score;
+  }
+
+  private claimSupported(claim: string, sourceText: string, verifiedFacts: string[]) {
+    const terms = extractTerms(claim).slice(0, 4);
+    if (terms.length === 0) {
+      return false;
+    }
+
+    const factText = verifiedFacts.join(" ").toLowerCase();
+    return terms.some(
+      (term) => sourceText.includes(term.toLowerCase()) || factText.includes(term.toLowerCase())
+    );
+  }
+
+  private detectConflicts(targetClaims: string[], verifiedFacts: string[]) {
+    const yearMatches = [...new Set(verifiedFacts.flatMap((fact) => fact.match(/\b20\d{2}\b/g) ?? []))];
+    if (yearMatches.length >= 2 && targetClaims.length > 0) {
+      return [`Reliable sources expose conflicting timing/details for: ${targetClaims[0]}`];
+    }
+
+    return [];
+  }
+
+  private uniqueNormalized(values: string[]) {
+    const seen = new Set<string>();
+    const deduped: string[] = [];
+    for (const value of values.map((entry) => normalizeSpace(entry)).filter(Boolean)) {
+      const key = value.toLowerCase();
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      deduped.push(value);
+    }
+
+    return deduped;
   }
 }

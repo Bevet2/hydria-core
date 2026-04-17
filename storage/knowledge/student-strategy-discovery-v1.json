@@ -1,0 +1,679 @@
+{
+  "version": "hydria-student-strategy-discovery-v1",
+  "builtAt": "2026-04-16T23:40:35.020Z",
+  "sourceStats": {
+    "proposals": 6,
+    "evaluations": 20,
+    "adoptedReplacements": 4
+  },
+  "proposals": [
+    {
+      "baseStrategyId": "factual_medium",
+      "candidateStrategyId": "factual_verify_first",
+      "category": "other",
+      "context": {
+        "questionType": "factual",
+        "promptLength": "medium",
+        "signals": [
+          "uncertainty",
+          "claims"
+        ]
+      },
+      "currentActivation": "inactive",
+      "currentAverageJudgeDelta": -3.5,
+      "reason": "Factual medium contexts with uncertainty or claims benefit from a verify-first strategy instead of a fuller factual answer template."
+    },
+    {
+      "baseStrategyId": "factual_medium",
+      "candidateStrategyId": "factual_verify_first",
+      "category": "other",
+      "context": {
+        "questionType": "factual",
+        "promptLength": "medium",
+        "signals": [
+          "claims"
+        ]
+      },
+      "currentActivation": "cautious",
+      "currentAverageJudgeDelta": 0.5,
+      "reason": "Factual medium contexts with uncertainty or claims benefit from a verify-first strategy instead of a fuller factual answer template."
+    },
+    {
+      "baseStrategyId": "explanatory_short",
+      "candidateStrategyId": "explanatory_compact_example",
+      "category": "other",
+      "context": {
+        "questionType": "explanatory",
+        "promptLength": "short",
+        "signals": []
+      },
+      "currentActivation": "cautious",
+      "currentAverageJudgeDelta": 0,
+      "reason": "Short explanatory prompts often need a compact definition plus one concrete example, not a thin abstract answer."
+    },
+    {
+      "baseStrategyId": "explanatory_medium",
+      "candidateStrategyId": "reasoning_bridge_medium",
+      "category": "other",
+      "context": {
+        "questionType": "explanatory",
+        "promptLength": "medium",
+        "signals": [
+          "claims",
+          "abstraction"
+        ]
+      },
+      "currentActivation": "active",
+      "currentAverageJudgeDelta": 12,
+      "reason": "Ambiguous mixed-reasoning prompts need a bridge between externally claimed facts and broader implications."
+    },
+    {
+      "baseStrategyId": "open_medium",
+      "candidateStrategyId": "reasoning_bridge_medium",
+      "category": "other",
+      "context": {
+        "questionType": "open",
+        "promptLength": "medium",
+        "signals": [
+          "uncertainty",
+          "abstraction"
+        ]
+      },
+      "currentActivation": "cautious",
+      "currentAverageJudgeDelta": 0,
+      "reason": "Open ambiguous prompts benefit from one concrete implication and one explicit boundary instead of a diffuse overview."
+    },
+    {
+      "baseStrategyId": "open_short",
+      "candidateStrategyId": "open_scope_anchor",
+      "category": "other",
+      "context": {
+        "questionType": "open",
+        "promptLength": "short",
+        "signals": [
+          "abstraction"
+        ]
+      },
+      "currentActivation": "active",
+      "currentAverageJudgeDelta": 6.74,
+      "reason": "Short open prompts with abstract scope often stay too vague unless the answer is anchored with one concrete frame."
+    }
+  ],
+  "evaluations": [
+    {
+      "question": "Which company announced the latest general-purpose AI model and when was it released?",
+      "category": "other",
+      "baseStrategyId": "factual_medium",
+      "candidateStrategyId": "factual_verify_first",
+      "context": {
+        "questionType": "factual",
+        "promptLength": "medium",
+        "signals": [
+          "uncertainty",
+          "claims"
+        ]
+      },
+      "judgeDelta": 4,
+      "gainGlobal": 4,
+      "success": true,
+      "lengthDeltaWords": 5,
+      "structureDelta": 0
+    },
+    {
+      "question": "What official AI model updates were announced this week by major labs?",
+      "category": "other",
+      "baseStrategyId": "factual_medium",
+      "candidateStrategyId": "factual_verify_first",
+      "context": {
+        "questionType": "factual",
+        "promptLength": "medium",
+        "signals": [
+          "uncertainty",
+          "claims"
+        ]
+      },
+      "judgeDelta": 7,
+      "gainGlobal": 7,
+      "success": true,
+      "lengthDeltaWords": 2,
+      "structureDelta": 0
+    },
+    {
+      "question": "Which major AI lab most recently released a new model or platform update?",
+      "category": "other",
+      "baseStrategyId": "factual_medium",
+      "candidateStrategyId": "factual_verify_first",
+      "context": {
+        "questionType": "factual",
+        "promptLength": "medium",
+        "signals": [
+          "uncertainty",
+          "claims"
+        ]
+      },
+      "judgeDelta": 23,
+      "gainGlobal": 23,
+      "success": true,
+      "lengthDeltaWords": -6,
+      "structureDelta": 0
+    },
+    {
+      "question": "Which company most recently announced a new AI platform update, and what was it?",
+      "category": "other",
+      "baseStrategyId": "factual_medium",
+      "candidateStrategyId": "factual_verify_first",
+      "context": {
+        "questionType": "factual",
+        "promptLength": "medium",
+        "signals": [
+          "uncertainty",
+          "claims"
+        ]
+      },
+      "judgeDelta": 27,
+      "gainGlobal": 27,
+      "success": true,
+      "lengthDeltaWords": 12,
+      "structureDelta": 1
+    },
+    {
+      "question": "Which company announced the latest general-purpose AI model and when was it released?",
+      "category": "other",
+      "baseStrategyId": "factual_medium",
+      "candidateStrategyId": "factual_verify_first",
+      "context": {
+        "questionType": "factual",
+        "promptLength": "medium",
+        "signals": [
+          "claims"
+        ]
+      },
+      "judgeDelta": 6,
+      "gainGlobal": 6,
+      "success": true,
+      "lengthDeltaWords": 5,
+      "structureDelta": -1
+    },
+    {
+      "question": "What official AI model updates were announced this week by major labs?",
+      "category": "other",
+      "baseStrategyId": "factual_medium",
+      "candidateStrategyId": "factual_verify_first",
+      "context": {
+        "questionType": "factual",
+        "promptLength": "medium",
+        "signals": [
+          "claims"
+        ]
+      },
+      "judgeDelta": 5,
+      "gainGlobal": 5,
+      "success": true,
+      "lengthDeltaWords": 8,
+      "structureDelta": 0
+    },
+    {
+      "question": "Which major AI lab most recently released a new model or platform update?",
+      "category": "other",
+      "baseStrategyId": "factual_medium",
+      "candidateStrategyId": "factual_verify_first",
+      "context": {
+        "questionType": "factual",
+        "promptLength": "medium",
+        "signals": [
+          "claims"
+        ]
+      },
+      "judgeDelta": 29,
+      "gainGlobal": 29,
+      "success": true,
+      "lengthDeltaWords": 31,
+      "structureDelta": 1
+    },
+    {
+      "question": "Which company most recently announced a new AI platform update, and what was it?",
+      "category": "other",
+      "baseStrategyId": "factual_medium",
+      "candidateStrategyId": "factual_verify_first",
+      "context": {
+        "questionType": "factual",
+        "promptLength": "medium",
+        "signals": [
+          "claims"
+        ]
+      },
+      "judgeDelta": 21,
+      "gainGlobal": 21,
+      "success": true,
+      "lengthDeltaWords": 4,
+      "structureDelta": 1
+    },
+    {
+      "question": "What is AI doing for ordinary users?",
+      "category": "other",
+      "baseStrategyId": "explanatory_short",
+      "candidateStrategyId": "explanatory_compact_example",
+      "context": {
+        "questionType": "explanatory",
+        "promptLength": "short",
+        "signals": []
+      },
+      "judgeDelta": 5,
+      "gainGlobal": 5,
+      "success": true,
+      "lengthDeltaWords": -13,
+      "structureDelta": -4,
+      "noiseDelta": 0,
+      "clarityDelta": -6
+    },
+    {
+      "question": "What are AI's limits for society?",
+      "category": "other",
+      "baseStrategyId": "explanatory_short",
+      "candidateStrategyId": "explanatory_compact_example",
+      "context": {
+        "questionType": "explanatory",
+        "promptLength": "short",
+        "signals": []
+      },
+      "judgeDelta": 14,
+      "gainGlobal": 14,
+      "success": true,
+      "lengthDeltaWords": -4,
+      "structureDelta": 0,
+      "noiseDelta": 0,
+      "clarityDelta": 0
+    },
+    {
+      "question": "Why does AI fail on simple tasks?",
+      "category": "technical_explanation",
+      "baseStrategyId": "explanatory_short",
+      "candidateStrategyId": "explanatory_compact_example",
+      "context": {
+        "questionType": "explanatory",
+        "promptLength": "short",
+        "signals": []
+      },
+      "judgeDelta": 8,
+      "gainGlobal": 8,
+      "success": true,
+      "lengthDeltaWords": 23,
+      "structureDelta": 2,
+      "noiseDelta": 0,
+      "clarityDelta": 1
+    },
+    {
+      "question": "Why do official AI safety claims matter for public trust in society?",
+      "category": "technical_explanation",
+      "baseStrategyId": "explanatory_medium",
+      "candidateStrategyId": "reasoning_bridge_medium",
+      "context": {
+        "questionType": "explanatory",
+        "promptLength": "medium",
+        "signals": [
+          "claims",
+          "abstraction"
+        ]
+      },
+      "judgeDelta": 9,
+      "gainGlobal": 9,
+      "success": true,
+      "lengthDeltaWords": 14,
+      "structureDelta": -2,
+      "noiseDelta": 0,
+      "clarityDelta": -3
+    },
+    {
+      "question": "How should we think about AI in society when the long-term impact is unclear?",
+      "category": "other",
+      "baseStrategyId": "explanatory_medium",
+      "candidateStrategyId": "reasoning_bridge_medium",
+      "context": {
+        "questionType": "explanatory",
+        "promptLength": "medium",
+        "signals": [
+          "claims",
+          "abstraction"
+        ]
+      },
+      "judgeDelta": -13,
+      "gainGlobal": -13,
+      "success": false,
+      "lengthDeltaWords": -48,
+      "structureDelta": -2,
+      "noiseDelta": 0,
+      "clarityDelta": -1
+    },
+    {
+      "question": "Why do company promises about AI capabilities shape social trust?",
+      "category": "technical_explanation",
+      "baseStrategyId": "explanatory_medium",
+      "candidateStrategyId": "reasoning_bridge_medium",
+      "context": {
+        "questionType": "explanatory",
+        "promptLength": "medium",
+        "signals": [
+          "claims",
+          "abstraction"
+        ]
+      },
+      "judgeDelta": 8,
+      "gainGlobal": 8,
+      "success": true,
+      "lengthDeltaWords": 23,
+      "structureDelta": -2,
+      "noiseDelta": 0,
+      "clarityDelta": -5
+    },
+    {
+      "question": "Why do official AI safety claims matter for public trust in society?",
+      "category": "technical_explanation",
+      "baseStrategyId": "open_medium",
+      "candidateStrategyId": "reasoning_bridge_medium",
+      "context": {
+        "questionType": "open",
+        "promptLength": "medium",
+        "signals": [
+          "uncertainty",
+          "abstraction"
+        ]
+      },
+      "judgeDelta": 14,
+      "gainGlobal": 14,
+      "success": true,
+      "lengthDeltaWords": 37,
+      "structureDelta": 3,
+      "noiseDelta": 1,
+      "clarityDelta": 0
+    },
+    {
+      "question": "How should we think about AI in society when the long-term impact is unclear?",
+      "category": "other",
+      "baseStrategyId": "open_medium",
+      "candidateStrategyId": "reasoning_bridge_medium",
+      "context": {
+        "questionType": "open",
+        "promptLength": "medium",
+        "signals": [
+          "uncertainty",
+          "abstraction"
+        ]
+      },
+      "judgeDelta": -6,
+      "gainGlobal": -6,
+      "success": false,
+      "lengthDeltaWords": -39,
+      "structureDelta": -1,
+      "noiseDelta": 0,
+      "clarityDelta": 3
+    },
+    {
+      "question": "Why do company promises about AI capabilities shape social trust?",
+      "category": "technical_explanation",
+      "baseStrategyId": "open_medium",
+      "candidateStrategyId": "reasoning_bridge_medium",
+      "context": {
+        "questionType": "open",
+        "promptLength": "medium",
+        "signals": [
+          "uncertainty",
+          "abstraction"
+        ]
+      },
+      "judgeDelta": 9,
+      "gainGlobal": 9,
+      "success": true,
+      "lengthDeltaWords": 21,
+      "structureDelta": 2,
+      "noiseDelta": 0,
+      "clarityDelta": 3
+    },
+    {
+      "question": "What should people understand about AI in society?",
+      "category": "other",
+      "baseStrategyId": "open_short",
+      "candidateStrategyId": "open_scope_anchor",
+      "context": {
+        "questionType": "open",
+        "promptLength": "short",
+        "signals": [
+          "abstraction"
+        ]
+      },
+      "judgeDelta": 16,
+      "gainGlobal": 16,
+      "success": true,
+      "lengthDeltaWords": 13,
+      "structureDelta": 2,
+      "noiseDelta": 0,
+      "clarityDelta": 3
+    },
+    {
+      "question": "What is the big picture risk of AI?",
+      "category": "other",
+      "baseStrategyId": "open_short",
+      "candidateStrategyId": "open_scope_anchor",
+      "context": {
+        "questionType": "open",
+        "promptLength": "short",
+        "signals": [
+          "abstraction"
+        ]
+      },
+      "judgeDelta": 3,
+      "gainGlobal": 3,
+      "success": true,
+      "lengthDeltaWords": 6,
+      "structureDelta": -2,
+      "noiseDelta": 0,
+      "clarityDelta": -3
+    },
+    {
+      "question": "What should the public keep in mind about AI?",
+      "category": "other",
+      "baseStrategyId": "open_short",
+      "candidateStrategyId": "open_scope_anchor",
+      "context": {
+        "questionType": "open",
+        "promptLength": "short",
+        "signals": [
+          "abstraction"
+        ]
+      },
+      "judgeDelta": 16,
+      "gainGlobal": 16,
+      "success": true,
+      "lengthDeltaWords": 12,
+      "structureDelta": 0,
+      "noiseDelta": 0,
+      "clarityDelta": 0
+    }
+  ],
+  "adoptions": [
+    {
+      "baseStrategyId": "factual_medium",
+      "candidateStrategyId": "factual_verify_first",
+      "category": "other",
+      "context": {
+        "questionType": "factual",
+        "promptLength": "medium",
+        "signals": [
+          "uncertainty",
+          "claims"
+        ]
+      },
+      "observations": 4,
+      "winRate": 100,
+      "averageJudgeDelta": 15.25,
+      "averageGainGlobal": 15.25,
+      "averageLengthDeltaWords": 3.25,
+      "averageAbsoluteLengthDeltaWords": 6.25,
+      "averageStructureDelta": 0.25,
+      "averageNoiseDelta": 0,
+      "averageClarityDelta": 0,
+      "productGuard": {
+        "passed": true,
+        "noiseOk": true,
+        "lengthOk": true,
+        "clarityOk": true,
+        "reasons": []
+      },
+      "adoption": "adopted",
+      "reason": "Candidate factual_verify_first beats factual_medium in this context and passes the product guard."
+    },
+    {
+      "baseStrategyId": "factual_medium",
+      "candidateStrategyId": "factual_verify_first",
+      "category": "other",
+      "context": {
+        "questionType": "factual",
+        "promptLength": "medium",
+        "signals": [
+          "claims"
+        ]
+      },
+      "observations": 4,
+      "winRate": 100,
+      "averageJudgeDelta": 15.25,
+      "averageGainGlobal": 15.25,
+      "averageLengthDeltaWords": 12,
+      "averageAbsoluteLengthDeltaWords": 12,
+      "averageStructureDelta": 0.25,
+      "averageNoiseDelta": 0,
+      "averageClarityDelta": 0,
+      "productGuard": {
+        "passed": true,
+        "noiseOk": true,
+        "lengthOk": true,
+        "clarityOk": true,
+        "reasons": []
+      },
+      "adoption": "adopted",
+      "reason": "Candidate factual_verify_first beats factual_medium in this context and passes the product guard."
+    },
+    {
+      "baseStrategyId": "open_short",
+      "candidateStrategyId": "open_scope_anchor",
+      "category": "other",
+      "context": {
+        "questionType": "open",
+        "promptLength": "short",
+        "signals": [
+          "abstraction"
+        ]
+      },
+      "observations": 3,
+      "winRate": 100,
+      "averageJudgeDelta": 11.67,
+      "averageGainGlobal": 11.67,
+      "averageLengthDeltaWords": 10.33,
+      "averageAbsoluteLengthDeltaWords": 10.33,
+      "averageStructureDelta": 0,
+      "averageNoiseDelta": 0,
+      "averageClarityDelta": 0,
+      "productGuard": {
+        "passed": true,
+        "noiseOk": true,
+        "lengthOk": true,
+        "clarityOk": true,
+        "reasons": []
+      },
+      "adoption": "adopted",
+      "reason": "Candidate open_scope_anchor beats open_short in this context and passes the product guard."
+    },
+    {
+      "baseStrategyId": "open_medium",
+      "candidateStrategyId": "reasoning_bridge_medium",
+      "category": "technical_explanation",
+      "context": {
+        "questionType": "open",
+        "promptLength": "medium",
+        "signals": [
+          "uncertainty",
+          "abstraction"
+        ]
+      },
+      "observations": 3,
+      "winRate": 66.67,
+      "averageJudgeDelta": 5.67,
+      "averageGainGlobal": 5.67,
+      "averageLengthDeltaWords": 6.33,
+      "averageAbsoluteLengthDeltaWords": 32.33,
+      "averageStructureDelta": 1.33,
+      "averageNoiseDelta": 0.33,
+      "averageClarityDelta": 2,
+      "productGuard": {
+        "passed": true,
+        "noiseOk": true,
+        "lengthOk": true,
+        "clarityOk": true,
+        "reasons": []
+      },
+      "adoption": "adopted",
+      "reason": "Candidate reasoning_bridge_medium beats open_medium in this context and passes the product guard."
+    },
+    {
+      "baseStrategyId": "explanatory_short",
+      "candidateStrategyId": "explanatory_compact_example",
+      "category": "other",
+      "context": {
+        "questionType": "explanatory",
+        "promptLength": "short",
+        "signals": []
+      },
+      "observations": 3,
+      "winRate": 100,
+      "averageJudgeDelta": 9,
+      "averageGainGlobal": 9,
+      "averageLengthDeltaWords": 2,
+      "averageAbsoluteLengthDeltaWords": 13.33,
+      "averageStructureDelta": -0.67,
+      "averageNoiseDelta": 0,
+      "averageClarityDelta": -1.67,
+      "productGuard": {
+        "passed": false,
+        "noiseOk": true,
+        "lengthOk": true,
+        "clarityOk": false,
+        "reasons": [
+          "Clarity regressed on average (-1.67)."
+        ]
+      },
+      "adoption": "rejected",
+      "reason": "Candidate explanatory_compact_example failed to beat explanatory_short or violated the product guard in this context. Clarity regressed on average (-1.67)."
+    },
+    {
+      "baseStrategyId": "explanatory_medium",
+      "candidateStrategyId": "reasoning_bridge_medium",
+      "category": "technical_explanation",
+      "context": {
+        "questionType": "explanatory",
+        "promptLength": "medium",
+        "signals": [
+          "claims",
+          "abstraction"
+        ]
+      },
+      "observations": 3,
+      "winRate": 66.67,
+      "averageJudgeDelta": 1.33,
+      "averageGainGlobal": 1.33,
+      "averageLengthDeltaWords": -3.67,
+      "averageAbsoluteLengthDeltaWords": 28.33,
+      "averageStructureDelta": -2,
+      "averageNoiseDelta": 0,
+      "averageClarityDelta": -3,
+      "productGuard": {
+        "passed": false,
+        "noiseOk": true,
+        "lengthOk": true,
+        "clarityOk": false,
+        "reasons": [
+          "Clarity regressed on average (-3)."
+        ]
+      },
+      "adoption": "rejected",
+      "reason": "Candidate reasoning_bridge_medium failed to beat explanatory_medium or violated the product guard in this context. Clarity regressed on average (-3)."
+    }
+  ]
+}

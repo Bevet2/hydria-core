@@ -1,0 +1,281 @@
+{
+  "version": "hydria-student-strategy-impact-v1",
+  "builtAt": "2026-04-17T00:36:51.708Z",
+  "sourceStats": {
+    "studentSessionsAnalyzed": 58,
+    "comparedSessions": 50,
+    "strategyObservations": 50
+  },
+  "strategies": [
+    {
+      "strategyId": "factual_verify_first",
+      "observations": 12,
+      "usageRate": 24,
+      "successRate": 100,
+      "positiveImpactRate": 100,
+      "averageJudgeDelta": 13.08,
+      "averageGainGlobal": 13.08,
+      "averageLengthDeltaWords": 6.83,
+      "averageStructureDelta": 0.33,
+      "empiricalConfidence": 0.95,
+      "activation": "active",
+      "contexts": [
+        {
+          "questionType": "factual",
+          "promptLength": "medium",
+          "signals": [
+            "uncertainty",
+            "claims"
+          ],
+          "observations": 10,
+          "usageRate": 20,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 14.5,
+          "averageGainGlobal": 14.5,
+          "averageLengthDeltaWords": 9.6,
+          "averageStructureDelta": 0.1,
+          "empiricalConfidence": 0.95,
+          "activation": "active"
+        },
+        {
+          "questionType": "factual",
+          "promptLength": "medium",
+          "signals": [
+            "claims"
+          ],
+          "observations": 2,
+          "usageRate": 4,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 6,
+          "averageGainGlobal": 6,
+          "averageLengthDeltaWords": -7,
+          "averageStructureDelta": 1.5,
+          "empiricalConfidence": 0.83,
+          "activation": "active"
+        }
+      ]
+    },
+    {
+      "strategyId": "explanatory_medium",
+      "observations": 5,
+      "usageRate": 10,
+      "successRate": 100,
+      "positiveImpactRate": 100,
+      "averageJudgeDelta": 12,
+      "averageGainGlobal": 12,
+      "averageLengthDeltaWords": 11,
+      "averageStructureDelta": 2.8,
+      "empiricalConfidence": 0.95,
+      "activation": "active",
+      "contexts": [
+        {
+          "questionType": "explanatory",
+          "promptLength": "medium",
+          "signals": [],
+          "observations": 5,
+          "usageRate": 10,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 12,
+          "averageGainGlobal": 12,
+          "averageLengthDeltaWords": 11,
+          "averageStructureDelta": 2.8,
+          "empiricalConfidence": 0.95,
+          "activation": "active"
+        }
+      ]
+    },
+    {
+      "strategyId": "strategic_medium",
+      "observations": 5,
+      "usageRate": 10,
+      "successRate": 100,
+      "positiveImpactRate": 100,
+      "averageJudgeDelta": 10.6,
+      "averageGainGlobal": 10.6,
+      "averageLengthDeltaWords": 14.2,
+      "averageStructureDelta": -0.6,
+      "empiricalConfidence": 0.95,
+      "activation": "active",
+      "contexts": [
+        {
+          "questionType": "strategic",
+          "promptLength": "medium",
+          "signals": [
+            "uncertainty"
+          ],
+          "observations": 4,
+          "usageRate": 8,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 11.25,
+          "averageGainGlobal": 11.25,
+          "averageLengthDeltaWords": 17,
+          "averageStructureDelta": -1.25,
+          "empiricalConfidence": 0.95,
+          "activation": "active"
+        },
+        {
+          "questionType": "strategic",
+          "promptLength": "medium",
+          "signals": [
+            "uncertainty",
+            "abstraction"
+          ],
+          "observations": 1,
+          "usageRate": 2,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 8,
+          "averageGainGlobal": 8,
+          "averageLengthDeltaWords": 3,
+          "averageStructureDelta": 2,
+          "empiricalConfidence": 0.84,
+          "activation": "cautious"
+        }
+      ]
+    },
+    {
+      "strategyId": "open_short",
+      "observations": 19,
+      "usageRate": 38,
+      "successRate": 89.47,
+      "positiveImpactRate": 89.47,
+      "averageJudgeDelta": 6.74,
+      "averageGainGlobal": 6.74,
+      "averageLengthDeltaWords": 6.21,
+      "averageStructureDelta": 0.11,
+      "empiricalConfidence": 0.95,
+      "activation": "active",
+      "contexts": [
+        {
+          "questionType": "open",
+          "promptLength": "short",
+          "signals": [],
+          "observations": 19,
+          "usageRate": 38,
+          "successRate": 89.47,
+          "positiveImpactRate": 89.47,
+          "averageJudgeDelta": 6.74,
+          "averageGainGlobal": 6.74,
+          "averageLengthDeltaWords": 6.21,
+          "averageStructureDelta": 0.11,
+          "empiricalConfidence": 0.95,
+          "activation": "active"
+        }
+      ]
+    },
+    {
+      "strategyId": "explanatory_short",
+      "observations": 2,
+      "usageRate": 4,
+      "successRate": 100,
+      "positiveImpactRate": 100,
+      "averageJudgeDelta": 6,
+      "averageGainGlobal": 6,
+      "averageLengthDeltaWords": -4.5,
+      "averageStructureDelta": -1,
+      "empiricalConfidence": 0.83,
+      "activation": "active",
+      "contexts": [
+        {
+          "questionType": "explanatory",
+          "promptLength": "short",
+          "signals": [],
+          "observations": 2,
+          "usageRate": 4,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 6,
+          "averageGainGlobal": 6,
+          "averageLengthDeltaWords": -4.5,
+          "averageStructureDelta": -1,
+          "empiricalConfidence": 0.83,
+          "activation": "active"
+        }
+      ]
+    },
+    {
+      "strategyId": "factual_medium",
+      "observations": 6,
+      "usageRate": 12,
+      "successRate": 66.67,
+      "positiveImpactRate": 66.67,
+      "averageJudgeDelta": -2.17,
+      "averageGainGlobal": -2.17,
+      "averageLengthDeltaWords": 2,
+      "averageStructureDelta": 0.17,
+      "empiricalConfidence": 0.67,
+      "activation": "inactive",
+      "contexts": [
+        {
+          "questionType": "factual",
+          "promptLength": "medium",
+          "signals": [
+            "uncertainty",
+            "claims"
+          ],
+          "observations": 4,
+          "usageRate": 8,
+          "successRate": 75,
+          "positiveImpactRate": 75,
+          "averageJudgeDelta": -3.5,
+          "averageGainGlobal": -3.5,
+          "averageLengthDeltaWords": 5.25,
+          "averageStructureDelta": 0.25,
+          "empiricalConfidence": 0.64,
+          "activation": "inactive"
+        },
+        {
+          "questionType": "factual",
+          "promptLength": "medium",
+          "signals": [
+            "claims"
+          ],
+          "observations": 2,
+          "usageRate": 4,
+          "successRate": 50,
+          "positiveImpactRate": 50,
+          "averageJudgeDelta": 0.5,
+          "averageGainGlobal": 0.5,
+          "averageLengthDeltaWords": -4.5,
+          "averageStructureDelta": 0,
+          "empiricalConfidence": 0.44,
+          "activation": "cautious"
+        }
+      ]
+    },
+    {
+      "strategyId": "reasoning_bridge_medium",
+      "observations": 1,
+      "usageRate": 2,
+      "successRate": 0,
+      "positiveImpactRate": 0,
+      "averageJudgeDelta": -21,
+      "averageGainGlobal": -21,
+      "averageLengthDeltaWords": 11,
+      "averageStructureDelta": 0,
+      "empiricalConfidence": 0.39,
+      "activation": "inactive",
+      "contexts": [
+        {
+          "questionType": "open",
+          "promptLength": "medium",
+          "signals": [],
+          "observations": 1,
+          "usageRate": 2,
+          "successRate": 0,
+          "positiveImpactRate": 0,
+          "averageJudgeDelta": -21,
+          "averageGainGlobal": -21,
+          "averageLengthDeltaWords": 11,
+          "averageStructureDelta": 0,
+          "empiricalConfidence": 0.39,
+          "activation": "inactive"
+        }
+      ]
+    }
+  ]
+}

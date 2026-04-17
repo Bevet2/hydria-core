@@ -4,6 +4,7 @@ import type {
   RedTeamOutput,
   RespondentOutput
 } from "../types/arena.js";
+import type { KnowledgeInjection } from "../types/knowledge.js";
 
 const refineOutputSchema = `{
   "modelRole": "refiner",
@@ -121,6 +122,7 @@ export function buildRefineUserPrompt(args: {
   originalResponse: RespondentOutput;
   redTeam: RedTeamOutput;
   research?: ResearchToolLog | null;
+  knowledge?: KnowledgeInjection | null;
 }) {
   const critique =
     args.slot === "A" ? args.redTeam.attacks_on_a : args.redTeam.attacks_on_b;
@@ -150,6 +152,24 @@ ${JSON.stringify(
     2
   )}
 
+${args.knowledge ? `KNOWLEDGE LAYER INJECTION
+${JSON.stringify(
+    {
+      strategy_note: args.knowledge.strategyNote,
+      winning_patterns: args.knowledge.winningPatterns,
+      anti_patterns: args.knowledge.antiPatterns,
+      high_value_signals: args.knowledge.highValueSignals,
+      low_value_signals: args.knowledge.lowValueSignals,
+      coaching_hints: args.knowledge.coachingHints,
+      best_round_references: args.knowledge.bestRoundReferences,
+      memory_summary: args.knowledge.memorySummary,
+      memory_rules: args.knowledge.memoryRules
+    },
+    null,
+    2
+  )}
+` : ""}
+
 ${args.research?.used ? `EXTERNAL RESEARCH TOOL FINDINGS
 ${JSON.stringify(
     {
@@ -172,6 +192,9 @@ Reminders:
 - preserve the useful parts
 - correct the concrete weaknesses
 - adapt the refinement to the detected category
+- use the knowledge-layer winning patterns when they fit the current question
+- avoid the anti-patterns highlighted by the knowledge layer
+- follow the highest-confidence memory rules when they fit the current round signals
 - reduce hallucination risk
 - if external research findings are present, use them to verify, tighten, or qualify factual claims
 - if external research findings are present, prefer sourced claims over unsupported generic claims
@@ -196,6 +219,7 @@ export function buildRefineRepairUserPrompt(args: {
   previousResponse: string;
   validationIssues: string[];
   research?: ResearchToolLog | null;
+  knowledge?: KnowledgeInjection | null;
 }) {
   return `Your previous refine output was invalid for Hydria Core.
 
@@ -223,6 +247,24 @@ ${JSON.stringify(
     null,
     2
   )}
+
+${args.knowledge ? `KNOWLEDGE LAYER INJECTION
+${JSON.stringify(
+    {
+      strategy_note: args.knowledge.strategyNote,
+      winning_patterns: args.knowledge.winningPatterns,
+      anti_patterns: args.knowledge.antiPatterns,
+      high_value_signals: args.knowledge.highValueSignals,
+      low_value_signals: args.knowledge.lowValueSignals,
+      coaching_hints: args.knowledge.coachingHints,
+      best_round_references: args.knowledge.bestRoundReferences,
+      memory_summary: args.knowledge.memorySummary,
+      memory_rules: args.knowledge.memoryRules
+    },
+    null,
+    2
+  )}
+` : ""}
 
 ${args.research?.used ? `EXTERNAL RESEARCH TOOL FINDINGS
 ${JSON.stringify(
@@ -255,6 +297,8 @@ Repair instructions:
 - ensure confidence is a single integer from 0 to 10
 - do not omit any keys, even if an array is empty
 - if you made no material fix, return fixes_applied: []
+- preserve the useful knowledge-layer patterns and avoid the listed anti-patterns when they apply
+- preserve the memory rules that match the current failure pattern when they improve precision
 - if external research findings are present, preserve the sourced constraints or examples when they materially improve precision
 - if external research findings are present, do not invent details that are not supported by the sources
 - if the category is product_strategy, preserve sequencing, priorities, metrics, risks, and dependencies

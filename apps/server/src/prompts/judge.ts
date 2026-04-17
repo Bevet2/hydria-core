@@ -5,6 +5,7 @@ import type {
   RedTeamOutput,
   RespondentOutput
 } from "../types/arena.js";
+import type { StudentJudgeOutput } from "../types/student.js";
 
 const judgeCategoryPriorities: Record<QuestionCategory, string> = {
   incident_response:
@@ -188,3 +189,83 @@ Return a corrected answer that:
 }
 
 export type { JudgeOutput };
+
+export function buildStudentJudgeSystemPrompt(category: QuestionCategory) {
+  return `You are the Judge for a Hydria student-learning cycle.
+
+Rules:
+- Compare the student answer against the teacher-corrected answer.
+- Score both answers on clarity, relevance, robustness, and hallucination risk from 0 to 100.
+- Higher hallucination_risk means worse risk; higher overall means better answer.
+- Be explicit about whether the teacher materially improved the student.
+- Return strict JSON only.
+- Never include markdown fences.
+
+Detected category: ${category}
+
+Category-specific judging priority:
+- ${judgeCategoryPriorities[category]}
+
+Output schema:
+{
+  "modelRole": "student_judge",
+  "initial_score": {
+    "clarity": 0,
+    "relevance": 0,
+    "robustness": 0,
+    "hallucination_risk": 0,
+    "overall": 0
+  },
+  "improved_score": {
+    "clarity": 0,
+    "relevance": 0,
+    "robustness": 0,
+    "hallucination_risk": 0,
+    "overall": 0
+  },
+  "verdict": "improved",
+  "worthIt": "YES",
+  "reasoning": "string",
+  "weak_points": ["string"],
+  "strong_points": ["string"]
+}`;
+}
+
+export function buildStudentJudgeUserPrompt(args: {
+  category: QuestionCategory;
+  question: string;
+  studentAnswer: RespondentOutput;
+  teacherAnswer: RefinerOutput;
+  redTeam: RedTeamOutput;
+}) {
+  return `Question:
+${args.question}
+
+Detected category:
+${args.category}
+
+Student answer:
+${JSON.stringify(args.studentAnswer, null, 2)}
+
+Teacher-corrected answer:
+${JSON.stringify(args.teacherAnswer, null, 2)}
+
+Red Team critique of the student:
+${JSON.stringify(args.redTeam, null, 2)}
+
+Instructions:
+- initial_score must evaluate the student answer
+- improved_score must evaluate the teacher-corrected answer
+- verdict should be:
+  - improved: clear material improvement
+  - minor: better but not by much
+  - needs_work: still weak after correction
+  - regressed: teacher answer is worse
+- worthIt should be YES if the correction clearly helps, otherwise NO
+- weak_points should list the student’s main weaknesses
+- strong_points should list the student’s useful strengths
+
+Return strict JSON only.`;
+}
+
+export type { StudentJudgeOutput };

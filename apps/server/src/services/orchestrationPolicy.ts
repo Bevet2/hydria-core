@@ -11,6 +11,7 @@ import type {
 import type { KnowledgeCategoryInsight } from "../types/knowledge.js";
 import { classifyQuestion } from "./questionClassifier.js";
 import { KnowledgeLayerService } from "./knowledgeLayerService.js";
+import { KnowledgeMemoryService } from "./knowledgeMemoryService.js";
 
 type OrchestrationContext = {
   question: string;
@@ -99,6 +100,7 @@ export function buildLegacyOrchestrationPolicy(question: string): OrchestrationP
 
 export class OrchestrationPolicyService {
   private readonly knowledgeLayerService = new KnowledgeLayerService();
+  private readonly knowledgeMemoryService = new KnowledgeMemoryService();
   private knowledgeLayerPromise: Promise<Awaited<ReturnType<KnowledgeLayerService["loadKnowledgeLayer"]>>> | null =
     null;
 
@@ -163,6 +165,42 @@ export class OrchestrationPolicyService {
       /\bhow does\b/i,
       /\bdifference between\b/i
     ]);
+    const activeSignals = uniqueStrings([
+      averageFactualRisk >= 70 ? "high_factual_risk" : "",
+      averageFactualRisk >= 55 ? "medium_factual_risk" : "",
+      averageReasoningRisk >= 70 ? "high_reasoning_risk" : "",
+      falseClaimCount > 0 ? "factual_claims" : "",
+      directCritiquePressure >= 3 ? "direct_critiques" : "",
+      structuralRiskCount >= 5 ? "structural_risk" : "",
+      providerOrStandardCue ? "provider_specific" : "",
+      metricCue ? "metric_claims" : "",
+      conceptCue ? "concept_question" : "",
+      uncertaintySignals >= 3 ? "uncertainty" : "",
+      (knowledgeInsight?.benchmark.noOpRate ?? 0) >= 35 ? "no_op_high" : "",
+      (knowledgeInsight?.benchmark.staticFallbackRate ?? 0) >= 15 ? "static_fallback_high" : "",
+      (knowledgeInsight?.benchmark.worthItRate ?? 0) >= 55 ? "positive_refine_roi" : "",
+      (knowledgeInsight?.benchmark.positiveResearchImpactRate ?? 0) >= 35
+        ? "positive_tool_roi"
+        : ""
+    ]);
+    const memoryRules = await this.knowledgeMemoryService.getRelevantRules({
+      category,
+      activeSignals,
+      domains: ["routing", "refine", "reasoning", "tool_usage"],
+      limit: 4
+    });
+    const memoryRoutingBias = memoryRules.reduce(
+      (sum, rule) => sum + Math.round(rule.influence.routingBias * rule.confidence),
+      0
+    );
+    const memoryRefineBias = memoryRules.reduce(
+      (sum, rule) => sum + Math.round(rule.influence.refineBias * rule.confidence),
+      0
+    );
+    const memoryResearchBias = memoryRules.reduce(
+      (sum, rule) => sum + Math.round(rule.influence.researchBias * rule.confidence),
+      0
+    );
 
     const focus = this.selectFocus({
       category,
@@ -203,7 +241,9 @@ export class OrchestrationPolicyService {
       (refinePolicy === "aggressive" ? 8 : refinePolicy === "conservative" ? -8 : 0) +
         (costPolicy === "quality_first" ? 4 : costPolicy === "latency_guarded" ? -4 : 0) +
         (focus === "execution_clarity" || focus === "strategy_actionability" ? 3 : 0) +
-        (knowledgeInsight?.strategy.routerBias ?? 0) / 2,
+        (knowledgeInsight?.strategy.routerBias ?? 0) / 2 +
+        memoryRoutingBias +
+        memoryRefineBias,
       -20,
       20
     );
@@ -218,7 +258,8 @@ export class OrchestrationPolicyService {
         (focus === "factual_grounding" || focus === "pedagogy_precision" ? 3 : 0) +
         (costPolicy === "quality_first" ? 3 : costPolicy === "latency_guarded" ? -4 : 0) +
         ((knowledgeInsight?.benchmark.positiveResearchImpactRate ?? 0) >= 40 ? 3 : 0) -
-        ((knowledgeInsight?.benchmark.positiveResearchImpactRate ?? 0) <= 10 ? 2 : 0),
+        ((knowledgeInsight?.benchmark.positiveResearchImpactRate ?? 0) <= 10 ? 2 : 0) +
+        memoryResearchBias,
       -20,
       20
     );
@@ -232,12 +273,14 @@ export class OrchestrationPolicyService {
       metricCue ? "metric_or_constraint_claims" : "",
       conceptCue ? "conceptual_question" : "",
       uncertaintySignals >= 3 ? "respondent_uncertainty" : "",
-      knowledgeInsight ? `knowledge_${knowledgeInsight.strategy.routingRecommendation}` : ""
+      knowledgeInsight ? `knowledge_${knowledgeInsight.strategy.routingRecommendation}` : "",
+      ...memoryRules.map((rule) => `memory_${rule.domain}`)
     ]).slice(0, 10);
 
     const targetOutcomes = uniqueStrings([
       ...this.buildTargetOutcomes(focus),
-      ...(knowledgeInsight?.strategy.highValueSignals.slice(0, 3) ?? [])
+      ...(knowledgeInsight?.strategy.highValueSignals.slice(0, 3) ?? []),
+      ...memoryRules.map((rule) => rule.recommendedStrategy)
     ]).slice(0, 8);
 
     const reasoning = uniqueStrings([
@@ -255,7 +298,11 @@ export class OrchestrationPolicyService {
       ,
       knowledgeInsight
         ? `Knowledge signals: no-op ${knowledgeInsight.benchmark.noOpRate}%, static refine fallback ${knowledgeInsight.benchmark.staticFallbackRate}%, positive research impact ${knowledgeInsight.benchmark.positiveResearchImpactRate}%.`
-        : null
+        : null,
+      ...memoryRules.map(
+        (rule) =>
+          `Knowledge memory ${rule.domain}: ${rule.lesson} Strategy: ${rule.recommendedStrategy} (confidence ${Math.round(rule.confidence * 100)}%).`
+      )
     ].filter(Boolean) as string[]).slice(0, 12);
 
     return {

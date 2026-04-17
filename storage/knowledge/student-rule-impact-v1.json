@@ -1,0 +1,763 @@
+{
+  "version": "hydria-student-rule-impact-v1",
+  "builtAt": "2026-04-17T00:36:50.684Z",
+  "sourceStats": {
+    "studentSessionsAnalyzed": 58,
+    "comparedSessions": 50,
+    "ruleObservations": 198
+  },
+  "rules": [
+    {
+      "ruleId": "other:unsupported_claim:ground externally dependent claims in verifiable facts or reliable sources",
+      "category": "other",
+      "failureType": "unsupported_claim",
+      "rule": "Ground externally dependent claims in verifiable facts or reliable sources.",
+      "observations": 49,
+      "successRate": 89.8,
+      "positiveImpactRate": 89.8,
+      "averageJudgeDelta": 7.51,
+      "averageGainGlobal": 7.51,
+      "averageLengthDeltaWords": 6.88,
+      "averageStructureDelta": 0.29,
+      "empiricalConfidence": 0.95,
+      "activation": "active",
+      "contexts": [
+        {
+          "questionType": "factual",
+          "promptLength": "medium",
+          "signals": [
+            "uncertainty",
+            "claims"
+          ],
+          "observations": 18,
+          "successRate": 94.44,
+          "positiveImpactRate": 94.44,
+          "averageJudgeDelta": 8.61,
+          "averageGainGlobal": 8.61,
+          "averageLengthDeltaWords": 7.61,
+          "averageStructureDelta": 0.44,
+          "empiricalConfidence": 0.95,
+          "activation": "active"
+        },
+        {
+          "questionType": "explanatory",
+          "promptLength": "medium",
+          "signals": [],
+          "observations": 7,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 11.29,
+          "averageGainGlobal": 11.29,
+          "averageLengthDeltaWords": 8.29,
+          "averageStructureDelta": 1.43,
+          "empiricalConfidence": 0.95,
+          "activation": "active"
+        },
+        {
+          "questionType": "open",
+          "promptLength": "short",
+          "signals": [],
+          "observations": 7,
+          "successRate": 85.71,
+          "positiveImpactRate": 85.71,
+          "averageJudgeDelta": 7.71,
+          "averageGainGlobal": 7.71,
+          "averageLengthDeltaWords": 0.71,
+          "averageStructureDelta": 0.14,
+          "empiricalConfidence": 0.95,
+          "activation": "active"
+        },
+        {
+          "questionType": "strategic",
+          "promptLength": "medium",
+          "signals": [
+            "uncertainty"
+          ],
+          "observations": 6,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 11.5,
+          "averageGainGlobal": 11.5,
+          "averageLengthDeltaWords": 24,
+          "averageStructureDelta": -1,
+          "empiricalConfidence": 0.95,
+          "activation": "active"
+        },
+        {
+          "questionType": "factual",
+          "promptLength": "medium",
+          "signals": [
+            "claims"
+          ],
+          "observations": 4,
+          "successRate": 75,
+          "positiveImpactRate": 75,
+          "averageJudgeDelta": 3.25,
+          "averageGainGlobal": 3.25,
+          "averageLengthDeltaWords": -5.75,
+          "averageStructureDelta": 0.75,
+          "empiricalConfidence": 0.72,
+          "activation": "active"
+        },
+        {
+          "questionType": "explanatory",
+          "promptLength": "medium",
+          "signals": [
+            "abstraction"
+          ],
+          "observations": 2,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 8.5,
+          "averageGainGlobal": 8.5,
+          "averageLengthDeltaWords": 2.5,
+          "averageStructureDelta": 0,
+          "empiricalConfidence": 0.89,
+          "activation": "active"
+        },
+        {
+          "questionType": "explanatory",
+          "promptLength": "short",
+          "signals": [],
+          "observations": 2,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 6,
+          "averageGainGlobal": 6,
+          "averageLengthDeltaWords": -4.5,
+          "averageStructureDelta": -1,
+          "empiricalConfidence": 0.83,
+          "activation": "active"
+        },
+        {
+          "questionType": "explanatory",
+          "promptLength": "short",
+          "signals": [
+            "abstraction"
+          ],
+          "observations": 1,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 9,
+          "averageGainGlobal": 9,
+          "averageLengthDeltaWords": 8,
+          "averageStructureDelta": -1,
+          "empiricalConfidence": 0.87,
+          "activation": "cautious"
+        },
+        {
+          "questionType": "factual",
+          "promptLength": "short",
+          "signals": [
+            "uncertainty",
+            "claims"
+          ],
+          "observations": 1,
+          "successRate": 0,
+          "positiveImpactRate": 0,
+          "averageJudgeDelta": -19,
+          "averageGainGlobal": -19,
+          "averageLengthDeltaWords": 1,
+          "averageStructureDelta": 1,
+          "empiricalConfidence": 0.39,
+          "activation": "inactive"
+        },
+        {
+          "questionType": "open",
+          "promptLength": "medium",
+          "signals": [],
+          "observations": 1,
+          "successRate": 0,
+          "positiveImpactRate": 0,
+          "averageJudgeDelta": -21,
+          "averageGainGlobal": -21,
+          "averageLengthDeltaWords": 11,
+          "averageStructureDelta": 0,
+          "empiricalConfidence": 0.39,
+          "activation": "inactive"
+        }
+      ]
+    },
+    {
+      "ruleId": "other:vague_definition:replace vague definitions with explicit testable and concrete framing",
+      "category": "other",
+      "failureType": "vague_definition",
+      "rule": "Replace vague definitions with explicit, testable, and concrete framing.",
+      "observations": 49,
+      "successRate": 89.8,
+      "positiveImpactRate": 89.8,
+      "averageJudgeDelta": 7.51,
+      "averageGainGlobal": 7.51,
+      "averageLengthDeltaWords": 6.88,
+      "averageStructureDelta": 0.29,
+      "empiricalConfidence": 0.95,
+      "activation": "active",
+      "contexts": [
+        {
+          "questionType": "factual",
+          "promptLength": "medium",
+          "signals": [
+            "uncertainty",
+            "claims"
+          ],
+          "observations": 18,
+          "successRate": 94.44,
+          "positiveImpactRate": 94.44,
+          "averageJudgeDelta": 8.61,
+          "averageGainGlobal": 8.61,
+          "averageLengthDeltaWords": 7.61,
+          "averageStructureDelta": 0.44,
+          "empiricalConfidence": 0.95,
+          "activation": "active"
+        },
+        {
+          "questionType": "explanatory",
+          "promptLength": "medium",
+          "signals": [],
+          "observations": 7,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 11.29,
+          "averageGainGlobal": 11.29,
+          "averageLengthDeltaWords": 8.29,
+          "averageStructureDelta": 1.43,
+          "empiricalConfidence": 0.95,
+          "activation": "active"
+        },
+        {
+          "questionType": "open",
+          "promptLength": "short",
+          "signals": [],
+          "observations": 7,
+          "successRate": 85.71,
+          "positiveImpactRate": 85.71,
+          "averageJudgeDelta": 7.71,
+          "averageGainGlobal": 7.71,
+          "averageLengthDeltaWords": 0.71,
+          "averageStructureDelta": 0.14,
+          "empiricalConfidence": 0.95,
+          "activation": "active"
+        },
+        {
+          "questionType": "strategic",
+          "promptLength": "medium",
+          "signals": [
+            "uncertainty"
+          ],
+          "observations": 6,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 11.5,
+          "averageGainGlobal": 11.5,
+          "averageLengthDeltaWords": 24,
+          "averageStructureDelta": -1,
+          "empiricalConfidence": 0.95,
+          "activation": "active"
+        },
+        {
+          "questionType": "factual",
+          "promptLength": "medium",
+          "signals": [
+            "claims"
+          ],
+          "observations": 4,
+          "successRate": 75,
+          "positiveImpactRate": 75,
+          "averageJudgeDelta": 3.25,
+          "averageGainGlobal": 3.25,
+          "averageLengthDeltaWords": -5.75,
+          "averageStructureDelta": 0.75,
+          "empiricalConfidence": 0.72,
+          "activation": "active"
+        },
+        {
+          "questionType": "explanatory",
+          "promptLength": "medium",
+          "signals": [
+            "abstraction"
+          ],
+          "observations": 2,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 8.5,
+          "averageGainGlobal": 8.5,
+          "averageLengthDeltaWords": 2.5,
+          "averageStructureDelta": 0,
+          "empiricalConfidence": 0.89,
+          "activation": "active"
+        },
+        {
+          "questionType": "explanatory",
+          "promptLength": "short",
+          "signals": [],
+          "observations": 2,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 6,
+          "averageGainGlobal": 6,
+          "averageLengthDeltaWords": -4.5,
+          "averageStructureDelta": -1,
+          "empiricalConfidence": 0.83,
+          "activation": "active"
+        },
+        {
+          "questionType": "explanatory",
+          "promptLength": "short",
+          "signals": [
+            "abstraction"
+          ],
+          "observations": 1,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 9,
+          "averageGainGlobal": 9,
+          "averageLengthDeltaWords": 8,
+          "averageStructureDelta": -1,
+          "empiricalConfidence": 0.87,
+          "activation": "cautious"
+        },
+        {
+          "questionType": "factual",
+          "promptLength": "short",
+          "signals": [
+            "uncertainty",
+            "claims"
+          ],
+          "observations": 1,
+          "successRate": 0,
+          "positiveImpactRate": 0,
+          "averageJudgeDelta": -19,
+          "averageGainGlobal": -19,
+          "averageLengthDeltaWords": 1,
+          "averageStructureDelta": 1,
+          "empiricalConfidence": 0.39,
+          "activation": "inactive"
+        },
+        {
+          "questionType": "open",
+          "promptLength": "medium",
+          "signals": [],
+          "observations": 1,
+          "successRate": 0,
+          "positiveImpactRate": 0,
+          "averageJudgeDelta": -21,
+          "averageGainGlobal": -21,
+          "averageLengthDeltaWords": 11,
+          "averageStructureDelta": 0,
+          "empiricalConfidence": 0.39,
+          "activation": "inactive"
+        }
+      ]
+    },
+    {
+      "ruleId": "other:missing_examples:add one concrete example or contrast to anchor the explanation",
+      "category": "other",
+      "failureType": "missing_examples",
+      "rule": "Add one concrete example or contrast to anchor the explanation.",
+      "observations": 49,
+      "successRate": 89.8,
+      "positiveImpactRate": 89.8,
+      "averageJudgeDelta": 7.51,
+      "averageGainGlobal": 7.51,
+      "averageLengthDeltaWords": 6.88,
+      "averageStructureDelta": 0.29,
+      "empiricalConfidence": 0.95,
+      "activation": "active",
+      "contexts": [
+        {
+          "questionType": "factual",
+          "promptLength": "medium",
+          "signals": [
+            "uncertainty",
+            "claims"
+          ],
+          "observations": 18,
+          "successRate": 94.44,
+          "positiveImpactRate": 94.44,
+          "averageJudgeDelta": 8.61,
+          "averageGainGlobal": 8.61,
+          "averageLengthDeltaWords": 7.61,
+          "averageStructureDelta": 0.44,
+          "empiricalConfidence": 0.95,
+          "activation": "active"
+        },
+        {
+          "questionType": "explanatory",
+          "promptLength": "medium",
+          "signals": [],
+          "observations": 7,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 11.29,
+          "averageGainGlobal": 11.29,
+          "averageLengthDeltaWords": 8.29,
+          "averageStructureDelta": 1.43,
+          "empiricalConfidence": 0.95,
+          "activation": "active"
+        },
+        {
+          "questionType": "open",
+          "promptLength": "short",
+          "signals": [],
+          "observations": 7,
+          "successRate": 85.71,
+          "positiveImpactRate": 85.71,
+          "averageJudgeDelta": 7.71,
+          "averageGainGlobal": 7.71,
+          "averageLengthDeltaWords": 0.71,
+          "averageStructureDelta": 0.14,
+          "empiricalConfidence": 0.95,
+          "activation": "active"
+        },
+        {
+          "questionType": "strategic",
+          "promptLength": "medium",
+          "signals": [
+            "uncertainty"
+          ],
+          "observations": 6,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 11.5,
+          "averageGainGlobal": 11.5,
+          "averageLengthDeltaWords": 24,
+          "averageStructureDelta": -1,
+          "empiricalConfidence": 0.95,
+          "activation": "active"
+        },
+        {
+          "questionType": "factual",
+          "promptLength": "medium",
+          "signals": [
+            "claims"
+          ],
+          "observations": 4,
+          "successRate": 75,
+          "positiveImpactRate": 75,
+          "averageJudgeDelta": 3.25,
+          "averageGainGlobal": 3.25,
+          "averageLengthDeltaWords": -5.75,
+          "averageStructureDelta": 0.75,
+          "empiricalConfidence": 0.72,
+          "activation": "active"
+        },
+        {
+          "questionType": "explanatory",
+          "promptLength": "medium",
+          "signals": [
+            "abstraction"
+          ],
+          "observations": 2,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 8.5,
+          "averageGainGlobal": 8.5,
+          "averageLengthDeltaWords": 2.5,
+          "averageStructureDelta": 0,
+          "empiricalConfidence": 0.89,
+          "activation": "active"
+        },
+        {
+          "questionType": "explanatory",
+          "promptLength": "short",
+          "signals": [],
+          "observations": 2,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 6,
+          "averageGainGlobal": 6,
+          "averageLengthDeltaWords": -4.5,
+          "averageStructureDelta": -1,
+          "empiricalConfidence": 0.83,
+          "activation": "active"
+        },
+        {
+          "questionType": "explanatory",
+          "promptLength": "short",
+          "signals": [
+            "abstraction"
+          ],
+          "observations": 1,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 9,
+          "averageGainGlobal": 9,
+          "averageLengthDeltaWords": 8,
+          "averageStructureDelta": -1,
+          "empiricalConfidence": 0.87,
+          "activation": "cautious"
+        },
+        {
+          "questionType": "factual",
+          "promptLength": "short",
+          "signals": [
+            "uncertainty",
+            "claims"
+          ],
+          "observations": 1,
+          "successRate": 0,
+          "positiveImpactRate": 0,
+          "averageJudgeDelta": -19,
+          "averageGainGlobal": -19,
+          "averageLengthDeltaWords": 1,
+          "averageStructureDelta": 1,
+          "empiricalConfidence": 0.39,
+          "activation": "inactive"
+        },
+        {
+          "questionType": "open",
+          "promptLength": "medium",
+          "signals": [],
+          "observations": 1,
+          "successRate": 0,
+          "positiveImpactRate": 0,
+          "averageJudgeDelta": -21,
+          "averageGainGlobal": -21,
+          "averageLengthDeltaWords": 11,
+          "averageStructureDelta": 0,
+          "empiricalConfidence": 0.39,
+          "activation": "inactive"
+        }
+      ]
+    },
+    {
+      "ruleId": "other:too_generic:expand beyond a minimal definition and cover the real scope of the question",
+      "category": "other",
+      "failureType": "too_generic",
+      "rule": "Expand beyond a minimal definition and cover the real scope of the question.",
+      "observations": 49,
+      "successRate": 89.8,
+      "positiveImpactRate": 89.8,
+      "averageJudgeDelta": 7.51,
+      "averageGainGlobal": 7.51,
+      "averageLengthDeltaWords": 6.88,
+      "averageStructureDelta": 0.29,
+      "empiricalConfidence": 0.95,
+      "activation": "active",
+      "contexts": [
+        {
+          "questionType": "factual",
+          "promptLength": "medium",
+          "signals": [
+            "uncertainty",
+            "claims"
+          ],
+          "observations": 18,
+          "successRate": 94.44,
+          "positiveImpactRate": 94.44,
+          "averageJudgeDelta": 8.61,
+          "averageGainGlobal": 8.61,
+          "averageLengthDeltaWords": 7.61,
+          "averageStructureDelta": 0.44,
+          "empiricalConfidence": 0.95,
+          "activation": "active"
+        },
+        {
+          "questionType": "explanatory",
+          "promptLength": "medium",
+          "signals": [],
+          "observations": 7,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 11.29,
+          "averageGainGlobal": 11.29,
+          "averageLengthDeltaWords": 8.29,
+          "averageStructureDelta": 1.43,
+          "empiricalConfidence": 0.95,
+          "activation": "active"
+        },
+        {
+          "questionType": "open",
+          "promptLength": "short",
+          "signals": [],
+          "observations": 7,
+          "successRate": 85.71,
+          "positiveImpactRate": 85.71,
+          "averageJudgeDelta": 7.71,
+          "averageGainGlobal": 7.71,
+          "averageLengthDeltaWords": 0.71,
+          "averageStructureDelta": 0.14,
+          "empiricalConfidence": 0.95,
+          "activation": "active"
+        },
+        {
+          "questionType": "strategic",
+          "promptLength": "medium",
+          "signals": [
+            "uncertainty"
+          ],
+          "observations": 6,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 11.5,
+          "averageGainGlobal": 11.5,
+          "averageLengthDeltaWords": 24,
+          "averageStructureDelta": -1,
+          "empiricalConfidence": 0.95,
+          "activation": "active"
+        },
+        {
+          "questionType": "factual",
+          "promptLength": "medium",
+          "signals": [
+            "claims"
+          ],
+          "observations": 4,
+          "successRate": 75,
+          "positiveImpactRate": 75,
+          "averageJudgeDelta": 3.25,
+          "averageGainGlobal": 3.25,
+          "averageLengthDeltaWords": -5.75,
+          "averageStructureDelta": 0.75,
+          "empiricalConfidence": 0.72,
+          "activation": "active"
+        },
+        {
+          "questionType": "explanatory",
+          "promptLength": "medium",
+          "signals": [
+            "abstraction"
+          ],
+          "observations": 2,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 8.5,
+          "averageGainGlobal": 8.5,
+          "averageLengthDeltaWords": 2.5,
+          "averageStructureDelta": 0,
+          "empiricalConfidence": 0.89,
+          "activation": "active"
+        },
+        {
+          "questionType": "explanatory",
+          "promptLength": "short",
+          "signals": [],
+          "observations": 2,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 6,
+          "averageGainGlobal": 6,
+          "averageLengthDeltaWords": -4.5,
+          "averageStructureDelta": -1,
+          "empiricalConfidence": 0.83,
+          "activation": "active"
+        },
+        {
+          "questionType": "explanatory",
+          "promptLength": "short",
+          "signals": [
+            "abstraction"
+          ],
+          "observations": 1,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 9,
+          "averageGainGlobal": 9,
+          "averageLengthDeltaWords": 8,
+          "averageStructureDelta": -1,
+          "empiricalConfidence": 0.87,
+          "activation": "cautious"
+        },
+        {
+          "questionType": "factual",
+          "promptLength": "short",
+          "signals": [
+            "uncertainty",
+            "claims"
+          ],
+          "observations": 1,
+          "successRate": 0,
+          "positiveImpactRate": 0,
+          "averageJudgeDelta": -19,
+          "averageGainGlobal": -19,
+          "averageLengthDeltaWords": 1,
+          "averageStructureDelta": 1,
+          "empiricalConfidence": 0.39,
+          "activation": "inactive"
+        },
+        {
+          "questionType": "open",
+          "promptLength": "medium",
+          "signals": [],
+          "observations": 1,
+          "successRate": 0,
+          "positiveImpactRate": 0,
+          "averageJudgeDelta": -21,
+          "averageGainGlobal": -21,
+          "averageLengthDeltaWords": 11,
+          "averageStructureDelta": 0,
+          "empiricalConfidence": 0.39,
+          "activation": "inactive"
+        }
+      ]
+    },
+    {
+      "ruleId": "product_strategy:missing_examples:add one concrete example or contrast to anchor the explanation",
+      "category": "product_strategy",
+      "failureType": "missing_examples",
+      "rule": "Add one concrete example or contrast to anchor the explanation.",
+      "observations": 1,
+      "successRate": 100,
+      "positiveImpactRate": 100,
+      "averageJudgeDelta": 8,
+      "averageGainGlobal": 8,
+      "averageLengthDeltaWords": 3,
+      "averageStructureDelta": 2,
+      "empiricalConfidence": 0.84,
+      "activation": "cautious",
+      "contexts": [
+        {
+          "questionType": "strategic",
+          "promptLength": "medium",
+          "signals": [
+            "uncertainty",
+            "abstraction"
+          ],
+          "observations": 1,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 8,
+          "averageGainGlobal": 8,
+          "averageLengthDeltaWords": 3,
+          "averageStructureDelta": 2,
+          "empiricalConfidence": 0.84,
+          "activation": "cautious"
+        }
+      ]
+    },
+    {
+      "ruleId": "product_strategy:too_generic:expand beyond a minimal definition and cover the real scope of the question",
+      "category": "product_strategy",
+      "failureType": "too_generic",
+      "rule": "Expand beyond a minimal definition and cover the real scope of the question.",
+      "observations": 1,
+      "successRate": 100,
+      "positiveImpactRate": 100,
+      "averageJudgeDelta": 8,
+      "averageGainGlobal": 8,
+      "averageLengthDeltaWords": 3,
+      "averageStructureDelta": 2,
+      "empiricalConfidence": 0.84,
+      "activation": "cautious",
+      "contexts": [
+        {
+          "questionType": "strategic",
+          "promptLength": "medium",
+          "signals": [
+            "uncertainty",
+            "abstraction"
+          ],
+          "observations": 1,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 8,
+          "averageGainGlobal": 8,
+          "averageLengthDeltaWords": 3,
+          "averageStructureDelta": 2,
+          "empiricalConfidence": 0.84,
+          "activation": "cautious"
+        }
+      ]
+    }
+  ]
+}

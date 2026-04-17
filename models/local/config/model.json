@@ -2,10 +2,10 @@
     "modelsDir":  "F:/hydria-arena/models/local/ollama-store",
     "healthcheck":  "OK",
     "role":  "local student model",
-    "host":  "127.0.0.1:11435",
+    "host":  "127.0.0.1:11434",
     "upstreamModel":  "Qwen/Qwen2.5-3B-Instruct",
-    "baseUrl":  "http://127.0.0.1:11435",
+    "baseUrl":  "http://127.0.0.1:11434",
     "lastSetupAt":  "2026-04-14T01:58:22.2424989+02:00",
     "provider":  "ollama",
-    "runtimeModel":  "qwen2.5:3b"
+    "runtimeModel":  "qwen2.5:7b"
 }

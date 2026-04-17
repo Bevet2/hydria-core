@@ -1,0 +1,198 @@
+{
+  "version": "hydria-student-strategy-assets-v1",
+  "builtAt": "2026-04-16T23:40:47.410Z",
+  "sourceStats": {
+    "discoveryBuiltAt": "2026-04-16T23:40:35.020Z",
+    "adoptedAssets": 4
+  },
+  "assets": [
+    {
+      "assetId": "strategy:factual_medium->factual_verify_first:factual|medium|claims,uncertainty",
+      "assetVersion": 1,
+      "status": "active",
+      "category": "other",
+      "baseStrategyId": "factual_medium",
+      "adoptedStrategyId": "factual_verify_first",
+      "context": {
+        "questionType": "factual",
+        "promptLength": "medium",
+        "signals": [
+          "uncertainty",
+          "claims"
+        ]
+      },
+      "trace": {
+        "proposalReason": "Factual medium contexts with uncertainty or claims benefit from a verify-first strategy instead of a fuller factual answer template.",
+        "adoptionReason": "Candidate factual_verify_first beats factual_medium in this context and passes the product guard.",
+        "discoveryBuiltAt": "2026-04-16T23:40:35.020Z",
+        "sampleQuestions": [
+          "Which company announced the latest general-purpose AI model and when was it released?",
+          "What official AI model updates were announced this week by major labs?",
+          "Which major AI lab most recently released a new model or platform update?",
+          "Which company most recently announced a new AI platform update, and what was it?"
+        ]
+      },
+      "evidence": {
+        "observations": 4,
+        "winRate": 100,
+        "averageJudgeDelta": 15.25,
+        "averageGainGlobal": 15.25,
+        "averageLengthDeltaWords": 3.25,
+        "averageNoiseDelta": 0,
+        "averageClarityDelta": 0,
+        "productGuard": {
+          "passed": true,
+          "noiseOk": true,
+          "lengthOk": true,
+          "clarityOk": true,
+          "reasons": []
+        }
+      },
+      "learning": {
+        "summary": "When the question is factual/medium with signals uncertainty, claims, prefer factual_verify_first over factual_medium.",
+        "promptHint": "Lead with uncertainty, verify before asserting, and keep the answer concise if facts remain unsettled.",
+        "usageNote": "Candidate factual_verify_first beats factual_medium in this context and passes the product guard."
+      }
+    },
+    {
+      "assetId": "strategy:factual_medium->factual_verify_first:factual|medium|claims",
+      "assetVersion": 1,
+      "status": "active",
+      "category": "other",
+      "baseStrategyId": "factual_medium",
+      "adoptedStrategyId": "factual_verify_first",
+      "context": {
+        "questionType": "factual",
+        "promptLength": "medium",
+        "signals": [
+          "claims"
+        ]
+      },
+      "trace": {
+        "proposalReason": "Factual medium contexts with uncertainty or claims benefit from a verify-first strategy instead of a fuller factual answer template.",
+        "adoptionReason": "Candidate factual_verify_first beats factual_medium in this context and passes the product guard.",
+        "discoveryBuiltAt": "2026-04-16T23:40:35.020Z",
+        "sampleQuestions": [
+          "Which company announced the latest general-purpose AI model and when was it released?",
+          "What official AI model updates were announced this week by major labs?",
+          "Which major AI lab most recently released a new model or platform update?",
+          "Which company most recently announced a new AI platform update, and what was it?"
+        ]
+      },
+      "evidence": {
+        "observations": 4,
+        "winRate": 100,
+        "averageJudgeDelta": 15.25,
+        "averageGainGlobal": 15.25,
+        "averageLengthDeltaWords": 12,
+        "averageNoiseDelta": 0,
+        "averageClarityDelta": 0,
+        "productGuard": {
+          "passed": true,
+          "noiseOk": true,
+          "lengthOk": true,
+          "clarityOk": true,
+          "reasons": []
+        }
+      },
+      "learning": {
+        "summary": "When the question is factual/medium with signals claims, prefer factual_verify_first over factual_medium.",
+        "promptHint": "Lead with uncertainty, verify before asserting, and keep the answer concise if facts remain unsettled.",
+        "usageNote": "Candidate factual_verify_first beats factual_medium in this context and passes the product guard."
+      }
+    },
+    {
+      "assetId": "strategy:open_short->open_scope_anchor:open|short|abstraction",
+      "assetVersion": 1,
+      "status": "active",
+      "category": "other",
+      "baseStrategyId": "open_short",
+      "adoptedStrategyId": "open_scope_anchor",
+      "context": {
+        "questionType": "open",
+        "promptLength": "short",
+        "signals": [
+          "abstraction"
+        ]
+      },
+      "trace": {
+        "proposalReason": "Short open prompts with abstract scope often stay too vague unless the answer is anchored with one concrete frame.",
+        "adoptionReason": "Candidate open_scope_anchor beats open_short in this context and passes the product guard.",
+        "discoveryBuiltAt": "2026-04-16T23:40:35.020Z",
+        "sampleQuestions": [
+          "What should people understand about AI in society?",
+          "What is the big picture risk of AI?",
+          "What should the public keep in mind about AI?"
+        ]
+      },
+      "evidence": {
+        "observations": 3,
+        "winRate": 100,
+        "averageJudgeDelta": 11.67,
+        "averageGainGlobal": 11.67,
+        "averageLengthDeltaWords": 10.33,
+        "averageNoiseDelta": 0,
+        "averageClarityDelta": 0,
+        "productGuard": {
+          "passed": true,
+          "noiseOk": true,
+          "lengthOk": true,
+          "clarityOk": true,
+          "reasons": []
+        }
+      },
+      "learning": {
+        "summary": "When the question is open/short with signals abstraction, prefer open_scope_anchor over open_short.",
+        "promptHint": "Anchor the answer with one concrete frame before widening the scope.",
+        "usageNote": "Candidate open_scope_anchor beats open_short in this context and passes the product guard."
+      }
+    },
+    {
+      "assetId": "strategy:open_medium->reasoning_bridge_medium:open|medium|abstraction,uncertainty",
+      "assetVersion": 1,
+      "status": "active",
+      "category": "technical_explanation",
+      "baseStrategyId": "open_medium",
+      "adoptedStrategyId": "reasoning_bridge_medium",
+      "context": {
+        "questionType": "open",
+        "promptLength": "medium",
+        "signals": [
+          "uncertainty",
+          "abstraction"
+        ]
+      },
+      "trace": {
+        "proposalReason": "Open ambiguous prompts benefit from one concrete implication and one explicit boundary instead of a diffuse overview.",
+        "adoptionReason": "Candidate reasoning_bridge_medium beats open_medium in this context and passes the product guard.",
+        "discoveryBuiltAt": "2026-04-16T23:40:35.020Z",
+        "sampleQuestions": [
+          "Why do official AI safety claims matter for public trust in society?",
+          "How should we think about AI in society when the long-term impact is unclear?",
+          "Why do company promises about AI capabilities shape social trust?"
+        ]
+      },
+      "evidence": {
+        "observations": 3,
+        "winRate": 66.67,
+        "averageJudgeDelta": 5.67,
+        "averageGainGlobal": 5.67,
+        "averageLengthDeltaWords": 6.33,
+        "averageNoiseDelta": 0.33,
+        "averageClarityDelta": 2,
+        "productGuard": {
+          "passed": true,
+          "noiseOk": true,
+          "lengthOk": true,
+          "clarityOk": true,
+          "reasons": []
+        }
+      },
+      "learning": {
+        "summary": "When the question is open/medium with signals uncertainty, abstraction, prefer reasoning_bridge_medium over open_medium.",
+        "promptHint": "Bridge abstract reasoning to one concrete implication, and separate verified claims from interpretation.",
+        "usageNote": "Candidate reasoning_bridge_medium beats open_medium in this context and passes the product guard."
+      }
+    }
+  ]
+}

@@ -2,13 +2,11 @@ import { load } from "cheerio";
 import type { ResearchSource } from "../../types/arena.js";
 import { logger } from "../../utils/logger.js";
 import {
-  COMMUNITY_PATH_PATTERNS,
   countRegexMatches,
   DOC_HINT_PATTERNS,
-  getHostname,
+  isHighTrustResearchSource,
   matchesAny,
   normalizeSpace,
-  OFFICIAL_DOMAIN_PATTERNS,
   splitSentences,
   type SearchCandidate,
   type SearchPlan,
@@ -185,44 +183,11 @@ export class ResearchExtractor {
   }
 
   private tryBuildSnippetFallback(result: SearchCandidate, plan: SearchPlan) {
-    const domain = getHostname(result.url);
-    if (!this.isHighTrustDomain(domain, plan)) {
+    if (!isHighTrustResearchSource(result.url, plan.preferredDomains)) {
       return null;
     }
 
     const fallback = normalizeSpace(`${result.title}. ${result.snippet}`.replace(/^\.\s*/, ""));
     return fallback.length >= 80 ? fallback.slice(0, 600) : null;
-  }
-
-  private isHighTrustDomain(domain: string, plan: SearchPlan) {
-    if (!domain) {
-      return false;
-    }
-
-    return this.getDomainTrustScore(domain, "", plan) >= 26;
-  }
-
-  private getDomainTrustScore(domain: string, path: string, plan: SearchPlan) {
-    if (!domain) {
-      return -20;
-    }
-
-    if (plan.preferredDomains.some((preferred) => domain.endsWith(preferred.toLowerCase()))) {
-      return 55;
-    }
-
-    if (OFFICIAL_DOMAIN_PATTERNS.some((pattern) => pattern.test(domain))) {
-      return COMMUNITY_PATH_PATTERNS.some((pattern) => pattern.test(path)) ? 20 : 38;
-    }
-
-    if (
-      domain.includes("docs.") ||
-      domain.includes("developer.") ||
-      domain.includes("developers.")
-    ) {
-      return 26;
-    }
-
-    return COMMUNITY_PATH_PATTERNS.some((pattern) => pattern.test(path)) ? -8 : 0;
   }
 }

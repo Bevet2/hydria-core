@@ -8,6 +8,7 @@ import { createArenaRouter } from "./routes/arena.js";
 import { createBenchmarkRouter } from "./routes/benchmark.js";
 import { createHistoryRouter } from "./routes/history.js";
 import { createLocalModelRouter } from "./routes/localModel.js";
+import { createStudentRouter } from "./routes/student.js";
 import {
   OFFICIAL_BASELINE_FROZEN_AT,
   OFFICIAL_BASELINE_LABEL,
@@ -24,6 +25,8 @@ import { OpenRouterService } from "./services/openrouter.js";
 import { OrchestrationPolicyService } from "./services/orchestrationPolicy.js";
 import { ResearchToolService } from "./services/researchToolService.js";
 import { RefineRouterService } from "./services/refineRouter.js";
+import { StudentService } from "./services/studentService.js";
+import { StudentSessionStore } from "./services/studentSessionStore.js";
 import { defaultArenaModels, env } from "./utils/env.js";
 import { logger } from "./utils/logger.js";
 
@@ -31,9 +34,17 @@ const historyStore = new HistoryStore();
 const localModelService = new LocalModelService();
 const openRouterService = new OpenRouterService();
 const benchmarkStore = new BenchmarkStore();
+const studentSessionStore = new StudentSessionStore();
 const orchestrationPolicyService = new OrchestrationPolicyService();
 const refineRouterService = new RefineRouterService();
 const researchToolService = new ResearchToolService();
+const studentService = new StudentService(
+  localModelService,
+  openRouterService,
+  orchestrationPolicyService,
+  researchToolService,
+  studentSessionStore
+);
 const arenaRunner = new ArenaRunner(
   openRouterService,
   localModelService,
@@ -50,6 +61,7 @@ const hasBuiltWebApp = existsSync(webIndexPath);
 
 await historyStore.ensureReady();
 await benchmarkService.ensureReady();
+await studentService.ensureReady();
 
 const app = express();
 app.use(
@@ -83,6 +95,7 @@ app.use("/api/arena", createArenaRouter(arenaRunner));
 app.use("/api/arena/history", createHistoryRouter(historyStore));
 app.use("/api/benchmark", createBenchmarkRouter(benchmarkService));
 app.use("/api/local-model", createLocalModelRouter(localModelService));
+app.use("/api/student", createStudentRouter(studentService));
 
 if (hasBuiltWebApp) {
   app.use(express.static(webDistDir));

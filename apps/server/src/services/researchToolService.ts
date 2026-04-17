@@ -7,6 +7,7 @@ import type {
 import type { KnowledgeCategoryInsight, KnowledgeCategoryStrategy } from "../types/knowledge.js";
 import { logger } from "../utils/logger.js";
 import { KnowledgeLayerService } from "./knowledgeLayerService.js";
+import { KnowledgeMemoryService } from "./knowledgeMemoryService.js";
 import {
   countRegexMatches,
   hasUncertaintySignals,
@@ -60,6 +61,13 @@ function buildEmptyResearchLog(decision: ResearchDecision): ResearchToolLog {
       extractedSourceCount: 0,
       corroboratedSignals: []
     },
+    truth: {
+      verified_facts: [],
+      uncertain_claims: [],
+      conflicting_info: [],
+      confidence_score: 0,
+      no_reliable_source: false
+    },
     appliedTo: {
       A: false,
       B: false
@@ -79,6 +87,7 @@ function buildEmptyResearchLog(decision: ResearchDecision): ResearchToolLog {
 
 export class ResearchToolService {
   private readonly knowledgeLayerService = new KnowledgeLayerService();
+  private readonly knowledgeMemoryService = new KnowledgeMemoryService();
   private readonly planner = new ResearchPlanner();
   private readonly retriever = new ResearchRetriever();
   private readonly extractor = new ResearchExtractor();
@@ -164,6 +173,7 @@ export class ResearchToolService {
     const knowledgeInsight = await this.loadKnowledgeInsight(args.category);
     const knowledgeStrategy = knowledgeInsight?.strategy ?? null;
     const orchestration = args.orchestration ?? null;
+    const studentStrategy = args.studentStrategy ?? null;
 
     const uncertaintySignals =
       hasUncertaintySignals(args.respondentA) + hasUncertaintySignals(args.respondentB);
@@ -276,10 +286,42 @@ export class ResearchToolService {
     const elevatedFactualRisk = args.redTeam.factual_risk_level >= 45;
     const verificationNeed =
       temporalOrOfficialCue || providerSpecific || regulatoryOrStandardCue || hardConstraintCue;
+    const studentFactualVerifyFirst = studentStrategy?.strategyId === "factual_verify_first";
+    const studentFactualShort = studentStrategy?.strategyId === "factual_short";
+    const studentOpenLike =
+      studentStrategy?.context.questionType === "open" ||
+      args.category === "operational_writing" ||
+      args.category === "product_strategy";
     const targetClaims = uniqueStrings([
       ...args.redTeam.potentially_false_claims.slice(0, 4),
       ...args.redTeam.shared_risks.slice(0, 2)
     ]).slice(0, 6);
+    const memorySignals = uniqueStrings([
+      highFactualRisk ? "high_factual_risk" : "",
+      mediumFactualRisk ? "medium_factual_risk" : "",
+      falseClaimCount > 0 ? "factual_claims" : "",
+      providerSpecific ? "provider_specific" : "",
+      regulatoryOrStandardCue ? "provider_specific" : "",
+      hardConstraintCue ? "metric_claims" : "",
+      debugDocCue ? "execution_gap" : "",
+      explicitMetricCue ? "metric_claims" : "",
+      factualCue ? "concept_question" : "",
+      uncertaintySignals >= 3 ? "uncertainty" : "",
+      (knowledgeInsight?.benchmark.positiveResearchImpactRate ?? 0) >= 35
+        ? "positive_tool_roi"
+        : "",
+      (knowledgeInsight?.benchmark.noOpRate ?? 0) >= 35 ? "no_op_high" : ""
+    ]);
+    const memoryRules = await this.knowledgeMemoryService.getRelevantRules({
+      category: args.category,
+      activeSignals: memorySignals,
+      domains: ["tool_usage", "reasoning"],
+      limit: 4
+    });
+    const memoryResearchBias = memoryRules.reduce(
+      (sum, rule) => sum + Math.round(rule.influence.researchBias * rule.confidence),
+      0
+    );
     const categoryBias = knowledgeStrategy?.routerBias ?? 0;
     const baseNeedScore =
       falseClaimCount * 18 +
@@ -291,7 +333,10 @@ export class ResearchToolService {
       (explicitMetricCue ? 5 : 0) +
       (uncertaintySignals >= 3 ? 6 : 0) +
       (structuralRiskCount >= 7 ? 6 : 0) +
+      (studentFactualVerifyFirst ? 16 : studentFactualShort ? 6 : 0) -
+      (studentOpenLike ? 10 : 0) +
       categoryBias +
+      memoryResearchBias +
       (orchestration?.researchBias ?? 0);
     const thresholdAdjustment =
       (knowledgeStrategy?.toolRecommendation === "prefer_grounded"
@@ -330,6 +375,9 @@ export class ResearchToolService {
     if (uncertaintySignals >= 3) addSignal("respondent_uncertainty");
     if (structuralRiskCount >= 7) addSignal("redteam_structural_pressure");
     if (knowledgeStrategy) addSignal(`knowledge_tool_${knowledgeStrategy.toolRecommendation}`);
+    for (const rule of memoryRules) {
+      addSignal(`memory_${rule.domain}`);
+    }
     if (orchestration) {
       addSignal(`orchestration_focus_${orchestration.focus}`);
       addSignal(`orchestration_research_${orchestration.researchPolicy}`);
@@ -350,6 +398,27 @@ export class ResearchToolService {
     } else if (knowledgeStrategy?.toolRecommendation === "conditional") {
       addReason(
         `Knowledge layer marks ${args.category} as conditional: research should only fire when the factual sub-problem is explicit.`
+      );
+    }
+    if (studentFactualVerifyFirst) {
+      addSignal("student_strategy_factual_verify_first");
+      addReason(
+        "Student strategy factual_verify_first prioritizes concise verification before answering, which increases the value of external grounding."
+      );
+    } else if (studentFactualShort) {
+      addSignal("student_strategy_factual_short");
+      addReason(
+        "Student strategy factual_short favors concise, careful answers and can benefit from lightweight factual verification."
+      );
+    } else if (studentOpenLike) {
+      addSignal("student_strategy_open_like");
+      addReason(
+        "Current student strategy or category is open-ended or writing-heavy, so external grounding should stay conservative."
+      );
+    }
+    for (const rule of memoryRules) {
+      addReason(
+        `Knowledge memory ${rule.domain}: ${rule.lesson} Strategy: ${rule.recommendedStrategy} (confidence ${Math.round(rule.confidence * 100)}%).`
       );
     }
 
@@ -393,7 +462,9 @@ export class ResearchToolService {
       baseNeedScore,
       thresholdAdjustment,
       knowledgeStrategy,
-      orchestration
+      orchestration,
+      studentFactualVerifyFirst,
+      studentOpenLike
     });
     const plan = shouldUse
       ? this.planner.buildPlan(args, knowledgeStrategy, orchestration)
@@ -445,7 +516,20 @@ export class ResearchToolService {
     thresholdAdjustment: number;
     knowledgeStrategy: KnowledgeCategoryStrategy | null;
     orchestration: OrchestrationPolicyDetails | null;
+    studentFactualVerifyFirst?: boolean;
+    studentOpenLike?: boolean;
   }) {
+    if (
+      args.studentOpenLike &&
+      args.falseClaimCount === 0 &&
+      !args.verificationNeed &&
+      !args.providerSpecific &&
+      !args.regulatoryOrStandardCue &&
+      !args.hardConstraintCue
+    ) {
+      return false;
+    }
+
     if (
       args.orchestration?.researchPolicy === "off" &&
       !(
@@ -464,6 +548,15 @@ export class ResearchToolService {
       args.baseNeedScore < 50
     ) {
       return false;
+    }
+
+    if (
+      args.studentFactualVerifyFirst &&
+      (args.falseClaimCount >= 1 ||
+        args.temporalOrOfficialCue ||
+        (args.mediumFactualRisk && (args.providerSpecific || args.explicitMetricCue)))
+    ) {
+      return true;
     }
 
     if (

@@ -8,6 +8,7 @@ import type {
   RespondentOutput
 } from "../../types/arena.js";
 import type { KnowledgeCategoryStrategy } from "../../types/knowledge.js";
+import type { StudentResponseStrategy } from "../../types/student.js";
 
 export const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0 Safari/537.36";
@@ -215,6 +216,7 @@ export type ResearchDecisionArgs = {
   shouldRefineA: boolean;
   shouldRefineB: boolean;
   orchestration?: OrchestrationPolicyDetails | null;
+  studentStrategy?: StudentResponseStrategy | null;
 };
 
 export type ResearchDecision = {
@@ -291,6 +293,47 @@ export function getPathname(url: string) {
   } catch {
     return "";
   }
+}
+
+export function getDomainTrustScore(
+  domain: string,
+  path: string,
+  preferredDomains: string[]
+) {
+  if (!domain) {
+    return -20;
+  }
+
+  if (preferredDomains.some((preferred) => domain.endsWith(preferred.toLowerCase()))) {
+    return 55;
+  }
+
+  if (OFFICIAL_DOMAIN_PATTERNS.some((pattern) => pattern.test(domain))) {
+    return COMMUNITY_PATH_PATTERNS.some((pattern) => pattern.test(path)) ? 20 : 38;
+  }
+
+  if (
+    domain.includes("docs.") ||
+    domain.includes("developer.") ||
+    domain.includes("developers.") ||
+    domain.includes("learn.")
+  ) {
+    return 26;
+  }
+
+  if (LOW_TRUST_DOMAIN_PATTERNS.some((pattern) => pattern.test(domain))) {
+    return -12;
+  }
+
+  return COMMUNITY_PATH_PATTERNS.some((pattern) => pattern.test(path)) ? -8 : 0;
+}
+
+export function getSourceTrustScore(url: string, preferredDomains: string[]) {
+  return getDomainTrustScore(getHostname(url), getPathname(url), preferredDomains);
+}
+
+export function isHighTrustResearchSource(url: string, preferredDomains: string[], minimum = 26) {
+  return getSourceTrustScore(url, preferredDomains) >= minimum;
 }
 
 export function stripSiteOperators(query: string) {

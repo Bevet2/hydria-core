@@ -1,0 +1,173 @@
+{
+  "version": "hydria-student-tool-impact-v1",
+  "builtAt": "2026-04-17T00:37:01.710Z",
+  "sourceStats": {
+    "studentSessionsAnalyzed": 58,
+    "toolUsedSessions": 10,
+    "toolUnusedSessions": 48,
+    "comparedSessions": 13
+  },
+  "overall": {
+    "used": {
+      "observations": 10,
+      "successRate": 80,
+      "positiveImpactRate": 80,
+      "averageJudgeDelta": 9.8,
+      "averageGainGlobal": 9.8,
+      "averageLengthDeltaWords": 5.4,
+      "averageStructureDelta": -0.7,
+      "noReliableSourceRate": 10
+    },
+    "unused": {
+      "observations": 3,
+      "successRate": 0,
+      "positiveImpactRate": 0,
+      "averageJudgeDelta": 0,
+      "averageGainGlobal": 0,
+      "averageLengthDeltaWords": 0,
+      "averageStructureDelta": 0,
+      "noReliableSourceRate": 0
+    },
+    "averageJudgeDeltaDelta": 9.8
+  },
+  "contexts": [
+    {
+      "questionType": "factual",
+      "promptLength": "medium",
+      "signals": [
+        "uncertainty",
+        "claims"
+      ],
+      "used": {
+        "observations": 7,
+        "successRate": 100,
+        "positiveImpactRate": 100,
+        "averageJudgeDelta": 14,
+        "averageGainGlobal": 14,
+        "averageLengthDeltaWords": 9.71,
+        "averageStructureDelta": -1,
+        "noReliableSourceRate": 14.29
+      },
+      "unused": {
+        "observations": 0,
+        "successRate": 0,
+        "positiveImpactRate": 0,
+        "averageJudgeDelta": 0,
+        "averageGainGlobal": 0,
+        "averageLengthDeltaWords": 0,
+        "averageStructureDelta": 0,
+        "noReliableSourceRate": 0
+      },
+      "averageJudgeDeltaDelta": 14
+    },
+    {
+      "questionType": "explanatory",
+      "promptLength": "short",
+      "signals": [],
+      "used": {
+        "observations": 1,
+        "successRate": 100,
+        "positiveImpactRate": 100,
+        "averageJudgeDelta": 7,
+        "averageGainGlobal": 7,
+        "averageLengthDeltaWords": -6,
+        "averageStructureDelta": 0,
+        "noReliableSourceRate": 0
+      },
+      "unused": {
+        "observations": 1,
+        "successRate": 0,
+        "positiveImpactRate": 0,
+        "averageJudgeDelta": 0,
+        "averageGainGlobal": 0,
+        "averageLengthDeltaWords": 0,
+        "averageStructureDelta": 0,
+        "noReliableSourceRate": 0
+      },
+      "averageJudgeDeltaDelta": 7
+    },
+    {
+      "questionType": "open",
+      "promptLength": "medium",
+      "signals": [],
+      "used": {
+        "observations": 1,
+        "successRate": 0,
+        "positiveImpactRate": 0,
+        "averageJudgeDelta": -3,
+        "averageGainGlobal": -3,
+        "averageLengthDeltaWords": 11,
+        "averageStructureDelta": 0,
+        "noReliableSourceRate": 0
+      },
+      "unused": {
+        "observations": 0,
+        "successRate": 0,
+        "positiveImpactRate": 0,
+        "averageJudgeDelta": 0,
+        "averageGainGlobal": 0,
+        "averageLengthDeltaWords": 0,
+        "averageStructureDelta": 0,
+        "noReliableSourceRate": 0
+      },
+      "averageJudgeDeltaDelta": -3
+    },
+    {
+      "questionType": "factual",
+      "promptLength": "medium",
+      "signals": [
+        "claims"
+      ],
+      "used": {
+        "observations": 1,
+        "successRate": 0,
+        "positiveImpactRate": 0,
+        "averageJudgeDelta": -4,
+        "averageGainGlobal": -4,
+        "averageLengthDeltaWords": -19,
+        "averageStructureDelta": 0,
+        "noReliableSourceRate": 0
+      },
+      "unused": {
+        "observations": 0,
+        "successRate": 0,
+        "positiveImpactRate": 0,
+        "averageJudgeDelta": 0,
+        "averageGainGlobal": 0,
+        "averageLengthDeltaWords": 0,
+        "averageStructureDelta": 0,
+        "noReliableSourceRate": 0
+      },
+      "averageJudgeDeltaDelta": -4
+    },
+    {
+      "questionType": "strategic",
+      "promptLength": "medium",
+      "signals": [
+        "uncertainty",
+        "abstraction"
+      ],
+      "used": {
+        "observations": 0,
+        "successRate": 0,
+        "positiveImpactRate": 0,
+        "averageJudgeDelta": 0,
+        "averageGainGlobal": 0,
+        "averageLengthDeltaWords": 0,
+        "averageStructureDelta": 0,
+        "noReliableSourceRate": 0
+      },
+      "unused": {
+        "observations": 2,
+        "successRate": 0,
+        "positiveImpactRate": 0,
+        "averageJudgeDelta": 0,
+        "averageGainGlobal": 0,
+        "averageLengthDeltaWords": 0,
+        "averageStructureDelta": 0,
+        "noReliableSourceRate": 0
+      },
+      "averageJudgeDeltaDelta": 0
+    }
+  ]
+}

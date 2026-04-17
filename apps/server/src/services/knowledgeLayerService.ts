@@ -23,6 +23,7 @@ import {
   buildContrastiveStudentExamples,
   buildCuratedStudentExamples
 } from "./knowledge/studentExamples.js";
+import { KnowledgeMemoryService } from "./knowledgeMemoryService.js";
 
 export class KnowledgeLayerService {
   constructor(
@@ -115,8 +116,12 @@ export class KnowledgeLayerService {
       "utf8"
     );
 
+    const knowledgeMemoryService = new KnowledgeMemoryService();
+    const knowledgeMemory = await knowledgeMemoryService.buildAndPersist(knowledgeLayer);
+
     return {
       knowledgeLayer,
+      knowledgeMemory,
       curatedStudentExamples,
       contrastiveStudentExamples
     };

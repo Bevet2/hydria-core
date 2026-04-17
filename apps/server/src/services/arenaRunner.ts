@@ -50,6 +50,7 @@ import {
   JudgeValidationError,
   parseJudgeOutput
 } from "../utils/judgeOutput.js";
+import type { KnowledgeInjection } from "../types/knowledge.js";
 import {
   RespondentValidationError,
   parseRespondentOutput
@@ -68,6 +69,7 @@ import { LocalModelService } from "./localModel.js";
 import { OpenRouterService } from "./openrouter.js";
 import { OrchestrationPolicyService } from "./orchestrationPolicy.js";
 import { classifyQuestion } from "./questionClassifier.js";
+import { KnowledgeInjectionService } from "./knowledgeInjectionService.js";
 import { ResearchToolService } from "./researchToolService.js";
 import { RefineRouterService } from "./refineRouter.js";
 import { deriveRoundMetrics } from "./roundMetrics.js";
@@ -121,6 +123,8 @@ export class RespondentStageError extends Error {
 }
 
 export class ArenaRunner {
+  private readonly knowledgeInjectionService = new KnowledgeInjectionService();
+
   constructor(
     private readonly openRouterService: OpenRouterService,
     private readonly localModelService: LocalModelService,
@@ -179,6 +183,7 @@ export class ArenaRunner {
       respondentB: respondentBResult.parsed,
       redTeam: redTeamResult.parsed
     }, orchestration);
+    const knowledgeInjection = await this.knowledgeInjectionService.buildForCategory(router.category);
     const researchBeforeRefine = await this.researchToolService.maybeCollect({
       question: request.question,
       category: router.category,
@@ -203,7 +208,8 @@ export class ArenaRunner {
             ),
             respondent: respondentAResult.parsed,
             redTeam: redTeamResult.parsed,
-            research: researchBeforeRefine
+            research: researchBeforeRefine,
+            knowledge: knowledgeInjection
           })
         : Promise.resolve(
             this.buildSkippedRefinement(
@@ -226,7 +232,8 @@ export class ArenaRunner {
             ),
             respondent: respondentBResult.parsed,
             redTeam: redTeamResult.parsed,
-            research: researchBeforeRefine
+            research: researchBeforeRefine,
+            knowledge: knowledgeInjection
           })
         : Promise.resolve(
             this.buildSkippedRefinement(
@@ -957,6 +964,7 @@ export class ArenaRunner {
     respondent: RespondentOutput;
     redTeam: RedTeamOutput;
     research?: ResearchToolLog | null;
+    knowledge?: KnowledgeInjection | null;
   }): Promise<StepResult<RefinerOutput>> {
     const maxTokens = args.category === "product_strategy" ? 560 : 900;
     const result = await executeOpenRouterStructuredStep({
@@ -971,7 +979,8 @@ export class ArenaRunner {
           category: args.category,
           originalResponse: args.respondent,
           redTeam: args.redTeam,
-          research: args.research
+          research: args.research,
+          knowledge: args.knowledge
         }),
       buildRepairUserPrompt: ({ previousResponse, validationIssues }) =>
         buildRefineRepairUserPrompt({
@@ -982,7 +991,8 @@ export class ArenaRunner {
           redTeam: args.redTeam,
           previousResponse,
           validationIssues,
-          research: args.research
+          research: args.research,
+          knowledge: args.knowledge
         }),
       parse: (raw) =>
         parseRefinerOutput({

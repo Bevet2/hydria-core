@@ -33,6 +33,48 @@ export const knowledgeToolRecommendationSchema = z.enum([
   "conditional"
 ]);
 
+export const knowledgeMemoryDomainSchema = z.enum([
+  "routing",
+  "refine",
+  "reasoning",
+  "tool_usage"
+]);
+
+export const knowledgeMemoryConditionSignalSchema = z
+  .string()
+  .min(1)
+  .max(64);
+
+export const knowledgeMemoryInfluenceSchema = z.object({
+  routingBias: z.number().int().min(-15).max(15),
+  refineBias: z.number().int().min(-15).max(15),
+  researchBias: z.number().int().min(-15).max(15)
+});
+
+export const knowledgeMemoryRuleSchema = z.object({
+  ruleId: z.string().min(1).max(120),
+  category: questionCategorySchema,
+  domain: knowledgeMemoryDomainSchema,
+  conditions: z.array(z.string().min(1).max(160)).min(1).max(6),
+  conditionSignals: z.array(knowledgeMemoryConditionSignalSchema).min(1).max(8),
+  lesson: z.string().min(1).max(240),
+  recommendedStrategy: z.string().min(1).max(240),
+  confidence: z.number().min(0).max(1),
+  evidence: z.object({
+    benchmarkSignals: z.array(z.string().min(1).max(180)).max(6),
+    roundCount: z.number().int().nonnegative(),
+    studentSessionCount: z.number().int().nonnegative(),
+    repeatedLessonCount: z.number().int().nonnegative()
+  }),
+  influence: knowledgeMemoryInfluenceSchema
+});
+
+export const knowledgeMemoryCategorySchema = z.object({
+  category: questionCategorySchema,
+  summary: z.string().min(1).max(400),
+  rules: z.array(knowledgeMemoryRuleSchema).max(12)
+});
+
 export const knowledgeCategoryStrategySchema = z.object({
   routingRecommendation: routingRecommendationSchema,
   routerBias: z.number().int().min(-30).max(30),
@@ -73,6 +115,48 @@ export const knowledgeCategoryInsightSchema = z.object({
   bestRounds: z.array(knowledgeRoundReferenceSchema).max(3),
   worstRounds: z.array(knowledgeRoundReferenceSchema).max(3),
   strategy: knowledgeCategoryStrategySchema
+});
+
+export const knowledgeInjectionReferenceSchema = z.object({
+  roundId: z.string().uuid(),
+  gain: z.number(),
+  note: z.string().min(1).max(240)
+});
+
+export const knowledgeInjectionSchema = z.object({
+  category: questionCategorySchema,
+  routingRecommendation: routingRecommendationSchema,
+  toolRecommendation: knowledgeToolRecommendationSchema,
+  strategyNote: z.string().min(1).max(400),
+  winningPatterns: z.array(z.string().min(1).max(200)).max(5),
+  antiPatterns: z.array(z.string().min(1).max(200)).max(5),
+  highValueSignals: z.array(z.string().min(1).max(140)).max(5),
+  lowValueSignals: z.array(z.string().min(1).max(140)).max(5),
+  coachingHints: z.array(z.string().min(1).max(240)).max(8),
+  bestRoundReferences: z.array(knowledgeInjectionReferenceSchema).max(3),
+  memorySummary: z.string().min(1).max(400),
+  memoryRules: z.array(
+    z.object({
+      domain: knowledgeMemoryDomainSchema,
+      lesson: z.string().min(1).max(240),
+      recommendedStrategy: z.string().min(1).max(240),
+      confidence: z.number().min(0).max(1)
+    })
+  ).max(6),
+  studentMemorySummary: z.string().min(1).max(400),
+  studentMemoryRules: z.array(
+    z.object({
+      ruleId: z.string().min(1).max(160),
+      failureType: z.string().min(1).max(64),
+      rule: z.string().min(1).max(240),
+      confidence: z.number().min(0).max(1),
+      activationConfidence: z.number().min(0).max(1),
+      activationMode: z.enum(["contextual", "overall", "fallback"]).default("fallback"),
+      activationReason: z.string().min(1).max(240).default("Lesson-confidence fallback."),
+      evidenceCount: z.number().int().min(1).max(50),
+      conditions: z.array(z.string().min(1).max(160)).max(4)
+    })
+  ).max(6)
 });
 
 export const studentCuratedExampleSchema = z.object({
@@ -138,9 +222,25 @@ export const knowledgeLayerSchema = z.object({
   categories: z.array(knowledgeCategoryInsightSchema).length(8)
 });
 
+export const knowledgeMemorySchema = z.object({
+  version: z.literal("hydria-memory-v1"),
+  builtAt: z.string().datetime(),
+  sourceStats: z.object({
+    benchmarkRunsAnalyzed: z.number().int().nonnegative(),
+    roundDatasetEntriesAnalyzed: z.number().int().nonnegative(),
+    studentSessionsAnalyzed: z.number().int().nonnegative(),
+    lessonsLearnedAnalyzed: z.number().int().nonnegative()
+  }),
+  categories: z.array(knowledgeMemoryCategorySchema).length(8)
+});
+
 export type KnowledgePattern = z.infer<typeof knowledgePatternSchema>;
 export type KnowledgeCategoryStrategy = z.infer<typeof knowledgeCategoryStrategySchema>;
 export type KnowledgeCategoryInsight = z.infer<typeof knowledgeCategoryInsightSchema>;
+export type KnowledgeInjection = z.infer<typeof knowledgeInjectionSchema>;
+export type KnowledgeMemoryRule = z.infer<typeof knowledgeMemoryRuleSchema>;
+export type KnowledgeMemoryCategory = z.infer<typeof knowledgeMemoryCategorySchema>;
 export type StudentCuratedExample = z.infer<typeof studentCuratedExampleSchema>;
 export type StudentContrastiveExample = z.infer<typeof studentContrastiveExampleSchema>;
 export type KnowledgeLayer = z.infer<typeof knowledgeLayerSchema>;
+export type KnowledgeMemory = z.infer<typeof knowledgeMemorySchema>;
