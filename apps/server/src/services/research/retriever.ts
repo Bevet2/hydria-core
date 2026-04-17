@@ -449,7 +449,10 @@ export class ResearchRetriever {
       results.push({
         title,
         url,
-        snippet: snippet || title
+        snippet: snippet || title,
+        retrievalChannel: "live",
+        retrievalOrigin: "generic_search",
+        retrievalEngine: "duckduckgo"
       });
     });
 
@@ -496,7 +499,10 @@ export class ResearchRetriever {
       results.push({
         title,
         url,
-        snippet
+        snippet,
+        retrievalChannel: "live",
+        retrievalOrigin: "generic_search",
+        retrievalEngine: "duckduckgo_lite"
       });
     });
 
@@ -554,7 +560,10 @@ export class ResearchRetriever {
       results.push({
         title,
         url,
-        snippet: snippet || title
+        snippet: snippet || title,
+        retrievalChannel: "live",
+        retrievalOrigin: "generic_search",
+        retrievalEngine: "bing_rss"
       });
     });
 
@@ -601,7 +610,10 @@ export class ResearchRetriever {
       results.push({
         title,
         url,
-        snippet: snippet || title
+        snippet: snippet || title,
+        retrievalChannel: "live",
+        retrievalOrigin: "generic_search",
+        retrievalEngine: "bing_html"
       });
     });
 

@@ -39,7 +39,10 @@ export class ResearchExtractor {
           publishedAt: extracted.publishedAt,
           modifiedAt: extracted.modifiedAt,
           effectiveDate: extracted.effectiveDate,
-          dateSource: extracted.dateSource
+          dateSource: extracted.dateSource,
+          retrievalChannel: result.retrievalChannel ?? "live",
+          retrievalOrigin: result.retrievalOrigin ?? "generic_search",
+          retrievalEngine: result.retrievalEngine ?? "bing_html"
         } satisfies ResearchSource;
       })
     );

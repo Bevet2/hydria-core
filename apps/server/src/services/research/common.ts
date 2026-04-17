@@ -5,6 +5,9 @@ import type {
   ResearchExpectedValue,
   ResearchFreshnessWindow,
   ResearchIntent,
+  ResearchSourceRetrievalChannel,
+  ResearchSourceRetrievalEngine,
+  ResearchSourceRetrievalOrigin,
   ResearchTemporalProfile,
   RedTeamOutput,
   RespondentOutput
@@ -523,6 +526,9 @@ export type SearchCandidate = {
   title: string;
   url: string;
   snippet: string;
+  retrievalChannel?: ResearchSourceRetrievalChannel;
+  retrievalOrigin?: ResearchSourceRetrievalOrigin;
+  retrievalEngine?: ResearchSourceRetrievalEngine;
 };
 
 export type ScoredCandidate = {

@@ -206,7 +206,10 @@ export class ResearchSourceCacheService {
       publishedAt: entry.publishedAt,
       modifiedAt: entry.modifiedAt,
       effectiveDate: entry.effectiveDate,
-      dateSource: entry.dateSource
+      dateSource: entry.dateSource,
+      retrievalChannel: entry.retrievalChannel ?? "cache",
+      retrievalOrigin: entry.retrievalOrigin ?? "generic_search",
+      retrievalEngine: entry.retrievalEngine ?? "cache"
     };
   }
 }

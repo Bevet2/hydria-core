@@ -46,7 +46,10 @@ export class ResearchKnownEndpointService {
           ({
             title: entry.endpoint.title,
             url: entry.endpoint.url,
-            snippet: normalizeSpace(entry.endpoint.snippet)
+            snippet: normalizeSpace(entry.endpoint.snippet),
+            retrievalChannel: "live",
+            retrievalOrigin: "known_endpoint",
+            retrievalEngine: "known_endpoint"
           }) satisfies SearchCandidate
       );
   }

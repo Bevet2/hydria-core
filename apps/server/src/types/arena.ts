@@ -354,6 +354,20 @@ export const researchSourceDateSourceSchema = z.enum([
   "unknown"
 ]);
 
+export const researchSourceRetrievalChannelSchema = z.enum(["live", "cache"]);
+export const researchSourceRetrievalOriginSchema = z.enum([
+  "generic_search",
+  "known_endpoint"
+]);
+export const researchSourceRetrievalEngineSchema = z.enum([
+  "duckduckgo",
+  "duckduckgo_lite",
+  "bing_rss",
+  "bing_html",
+  "cache",
+  "known_endpoint"
+]);
+
 export const researchSourceSchema = z.object({
   title: z.string().min(1),
   url: z.string().url(),
@@ -362,7 +376,10 @@ export const researchSourceSchema = z.object({
   publishedAt: z.string().datetime().nullable().default(null),
   modifiedAt: z.string().datetime().nullable().default(null),
   effectiveDate: z.string().datetime().nullable().default(null),
-  dateSource: researchSourceDateSourceSchema.nullable().default(null)
+  dateSource: researchSourceDateSourceSchema.nullable().default(null),
+  retrievalChannel: researchSourceRetrievalChannelSchema.default("live"),
+  retrievalOrigin: researchSourceRetrievalOriginSchema.default("generic_search"),
+  retrievalEngine: researchSourceRetrievalEngineSchema.default("bing_html")
 });
 
 export const researchFreshnessWindowSchema = z.enum([
@@ -582,6 +599,15 @@ export type RefineRouterDecisionDetails = z.infer<typeof refineRouterDecisionSch
 export type RefineProfile = z.infer<typeof refineProfileSchema>;
 export type OrchestrationPolicyDetails = z.infer<typeof orchestrationPolicySchema>;
 export type ResearchSourceDateSource = z.infer<typeof researchSourceDateSourceSchema>;
+export type ResearchSourceRetrievalChannel = z.infer<
+  typeof researchSourceRetrievalChannelSchema
+>;
+export type ResearchSourceRetrievalOrigin = z.infer<
+  typeof researchSourceRetrievalOriginSchema
+>;
+export type ResearchSourceRetrievalEngine = z.infer<
+  typeof researchSourceRetrievalEngineSchema
+>;
 export type ResearchSource = z.infer<typeof researchSourceSchema>;
 export type ResearchFreshnessWindow = z.infer<typeof researchFreshnessWindowSchema>;
 export type ResearchVerification = z.infer<typeof researchVerificationSchema>;

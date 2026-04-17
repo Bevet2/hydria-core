@@ -23,6 +23,16 @@ export const KNOWN_FRESH_ENDPOINTS: KnownFreshEndpoint[] = [
     priority: 90
   },
   {
+    id: "openai-pricing",
+    title: "OpenAI API Pricing",
+    url: "https://openai.com/api/pricing/",
+    snippet: "Official OpenAI pricing and current model pricing page.",
+    intents: ["current_status"],
+    domains: ["openai.com"],
+    termHints: ["openai", "pricing", "price"],
+    priority: 76
+  },
+  {
     id: "openai-about",
     title: "OpenAI About",
     url: "https://openai.com/about/",
@@ -41,6 +51,26 @@ export const KNOWN_FRESH_ENDPOINTS: KnownFreshEndpoint[] = [
     domains: ["vercel.com"],
     termHints: ["vercel"],
     priority: 92
+  },
+  {
+    id: "vercel-status",
+    title: "Vercel Status",
+    url: "https://www.vercel-status.com/",
+    snippet: "Official Vercel status page with current service state.",
+    intents: ["current_status", "recent_updates"],
+    domains: ["vercel-status.com", "vercel.com"],
+    termHints: ["vercel", "status", "availability"],
+    priority: 88
+  },
+  {
+    id: "vercel-pricing",
+    title: "Vercel Pricing",
+    url: "https://vercel.com/pricing",
+    snippet: "Official Vercel pricing page.",
+    intents: ["current_status"],
+    domains: ["vercel.com"],
+    termHints: ["vercel", "pricing", "price"],
+    priority: 72
   },
   {
     id: "vercel-blog",
@@ -73,6 +103,16 @@ export const KNOWN_FRESH_ENDPOINTS: KnownFreshEndpoint[] = [
     priority: 86
   },
   {
+    id: "nextjs-whats-new",
+    title: "What's New in Next.js",
+    url: "https://nextjs.org/blog",
+    snippet: "Official What's New and release posts for Next.js.",
+    intents: ["recent_updates", "release_freshness"],
+    domains: ["nextjs.org"],
+    termHints: ["next.js", "nextjs", "what's new"],
+    priority: 84
+  },
+  {
     id: "nodejs-releases",
     title: "Node.js Release Blog",
     url: "https://nodejs.org/en/blog/release",
@@ -91,6 +131,16 @@ export const KNOWN_FRESH_ENDPOINTS: KnownFreshEndpoint[] = [
     domains: ["nodejs.org"],
     termHints: ["node.js", "nodejs"],
     priority: 91
+  },
+  {
+    id: "nodejs-changelog",
+    title: "Node.js Changelog",
+    url: "https://github.com/nodejs/node/blob/main/CHANGELOG.md",
+    snippet: "Node.js changelog on GitHub.",
+    intents: ["release_freshness", "recent_updates"],
+    domains: ["github.com", "nodejs.org"],
+    termHints: ["node.js", "nodejs", "changelog"],
+    priority: 82
   },
   {
     id: "typescript-releases",
@@ -113,6 +163,16 @@ export const KNOWN_FRESH_ENDPOINTS: KnownFreshEndpoint[] = [
     priority: 84
   },
   {
+    id: "typescript-release-notes",
+    title: "TypeScript Release Notes",
+    url: "https://www.typescriptlang.org/docs/handbook/release-notes/overview.html",
+    snippet: "Official TypeScript release notes overview.",
+    intents: ["release_freshness", "recent_updates"],
+    domains: ["typescriptlang.org"],
+    termHints: ["typescript", "release notes"],
+    priority: 74
+  },
+  {
     id: "kubernetes-releases",
     title: "Kubernetes Releases",
     url: "https://github.com/kubernetes/kubernetes/releases",
@@ -131,5 +191,15 @@ export const KNOWN_FRESH_ENDPOINTS: KnownFreshEndpoint[] = [
     domains: ["kubernetes.io"],
     termHints: ["kubernetes"],
     priority: 90
+  },
+  {
+    id: "kubernetes-blog",
+    title: "Kubernetes Blog",
+    url: "https://kubernetes.io/blog/",
+    snippet: "Official Kubernetes announcements, release notes, and what's new posts.",
+    intents: ["recent_updates", "release_freshness"],
+    domains: ["kubernetes.io"],
+    termHints: ["kubernetes"],
+    priority: 84
   }
 ];

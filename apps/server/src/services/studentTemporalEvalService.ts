@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   QuestionCategory,
+  ResearchSourceDateSource,
   ResearchTemporalQueryType,
   ResearchToolLog,
   RespondentOutput,
@@ -23,6 +24,8 @@ type EvalResult = {
   expectedQueryType: Exclude<ResearchTemporalQueryType, "none">;
   observedQueryType: ResearchTemporalQueryType;
   queryTypeMatch: boolean;
+  rawParseMode: "strict" | "repaired" | "fallback" | "unavailable";
+  groundedParseMode: "strict" | "repaired" | "fallback" | "unavailable";
   toolTriggered: boolean;
   researchUsed: boolean;
   toolApplied: boolean;
@@ -38,6 +41,21 @@ type EvalResult = {
   staleSourcesRejectedCount: number;
   verifiedFactsCount: number;
   uncertainClaimsCount: number;
+  sourceVenue: "none" | "cache_only" | "live_only" | "mixed";
+  sourceOrigin: "none" | "known_endpoint_only" | "generic_search_only" | "mixed";
+  sourceDateSources: Array<ResearchSourceDateSource | "none">;
+  sourceEngines: string[];
+  primaryCause:
+    | "model_parse_fallback"
+    | "cache_hit"
+    | "known_endpoint_hit"
+    | "generic_search_hit"
+    | "mixed_source_hit"
+    | "fresh_sources_no_supported_claim"
+    | "no_fresh_source"
+    | "search_failure"
+    | "no_reliable_source"
+    | "unknown";
   rawWordCount: number;
   groundedWordCount: number;
   durationMs: number;
@@ -57,6 +75,11 @@ type EvalSummaryByType = {
   staleAbstentionRate: number;
 };
 
+type EvalBreakdown = {
+  label: string;
+  count: number;
+};
+
 export type StudentTemporalEvalSummary = {
   totalCases: number;
   completedCases: number;
@@ -73,6 +96,10 @@ export type StudentTemporalEvalSummary = {
   averageResearchSourceCount: number;
   averageStaleRejectedCount: number;
   averageDurationMs: number;
+  successByVenue: EvalBreakdown[];
+  successByOrigin: EvalBreakdown[];
+  successByDateSource: EvalBreakdown[];
+  byPrimaryCause: EvalBreakdown[];
   byQueryType: EvalSummaryByType[];
 };
 
@@ -114,6 +141,15 @@ function average(values: number[]) {
   return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10;
 }
 
+function countByLabel(values: string[]) {
+  return [...values.reduce((accumulator, value) => {
+    accumulator.set(value, (accumulator.get(value) ?? 0) + 1);
+    return accumulator;
+  }, new Map<string, number>()).entries()]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .map(([label, count]) => ({ label, count }));
+}
+
 function normalize(value: string) {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
 }
@@ -142,6 +178,78 @@ function countAddedVerifiedSignals(rawAnswer: string, groundedAnswer: string, re
   return terms.filter(
     (term) => term.length >= 4 && groundedText.includes(term) && !rawText.includes(term)
   ).length;
+}
+
+function deriveSourceVenue(research: ResearchToolLog): EvalResult["sourceVenue"] {
+  const channels = [...new Set(research.sources.map((source) => source.retrievalChannel))];
+  if (channels.length === 0) {
+    return "none";
+  }
+  if (channels.length > 1) {
+    return "mixed";
+  }
+  return channels[0] === "cache" ? "cache_only" : "live_only";
+}
+
+function deriveSourceOrigin(research: ResearchToolLog): EvalResult["sourceOrigin"] {
+  const origins = [...new Set(research.sources.map((source) => source.retrievalOrigin))];
+  if (origins.length === 0) {
+    return "none";
+  }
+  if (origins.length > 1) {
+    return "mixed";
+  }
+  return origins[0] === "known_endpoint" ? "known_endpoint_only" : "generic_search_only";
+}
+
+function derivePrimaryCause(args: {
+  error: string | null;
+  rawParseMode: EvalResult["rawParseMode"];
+  groundedParseMode: EvalResult["groundedParseMode"];
+  research: ResearchToolLog;
+  sourceVenue: EvalResult["sourceVenue"];
+  sourceOrigin: EvalResult["sourceOrigin"];
+}): EvalResult["primaryCause"] {
+  if (
+    args.error !== null ||
+    args.rawParseMode === "fallback" ||
+    args.groundedParseMode === "fallback"
+  ) {
+    return "model_parse_fallback";
+  }
+
+  if (args.research.used) {
+    if (args.sourceVenue === "cache_only") {
+      return "cache_hit";
+    }
+    if (args.sourceVenue === "mixed" || args.sourceOrigin === "mixed") {
+      return "mixed_source_hit";
+    }
+    if (args.sourceOrigin === "known_endpoint_only") {
+      return "known_endpoint_hit";
+    }
+    return "generic_search_hit";
+  }
+
+  if (!args.research.verification.freshnessSatisfied) {
+    return "no_fresh_source";
+  }
+
+  if (args.research.route === "failed" && args.research.sources.length === 0) {
+    return "search_failure";
+  }
+
+  if (args.research.verification.freshnessSatisfied && args.research.truth.no_reliable_source) {
+    return args.research.sources.length > 0
+      ? "fresh_sources_no_supported_claim"
+      : "no_reliable_source";
+  }
+
+  if (args.research.truth.no_reliable_source) {
+    return "no_reliable_source";
+  }
+
+  return "unknown";
 }
 
 function buildSyntheticRedTeam(question: string, draft: RespondentOutput): RedTeamOutput {
@@ -202,6 +310,8 @@ export class StudentTemporalEvalService {
           expectedQueryType: entry.expectedQueryType,
           observedQueryType: "none" as const,
           queryTypeMatch: false,
+          rawParseMode: "unavailable" as const,
+          groundedParseMode: "unavailable" as const,
           toolTriggered: false,
           researchUsed: false,
           toolApplied: false,
@@ -217,6 +327,11 @@ export class StudentTemporalEvalService {
           staleSourcesRejectedCount: 0,
           verifiedFactsCount: 0,
           uncertainClaimsCount: 0,
+          sourceVenue: "none" as const,
+          sourceOrigin: "none" as const,
+          sourceDateSources: ["none"] as const,
+          sourceEngines: [],
+          primaryCause: "model_parse_fallback" as const,
           rawWordCount: 0,
           groundedWordCount: 0,
           durationMs: 0,
@@ -276,6 +391,7 @@ export class StudentTemporalEvalService {
     let groundedAnswer = rawDraft.output;
     const toolTriggered = research.decision.shouldUse;
     const toolApplied = toolTriggered;
+    let groundedParseMode = rawDraft.parseMode as EvalResult["groundedParseMode"];
 
     if (toolApplied) {
       const groundedDraft = await this.localModelService.answerQuestionDetailed({
@@ -286,7 +402,21 @@ export class StudentTemporalEvalService {
         research
       });
       groundedAnswer = groundedDraft.output;
+      groundedParseMode = groundedDraft.parseMode as EvalResult["groundedParseMode"];
     }
+
+    const sourceVenue = deriveSourceVenue(research);
+    const sourceOrigin = deriveSourceOrigin(research);
+    const sourceDateSources = [...new Set(research.sources.map((source) => source.dateSource ?? "none"))];
+    const sourceEngines = [...new Set(research.sources.map((source) => source.retrievalEngine))];
+    const primaryCause = derivePrimaryCause({
+      error: null,
+      rawParseMode: rawDraft.parseMode as EvalResult["rawParseMode"],
+      groundedParseMode,
+      research,
+      sourceVenue,
+      sourceOrigin
+    });
 
     return {
       caseId: entry.caseId,
@@ -295,6 +425,8 @@ export class StudentTemporalEvalService {
       expectedQueryType: entry.expectedQueryType,
       observedQueryType: research.queryPlan.temporalProfile.queryType,
       queryTypeMatch: research.queryPlan.temporalProfile.queryType === entry.expectedQueryType,
+      rawParseMode: rawDraft.parseMode as EvalResult["rawParseMode"],
+      groundedParseMode,
       toolTriggered,
       researchUsed: research.used,
       toolApplied,
@@ -316,6 +448,11 @@ export class StudentTemporalEvalService {
       staleSourcesRejectedCount: research.verification.staleSourcesRejectedCount,
       verifiedFactsCount: research.truth.verified_facts.length,
       uncertainClaimsCount: research.truth.uncertain_claims.length,
+      sourceVenue,
+      sourceOrigin,
+      sourceDateSources,
+      sourceEngines,
+      primaryCause,
       rawWordCount: countWords(rawDraft.output.answer),
       groundedWordCount: countWords(groundedAnswer.answer),
       durationMs: Date.now() - startedAt,
@@ -329,6 +466,7 @@ export class StudentTemporalEvalService {
 
   private buildSummary(results: EvalResult[]): StudentTemporalEvalSummary {
     const completed = results.filter((result) => result.error === null);
+    const successfulResearch = completed.filter((result) => result.researchUsed);
     const stalePool = completed.filter(
       (result) => !result.freshnessSatisfied || result.noReliableSource
     );
@@ -407,6 +545,12 @@ export class StudentTemporalEvalService {
         completed.map((result) => result.staleSourcesRejectedCount)
       ),
       averageDurationMs: average(completed.map((result) => result.durationMs)),
+      successByVenue: countByLabel(successfulResearch.map((result) => result.sourceVenue)),
+      successByOrigin: countByLabel(successfulResearch.map((result) => result.sourceOrigin)),
+      successByDateSource: countByLabel(
+        successfulResearch.flatMap((result) => result.sourceDateSources)
+      ),
+      byPrimaryCause: countByLabel(results.map((result) => result.primaryCause)),
       byQueryType
     };
   }

@@ -22,13 +22,14 @@ import {
   type LocalModelTestResponse,
   type LocalStudentOutput
 } from "../types/localModel.js";
-import { parseStructuredOutput } from "../utils/jsonRepair.js";
+import { parseLooseJson, parseStructuredOutput, stripCodeFences } from "../utils/jsonRepair.js";
 import {
   studentAnswerSchema,
   type StudentAnswer,
   type StudentResponseStrategy
 } from "../types/student.js";
 import { env } from "../utils/env.js";
+import { logger } from "../utils/logger.js";
 import { describeTemporalWindow, extractTerms } from "./research/common.js";
 
 type OllamaTagsResponse = {
@@ -52,11 +53,268 @@ type LocalObservationArgs = {
   synthesizer: SynthesizerOutput;
 };
 
+type LocalStudentParseMode = "strict" | "repaired" | "fallback";
+
+type StudentAnswerParseResult = {
+  output: StudentAnswer;
+  parseMode: LocalStudentParseMode;
+  validationIssues: string[];
+};
+
 const ABSTENTION_PATTERN =
   /\b(?:cannot|can't|could not)\s+(?:verify|confirm)\b|\bno reliable source\b/i;
 
 function normalizeText(value: string) {
   return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function uniqueNonEmpty(values: string[]) {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function clampConfidence(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
+function splitLooseItems(value: string) {
+  const normalized = value
+    .split(/\r?\n|;|\u2022/)
+    .map((entry) => entry.replace(/^[\s*-]+/, "").trim())
+    .filter(Boolean);
+
+  if (normalized.length > 1) {
+    return normalized;
+  }
+
+  return value
+    .split(/(?<=[.!?])\s+/)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length >= 12);
+}
+
+function coerceText(value: unknown, depth = 0): string | null {
+  if (depth > 4 || value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.replace(/\s+/g, " ").trim();
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    const parts = value
+      .map((entry) => coerceText(entry, depth + 1))
+      .filter((entry): entry is string => Boolean(entry));
+    return parts.length > 0 ? parts.join(" ") : null;
+  }
+
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of [
+      "answer",
+      "student_answer",
+      "text",
+      "content",
+      "message",
+      "final_answer",
+      "response",
+      "output",
+      "summary",
+      "value"
+    ]) {
+      const candidate = coerceText(record[key], depth + 1);
+      if (candidate) {
+        return candidate;
+      }
+    }
+
+    for (const entry of Object.values(record)) {
+      const candidate = coerceText(entry, depth + 1);
+      if (candidate) {
+        return candidate;
+      }
+    }
+  }
+
+  return null;
+}
+
+function coerceStringArray(value: unknown) {
+  if (Array.isArray(value)) {
+    return uniqueNonEmpty(
+      value
+        .map((entry) => coerceText(entry))
+        .filter((entry): entry is string => Boolean(entry))
+    );
+  }
+
+  const text = coerceText(value);
+  return text ? uniqueNonEmpty(splitLooseItems(text)) : [];
+}
+
+function coerceConfidence(value: unknown, answerText: string): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return clampConfidence(value);
+  }
+
+  if (typeof value === "string") {
+    const parsedNumber = Number(value.match(/-?\d+(?:\.\d+)?/)?.[0] ?? Number.NaN);
+    if (Number.isFinite(parsedNumber)) {
+      return clampConfidence(parsedNumber);
+    }
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["confidence", "score", "value"]) {
+      const nestedConfidence = coerceConfidence(record[key], answerText);
+      if (nestedConfidence !== null) {
+        return nestedConfidence;
+      }
+    }
+  }
+
+  if (ABSTENTION_PATTERN.test(answerText) || /\b(?:uncertain|not sure|cannot confirm)\b/i.test(answerText)) {
+    return 35;
+  }
+
+  return 62;
+}
+
+function deriveKeyPoints(answerText: string) {
+  return uniqueNonEmpty(splitLooseItems(answerText)).slice(0, 4);
+}
+
+function deriveAssumptions(answerText: string) {
+  if (ABSTENTION_PATTERN.test(answerText)) {
+    return ["The answer is constrained by missing or unverified external evidence."];
+  }
+
+  const assumptions = splitLooseItems(answerText)
+    .filter((entry) => /\b(?:if|assuming|unless|depends|based on)\b/i.test(entry))
+    .slice(0, 3);
+
+  return uniqueNonEmpty(assumptions);
+}
+
+function findStudentLikeObject(value: unknown, depth = 0): Record<string, unknown> | null {
+  if (depth > 4 || !value) {
+    return null;
+  }
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const nested = findStudentLikeObject(entry, depth + 1);
+      if (nested) {
+        return nested;
+      }
+    }
+    return null;
+  }
+
+  if (typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (
+    ["answer", "student_answer", "key_points", "assumptions", "confidence", "response", "output"].some(
+      (key) => key in record
+    )
+  ) {
+    return record;
+  }
+
+  for (const entry of Object.values(record)) {
+    const nested = findStudentLikeObject(entry, depth + 1);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return null;
+}
+
+function buildStudentAnswerFromObject(value: unknown): StudentAnswer | null {
+  const record = findStudentLikeObject(value);
+  if (!record) {
+    return null;
+  }
+
+  const answerText = coerceText(
+    record.answer ??
+      record.student_answer ??
+      record.response ??
+      record.output ??
+      record.content ??
+      record.result
+  );
+  if (!answerText) {
+    return null;
+  }
+
+  const keyPoints = uniqueNonEmpty([
+    ...coerceStringArray(record.key_points ?? record.keyPoints ?? record.points ?? record.bullets),
+    ...deriveKeyPoints(answerText)
+  ]).slice(0, 6);
+  const assumptions = uniqueNonEmpty(
+    coerceStringArray(record.assumptions ?? record.assumption ?? record.notes ?? record.caveats)
+  )
+    .slice(0, 4);
+
+  const candidate = {
+    modelRole: "student" as const,
+    answer: answerText,
+    key_points: keyPoints.length > 0 ? keyPoints : ["See answer body."],
+    assumptions: assumptions.length > 0 ? assumptions : deriveAssumptions(answerText).slice(0, 3),
+    confidence: coerceConfidence(record.confidence ?? record.score, answerText)
+  };
+
+  const parsed = studentAnswerSchema.safeParse(candidate);
+  return parsed.success ? parsed.data : null;
+}
+
+function extractFallbackAnswerText(raw: string) {
+  const cleaned = stripCodeFences(raw)
+    .replace(/^[\s{[]+/, "")
+    .replace(/[\]}]+$/, "")
+    .replace(/\b(?:modelRole|key_points|assumptions|confidence)\b\s*:\s*/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) {
+    return "I cannot provide a reliable structured answer because the local model output was malformed.";
+  }
+
+  const answerMatch = cleaned.match(/answer\s*[:=-]\s*(.+)$/i);
+  if (answerMatch?.[1]) {
+    return answerMatch[1].trim();
+  }
+
+  return cleaned.slice(0, 800);
+}
+
+function buildFallbackStudentAnswer(raw: string, validationIssues: string[]): StudentAnswerParseResult {
+  const answerText = extractFallbackAnswerText(raw);
+  return {
+    output: studentAnswerSchema.parse({
+      modelRole: "student",
+      answer: answerText,
+      key_points: deriveKeyPoints(answerText).slice(0, 4),
+      assumptions: deriveAssumptions(answerText).slice(0, 3),
+      confidence: coerceConfidence(null, answerText)
+    }),
+    parseMode: "fallback",
+    validationIssues: uniqueNonEmpty([
+      ...validationIssues,
+      "Used degraded student fallback because the model output could not be parsed cleanly."
+    ])
+  };
 }
 
 function buildResearchAnchor(research: ResearchToolLog) {
@@ -120,6 +378,44 @@ function buildTruthAnchoredFallback(
 }
 
 export class LocalModelService {
+  private parseStudentAnswerResponse(raw: string): StudentAnswerParseResult {
+    const validationIssues: string[] = [];
+
+    try {
+      const strict = studentAnswerSchema.parse(JSON.parse(stripCodeFences(raw)));
+      return {
+        output: strict,
+        parseMode: "strict",
+        validationIssues
+      };
+    } catch (error) {
+      validationIssues.push(error instanceof Error ? error.message : String(error));
+    }
+
+    try {
+      const repaired = buildStudentAnswerFromObject(
+        parseLooseJson(raw, "Local student direct answer")
+      );
+      if (repaired) {
+        return {
+          output: repaired,
+          parseMode: "repaired",
+          validationIssues
+        };
+      }
+      validationIssues.push("Recovered JSON still did not expose a valid student answer shape.");
+    } catch (error) {
+      validationIssues.push(error instanceof Error ? error.message : String(error));
+    }
+
+    const fallback = buildFallbackStudentAnswer(raw, validationIssues);
+    logger.warn("Local student answer fell back to degraded parsing", {
+      validationIssues: fallback.validationIssues.slice(0, 4),
+      rawPreview: raw.slice(0, 400)
+    });
+    return fallback;
+  }
+
   async healthcheck(): Promise<LocalModelHealth> {
     const checkedAt = new Date().toISOString();
 
@@ -225,7 +521,7 @@ export class LocalModelService {
     research?: ResearchToolLog | null;
   }) {
     let previousResponse = "";
-    let lastError: unknown = null;
+    let validationIssues: string[] = [];
 
     try {
       const primary = await this.testPrompt(
@@ -233,19 +529,22 @@ export class LocalModelService {
         studentDirectSystemPrompt
       );
       previousResponse = primary.response;
-      const parsed = parseStructuredOutput(
-        primary.response,
-        studentAnswerSchema,
-        "Local student direct answer"
-      );
-      return {
-        output: buildTruthAnchoredFallback(parsed, args.research ?? null) ?? parsed,
-        durationMs: primary.durationMs,
-        raw: primary.response,
-        usedRetry: false
-      };
+      const parsed = this.parseStudentAnswerResponse(primary.response);
+      if (parsed.parseMode !== "fallback") {
+        return {
+          output: buildTruthAnchoredFallback(parsed.output, args.research ?? null) ?? parsed.output,
+          durationMs: primary.durationMs,
+          raw: primary.response,
+          usedRetry: false,
+          parseMode: parsed.parseMode,
+          degraded: false,
+          validationIssues: parsed.validationIssues
+        };
+      }
+
+      validationIssues = parsed.validationIssues;
     } catch (error) {
-      lastError = error;
+      validationIssues = this.getValidationIssues(error);
     }
 
     const repair = await this.testPrompt(
@@ -254,24 +553,23 @@ export class LocalModelService {
         category: args.category,
         strategy: args.strategy,
         previousResponse: previousResponse || "(empty response)",
-        validationIssues: this.getValidationIssues(lastError),
+        validationIssues,
         knowledge: args.knowledge,
         research: args.research
       }),
       studentDirectSystemPrompt
     );
     previousResponse = repair.response;
-    const parsed = parseStructuredOutput(
-      repair.response,
-      studentAnswerSchema,
-      "Local student direct answer"
-    );
+    const parsed = this.parseStudentAnswerResponse(repair.response);
 
     return {
-      output: buildTruthAnchoredFallback(parsed, args.research ?? null) ?? parsed,
+      output: buildTruthAnchoredFallback(parsed.output, args.research ?? null) ?? parsed.output,
       durationMs: repair.durationMs,
       raw: repair.response,
-      usedRetry: true
+      usedRetry: true,
+      parseMode: parsed.parseMode,
+      degraded: parsed.parseMode === "fallback",
+      validationIssues: parsed.validationIssues
     };
   }
 
