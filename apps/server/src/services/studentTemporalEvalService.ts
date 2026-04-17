@@ -14,6 +14,7 @@ import { classifyQuestion } from "./questionClassifier.js";
 import { KnowledgeInjectionService } from "./knowledgeInjectionService.js";
 import { LocalModelService } from "./localModel.js";
 import { ResearchToolService } from "./researchToolService.js";
+import type { ResearchAcquisitionMode } from "./research/replayStore.js";
 import { StudentStrategySelectorService } from "./studentStrategySelector.js";
 import { extractTerms } from "./research/common.js";
 
@@ -107,6 +108,9 @@ export type StudentTemporalEvalReport = {
   runId: string;
   createdAt: string;
   mode: "local_first_preview";
+  acquisitionMode: ResearchAcquisitionMode;
+  fixtureFile: string | null;
+  sourceCacheEnabled: boolean;
   cases: StudentTemporalEvalCase[];
   summary: StudentTemporalEvalSummary;
   results: EvalResult[];
@@ -116,6 +120,9 @@ type RunArgs = {
   cases?: StudentTemporalEvalCase[];
   limit?: number;
   continueOnError?: boolean;
+  acquisitionMode?: ResearchAcquisitionMode;
+  fixtureFile?: string | null;
+  sourceCacheEnabled?: boolean;
 };
 
 function countWords(value: string) {
@@ -353,6 +360,9 @@ export class StudentTemporalEvalService {
       runId: randomUUID(),
       createdAt: new Date().toISOString(),
       mode: "local_first_preview",
+      acquisitionMode: args.acquisitionMode ?? "live",
+      fixtureFile: args.fixtureFile ?? null,
+      sourceCacheEnabled: args.sourceCacheEnabled ?? true,
       cases: selectedCases,
       summary: this.buildSummary(results),
       results

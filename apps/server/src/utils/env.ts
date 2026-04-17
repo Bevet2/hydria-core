@@ -99,6 +99,10 @@ const envSchema = z.object({
     .string()
     .min(1)
     .default("F:/hydria-arena/storage/cache/research-source-cache-v1.json"),
+  RESEARCH_EVAL_FIXTURE_FILE: z
+    .string()
+    .min(1)
+    .default("F:/hydria-arena/storage/fixtures/research-eval-fixtures-v1.json"),
   LOCAL_MODEL_PROVIDER: z.literal("ollama").default("ollama"),
   LOCAL_MODEL_NAME: z.string().min(1).default("qwen2.5:3b"),
   LOCAL_MODEL_BASE_URL: z.string().url().default("http://127.0.0.1:11435"),

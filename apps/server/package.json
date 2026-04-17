@@ -10,7 +10,9 @@
     "start": "node dist/index.js",
     "knowledge:refresh": "tsx src/scripts/refreshKnowledgeLayer.ts",
     "student:strategy-discovery": "tsx src/scripts/runStudentStrategyDiscoveryLoop.ts",
-    "student:temporal-eval": "tsx src/scripts/runStudentTemporalEval.ts"
+    "student:temporal-eval": "tsx src/scripts/runStudentTemporalEval.ts",
+    "student:temporal-eval:record": "tsx src/scripts/runStudentTemporalEval.ts --acquisition=record --cache=off",
+    "student:temporal-eval:replay": "tsx src/scripts/runStudentTemporalEval.ts --acquisition=replay --cache=off"
   },
   "dependencies": {
     "cheerio": "^1.2.0",

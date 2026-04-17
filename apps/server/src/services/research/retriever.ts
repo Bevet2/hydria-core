@@ -12,15 +12,37 @@ import {
   normalizeSpace,
   OFFICIAL_DOMAIN_PATTERNS,
   scoreTemporalFreshness,
-  type ScoredCandidate,
   SEARCH_ENGINE_HOST_PATTERNS,
   stripSiteOperators,
+  type ScoredCandidate,
   type SearchCandidate,
   type SearchPlan,
   USER_AGENT
 } from "./common.js";
+import type {
+  ResearchAcquisitionMode,
+  ResearchReplayStoreService
+} from "./replayStore.js";
+
+type ResearchRetrieverOptions = {
+  acquisitionMode?: ResearchAcquisitionMode;
+  replayStore?: ResearchReplayStoreService | null;
+};
+
+type SearchEngineRunner = {
+  warning: string;
+  run: (query: string) => Promise<SearchCandidate[]>;
+};
 
 export class ResearchRetriever {
+  private readonly acquisitionMode: ResearchAcquisitionMode;
+  private readonly replayStore: ResearchReplayStoreService | null;
+
+  constructor(options: ResearchRetrieverOptions = {}) {
+    this.acquisitionMode = options.acquisitionMode ?? "live";
+    this.replayStore = options.replayStore ?? null;
+  }
+
   async searchAll(plan: SearchPlan, seedCandidates: SearchCandidate[] = []) {
     const resultSets = await Promise.all(
       plan.queries.slice(0, 3).map(async (query) => {
@@ -374,7 +396,9 @@ export class ResearchRetriever {
           const host = getHostname(candidate.url);
           return (
             candidate.title.length >= 3 &&
-            (candidate.snippet.length >= 12 || this.isHighTrustDomain(host, plan)) &&
+            (candidate.snippet.length >= 8 ||
+              this.isHighTrustDomain(host, plan) ||
+              candidate.retrievalOrigin === "known_endpoint") &&
             !SEARCH_ENGINE_HOST_PATTERNS.some((pattern) => pattern.test(host))
           );
         });
@@ -406,50 +430,131 @@ export class ResearchRetriever {
       });
     };
 
-    try {
-      const results = enforceQueryRelevance(sanitize(await this.searchDuckDuckGo(query)));
-      if (results.length > 0) {
-        return results;
+    if (this.acquisitionMode === "replay") {
+      const replayResults = await this.replayStore?.getSearch(query);
+      if (replayResults && replayResults.length > 0) {
+        return replayResults.map((result) => this.normalizeCandidate(result));
       }
-    } catch (error) {
-      logger.warn("DuckDuckGo search failed; trying Bing fallback", {
-        query,
-        error: String(error)
-      });
+      return [];
     }
 
-    try {
-      const results = enforceQueryRelevance(sanitize(await this.searchDuckDuckGoLite(query)));
-      if (results.length > 0) {
-        return results;
+    const aggregated: SearchCandidate[] = [];
+    for (const variant of this.buildSearchVariants(query, plan, allowBroaden)) {
+      const variantResults = enforceQueryRelevance(
+        sanitize(await this.searchVariant(variant, plan))
+      );
+      for (const candidate of variantResults) {
+        if (!aggregated.some((entry) => entry.url === candidate.url)) {
+          aggregated.push(candidate);
+        }
       }
-    } catch (error) {
-      logger.warn("DuckDuckGo Lite search failed; trying Bing fallback", {
-        query,
-        error: String(error)
-      });
+
+      if (aggregated.length >= 10) {
+        break;
+      }
     }
 
-    try {
-      const results = enforceQueryRelevance(sanitize(await this.searchBing(query)));
-      if (results.length > 0) {
-        return results;
+    if (aggregated.length > 0) {
+      if (this.acquisitionMode === "record") {
+        await this.replayStore?.rememberSearch(query, aggregated);
       }
-    } catch (error) {
-      logger.warn("Bing search failed", {
-        query,
-        error: String(error)
-      });
+      return aggregated.slice(0, 10);
+    }
+
+    return [];
+  }
+
+  private async searchVariant(query: string, plan: SearchPlan) {
+    const aggregated: SearchCandidate[] = [];
+
+    for (const engine of this.buildSearchEngines(plan)) {
+      try {
+        const results = await engine.run(query);
+        for (const candidate of results) {
+          if (!aggregated.some((entry) => entry.url === candidate.url)) {
+            aggregated.push(candidate);
+          }
+        }
+
+        if (aggregated.length >= 10) {
+          break;
+        }
+      } catch (error) {
+        logger.warn(engine.warning, {
+          query,
+          error: String(error)
+        });
+      }
+    }
+
+    return aggregated.slice(0, 10);
+  }
+
+  private buildSearchVariants(query: string, plan: SearchPlan, allowBroaden: boolean) {
+    const variants = [normalizeSpace(query)];
+    const stripped = normalizeSpace(stripSiteOperators(query));
+    const primaryDomain = plan.preferredDomains[0]?.toLowerCase() ?? "";
+
+    if (primaryDomain && !/\bsite:/i.test(query)) {
+      variants.push(normalizeSpace(`${stripped} site:${primaryDomain}`));
     }
 
     if (allowBroaden) {
       const broadened = this.broadenQuery(query);
       if (broadened && broadened !== query) {
-        return this.search(broadened, plan, false);
+        variants.push(broadened);
+        if (primaryDomain && !/\bsite:/i.test(broadened)) {
+          variants.push(normalizeSpace(`${stripSiteOperators(broadened)} site:${primaryDomain}`));
+        }
       }
     }
 
-    return [];
+    return [...new Set(variants.filter(Boolean))].slice(0, 4);
+  }
+
+  private buildSearchEngines(plan: SearchPlan): SearchEngineRunner[] {
+    const temporalFirst =
+      plan.intent === "current_status" ||
+      plan.intent === "recent_updates" ||
+      plan.intent === "release_freshness";
+
+    return temporalFirst
+      ? [
+          {
+            warning: "Bing HTML search failed",
+            run: (query: string) => this.searchBingHtml(query)
+          },
+          {
+            warning: "Bing RSS search failed",
+            run: (query: string) => this.searchBingRss(query)
+          },
+          {
+            warning: "DuckDuckGo search failed; trying alternative fallback",
+            run: (query: string) => this.searchDuckDuckGo(query)
+          },
+          {
+            warning: "DuckDuckGo Lite search failed; trying alternative fallback",
+            run: (query: string) => this.searchDuckDuckGoLite(query)
+          }
+        ]
+      : [
+          {
+            warning: "DuckDuckGo search failed; trying Bing fallback",
+            run: (query: string) => this.searchDuckDuckGo(query)
+          },
+          {
+            warning: "DuckDuckGo Lite search failed; trying Bing fallback",
+            run: (query: string) => this.searchDuckDuckGoLite(query)
+          },
+          {
+            warning: "Bing HTML search failed",
+            run: (query: string) => this.searchBingHtml(query)
+          },
+          {
+            warning: "Bing RSS search failed",
+            run: (query: string) => this.searchBingRss(query)
+          }
+        ];
   }
 
   private async searchDuckDuckGo(query: string) {
@@ -457,7 +562,7 @@ export class ResearchRetriever {
       headers: {
         "User-Agent": USER_AGENT
       },
-      signal: AbortSignal.timeout(20000)
+      signal: AbortSignal.timeout(12000)
     });
 
     if (!response.ok) {
@@ -470,9 +575,9 @@ export class ResearchRetriever {
 
     $(".result").each((_index, element) => {
       const anchor = $(element).find(".result__a").first();
-      const title = anchor.text().replace(/\s+/g, " ").trim();
+      const title = normalizeSpace(anchor.text());
       const href = anchor.attr("href") ?? "";
-      const snippet = $(element).find(".result__snippet").first().text().replace(/\s+/g, " ").trim();
+      const snippet = normalizeSpace($(element).find(".result__snippet").first().text());
       const url = this.unwrapDuckDuckGoUrl(href);
 
       if (!title || !url || !/^https?:\/\//i.test(url) || results.some((entry) => entry.url === url)) {
@@ -493,7 +598,7 @@ export class ResearchRetriever {
       throw new Error("DuckDuckGo search returned no usable results.");
     }
 
-    return results;
+    return results.slice(0, 12);
   }
 
   private async searchDuckDuckGoLite(query: string) {
@@ -501,7 +606,7 @@ export class ResearchRetriever {
       headers: {
         "User-Agent": USER_AGENT
       },
-      signal: AbortSignal.timeout(20000)
+      signal: AbortSignal.timeout(12000)
     });
 
     if (!response.ok) {
@@ -514,7 +619,7 @@ export class ResearchRetriever {
 
     $("a").each((_index, element) => {
       const anchor = $(element);
-      const title = anchor.text().replace(/\s+/g, " ").trim();
+      const title = normalizeSpace(anchor.text());
       const href = anchor.attr("href") ?? "";
       const url = this.unwrapDuckDuckGoUrl(href);
 
@@ -522,7 +627,7 @@ export class ResearchRetriever {
         return;
       }
 
-      const rowText = anchor.parent().text().replace(/\s+/g, " ").trim();
+      const rowText = normalizeSpace(anchor.parent().text());
       const snippet = rowText.length > title.length ? rowText : title;
 
       if (results.some((entry) => entry.url === url)) {
@@ -543,23 +648,7 @@ export class ResearchRetriever {
       throw new Error("DuckDuckGo Lite search returned no usable results.");
     }
 
-    return results.slice(0, 10);
-  }
-
-  private async searchBing(query: string) {
-    try {
-      const rssResults = await this.searchBingRss(query);
-      if (rssResults.length > 0) {
-        return rssResults;
-      }
-    } catch (error) {
-      logger.warn("Bing RSS search failed; trying HTML fallback", {
-        query,
-        error: String(error)
-      });
-    }
-
-    return this.searchBingHtml(query);
+    return results.slice(0, 12);
   }
 
   private async searchBingRss(query: string) {
@@ -569,7 +658,7 @@ export class ResearchRetriever {
         headers: {
           "User-Agent": USER_AGENT
         },
-        signal: AbortSignal.timeout(20000)
+        signal: AbortSignal.timeout(12000)
       }
     );
 
@@ -582,9 +671,11 @@ export class ResearchRetriever {
     const results: SearchCandidate[] = [];
 
     $("item").each((_index, element) => {
-      const title = $(element).find("title").first().text().replace(/\s+/g, " ").trim();
-      const url = $(element).find("link").first().text().replace(/\s+/g, " ").trim();
-      const snippet = $(element).find("description").first().text().replace(/\s+/g, " ").trim();
+      const title = normalizeSpace($(element).find("title").first().text());
+      const url = this.decodeUrlCandidate(
+        normalizeSpace($(element).find("link").first().text())
+      );
+      const snippet = normalizeSpace($(element).find("description").first().text());
 
       if (!title || !url || !/^https?:\/\//i.test(url) || results.some((entry) => entry.url === url)) {
         return;
@@ -604,16 +695,19 @@ export class ResearchRetriever {
       throw new Error("Bing RSS search returned no usable results.");
     }
 
-    return results.slice(0, 10);
+    return results.slice(0, 12);
   }
 
   private async searchBingHtml(query: string) {
-    const response = await fetch(`https://www.bing.com/search?q=${encodeURIComponent(query)}`, {
-      headers: {
-        "User-Agent": USER_AGENT
-      },
-      signal: AbortSignal.timeout(20000)
-    });
+    const response = await fetch(
+      `https://www.bing.com/search?cc=us&setlang=en-US&count=12&q=${encodeURIComponent(query)}`,
+      {
+        headers: {
+          "User-Agent": USER_AGENT
+        },
+        signal: AbortSignal.timeout(12000)
+      }
+    );
 
     if (!response.ok) {
       throw new Error(`Bing search returned ${response.status}`);
@@ -623,18 +717,30 @@ export class ResearchRetriever {
     const $ = load(html);
     const results: SearchCandidate[] = [];
 
-    $("li.b_algo, .b_algo").each((_index, element) => {
-      const anchor = $(element).find("h2 a").first();
-      const title = anchor.text().replace(/\s+/g, " ").trim();
-      const url = this.unwrapBingUrl(anchor.attr("href") ?? "");
-      const snippet = (
+    $("li.b_algo, .b_algo, .b_ans, .b_nwsAns").each((_index, element) => {
+      const anchor =
+        $(element).find("h2 a").first().length > 0
+          ? $(element).find("h2 a").first()
+          : $(element).find("a").first();
+      const title = normalizeSpace(
+        anchor.text() ||
+          $(element).find("h2").first().text() ||
+          $(element).find(".b_title").first().text()
+      );
+      const rawHref =
+        anchor.attr("href") ??
+        $(element).find("cite").first().text() ??
+        $(element).find(".b_attribution").first().text() ??
+        "";
+      const url = this.unwrapBingUrl(rawHref);
+      const snippet = normalizeSpace(
         $(element).find(".b_caption p").first().text() ||
-        $(element).find(".b_snippet").first().text() ||
-        $(element).find(".b_lineclamp2").first().text() ||
-        $(element).find("p").first().text()
-      )
-        .replace(/\s+/g, " ")
-        .trim();
+          $(element).find(".b_snippet").first().text() ||
+          $(element).find(".b_lineclamp2").first().text() ||
+          $(element).find(".news_dt").first().text() ||
+          $(element).find("p").first().text() ||
+          $(element).text()
+      );
 
       if (!title || !url || !/^https?:\/\//i.test(url) || results.some((entry) => entry.url === url)) {
         return;
@@ -654,61 +760,98 @@ export class ResearchRetriever {
       throw new Error("Bing search returned no usable results.");
     }
 
-    return results;
+    return results.slice(0, 12);
   }
 
   private unwrapDuckDuckGoUrl(url: string) {
     try {
       const parsed = new URL(url, "https://duckduckgo.com");
       const redirected = parsed.searchParams.get("uddg");
-      return redirected ? decodeURIComponent(redirected) : parsed.toString();
+      if (redirected) {
+        return this.decodeUrlCandidate(redirected);
+      }
+      return this.decodeUrlCandidate(parsed.toString());
     } catch {
-      return url;
+      return this.decodeUrlCandidate(url);
     }
   }
 
   private unwrapBingUrl(url: string) {
+    const direct = this.extractFirstHttpUrl(url);
+    if (direct) {
+      return direct;
+    }
+
     try {
       const parsed = new URL(url, "https://www.bing.com");
       if (!/(^|\.)bing\.com$/i.test(parsed.hostname)) {
-        return parsed.toString();
+        return this.decodeUrlCandidate(parsed.toString());
       }
 
-      const direct =
+      const directParam =
         this.extractFirstHttpUrl(parsed.searchParams.get("url") ?? "") ??
-        this.extractFirstHttpUrl(parsed.searchParams.get("target") ?? "");
-      if (direct) {
-        return direct;
+        this.extractFirstHttpUrl(parsed.searchParams.get("target") ?? "") ??
+        this.extractFirstHttpUrl(parsed.searchParams.get("r") ?? "");
+      if (directParam) {
+        return directParam;
       }
 
       const encoded = parsed.searchParams.get("u");
       if (encoded) {
-        const payload = encoded.startsWith("a1") ? encoded.slice(2) : encoded;
-        const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-        const padded =
-          normalized.length % 4 === 2
-            ? `${normalized}==`
-            : normalized.length % 4 === 3
-              ? `${normalized}=`
-              : normalized;
-        const decoded = Buffer.from(padded, "base64").toString("utf8");
+        const decoded = this.decodeBingPayload(encoded);
         const extracted = this.extractFirstHttpUrl(decoded);
         if (extracted) {
           return extracted;
         }
       }
 
-      return parsed.toString();
+      return this.decodeUrlCandidate(parsed.toString());
     } catch {
-      return url;
+      return this.decodeUrlCandidate(url);
     }
   }
 
+  private decodeBingPayload(value: string) {
+    const normalized = value.startsWith("a1") ? value.slice(2) : value;
+    const base64ish = normalized.replace(/-/g, "+").replace(/_/g, "/");
+    const padded =
+      base64ish.length % 4 === 2
+        ? `${base64ish}==`
+        : base64ish.length % 4 === 3
+          ? `${base64ish}=`
+          : base64ish;
+
+    try {
+      return Buffer.from(padded, "base64").toString("utf8");
+    } catch {
+      return value;
+    }
+  }
+
+  private decodeUrlCandidate(value: string) {
+    let decoded = value.trim();
+
+    for (let index = 0; index < 3; index += 1) {
+      try {
+        const next = decodeURIComponent(decoded);
+        if (next === decoded) {
+          break;
+        }
+        decoded = next;
+      } catch {
+        break;
+      }
+    }
+
+    return decoded;
+  }
+
   private normalizeCandidate(candidate: SearchCandidate): SearchCandidate {
-    const fallbackSnippet = normalizeSpace(`${candidate.title} ${getHostname(candidate.url)}`);
+    const normalizedUrl = this.decodeUrlCandidate(candidate.url);
+    const fallbackSnippet = normalizeSpace(`${candidate.title} ${getHostname(normalizedUrl)}`);
     return {
       title: normalizeSpace(candidate.title),
-      url: candidate.url,
+      url: normalizedUrl,
       snippet: normalizeSpace(candidate.snippet || fallbackSnippet || candidate.title),
       retrievalChannel: candidate.retrievalChannel,
       retrievalOrigin: candidate.retrievalOrigin,
@@ -731,14 +874,15 @@ export class ResearchRetriever {
   }
 
   private extractFirstHttpUrl(value: string) {
-    for (let index = 0; index < 3; index += 1) {
-      const match = value.match(/https?:\/\/[^\s&]+/i);
+    let decoded = value;
+    for (let index = 0; index < 4; index += 1) {
+      const match = decoded.match(/https?:\/\/[^\s"'&<>]+/i);
       if (match?.[0]) {
-        return match[0];
+        return this.decodeUrlCandidate(match[0]);
       }
 
       try {
-        value = decodeURIComponent(value);
+        decoded = decodeURIComponent(decoded);
       } catch {
         break;
       }

@@ -6,6 +6,7 @@ import type {
 } from "../types/arena.js";
 import type { KnowledgeCategoryInsight, KnowledgeCategoryStrategy } from "../types/knowledge.js";
 import { logger } from "../utils/logger.js";
+import { env } from "../utils/env.js";
 import { KnowledgeLayerService } from "./knowledgeLayerService.js";
 import { KnowledgeMemoryService } from "./knowledgeMemoryService.js";
 import {
@@ -23,9 +24,19 @@ import {
 import { ResearchExtractor } from "./research/extractor.js";
 import { ResearchKnownEndpointService } from "./research/knownEndpoints.js";
 import { ResearchPlanner } from "./research/planner.js";
+import {
+  ResearchReplayStoreService,
+  type ResearchAcquisitionMode
+} from "./research/replayStore.js";
 import { ResearchRetriever } from "./research/retriever.js";
 import { ResearchSourceCacheService } from "./research/sourceCache.js";
 import { ResearchVerifier } from "./research/verifier.js";
+
+type ResearchToolServiceOptions = {
+  acquisitionMode?: ResearchAcquisitionMode;
+  fixtureFile?: string | null;
+  sourceCacheEnabled?: boolean;
+};
 
 type ResearchImpactArgs = {
   log: ResearchToolLog;
@@ -101,14 +112,34 @@ export class ResearchToolService {
   private readonly knowledgeLayerService = new KnowledgeLayerService();
   private readonly knowledgeMemoryService = new KnowledgeMemoryService();
   private readonly planner = new ResearchPlanner();
-  private readonly retriever = new ResearchRetriever();
-  private readonly extractor = new ResearchExtractor();
   private readonly knownEndpointService = new ResearchKnownEndpointService();
   private readonly sourceCacheService = new ResearchSourceCacheService();
   private readonly verifier = new ResearchVerifier();
+  private readonly replayStore: ResearchReplayStoreService | null;
+  private readonly retriever: ResearchRetriever;
+  private readonly extractor: ResearchExtractor;
+  private readonly sourceCacheEnabled: boolean;
   private knowledgeLayerPromise: Promise<
     Awaited<ReturnType<KnowledgeLayerService["loadKnowledgeLayer"]>>
   > | null = null;
+
+  constructor(options: ResearchToolServiceOptions = {}) {
+    const acquisitionMode = options.acquisitionMode ?? "live";
+    const fixtureFile = options.fixtureFile ?? env.RESEARCH_EVAL_FIXTURE_FILE;
+    this.sourceCacheEnabled = options.sourceCacheEnabled ?? acquisitionMode === "live";
+    this.replayStore =
+      acquisitionMode === "live" && !options.fixtureFile
+        ? null
+        : new ResearchReplayStoreService(fixtureFile);
+    this.retriever = new ResearchRetriever({
+      acquisitionMode,
+      replayStore: this.replayStore
+    });
+    this.extractor = new ResearchExtractor({
+      acquisitionMode,
+      replayStore: this.replayStore
+    });
+  }
 
   async maybeCollect(args: ResearchDecisionArgs): Promise<ResearchToolLog> {
     const decision = await this.decide(args);
@@ -117,20 +148,49 @@ export class ResearchToolService {
     }
 
     const startedAt = Date.now();
+    const plan = decision.plan;
 
     try {
-      const cachedSources = await this.sourceCacheService.getFreshSources(decision.plan, 3);
+      const cachedSources = this.sourceCacheEnabled
+        ? await this.sourceCacheService.getFreshSources(plan, 3)
+        : [];
       const cachedUrls = new Set(cachedSources.map((source) => source.url));
-      const seedCandidates = this.knownEndpointService.getCandidates(decision.plan, [...cachedUrls]);
-      const searchResults = await this.retriever.searchAll(decision.plan, seedCandidates);
-      const uncachedResults = searchResults.filter((candidate) => !cachedUrls.has(candidate.url));
+      const seedCandidates = this.knownEndpointService.getCandidates(plan, [...cachedUrls]);
+      const searchResults = await this.retriever.searchAll(plan, seedCandidates);
+      const uncachedResults = searchResults
+        .filter((candidate) => !cachedUrls.has(candidate.url))
+        .sort((left, right) => {
+          const leftKnown = left.retrievalOrigin === "known_endpoint" ? 1 : 0;
+          const rightKnown = right.retrievalOrigin === "known_endpoint" ? 1 : 0;
+          if (leftKnown !== rightKnown) {
+            return rightKnown - leftKnown;
+          }
+
+          const leftPreferred = plan.preferredDomains.some((domain) =>
+            left.url.toLowerCase().includes(domain.toLowerCase())
+          )
+            ? 1
+            : 0;
+          const rightPreferred = plan.preferredDomains.some((domain) =>
+            right.url.toLowerCase().includes(domain.toLowerCase())
+          )
+            ? 1
+            : 0;
+          if (leftPreferred !== rightPreferred) {
+            return rightPreferred - leftPreferred;
+          }
+
+          return left.url.localeCompare(right.url);
+        });
       const extractedSources = await this.extractor.extractSources(
         uncachedResults.slice(0, Math.max(3, 5 - cachedSources.length)),
-        decision.plan
+        plan
       );
       const sources = this.mergeSources([...cachedSources, ...extractedSources]);
 
-      await this.sourceCacheService.rememberSources(decision.plan, extractedSources);
+      if (this.sourceCacheEnabled) {
+        await this.sourceCacheService.rememberSources(plan, extractedSources);
+      }
 
       return this.verifier.buildLog({
         decision,

@@ -10,6 +10,7 @@ storage/history/history.json
 storage/history/*.html
 storage/history/*.log
 storage/cache/
+storage/fixtures/
 storage/benchmarks/student-temporal-eval-v1.json
 models/local/ollama-store/
 !apps/server/src/storage/history.json

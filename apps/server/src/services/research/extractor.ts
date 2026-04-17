@@ -5,6 +5,7 @@ import {
   countRegexMatches,
   DOC_HINT_PATTERNS,
   extractDateCandidates,
+  getPathname,
   isHighTrustResearchSource,
   matchesAny,
   normalizeSpace,
@@ -14,6 +15,11 @@ import {
   type SearchPlan,
   USER_AGENT
 } from "./common.js";
+import type {
+  ResearchAcquisitionMode,
+  ResearchFetchKind,
+  ResearchReplayStoreService
+} from "./replayStore.js";
 
 type ExtractedDateMetadata = Pick<
   ResearchSource,
@@ -21,8 +27,43 @@ type ExtractedDateMetadata = Pick<
 >;
 type SourceDateKind = NonNullable<ResearchSource["dateSource"]>;
 type ExtractedPage = { excerpt: string } & ExtractedDateMetadata;
+type ExtractorPageType =
+  | "generic"
+  | "release"
+  | "leadership"
+  | "version"
+  | "changelog"
+  | "status";
+
+type ExtractorProfile = {
+  pageType: ExtractorPageType;
+  selectors: string;
+  maxChunks: number;
+  inclusionPatterns: RegExp[];
+  contextualizeStructuredRows: boolean;
+};
+
+type FetchDocumentResult = {
+  status: number;
+  contentType: string;
+  body: string;
+  finalUrl: string;
+};
+
+type ResearchExtractorOptions = {
+  acquisitionMode?: ResearchAcquisitionMode;
+  replayStore?: ResearchReplayStoreService | null;
+};
 
 export class ResearchExtractor {
+  private readonly acquisitionMode: ResearchAcquisitionMode;
+  private readonly replayStore: ResearchReplayStoreService | null;
+
+  constructor(options: ResearchExtractorOptions = {}) {
+    this.acquisitionMode = options.acquisitionMode ?? "live";
+    this.replayStore = options.replayStore ?? null;
+  }
+
   async extractSources(results: SearchCandidate[], plan: SearchPlan) {
     const settled = await Promise.allSettled(
       results.map(async (result) => {
@@ -65,7 +106,13 @@ export class ResearchExtractor {
     return sources.slice(0, 4);
   }
 
-  private buildRelevantExcerpt(rawText: string, plan: SearchPlan, fallbackSnippet = "", title = "") {
+  private buildRelevantExcerpt(
+    rawText: string,
+    plan: SearchPlan,
+    pageType: ExtractorPageType,
+    fallbackSnippet = "",
+    title = ""
+  ) {
     const sentences = splitSentences(rawText);
     if (sentences.length === 0) {
       const fallback = normalizeSpace(`${title}. ${fallbackSnippet}`);
@@ -97,35 +144,39 @@ export class ResearchExtractor {
           score += 2;
         }
         if (
-          plan.intent === "current_status" &&
+          (plan.intent === "current_status" || plan.intent === "release_freshness") &&
           /\bv?\d+(?:\.\d+){0,2}\b/i.test(sentence)
+        ) {
+          score += 5;
+        }
+        if (
+          (plan.intent === "current_status" || plan.intent === "release_freshness") &&
+          /\b(?:lts|current|release|version|major)\b/i.test(sentence)
         ) {
           score += 4;
         }
         if (
-          (plan.intent === "current_status" || plan.intent === "release_freshness") &&
-          /\b(?:lts|current|release|version)\b/i.test(sentence)
-        ) {
-          score += 3;
-        }
-        if (
-          (plan.intent === "current_status" || plan.intent === "release_freshness") &&
-          /\bv?\d+(?:\.\d+){0,2}\b/i.test(sentence) &&
-          /\b(?:current|lts|maintenance|eol|release)\b/i.test(sentence)
+          matchesAny(sentence, [/\bceo\b/i, /\bpresident\b/i, /\bchief\b/i, /\bleadership\b/i]) &&
+          pageType === "leadership"
         ) {
           score += 10;
         }
         if (
-          (plan.intent === "current_status" || plan.intent === "release_freshness") &&
-          /\bv?\d+(?:\.\d+){0,2}\b/i.test(sentence) &&
-          /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/i.test(sentence)
+          matchesAny(sentence, [/\boperational\b/i, /\bincident\b/i, /\boutage\b/i, /\bresolved\b/i]) &&
+          pageType === "status"
         ) {
-          score += 6;
+          score += 9;
+        }
+        if (
+          matchesAny(sentence, [/\bchangelog\b/i, /\brelease notes\b/i, /\bfixed\b/i, /\badded\b/i]) &&
+          (pageType === "release" || pageType === "changelog")
+        ) {
+          score += 9;
         }
         if (matchesAny(sentence, DOC_HINT_PATTERNS)) {
           score += 3;
         }
-        if (sentence.length >= 80 && sentence.length <= 320) {
+        if (sentence.length >= 60 && sentence.length <= 320) {
           score += 2;
         }
         if (matchesAny(sentence, [/\bmust\b/i, /\bshould\b/i, /\brequires?\b/i, /\bmeans\b/i])) {
@@ -141,7 +192,7 @@ export class ResearchExtractor {
 
     const selected =
       scored.length > 0 ? scored.map((entry) => entry.sentence) : sentences.slice(0, 4);
-    const excerpt = normalizeSpace([title, ...selected].filter(Boolean).join(" ")).slice(0, 1600);
+    const excerpt = normalizeSpace([title, ...selected].filter(Boolean).join(" ")).slice(0, 1800);
     if (excerpt.length >= 120) {
       return excerpt;
     }
@@ -171,25 +222,17 @@ export class ResearchExtractor {
     result: SearchCandidate,
     plan: SearchPlan
   ): Promise<ExtractedPage | null> {
-    const response = await fetch(result.url, {
-      headers: {
-        "User-Agent": USER_AGENT
-      },
-      redirect: "follow",
-      signal: AbortSignal.timeout(15000)
-    });
-
-    if (!response.ok) {
-      throw new Error(`Direct extract returned ${response.status}`);
+    const fetched = await this.fetchDocument("direct", result.url, result.url);
+    if (!fetched || fetched.status < 200 || fetched.status >= 400) {
+      return null;
     }
 
-    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+    const contentType = fetched.contentType.toLowerCase();
     if (contentType.includes("application/pdf")) {
       return null;
     }
 
-    const html = await response.text();
-    const $ = load(html);
+    const $ = load(fetched.body);
     const metadata = this.extractDateMetadata({
       $,
       title: result.title,
@@ -208,30 +251,10 @@ export class ResearchExtractor {
         : $("main").first().length > 0
           ? $("main").first()
           : $("body").first();
-
-    const chunks: string[] = [];
-    const structureSelector =
-      plan.intent === "current_status" || plan.intent === "release_freshness"
-        ? "h1,h2,h3,p,li,time,tr,td,th,code"
-        : "h1,h2,h3,p,li,time";
-
-    root.find(structureSelector).each((_index, element) => {
-      const tagName = element.tagName?.toLowerCase() ?? "";
-      const text = normalizeSpace($(element).text());
-      const contextualText =
-        (tagName === "tr" || tagName === "td" || tagName === "th") && result.title
-          ? normalizeSpace(`${result.title} ${text}`)
-          : text;
-      if (contextualText.length >= 30) {
-        chunks.push(contextualText);
-      }
-      if (chunks.length >= 24) {
-        return false;
-      }
-    });
-
+    const pageType = this.detectPageType(result, plan);
+    const chunks = this.collectChunks($, root, result.title, this.buildProfile(pageType));
     const rawText = normalizeSpace([metaDescription, ...chunks].filter(Boolean).join(". "));
-    const excerpt = this.buildRelevantExcerpt(rawText, plan, result.snippet, result.title);
+    const excerpt = this.buildRelevantExcerpt(rawText, plan, pageType, result.snippet, result.title);
     if (!excerpt) {
       return null;
     }
@@ -247,19 +270,14 @@ export class ResearchExtractor {
     plan: SearchPlan
   ): Promise<ExtractedPage | null> {
     const readerUrl = `https://r.jina.ai/http://${result.url.replace(/^https?:\/\//i, "")}`;
-    const response = await fetch(readerUrl, {
-      headers: {
-        "User-Agent": USER_AGENT
-      },
-      signal: AbortSignal.timeout(15000)
-    });
-
-    if (!response.ok) {
-      throw new Error(`Reader extract returned ${response.status}`);
+    const fetched = await this.fetchDocument("reader", result.url, readerUrl);
+    if (!fetched || fetched.status < 200 || fetched.status >= 400) {
+      return null;
     }
 
-    const text = normalizeSpace(await response.text());
-    const excerpt = this.buildRelevantExcerpt(text, plan, result.snippet, result.title);
+    const text = normalizeSpace(fetched.body);
+    const pageType = this.detectPageType(result, plan);
+    const excerpt = this.buildRelevantExcerpt(text, plan, pageType, result.snippet, result.title);
     if (!excerpt) {
       return null;
     }
@@ -292,6 +310,180 @@ export class ResearchExtractor {
       effectiveDate,
       dateSource: effectiveDate ? "search_result" : null
     };
+  }
+
+  private detectPageType(result: SearchCandidate, plan: SearchPlan): ExtractorPageType {
+    const haystack = `${result.title} ${result.snippet} ${getPathname(result.url)}`.toLowerCase();
+
+    if (matchesAny(haystack, [/\bstatus\b/i, /\bincident\b/i, /\boutage\b/i, /\/status/i])) {
+      return "status";
+    }
+    if (matchesAny(haystack, [/\bleadership\b/i, /\bceo\b/i, /\bpresident\b/i, /\/team/i, /\/about/i])) {
+      return "leadership";
+    }
+    if (matchesAny(haystack, [/\bchangelog\b/i, /\/changelog/i, /\bwhat's new\b/i])) {
+      return "changelog";
+    }
+    if (matchesAny(haystack, [/\brelease\b/i, /\brelease notes\b/i, /\/releases?\//i])) {
+      return "release";
+    }
+    if (
+      plan.intent === "current_status" ||
+      matchesAny(haystack, [/\bversion\b/i, /\blts\b/i, /\bcurrent\b/i, /\bstable\b/i])
+    ) {
+      return "version";
+    }
+
+    return "generic";
+  }
+
+  private buildProfile(pageType: ExtractorPageType): ExtractorProfile {
+    switch (pageType) {
+      case "release":
+        return {
+          pageType,
+          selectors: "h1,h2,h3,p,li,time,tr,td,th,code,pre",
+          maxChunks: 28,
+          inclusionPatterns: [/\brelease\b/i, /\bchangelog\b/i, /\bversion\b/i, /\bv?\d+(?:\.\d+){0,2}\b/i],
+          contextualizeStructuredRows: true
+        };
+      case "changelog":
+        return {
+          pageType,
+          selectors: "h1,h2,h3,p,li,time,tr,td,th,code",
+          maxChunks: 28,
+          inclusionPatterns: [/\bchangelog\b/i, /\bupdated?\b/i, /\badded\b/i, /\bfixed\b/i, /\bdeprecated\b/i],
+          contextualizeStructuredRows: true
+        };
+      case "leadership":
+        return {
+          pageType,
+          selectors: "h1,h2,h3,h4,p,li,dt,dd,span,a",
+          maxChunks: 20,
+          inclusionPatterns: [/\bceo\b/i, /\bpresident\b/i, /\bchief\b/i, /\bleadership\b/i, /\bexecutive\b/i, /\bfounder\b/i],
+          contextualizeStructuredRows: false
+        };
+      case "status":
+        return {
+          pageType,
+          selectors: "h1,h2,h3,p,li,span,time,div",
+          maxChunks: 22,
+          inclusionPatterns: [/\boperational\b/i, /\bincident\b/i, /\boutage\b/i, /\bresolved\b/i, /\bmonitoring\b/i],
+          contextualizeStructuredRows: false
+        };
+      case "version":
+        return {
+          pageType,
+          selectors: "h1,h2,h3,p,li,time,tr,td,th,code",
+          maxChunks: 28,
+          inclusionPatterns: [/\bstable\b/i, /\bversion\b/i, /\bcurrent\b/i, /\blts\b/i, /\bv?\d+(?:\.\d+){0,2}\b/i],
+          contextualizeStructuredRows: true
+        };
+      case "generic":
+      default:
+        return {
+          pageType: "generic",
+          selectors: "h1,h2,h3,p,li,time",
+          maxChunks: 18,
+          inclusionPatterns: [],
+          contextualizeStructuredRows: false
+        };
+    }
+  }
+
+  private collectChunks(
+    $: ReturnType<typeof load>,
+    root: any,
+    title: string,
+    profile: ExtractorProfile
+  ): string[] {
+    const chunks: string[] = [];
+    const pushChunk = (value: string) => {
+      const normalized = normalizeSpace(value);
+      if (normalized.length < 30 || chunks.includes(normalized)) {
+        return;
+      }
+      chunks.push(normalized);
+    };
+
+    root.find(profile.selectors).each((_index: number, element: any) => {
+      const tagName = element.tagName?.toLowerCase() ?? "";
+      const text = normalizeSpace($(element).text());
+      if (!text) {
+        return;
+      }
+
+      const contextualText =
+        profile.contextualizeStructuredRows &&
+        (tagName === "tr" || tagName === "td" || tagName === "th")
+          ? normalizeSpace(`${title} ${text}`)
+          : text;
+
+      if (
+        profile.inclusionPatterns.length > 0 &&
+        !profile.inclusionPatterns.some((pattern) => pattern.test(contextualText))
+      ) {
+        return;
+      }
+
+      pushChunk(contextualText);
+      if (chunks.length >= profile.maxChunks) {
+        return false;
+      }
+    });
+
+    if (chunks.length > 0 || profile.pageType === "generic") {
+      return chunks;
+    }
+
+    return this.collectChunks($, root, title, this.buildProfile("generic"));
+  }
+
+  private async fetchDocument(
+    kind: ResearchFetchKind,
+    keyUrl: string,
+    targetUrl: string
+  ): Promise<FetchDocumentResult | null> {
+    if (this.acquisitionMode === "replay") {
+      const fixture = await this.replayStore?.getFetch(kind, keyUrl);
+      if (fixture) {
+        return {
+          status: fixture.status,
+          contentType: fixture.contentType,
+          body: fixture.body,
+          finalUrl: fixture.finalUrl
+        };
+      }
+      return null;
+    }
+
+    const response = await fetch(targetUrl, {
+      headers: {
+        "User-Agent": USER_AGENT
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(15000)
+    });
+    const body = await response.text();
+    const fetched = {
+      status: response.status,
+      contentType: response.headers.get("content-type") ?? "",
+      body,
+      finalUrl: response.url
+    };
+
+    if (this.acquisitionMode === "record") {
+      await this.replayStore?.rememberFetch({
+        kind,
+        url: keyUrl,
+        status: fetched.status,
+        contentType: fetched.contentType,
+        body: fetched.body,
+        finalUrl: fetched.finalUrl
+      });
+    }
+
+    return fetched;
   }
 
   private extractDateMetadata(args: {
