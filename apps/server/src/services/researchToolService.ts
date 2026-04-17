@@ -21,8 +21,10 @@ import {
   uniqueStrings
 } from "./research/common.js";
 import { ResearchExtractor } from "./research/extractor.js";
+import { ResearchKnownEndpointService } from "./research/knownEndpoints.js";
 import { ResearchPlanner } from "./research/planner.js";
 import { ResearchRetriever } from "./research/retriever.js";
+import { ResearchSourceCacheService } from "./research/sourceCache.js";
 import { ResearchVerifier } from "./research/verifier.js";
 
 type ResearchImpactArgs = {
@@ -100,6 +102,8 @@ export class ResearchToolService {
   private readonly planner = new ResearchPlanner();
   private readonly retriever = new ResearchRetriever();
   private readonly extractor = new ResearchExtractor();
+  private readonly knownEndpointService = new ResearchKnownEndpointService();
+  private readonly sourceCacheService = new ResearchSourceCacheService();
   private readonly verifier = new ResearchVerifier();
   private knowledgeLayerPromise: Promise<
     Awaited<ReturnType<KnowledgeLayerService["loadKnowledgeLayer"]>>
@@ -114,8 +118,18 @@ export class ResearchToolService {
     const startedAt = Date.now();
 
     try {
-      const searchResults = await this.retriever.searchAll(decision.plan);
-      const sources = await this.extractor.extractSources(searchResults.slice(0, 3), decision.plan);
+      const cachedSources = await this.sourceCacheService.getFreshSources(decision.plan, 3);
+      const cachedUrls = new Set(cachedSources.map((source) => source.url));
+      const seedCandidates = this.knownEndpointService.getCandidates(decision.plan, [...cachedUrls]);
+      const searchResults = await this.retriever.searchAll(decision.plan, seedCandidates);
+      const uncachedResults = searchResults.filter((candidate) => !cachedUrls.has(candidate.url));
+      const extractedSources = await this.extractor.extractSources(
+        uncachedResults.slice(0, Math.max(3, 5 - cachedSources.length)),
+        decision.plan
+      );
+      const sources = this.mergeSources([...cachedSources, ...extractedSources]);
+
+      await this.sourceCacheService.rememberSources(decision.plan, extractedSources);
 
       return this.verifier.buildLog({
         decision,
@@ -145,6 +159,23 @@ export class ResearchToolService {
 
   finalizeRoundAccounting(log: ResearchToolLog, totalRoundMs: number): ResearchToolLog {
     return this.verifier.finalizeRoundAccounting(log, totalRoundMs);
+  }
+
+  private mergeSources(sources: ResearchToolLog["sources"]) {
+    const bestByUrl = new Map<string, ResearchToolLog["sources"][number]>();
+
+    for (const source of sources) {
+      const existing = bestByUrl.get(source.url);
+      if (
+        !existing ||
+        (source.effectiveDate && !existing.effectiveDate) ||
+        source.excerpt.length > existing.excerpt.length
+      ) {
+        bestByUrl.set(source.url, source);
+      }
+    }
+
+    return [...bestByUrl.values()].slice(0, 5);
   }
 
   private async loadKnowledgeInsight(category: QuestionCategory): Promise<KnowledgeCategoryInsight | null> {

@@ -8,6 +8,7 @@ import {
   hasExplicitDateSignal,
   LOW_TRUST_DOMAIN_PATTERNS,
   matchesAny,
+  normalizeSpace,
   OFFICIAL_DOMAIN_PATTERNS,
   scoreTemporalFreshness,
   type ScoredCandidate,
@@ -19,11 +20,11 @@ import {
 } from "./common.js";
 
 export class ResearchRetriever {
-  async searchAll(plan: SearchPlan) {
+  async searchAll(plan: SearchPlan, seedCandidates: SearchCandidate[] = []) {
     const resultSets = await Promise.all(
       plan.queries.slice(0, 3).map(async (query) => {
         try {
-          return await this.search(query);
+          return await this.search(query, plan);
         } catch (error) {
           logger.warn("Research search query failed", {
             query,
@@ -36,7 +37,7 @@ export class ResearchRetriever {
     );
 
     const bestByUrl = new Map<string, ScoredCandidate>();
-    for (const candidate of resultSets.flat()) {
+    for (const candidate of [...seedCandidates, ...resultSets.flat()]) {
       const score = this.scoreCandidate(candidate, plan);
       const trustScore = this.getDomainTrustScore(
         getHostname(candidate.url),
@@ -303,6 +304,13 @@ export class ResearchRetriever {
       return 55;
     }
 
+    if (
+      domain === "github.com" &&
+      (/\/releases?(?:\/|$)/i.test(path) || /\/tags(?:\/|$)/i.test(path))
+    ) {
+      return plan.intent === "release_freshness" || plan.intent === "recent_updates" ? 34 : 24;
+    }
+
     if (OFFICIAL_DOMAIN_PATTERNS.some((pattern) => pattern.test(domain))) {
       if (COMMUNITY_PATH_PATTERNS.some((pattern) => pattern.test(path))) {
         return plan.intent === "recent_updates" || plan.intent === "release_freshness" ? 34 : 20;
@@ -321,16 +329,22 @@ export class ResearchRetriever {
     return COMMUNITY_PATH_PATTERNS.some((pattern) => pattern.test(path)) ? -8 : 0;
   }
 
-  private async search(query: string, allowBroaden = true): Promise<SearchCandidate[]> {
+  private async search(
+    query: string,
+    plan: SearchPlan,
+    allowBroaden = true
+  ): Promise<SearchCandidate[]> {
     const sanitize = (results: SearchCandidate[]) =>
-      results.filter((candidate) => {
-        const host = getHostname(candidate.url);
-        return (
-          candidate.title.length >= 3 &&
-          candidate.snippet.length >= 20 &&
-          !SEARCH_ENGINE_HOST_PATTERNS.some((pattern) => pattern.test(host))
-        );
-      });
+      results
+        .map((candidate) => this.normalizeCandidate(candidate))
+        .filter((candidate) => {
+          const host = getHostname(candidate.url);
+          return (
+            candidate.title.length >= 3 &&
+            (candidate.snippet.length >= 12 || this.isHighTrustDomain(host, plan)) &&
+            !SEARCH_ENGINE_HOST_PATTERNS.some((pattern) => pattern.test(host))
+          );
+        });
 
     const enforceQueryRelevance = (results: SearchCandidate[]) => {
       const quotedPhrases = [...query.matchAll(/"([^"]+)"/g)]
@@ -395,10 +409,10 @@ export class ResearchRetriever {
       });
     }
 
-    if (allowBroaden && /\bsite:/i.test(query)) {
-      const broadened = stripSiteOperators(query);
+    if (allowBroaden) {
+      const broadened = this.broadenQuery(query);
       if (broadened && broadened !== query) {
-        return this.search(broadened, false);
+        return this.search(broadened, plan, false);
       }
     }
 
@@ -567,12 +581,15 @@ export class ResearchRetriever {
     const $ = load(html);
     const results: SearchCandidate[] = [];
 
-    $(".b_algo").each((_index, element) => {
+    $("li.b_algo, .b_algo").each((_index, element) => {
       const anchor = $(element).find("h2 a").first();
       const title = anchor.text().replace(/\s+/g, " ").trim();
       const url = this.unwrapBingUrl(anchor.attr("href") ?? "");
       const snippet = (
-        $(element).find(".b_caption p").first().text() || $(element).find("p").first().text()
+        $(element).find(".b_caption p").first().text() ||
+        $(element).find(".b_snippet").first().text() ||
+        $(element).find(".b_lineclamp2").first().text() ||
+        $(element).find("p").first().text()
       )
         .replace(/\s+/g, " ")
         .trim();
@@ -608,24 +625,77 @@ export class ResearchRetriever {
   private unwrapBingUrl(url: string) {
     try {
       const parsed = new URL(url, "https://www.bing.com");
-      const encoded = parsed.searchParams.get("u");
-      if (!encoded) {
+      if (!/(^|\.)bing\.com$/i.test(parsed.hostname)) {
         return parsed.toString();
       }
 
-      const payload = encoded.startsWith("a1") ? encoded.slice(2) : encoded;
-      const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-      const padded =
-        normalized.length % 4 === 2
-          ? `${normalized}==`
-          : normalized.length % 4 === 3
-            ? `${normalized}=`
-            : normalized;
-      const decoded = Buffer.from(padded, "base64").toString("utf8");
+      const direct =
+        this.extractFirstHttpUrl(parsed.searchParams.get("url") ?? "") ??
+        this.extractFirstHttpUrl(parsed.searchParams.get("target") ?? "");
+      if (direct) {
+        return direct;
+      }
 
-      return /^https?:\/\//i.test(decoded) ? decoded : parsed.toString();
+      const encoded = parsed.searchParams.get("u");
+      if (encoded) {
+        const payload = encoded.startsWith("a1") ? encoded.slice(2) : encoded;
+        const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+        const padded =
+          normalized.length % 4 === 2
+            ? `${normalized}==`
+            : normalized.length % 4 === 3
+              ? `${normalized}=`
+              : normalized;
+        const decoded = Buffer.from(padded, "base64").toString("utf8");
+        const extracted = this.extractFirstHttpUrl(decoded);
+        if (extracted) {
+          return extracted;
+        }
+      }
+
+      return parsed.toString();
     } catch {
       return url;
     }
+  }
+
+  private normalizeCandidate(candidate: SearchCandidate): SearchCandidate {
+    const fallbackSnippet = normalizeSpace(`${candidate.title} ${getHostname(candidate.url)}`);
+    return {
+      title: normalizeSpace(candidate.title),
+      url: candidate.url,
+      snippet: normalizeSpace(candidate.snippet || fallbackSnippet || candidate.title)
+    };
+  }
+
+  private broadenQuery(query: string) {
+    const broadened = normalizeSpace(
+      stripSiteOperators(query)
+        .replace(/"([^"]+)"/g, "$1")
+        .replace(
+          /\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+20\d{2}\b/gi,
+          " "
+        )
+        .replace(/\b20\d{2}\b/g, " ")
+    );
+
+    return broadened.length >= 8 ? broadened : query;
+  }
+
+  private extractFirstHttpUrl(value: string) {
+    for (let index = 0; index < 3; index += 1) {
+      const match = value.match(/https?:\/\/[^\s&]+/i);
+      if (match?.[0]) {
+        return match[0];
+      }
+
+      try {
+        value = decodeURIComponent(value);
+      } catch {
+        break;
+      }
+    }
+
+    return null;
   }
 }

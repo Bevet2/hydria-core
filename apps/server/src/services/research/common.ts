@@ -101,6 +101,11 @@ export const OFFICIAL_DOMAIN_PATTERNS = [
   /\.edu$/i,
   /(^|\.)ietf\.org$/i,
   /(^|\.)rfc-editor\.org$/i,
+  /(^|\.)openai\.com$/i,
+  /(^|\.)vercel\.com$/i,
+  /(^|\.)nextjs\.org$/i,
+  /(^|\.)typescriptlang\.org$/i,
+  /(^|\.)devblogs\.microsoft\.com$/i,
   /(^|\.)apache\.org$/i,
   /(^|\.)w3\.org$/i,
   /(^|\.)whatwg\.org$/i,
@@ -150,6 +155,14 @@ export const TERM_DOMAIN_HINTS: Array<{
   canonical: string;
   domains: string[];
 }> = [
+  { pattern: /\bopenai\b/i, canonical: "openai", domains: ["openai.com"] },
+  { pattern: /\bvercel\b/i, canonical: "vercel", domains: ["vercel.com"] },
+  { pattern: /\bnext\.?js\b/i, canonical: "next.js", domains: ["nextjs.org", "github.com"] },
+  {
+    pattern: /\btypescript\b/i,
+    canonical: "typescript",
+    domains: ["typescriptlang.org", "devblogs.microsoft.com", "github.com"]
+  },
   { pattern: /\bnode\.?js\b/i, canonical: "node.js", domains: ["nodejs.org"] },
   { pattern: /\bexpress\b/i, canonical: "express", domains: ["expressjs.com"] },
   { pattern: /\bkafka\b/i, canonical: "kafka", domains: ["kafka.apache.org", "confluent.io"] },
@@ -628,6 +641,13 @@ export function getDomainTrustScore(
 
   if (preferredDomains.some((preferred) => domain.endsWith(preferred.toLowerCase()))) {
     return 55;
+  }
+
+  if (
+    domain === "github.com" &&
+    (/\/releases?(?:\/|$)/i.test(path) || /\/tags(?:\/|$)/i.test(path))
+  ) {
+    return 34;
   }
 
   if (OFFICIAL_DOMAIN_PATTERNS.some((pattern) => pattern.test(domain))) {
