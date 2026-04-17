@@ -445,6 +445,7 @@ export type StudentAnswer = {
 };
 
 export type StudentAnswerPreview = {
+  previewId: string;
   question: string;
   category: QuestionCategory;
   knowledge: KnowledgeInjection | null;
@@ -1021,16 +1022,10 @@ export async function answerStudentQuestion(question: string) {
   });
 }
 
-export async function analyzeStudentDraft(args: {
-  question: string;
-  category: QuestionCategory;
-  draft: StudentAnswer;
-  baselineDraft?: StudentAnswer | null;
-  trace: ExecutionTrace;
-}) {
+export async function analyzeStudentDraft(previewId: string) {
   return request<StudentSession>("/api/student/analyze", {
     method: "POST",
-    body: JSON.stringify(args)
+    body: JSON.stringify({ previewId })
   });
 }
 

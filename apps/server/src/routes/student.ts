@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { StudentService } from "../services/studentService.js";
+import { StudentPreviewNotFoundError, StudentService } from "../services/studentService.js";
 import {
   studentAnalyzeRequestSchema,
   studentSessionRequestSchema
@@ -45,9 +45,14 @@ export function createStudentRouter(studentService: StudentService) {
   router.post("/analyze", async (request, response, next) => {
     try {
       const parsed = studentAnalyzeRequestSchema.parse(request.body);
-      const session = await studentService.analyzeDraft(parsed);
+      const session = await studentService.analyzePreview(parsed.previewId);
       response.json(session);
     } catch (error) {
+      if (error instanceof StudentPreviewNotFoundError) {
+        response.status(404).json({ error: error.message });
+        return;
+      }
+
       next(error);
     }
   });

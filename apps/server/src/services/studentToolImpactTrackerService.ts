@@ -120,7 +120,7 @@ export class StudentToolImpactTrackerService {
 
   async buildAndPersist() {
     const sessions = await this.readSessions();
-    const compared = sessions.filter((session) => session.tooling.baselineAvailable);
+    const compared = sessions.filter((session) => session.tooling.compared);
     const usedOverall = emptyAggregate();
     const unusedOverall = emptyAggregate();
     const byContext = new Map<
@@ -172,8 +172,8 @@ export class StudentToolImpactTrackerService {
       builtAt: new Date().toISOString(),
       sourceStats: {
         studentSessionsAnalyzed: sessions.length,
-        toolUsedSessions: sessions.filter((session) => session.tooling.toolUsed).length,
-        toolUnusedSessions: sessions.filter((session) => !session.tooling.toolUsed).length,
+        toolUsedSessions: compared.filter((session) => session.tooling.toolUsed).length,
+        toolUnusedSessions: compared.filter((session) => !session.tooling.toolUsed).length,
         comparedSessions: compared.length
       },
       overall: {

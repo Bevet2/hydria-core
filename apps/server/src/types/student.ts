@@ -25,11 +25,7 @@ export const studentAnswerSchema = z.object({
 });
 
 export const studentAnalyzeRequestSchema = z.object({
-  question: z.string().trim().min(3).max(8000),
-  category: questionCategorySchema,
-  draft: studentAnswerSchema,
-  baselineDraft: studentAnswerSchema.nullable().optional(),
-  trace: executionTraceSchema
+  previewId: z.string().uuid()
 });
 
 export const studentJudgeOutputSchema = z.object({
@@ -156,6 +152,7 @@ const defaultStudentStrategy = {
 };
 
 export const studentAnswerPreviewSchema = z.object({
+  previewId: z.string().uuid(),
   question: z.string().min(1),
   category: questionCategorySchema,
   knowledge: knowledgeInjectionSchema.nullable(),
@@ -442,11 +439,11 @@ export const studentProgressSummarySchema = z.object({
 });
 
 export const studentSessionHistorySchema = z.object({
-  sessions: z.array(studentSessionSchema).max(100)
+  sessions: z.array(studentSessionSchema)
 });
 
 export const studentSessionHistoryResponseSchema = z.object({
-  sessions: z.array(studentSessionSchema).max(100),
+  sessions: z.array(studentSessionSchema),
   summary: studentProgressSummarySchema
 });
 

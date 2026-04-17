@@ -18,7 +18,7 @@ function trimText(value: string, max: number) {
   return value.length <= max ? value : `${value.slice(0, max - 3).trimEnd()}...`;
 }
 
-function inferBaseStrategyId(
+export function inferBaseStudentStrategyId(
   questionType: StudentRuleImpactContext["questionType"],
   promptLength: StudentRuleImpactContext["promptLength"]
 ) {
@@ -288,7 +288,7 @@ export class StudentStrategySelectorService {
     const context = buildStudentRuleContext(args.question, args.category);
     const baseStrategyId =
       args.overrideStrategyId ??
-      inferBaseStrategyId(context.questionType, context.promptLength);
+      inferBaseStudentStrategyId(context.questionType, context.promptLength);
     const adoptedReplacement =
       !args.overrideStrategyId && args.allowDiscoveryOverride !== false
         ? await this.strategyDiscoveryService.resolveAdoptedStrategy(baseStrategyId, context)

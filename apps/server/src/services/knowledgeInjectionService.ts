@@ -123,11 +123,6 @@ export class KnowledgeInjectionService {
           .slice(0, 2)
           .map((entry) => entry.asset)
       : strategyAssets.slice(0, 2);
-
-    if (!insight && !memoryEntry && studentMemoryRules.length === 0) {
-      return null;
-    }
-
     const coachingHints = uniqueStrings(
       [
         ...curatedExamples
@@ -139,6 +134,10 @@ export class KnowledgeInjectionService {
         ...matchingStrategyAssets.map((asset) => `Strategy hint: ${asset.learning.promptHint}`)
       ]
     ).slice(0, 8);
+
+    if (!insight && !memoryEntry && studentMemoryRules.length === 0 && coachingHints.length === 0) {
+      return null;
+    }
 
     return knowledgeInjectionSchema.parse({
       category,
@@ -170,6 +169,13 @@ export class KnowledgeInjectionService {
       studentMemorySummary: summarizeStudentMemory(category, studentMemoryRules),
       studentMemoryRules
     });
+  }
+
+  invalidateStudentLearningCaches() {
+    this.knowledgeMemoryPromise = null;
+    this.studentSessionsPromise = null;
+    this.studentRuleImpactPromise = null;
+    this.studentStrategyAssetsPromises.clear();
   }
 
   private async loadKnowledgeLayer() {

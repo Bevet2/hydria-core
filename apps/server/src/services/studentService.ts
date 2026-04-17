@@ -43,7 +43,18 @@ import { executeOpenRouterStructuredStep } from "./arena/openRouterStructuredSte
 import { StudentSessionStore } from "./studentSessionStore.js";
 import { enrichStudentSession } from "./studentLearning.js";
 import { buildStudentRuleContext } from "./studentRuleContext.js";
-import { StudentStrategySelectorService } from "./studentStrategySelector.js";
+import {
+  inferBaseStudentStrategyId,
+  StudentStrategySelectorService
+} from "./studentStrategySelector.js";
+
+type StoredStudentPreview = {
+  preview: StudentAnswerPreview;
+  storedAtMs: number;
+};
+
+const STUDENT_PREVIEW_TTL_MS = 30 * 60 * 1000;
+const MAX_STORED_STUDENT_PREVIEWS = 200;
 
 function uniqueStrings(values: string[]) {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
@@ -168,7 +179,27 @@ function countWords(value: string) {
     .filter(Boolean).length;
 }
 
+function buildEmptyImpactMetrics() {
+  return {
+    judgeOverallDelta: 0,
+    gainGlobal: 0,
+    lengthDeltaWords: 0,
+    keyPointsDelta: 0,
+    assumptionsDelta: 0,
+    structureDelta: 0,
+    success: false
+  };
+}
+
+export class StudentPreviewNotFoundError extends Error {
+  constructor(previewId: string) {
+    super(`Student preview ${previewId} was not found or has expired.`);
+    this.name = "StudentPreviewNotFoundError";
+  }
+}
+
 export class StudentService {
+  private readonly previewStore = new Map<string, StoredStudentPreview>();
   private readonly knowledgeInjectionService = new KnowledgeInjectionService();
   private readonly studentStrategySelectorService = new StudentStrategySelectorService();
 
@@ -230,7 +261,8 @@ export class StudentService {
       usedRetry: draftResult.usedRetry,
       note: "Local student produced the initial standalone answer."
     });
-    return studentAnswerPreviewSchema.parse({
+    const preview = studentAnswerPreviewSchema.parse({
+      previewId: randomUUID(),
       question,
       category,
       knowledge,
@@ -244,26 +276,39 @@ export class StudentService {
       },
       durationMs: draftResult.durationMs
     });
+    this.rememberPreview(preview);
+    return preview;
   }
 
-  async analyzeDraft(args: {
+  async analyzePreview(previewId: string): Promise<StudentSession> {
+    const preview = this.loadPreview(previewId);
+    const session = await this.analyzeDraft({
+      question: preview.question,
+      category: preview.category,
+      draft: preview.student.draft,
+      baselineDraft: preview.student.baselineDraft,
+      trace: preview.trace.student,
+      knowledge: preview.knowledge,
+      strategy: preview.strategy
+    });
+    this.previewStore.delete(previewId);
+    return session;
+  }
+
+  private async analyzeDraft(args: {
     question: string;
     category: QuestionCategory;
     draft: StudentAnswer;
     baselineDraft?: StudentAnswer | null;
     trace: ExecutionTrace;
+    knowledge: KnowledgeInjection | null;
+    strategy: StudentAnswerPreview["strategy"];
   }): Promise<StudentSession> {
     const startedAt = performance.now();
     const sessionId = randomUUID();
     const createdAt = new Date().toISOString();
-    const knowledge = await this.knowledgeInjectionService.buildForCategory(args.category, {
-      question: args.question
-    });
-    const strategy = await this.studentStrategySelectorService.select({
-      question: args.question,
-      category: args.category,
-      knowledge
-    });
+    const knowledge = args.knowledge;
+    const strategy = args.strategy;
     const draftRespondent = toRespondentOutput(args.draft);
     const baselineRespondent = args.baselineDraft ? toRespondentOutput(args.baselineDraft) : null;
     const initialRedTeam = await this.runStudentRedTeam(
@@ -377,9 +422,12 @@ export class StudentService {
       finalDraft: finalStudentAnswer,
       research: finalizedResearch
     });
-    const strategyImpact = this.measureStrategyImpact({
+    const strategyImpact = await this.measureStrategyImpact({
+      question: args.question,
+      category: args.category,
       strategy,
-      ruleImpact
+      selectedDraft: args.draft,
+      knowledge
     });
 
     const session = enrichStudentSession(
@@ -422,6 +470,7 @@ export class StudentService {
     );
 
     await this.studentSessionStore.appendSession(session);
+    this.knowledgeInjectionService.invalidateStudentLearningCaches();
     logger.info("Student session completed", {
       sessionId,
       category: args.category,
@@ -440,13 +489,7 @@ export class StudentService {
 
   async runSession(question: string): Promise<StudentSession> {
     const preview = await this.answerOnly(question);
-    return this.analyzeDraft({
-      question: preview.question,
-      category: preview.category,
-      draft: preview.student.draft,
-      baselineDraft: preview.student.baselineDraft,
-      trace: preview.trace.student
-    });
+    return this.analyzePreview(preview.previewId);
   }
 
   async runStrategyComparison(args: {
@@ -700,15 +743,7 @@ export class StudentService {
   }): Promise<StudentRuleImpact> {
     const activeRules = args.knowledge?.studentMemoryRules ?? [];
     const context = buildStudentRuleContext(args.question, args.category);
-    const emptyMetrics = {
-      judgeOverallDelta: 0,
-      gainGlobal: 0,
-      lengthDeltaWords: 0,
-      keyPointsDelta: 0,
-      assumptionsDelta: 0,
-      structureDelta: 0,
-      success: false
-    } as const;
+    const emptyMetrics = buildEmptyImpactMetrics();
 
     if (!args.baselineDraft || !args.baselineRespondent || activeRules.length === 0) {
       return {
@@ -807,21 +842,94 @@ export class StudentService {
     };
   }
 
-  private measureStrategyImpact(args: {
+  private async measureStrategyImpact(args: {
+    question: string;
+    category: QuestionCategory;
     strategy: StudentSession["strategy"];
-    ruleImpact: StudentRuleImpact;
-  }): StudentStrategyImpact {
-    return {
-      compared: args.ruleImpact.compared,
-      baselineAvailable: args.ruleImpact.baselineAvailable,
-      strategyId: args.strategy.strategyId,
-      activationMode: args.strategy.activationMode,
-      impactStatus: args.strategy.impactStatus,
-      impactConfidence: args.strategy.impactConfidence,
-      context: args.strategy.context,
-      judge: args.ruleImpact.judge,
-      metrics: args.ruleImpact.metrics
-    };
+    selectedDraft: StudentAnswer;
+    knowledge: KnowledgeInjection | null;
+  }): Promise<StudentStrategyImpact> {
+    const emptyMetrics = buildEmptyImpactMetrics();
+    const baseStrategyId = inferBaseStudentStrategyId(
+      args.strategy.context.questionType,
+      args.strategy.context.promptLength
+    );
+
+    if (args.strategy.strategyId === baseStrategyId) {
+      return {
+        compared: false,
+        baselineAvailable: false,
+        strategyId: args.strategy.strategyId,
+        activationMode: args.strategy.activationMode,
+        impactStatus: args.strategy.impactStatus,
+        impactConfidence: args.strategy.impactConfidence,
+        context: args.strategy.context,
+        judge: null,
+        metrics: { ...emptyMetrics }
+      };
+    }
+
+    try {
+      const baselineStrategy = await this.studentStrategySelectorService.select({
+        question: args.question,
+        category: args.category,
+        knowledge: args.knowledge,
+        overrideStrategyId: baseStrategyId,
+        allowDiscoveryOverride: false
+      });
+      const baselineDraft = await this.localModelService.answerQuestionDetailed({
+        question: args.question,
+        category: args.category,
+        strategy: baselineStrategy,
+        knowledge: args.knowledge
+      });
+      const { judge: comparisonJudge, metrics } = await this.measureDraftComparison({
+        question: args.question,
+        category: args.category,
+        baselineDraft: baselineDraft.output,
+        baselineRespondent: toRespondentOutput(baselineDraft.output),
+        comparisonDraft: args.selectedDraft,
+        knowledge: null
+      });
+
+      return {
+        compared: true,
+        baselineAvailable: true,
+        strategyId: args.strategy.strategyId,
+        activationMode: args.strategy.activationMode,
+        impactStatus: args.strategy.impactStatus,
+        impactConfidence: args.strategy.impactConfidence,
+        context: args.strategy.context,
+        judge: {
+          initial_score: comparisonJudge.output.initial_score,
+          improved_score: comparisonJudge.output.improved_score,
+          verdict: comparisonJudge.output.verdict,
+          worthIt: comparisonJudge.output.worthIt,
+          reasoning: comparisonJudge.output.reasoning
+        },
+        metrics
+      };
+    } catch (error) {
+      logger.warn("Strategy impact measurement failed", {
+        question: args.question,
+        category: args.category,
+        strategyId: args.strategy.strategyId,
+        baseStrategyId,
+        error: String(error)
+      });
+
+      return {
+        compared: false,
+        baselineAvailable: false,
+        strategyId: args.strategy.strategyId,
+        activationMode: args.strategy.activationMode,
+        impactStatus: args.strategy.impactStatus,
+        impactConfidence: args.strategy.impactConfidence,
+        context: args.strategy.context,
+        judge: null,
+        metrics: { ...emptyMetrics }
+      };
+    }
   }
 
   private async measureToolImpact(args: {
@@ -833,16 +941,8 @@ export class StudentService {
     research: ResearchToolLog;
   }): Promise<StudentToolImpact> {
     const context = buildStudentRuleContext(args.question, args.category);
-    const emptyMetrics = {
-      judgeOverallDelta: 0,
-      gainGlobal: 0,
-      lengthDeltaWords: 0,
-      keyPointsDelta: 0,
-      assumptionsDelta: 0,
-      structureDelta: 0,
-      success: false
-    } as const;
-    const toolUsed = args.research.decision.shouldUse;
+    const emptyMetrics = buildEmptyImpactMetrics();
+    const toolUsed = args.research.used;
 
     if (!toolUsed) {
       return {
@@ -850,7 +950,7 @@ export class StudentService {
         toolReason: args.research.decision.reasoning,
         toolImpact: "no_impact",
         compared: false,
-        baselineAvailable: true,
+        baselineAvailable: false,
         context,
         noReliableSource: false,
         confidenceScore: 0,
@@ -910,5 +1010,41 @@ export class StudentService {
         !excluded.has(candidate) &&
         list.indexOf(candidate) === index
     );
+  }
+
+  private rememberPreview(preview: StudentAnswerPreview) {
+    this.cleanupExpiredPreviews();
+    this.previewStore.set(preview.previewId, {
+      preview,
+      storedAtMs: Date.now()
+    });
+
+    while (this.previewStore.size > MAX_STORED_STUDENT_PREVIEWS) {
+      const oldestPreviewId = this.previewStore.keys().next().value;
+      if (!oldestPreviewId) {
+        break;
+      }
+
+      this.previewStore.delete(oldestPreviewId);
+    }
+  }
+
+  private loadPreview(previewId: string) {
+    this.cleanupExpiredPreviews();
+    const storedPreview = this.previewStore.get(previewId);
+    if (!storedPreview) {
+      throw new StudentPreviewNotFoundError(previewId);
+    }
+
+    return storedPreview.preview;
+  }
+
+  private cleanupExpiredPreviews() {
+    const now = Date.now();
+    for (const [previewId, storedPreview] of this.previewStore.entries()) {
+      if (now - storedPreview.storedAtMs > STUDENT_PREVIEW_TTL_MS) {
+        this.previewStore.delete(previewId);
+      }
+    }
   }
 }

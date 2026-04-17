@@ -142,13 +142,7 @@ export function StudentPage() {
     setError(null);
 
     try {
-      const session = await analyzeStudentDraft({
-        question: preview.question,
-        category: preview.category,
-        draft: preview.student.draft,
-        baselineDraft: preview.student.baselineDraft,
-        trace: preview.trace.student
-      });
+      const session = await analyzeStudentDraft(preview.previewId);
       setCurrentSession(session);
       syncSessionInUrl(session.sessionId);
       await refreshSessions(session.sessionId);
@@ -222,7 +216,7 @@ export function StudentPage() {
               <h2>Student Progress</h2>
               {currentSession ? (
                 <span className="pill">
-                  Session score {currentSession.progression.sessionScore} · {formatTrend(currentSession.progression.trend)}
+                  Session score {currentSession.progression.sessionScore} | {formatTrend(currentSession.progression.trend)}
                 </span>
               ) : null}
             </div>
@@ -372,7 +366,7 @@ export function StudentPage() {
                         <strong>Rule</strong>
                         <span>{rule.rule}</span>
                         <strong>Apply when</strong>
-                        <span>{rule.conditions.join(" · ") || "No conditions stored."}</span>
+                        <span>{rule.conditions.join(" | ") || "No conditions stored."}</span>
                         <strong>Observed impact</strong>
                         <span>
                           Judge {rule.metrics.judgeOverallDelta}, gain {rule.metrics.gainGlobal}, length {rule.metrics.lengthDeltaWords}, structure {rule.metrics.structureDelta}
@@ -395,7 +389,7 @@ export function StudentPage() {
               <h2>Strategy Impact Tracker</h2>
               {currentSession?.strategyImpact.compared ? (
                 <span className="pill">
-                  {currentSession.strategyImpact.strategyId} · {currentSession.strategyImpact.impactStatus}
+                  {currentSession.strategyImpact.strategyId} | {currentSession.strategyImpact.impactStatus}
                 </span>
               ) : null}
             </div>
@@ -447,7 +441,7 @@ export function StudentPage() {
               {displayedDraft ? (
                 <span className="pill">
                   Confidence {displayedDraft.confidence}
-                  {preview ? ` · ${preview.durationMs} ms` : ""}
+                  {preview ? ` | ${preview.durationMs} ms` : ""}
                 </span>
               ) : null}
             </div>
@@ -597,7 +591,7 @@ export function StudentPage() {
                         {lesson.conditions.length > 0 ? (
                           <>
                             <strong>Apply when</strong>
-                            <span>{lesson.conditions.join(" · ")}</span>
+                            <span>{lesson.conditions.join(" | ")}</span>
                           </>
                         ) : null}
                       </div>
@@ -634,7 +628,7 @@ export function StudentPage() {
               </div>
             ) : (
               <p className="muted">
-                Each analyzed session also creates a compact “bad answer → corrected answer” training
+                Each analyzed session also creates a compact "bad answer -&gt; corrected answer" training
                 example for Qwen.
               </p>
             )}
@@ -702,18 +696,18 @@ export function StudentPage() {
                         {displayedStrategy.impactStatus} / {displayedStrategy.activationMode} / {Math.round(displayedStrategy.impactConfidence * 100)}%
                       </span>
                       <strong>Directives</strong>
-                      <span>{displayedStrategy.directives.join(" · ")}</span>
+                      <span>{displayedStrategy.directives.join(" | ")}</span>
                       <strong>Avoid</strong>
                       <span>
-                        {displayedStrategy.avoidances.join(" · ") || "No extra avoidances."}
+                        {displayedStrategy.avoidances.join(" | ") || "No extra avoidances."}
                       </span>
                       <strong>Empirical reason</strong>
                       <span>{displayedStrategy.impactReason}</span>
                       <strong>Why this strategy</strong>
-                      <span>{displayedStrategy.reasoning.join(" · ")}</span>
+                      <span>{displayedStrategy.reasoning.join(" | ")}</span>
                       <strong>Influenced by</strong>
                       <span>
-                        Signals: {displayedStrategy.influencedBy.signals.join(" · ") || "none"} | Rules: {displayedStrategy.influencedBy.studentRuleIds.join(" · ") || "none"}
+                        Signals: {displayedStrategy.influencedBy.signals.join(" | ") || "none"} | Rules: {displayedStrategy.influencedBy.studentRuleIds.join(" | ") || "none"}
                       </span>
                     </div>
                   </>
@@ -757,7 +751,7 @@ export function StudentPage() {
                 <p>{currentSession.research.decision.reasoning}</p>
                 <h4>Truth engine impact</h4>
                 <p>
-                  {currentSession.tooling.toolImpact} · {currentSession.tooling.metrics.judgeOverallDelta} judge delta · {currentSession.tooling.noReliableSource ? "no reliable source" : "reliable sources found"}
+                  {currentSession.tooling.toolImpact} | {currentSession.tooling.metrics.judgeOverallDelta} judge delta | {currentSession.tooling.noReliableSource ? "no reliable source" : "reliable sources found"}
                 </p>
                 {renderBulletList(
                   currentSession.research.decision.triggerSignals,

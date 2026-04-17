@@ -22,6 +22,7 @@ const EMPTY_HISTORY = {
 };
 
 export class StudentSessionStore {
+  private writeQueue = Promise.resolve();
   private readonly knowledgeMemoryService = new KnowledgeMemoryService();
   private readonly studentRuleImpactTrackerService = new StudentRuleImpactTrackerService();
   private readonly studentStrategyImpactTrackerService = new StudentStrategyImpactTrackerService();
@@ -50,6 +51,7 @@ export class StudentSessionStore {
   }
 
   async listSessions() {
+    await this.waitForPendingWrites();
     const history = await this.readHistory();
     return history.sessions.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   }
@@ -65,26 +67,41 @@ export class StudentSessionStore {
   }
 
   async appendSession(session: StudentSession) {
-    const history = await this.readHistory();
-    const parsed = enrichStudentSession(studentSessionSchema.parse(session));
-    const nextHistory = {
-      sessions: [parsed, ...history.sessions].slice(0, 100)
-    };
-    await writeFile(this.historyFile, JSON.stringify(nextHistory, null, 2), "utf8");
+    await this.runExclusive(async () => {
+      const history = await this.readHistory();
+      const parsed = enrichStudentSession(studentSessionSchema.parse(session));
+      const nextHistory = {
+        sessions: [parsed, ...history.sessions]
+      };
+      await writeFile(this.historyFile, JSON.stringify(nextHistory, null, 2), "utf8");
 
-    const datasetEntry = studentCycleDatasetEntrySchema.parse(this.buildDatasetEntry(parsed));
-    await appendFile(this.datasetFile, `${JSON.stringify(datasetEntry)}\n`, "utf8");
+      const datasetEntry = studentCycleDatasetEntrySchema.parse(this.buildDatasetEntry(parsed));
+      await appendFile(this.datasetFile, `${JSON.stringify(datasetEntry)}\n`, "utf8");
 
-    try {
-      await this.studentRuleImpactTrackerService.buildAndPersist();
-      await this.studentToolImpactTrackerService.buildAndPersist();
-      await this.studentStrategyImpactTrackerService.buildAndPersist();
-      await this.knowledgeMemoryService.buildAndPersist();
-    } catch (error) {
-      logger.warn("Student session appended but post-processing refresh failed", {
-        error: String(error)
-      });
-    }
+      try {
+        await this.studentRuleImpactTrackerService.buildAndPersist();
+        await this.studentToolImpactTrackerService.buildAndPersist();
+        await this.studentStrategyImpactTrackerService.buildAndPersist();
+        await this.knowledgeMemoryService.buildAndPersist();
+      } catch (error) {
+        logger.warn("Student session appended but post-processing refresh failed", {
+          error: String(error)
+        });
+      }
+    });
+  }
+
+  private async waitForPendingWrites() {
+    await this.writeQueue;
+  }
+
+  private async runExclusive<T>(task: () => Promise<T>) {
+    const pending = this.writeQueue.then(task, task);
+    this.writeQueue = pending.then(
+      () => undefined,
+      () => undefined
+    );
+    return pending;
   }
 
   private async readHistory() {

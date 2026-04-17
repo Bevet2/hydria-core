@@ -167,13 +167,13 @@ export class StudentStrategyDiscoveryLoopService {
       },
       factual: {
         short: [
-          "Who announced the latest major AI update?",
-          "What is the newest major AI release this week?"
+          "According to the HTTP specification, what does status code 429 mean?",
+          "According to the Docker documentation, what is an image?"
         ],
         medium: [
-          "Which company announced the latest general-purpose AI model and when was it released?",
-          "What official AI model updates were announced this week by major labs?",
-          "Which major AI lab most recently released a new model or platform update?"
+          "According to the HTTP specification, what does status code 429 mean and how should a client react?",
+          "According to the OAuth 2.0 specification, what is the authorization code flow used for?",
+          "According to the PostgreSQL documentation, what does VACUUM do and why is it needed?"
         ]
       },
       strategic: {
@@ -204,15 +204,15 @@ export class StudentStrategyDiscoveryLoopService {
       const bank =
         proposal.context.signals.includes("uncertainty") || proposal.context.signals.includes("claims")
           ? [
-              "Which company announced the latest general-purpose AI model and when was it released?",
-              "What official AI model updates were announced this week by major labs?",
-              "Which major AI lab most recently released a new model or platform update?",
-              "Which company most recently announced a new AI platform update, and what was it?"
+              "According to the HTTP specification, what does status code 429 mean and when should a client retry?",
+              "According to the OAuth 2.0 specification, what is the authorization code flow used for?",
+              "According to the PostgreSQL documentation, what does VACUUM do and why is it needed?",
+              "According to the Docker documentation, what is the difference between an image and a container?"
             ]
           : [
-              "Which company released the latest general-purpose AI model?",
-              "What was the latest official AI platform update announced by a major lab?",
-              "Which major AI lab most recently announced a new model?"
+              "According to the HTTP specification, what does status code 429 mean?",
+              "According to the OAuth 2.0 specification, what is the purpose of the authorization code flow?",
+              "According to the Docker documentation, what is the difference between an image and a container?"
             ];
 
       return bank.map((question) => ({
