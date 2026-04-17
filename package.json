@@ -13,6 +13,7 @@
     "check": "npm run check -w @hydria-arena/server && npm run build -w @hydria-arena/web",
     "start": "npm run start -w @hydria-arena/server",
     "knowledge:refresh": "npm run knowledge:refresh -w @hydria-arena/server",
+    "student:temporal-eval": "npm run student:temporal-eval -w @hydria-arena/server",
     "sync:openrouter": "powershell -ExecutionPolicy Bypass -File ./scripts/sync-openrouter-key.ps1",
     "setup:local-model": "powershell -ExecutionPolicy Bypass -File ./scripts/setup-local-model.ps1",
     "dev:ps": "powershell -ExecutionPolicy Bypass -File ./scripts/dev.ps1"
