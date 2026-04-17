@@ -185,7 +185,11 @@ ${JSON.stringify(
         title: source.title,
         url: source.url,
         snippet: source.snippet,
-        excerpt: source.excerpt
+        excerpt: source.excerpt,
+        published_at: source.publishedAt,
+        modified_at: source.modifiedAt,
+        effective_date: source.effectiveDate,
+        date_source: source.dateSource
       }))
     },
     null,
@@ -206,6 +210,11 @@ Reminders:
 - if external research findings are incomplete or mixed, keep uncertainty explicit instead of pretending certainty
 - if query_plan.temporal_profile.isTemporal is true, replace relative time words with the exact date or date window from temporal_profile
 - if query_plan.temporal_profile.isTemporal is true, do not claim something is current/latest/recent without the explicit as-of date or verified window
+- if query_plan.temporal_profile.isTemporal is true, do not answer the freshness-sensitive claim from general knowledge
+- if query_plan.temporal_profile.queryType is current_status, prefer official or primary sources that describe the present state
+- if query_plan.temporal_profile.queryType is recent_updates or release_freshness, prefer sources with explicit publication or update dates over timeless documentation
+- if verification.freshnessSatisfied is false for a temporal query, say that research was attempted but no sufficiently recent dated source was found
+- if a temporal source has no effective_date, treat it as weak evidence and avoid using it to assert current or recent status
 - if query_plan.temporal_profile.isTemporal is true and truth.no_reliable_source is true, say that the current/recent claim could not be confirmed for that date or window
 - if the category is product_strategy, prefer objective + priorities + phases + metrics + risks over polished but generic prose
 - if the category is product_strategy, keep the answer compact and decision-oriented rather than exhaustive
@@ -289,7 +298,11 @@ ${JSON.stringify(
         title: source.title,
         url: source.url,
         snippet: source.snippet,
-        excerpt: source.excerpt
+        excerpt: source.excerpt,
+        published_at: source.publishedAt,
+        modified_at: source.modifiedAt,
+        effective_date: source.effectiveDate,
+        date_source: source.dateSource
       }))
     },
     null,
@@ -315,6 +328,8 @@ Repair instructions:
 - if external research findings are present, preserve the sourced constraints or examples when they materially improve precision
 - if external research findings are present, do not invent details that are not supported by the sources
 - if query_plan.temporal_profile.isTemporal is true, keep the explicit as-of date or date window in the repaired answer instead of reverting to vague relative wording
+- if query_plan.temporal_profile.isTemporal is true, do not repair the answer by filling freshness gaps with general knowledge
+- if verification.freshnessSatisfied is false for a temporal query, preserve the explicit statement that no sufficiently recent dated source was found
 - if query_plan.temporal_profile.isTemporal is true and truth.no_reliable_source is true, keep the freshness uncertainty explicit
 - if the category is product_strategy, preserve sequencing, priorities, metrics, risks, and dependencies
 - if the category is product_strategy, shorten and sharpen the answer instead of expanding it

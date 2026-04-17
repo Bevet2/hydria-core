@@ -1,4 +1,5 @@
 import type {
+  ResearchFreshnessWindow,
   ResearchNetImpact,
   ResearchSource,
   ResearchTruth,
@@ -9,9 +10,11 @@ import {
   buildDefaultTemporalProfile,
   describeTemporalWindow,
   extractTerms,
+  getPathname,
   getSourceTrustScore,
   hasExplicitDateSignal,
   normalizeSpace,
+  resolveFreshnessWindow,
   scoreTemporalFreshness,
   splitSentences,
   type ResearchDecision,
@@ -29,7 +32,6 @@ type BuildLogArgs = {
 
 type BuildFailureArgs = {
   decision: ResearchDecision;
-  args: ResearchDecisionArgs;
   startedAt: number;
   error: unknown;
 };
@@ -42,23 +44,54 @@ type FinalizeImpactArgs = {
   refineB: { improved_answer: string; fixes_applied: string[] };
 };
 
+type SourceEntry = {
+  source: ResearchSource;
+  trustScore: number;
+  effectiveDate: Date | null;
+};
+
+type FreshnessAudit = {
+  acceptedEntries: SourceEntry[];
+  freshnessSatisfied: boolean;
+  freshnessWindow: ResearchFreshnessWindow;
+  mostRecentSourceDate: string | null;
+  oldestAcceptedSourceDate: string | null;
+  staleSourcesRejectedCount: number;
+  failureNote: string | null;
+};
+
 export class ResearchVerifier {
   buildLog({ decision, args, searchResults, sources, startedAt }: BuildLogArgs): ResearchToolLog {
-    const sourceTexts = sources.map((source) => `${source.snippet} ${source.excerpt}`).join(" ");
+    const acceptedSources = this.buildAcceptedEntries(decision, sources);
+    const freshnessAudit = this.auditFreshness(decision, acceptedSources);
+    const acceptedOnly = freshnessAudit.acceptedEntries.map((entry) => entry.source);
+    const sourceTexts = acceptedOnly.map((source) => `${source.snippet} ${source.excerpt}`).join(" ");
     const corroboratedSignals = extractTerms(sourceTexts)
       .filter(
         (term) =>
-          sources.filter((source) => source.excerpt.toLowerCase().includes(term)).length >= 2
+          acceptedOnly.filter((source) => source.excerpt.toLowerCase().includes(term)).length >= 2
       )
       .slice(0, 6);
-
-    const summary = sources
-      .map((source) => `${source.title}: ${splitSentences(source.excerpt)[0] ?? source.snippet}`)
+    const summary = acceptedOnly
+      .map((source) => {
+        const firstSentence = splitSentences(source.excerpt)[0] ?? source.snippet;
+        const datePrefix = source.effectiveDate
+          ? `${source.effectiveDate.slice(0, 10)}: `
+          : "";
+        return `${source.title}: ${datePrefix}${firstSentence}`;
+      })
       .map((entry) => normalizeSpace(entry))
       .slice(0, 4);
-    const truth = this.buildTruth({ decision, args, sources, corroboratedSignals });
+    const truth = this.buildTruth({
+      decision,
+      args,
+      entries: freshnessAudit.acceptedEntries,
+      corroboratedSignals
+    });
+    const isTemporal = decision.plan?.temporalProfile.isTemporal ?? false;
     const used =
-      sources.length > 0 &&
+      acceptedOnly.length > 0 &&
+      (!isTemporal || freshnessAudit.freshnessSatisfied) &&
       !truth.no_reliable_source &&
       (truth.verified_facts.length > 0 ||
         truth.uncertain_claims.length > 0 ||
@@ -89,11 +122,16 @@ export class ResearchVerifier {
       query: decision.plan?.queries[0] ?? decision.plan?.queries.join(" || ") ?? null,
       reasons: decision.reasons,
       summary,
-      sources,
+      sources: acceptedOnly,
       verification: {
         sourceCount: searchResults.length,
         extractedSourceCount: sources.length,
-        corroboratedSignals
+        corroboratedSignals,
+        freshnessSatisfied: freshnessAudit.freshnessSatisfied,
+        freshnessWindow: freshnessAudit.freshnessWindow,
+        mostRecentSourceDate: freshnessAudit.mostRecentSourceDate,
+        oldestAcceptedSourceDate: freshnessAudit.oldestAcceptedSourceDate,
+        staleSourcesRejectedCount: freshnessAudit.staleSourcesRejectedCount
       },
       truth,
       appliedTo: {
@@ -112,22 +150,19 @@ export class ResearchVerifier {
         costSharePct: 0,
         netImpact: used ? "neutral" : "negative"
       },
-      impactNotes: used
-        ? [
-            `Truth engine produced ${truth.verified_facts.length} verified fact(s), ${truth.uncertain_claims.length} uncertain claim(s), and ${truth.conflicting_info.length} conflict marker(s).`,
-            ...this.buildTemporalImpactNotes(decision)
-          ]
-        : truth.no_reliable_source
-          ? [
-              "Research ran, but no reliable source could verify the target claim set.",
-              ...this.buildTemporalImpactNotes(decision)
-            ]
-          : ["Research was triggered, but no usable truth payload was recovered."],
+      impactNotes: this.buildImpactNotes({
+        decision,
+        used,
+        truth,
+        freshnessAudit
+      }),
       durationMs: Date.now() - startedAt
     };
   }
 
   buildFailureLog({ decision, startedAt, error }: BuildFailureArgs): ResearchToolLog {
+    const temporalProfile = decision.plan?.temporalProfile ?? buildDefaultTemporalProfile();
+
     return {
       considered: true,
       used: false,
@@ -148,7 +183,7 @@ export class ResearchVerifier {
         requiredTerms: decision.plan?.requiredTerms ?? [],
         preferredDomains: decision.plan?.preferredDomains ?? [],
         factFocusTerms: decision.plan?.factFocusTerms ?? [],
-        temporalProfile: decision.plan?.temporalProfile ?? buildDefaultTemporalProfile()
+        temporalProfile
       },
       query: decision.plan?.queries[0] ?? decision.plan?.queries.join(" || ") ?? null,
       reasons: decision.reasons,
@@ -157,7 +192,12 @@ export class ResearchVerifier {
       verification: {
         sourceCount: 0,
         extractedSourceCount: 0,
-        corroboratedSignals: []
+        corroboratedSignals: [],
+        freshnessSatisfied: !temporalProfile.isTemporal,
+        freshnessWindow: resolveFreshnessWindow(temporalProfile),
+        mostRecentSourceDate: null,
+        oldestAcceptedSourceDate: null,
+        staleSourcesRejectedCount: 0
       },
       truth: {
         verified_facts: [],
@@ -244,12 +284,12 @@ export class ResearchVerifier {
     return {
       ...args.log,
       impact: {
-      ...args.log.impact,
-      refineChangedBecauseOfTool,
-      addedFactsCount: Math.min(20, addedFactsCount),
-      correctedClaimsCount: Math.min(12, correctedClaimsCount),
-      sourceBackedClaimsCount: Math.min(12, sourceBackedClaimsCount),
-      netImpact: args.log.truth.no_reliable_source && !refineChangedBecauseOfTool ? "neutral" : netImpact
+        ...args.log.impact,
+        refineChangedBecauseOfTool,
+        addedFactsCount: Math.min(20, addedFactsCount),
+        correctedClaimsCount: Math.min(12, correctedClaimsCount),
+        sourceBackedClaimsCount: Math.min(12, sourceBackedClaimsCount),
+        netImpact: args.log.truth.no_reliable_source && !refineChangedBecauseOfTool ? "neutral" : netImpact
       },
       impactNotes: impactNotes.slice(0, 12)
     };
@@ -266,6 +306,183 @@ export class ResearchVerifier {
         costSharePct: Math.max(0, Math.min(100, costSharePct))
       }
     };
+  }
+
+  private buildAcceptedEntries(decision: ResearchDecision, sources: ResearchSource[]) {
+    const preferredDomains = decision.plan?.preferredDomains ?? [];
+
+    return sources
+      .map((source) => ({
+        source,
+        trustScore: getSourceTrustScore(source.url, preferredDomains),
+        effectiveDate: this.parseDate(source.effectiveDate ?? source.modifiedAt ?? source.publishedAt)
+      }))
+      .filter((entry) => entry.trustScore >= 26);
+  }
+
+  private auditFreshness(decision: ResearchDecision, entries: SourceEntry[]): FreshnessAudit {
+    const temporalProfile = decision.plan?.temporalProfile ?? buildDefaultTemporalProfile();
+    const freshnessWindow = resolveFreshnessWindow(temporalProfile);
+
+    if (!temporalProfile.isTemporal) {
+      const acceptedDates = entries
+        .map((entry) => entry.effectiveDate?.toISOString() ?? null)
+        .filter((value): value is string => value !== null)
+        .sort();
+
+      return {
+        acceptedEntries: entries,
+        freshnessSatisfied: true,
+        freshnessWindow,
+        mostRecentSourceDate: acceptedDates.at(-1) ?? null,
+        oldestAcceptedSourceDate: acceptedDates[0] ?? null,
+        staleSourcesRejectedCount: 0,
+        failureNote: null
+      };
+    }
+
+    const acceptedEntries = entries.filter((entry) =>
+      this.isEntryFresh(entry, temporalProfile, decision.plan?.intent ?? "fact_check")
+    );
+    const acceptedDates = acceptedEntries
+      .map((entry) => entry.effectiveDate?.toISOString() ?? null)
+      .filter((value): value is string => value !== null)
+      .sort();
+    const freshnessSatisfied = acceptedEntries.length > 0;
+
+    return {
+      acceptedEntries,
+      freshnessSatisfied,
+      freshnessWindow,
+      mostRecentSourceDate: acceptedDates.at(-1) ?? null,
+      oldestAcceptedSourceDate: acceptedDates[0] ?? null,
+      staleSourcesRejectedCount: Math.max(0, entries.length - acceptedEntries.length),
+      failureNote: freshnessSatisfied
+        ? null
+        : this.buildFreshnessFailureNote(temporalProfile, entries)
+    };
+  }
+
+  private isEntryFresh(
+    entry: SourceEntry,
+    temporalProfile: ReturnType<typeof buildDefaultTemporalProfile>,
+    intent: ResearchDecision["plan"] extends infer _ ? NonNullable<ResearchDecision["plan"]>["intent"] : never
+  ) {
+    const date = entry.effectiveDate;
+    if (!date) {
+      return false;
+    }
+
+    const sourceText = `${entry.source.title} ${entry.source.snippet} ${entry.source.excerpt} ${entry.source.url}`;
+    const path = getPathname(entry.source.url);
+
+    if (intent === "release_freshness") {
+      const releaseLike =
+        /\brelease\b|\bversion\b|\bchangelog\b|\brelease notes?\b|\bgeneral availability\b|\bga\b/i.test(
+          sourceText
+        ) || /\/releases?\//i.test(path) || /\/changelog/i.test(path);
+      if (!releaseLike) {
+        return false;
+      }
+    }
+
+    if (intent === "current_status") {
+      const currentLike =
+        /\bcurrent\b|\bas of\b|\bstatus\b|\bleadership\b|\bteam\b|\bpricing\b|\bavailability\b|\bversion\b/i.test(
+          sourceText
+        ) ||
+        /\/status/i.test(path) ||
+        /\/team/i.test(path) ||
+        /\/leadership/i.test(path) ||
+        /\/pricing/i.test(path) ||
+        /\/availability/i.test(path);
+      if (!currentLike) {
+        return false;
+      }
+    }
+
+    return this.dateWithinWindow(date, temporalProfile);
+  }
+
+  private dateWithinWindow(
+    date: Date,
+    temporalProfile: ReturnType<typeof buildDefaultTemporalProfile>
+  ) {
+    if (temporalProfile.dateRangeStart && temporalProfile.dateRangeEnd) {
+      const start = new Date(`${temporalProfile.dateRangeStart}T00:00:00.000Z`);
+      const end = new Date(`${temporalProfile.dateRangeEnd}T23:59:59.999Z`);
+      return date.getTime() >= start.getTime() && date.getTime() <= end.getTime();
+    }
+
+    if (temporalProfile.recencyDays === null) {
+      return true;
+    }
+
+    const ageMs = Date.now() - date.getTime();
+    const ageDays = ageMs / 86_400_000;
+    return ageDays >= 0 && ageDays <= temporalProfile.recencyDays;
+  }
+
+  private buildFreshnessFailureNote(
+    temporalProfile: ReturnType<typeof buildDefaultTemporalProfile>,
+    entries: SourceEntry[]
+  ) {
+    const window = describeTemporalWindow(temporalProfile) ?? temporalProfile.absoluteDateHint ?? "the requested timeframe";
+    const datedEntries = entries.filter((entry) => entry.effectiveDate !== null);
+
+    if (datedEntries.length === 0) {
+      return `Research attempted, but no sufficiently recent source with an explicit date was found for ${window}.`;
+    }
+
+    return `Research attempted, but no sufficiently recent source was found inside ${window}.`;
+  }
+
+  private buildImpactNotes(args: {
+    decision: ResearchDecision;
+    used: boolean;
+    truth: ResearchTruth;
+    freshnessAudit: FreshnessAudit;
+  }) {
+    if (args.used) {
+      return [
+        `Truth engine produced ${args.truth.verified_facts.length} verified fact(s), ${args.truth.uncertain_claims.length} uncertain claim(s), and ${args.truth.conflicting_info.length} conflict marker(s).`,
+        ...this.buildFreshnessImpactNotes(args.freshnessAudit),
+        ...this.buildTemporalImpactNotes(args.decision)
+      ].slice(0, 8);
+    }
+
+    if (args.freshnessAudit.failureNote) {
+      return [
+        args.freshnessAudit.failureNote,
+        ...this.buildFreshnessImpactNotes(args.freshnessAudit),
+        ...this.buildTemporalImpactNotes(args.decision)
+      ].slice(0, 8);
+    }
+
+    if (args.truth.no_reliable_source) {
+      return [
+        "Research ran, but no reliable source could verify the target claim set.",
+        ...this.buildTemporalImpactNotes(args.decision)
+      ];
+    }
+
+    return ["Research was triggered, but no usable truth payload was recovered."];
+  }
+
+  private buildFreshnessImpactNotes(freshnessAudit: FreshnessAudit) {
+    if (freshnessAudit.freshnessWindow === "none") {
+      return [];
+    }
+
+    const notes = [
+      `Freshness audit: ${freshnessAudit.freshnessWindow}, accepted ${freshnessAudit.acceptedEntries.length} source(s), rejected ${freshnessAudit.staleSourcesRejectedCount} as stale or undated.`
+    ];
+
+    if (freshnessAudit.mostRecentSourceDate) {
+      notes.push(`Most recent accepted source date: ${freshnessAudit.mostRecentSourceDate.slice(0, 10)}.`);
+    }
+
+    return notes;
   }
 
   private buildSlotImpactNotes(
@@ -326,11 +543,10 @@ export class ResearchVerifier {
   private buildTruth(args: {
     decision: ResearchDecision;
     args: ResearchDecisionArgs;
-    sources: ResearchSource[];
+    entries: SourceEntry[];
     corroboratedSignals: string[];
   }): ResearchTruth {
     const temporalProfile = args.decision.plan?.temporalProfile ?? buildDefaultTemporalProfile();
-    const preferredDomains = args.decision.plan?.preferredDomains ?? [];
     const genericTerms = new Set([
       "official",
       "documentation",
@@ -373,14 +589,8 @@ export class ResearchVerifier {
       ).filter((term) => !genericTerms.has(term.toLowerCase()))
     ).slice(0, 8);
     const focusTerms = claimAnchorTerms.length > 0 ? claimAnchorTerms : fallbackFocusTerms;
-    const reliableSources = args.sources
-      .map((source) => ({
-        source,
-        trustScore: getSourceTrustScore(source.url, preferredDomains)
-      }))
-      .filter((entry) => entry.trustScore >= 26);
 
-    let candidateFacts = reliableSources
+    let candidateFacts = args.entries
       .flatMap((entry) =>
         splitSentences(entry.source.excerpt).map((sentence, index) => ({
           sentence: normalizeSpace(sentence),
@@ -390,29 +600,27 @@ export class ResearchVerifier {
             focusTerms,
             entry.trustScore,
             index,
-            temporalProfile
+            temporalProfile,
+            entry.source.effectiveDate
           ),
-          trustScore: entry.trustScore
+          trustScore: entry.trustScore,
+          effectiveDate: entry.source.effectiveDate
         }))
       )
       .filter((entry) => entry.score >= 6)
-      .sort((left, right) => right.score - left.score || right.trustScore - left.trustScore)
-      .map((entry) => entry.sentence);
+      .sort((left, right) => right.score - left.score || right.trustScore - left.trustScore);
 
-    if (
-      temporalProfile.focus === "recent" ||
-      temporalProfile.focus === "this_week" ||
-      temporalProfile.focus === "today"
-    ) {
+    if (temporalProfile.isTemporal) {
       candidateFacts = candidateFacts.filter(
-        (sentence) =>
-          hasExplicitDateSignal(sentence) ||
-          scoreTemporalFreshness(sentence, temporalProfile) >= 4
+        (entry) =>
+          entry.effectiveDate !== null ||
+          hasExplicitDateSignal(entry.sentence) ||
+          scoreTemporalFreshness(entry.sentence, temporalProfile) >= 4
       );
     }
 
-    const verifiedFacts = this.uniqueNormalized(candidateFacts).slice(0, 6);
-    const sourceText = reliableSources
+    const verifiedFacts = this.uniqueNormalized(candidateFacts.map((entry) => entry.sentence)).slice(0, 6);
+    const sourceText = args.entries
       .map((entry) => `${entry.source.title} ${entry.source.snippet} ${entry.source.excerpt}`)
       .join(" ")
       .toLowerCase();
@@ -426,7 +634,10 @@ export class ResearchVerifier {
       verifiedFacts,
       temporalProfile
     );
-    const noReliableSource = reliableSources.length === 0 || verifiedFacts.length === 0;
+    const noReliableSource =
+      args.entries.length === 0 ||
+      verifiedFacts.length === 0 ||
+      (temporalProfile.isTemporal && args.entries.every((entry) => entry.source.effectiveDate === null));
     const confidenceScore = noReliableSource
       ? 0
       : Math.max(
@@ -434,7 +645,7 @@ export class ResearchVerifier {
           Math.min(
             1,
             0.3 +
-              Math.min(reliableSources.length, 3) * 0.15 +
+              Math.min(args.entries.length, 3) * 0.15 +
               Math.min(args.corroboratedSignals.length, 3) * 0.08 +
               Math.min(verifiedFacts.length, 3) * 0.08 -
               Math.min(uncertainClaims.length, 3) * 0.08 -
@@ -461,7 +672,8 @@ export class ResearchVerifier {
     focusTerms: string[],
     trustScore: number,
     index: number,
-    temporalProfile = buildDefaultTemporalProfile()
+    temporalProfile = buildDefaultTemporalProfile(),
+    sourceEffectiveDate: string | null = null
   ) {
     const normalized = sentence.toLowerCase();
     let score = Math.min(5, Math.round(trustScore / 10));
@@ -484,13 +696,15 @@ export class ResearchVerifier {
       : 0;
     score -= /\b(may|might|could|appears|seems)\b/i.test(sentence) ? 2 : 0;
     score -= index > 3 ? 1 : 0;
-    score += scoreTemporalFreshness(sentence, temporalProfile);
+    score += scoreTemporalFreshness(
+      sourceEffectiveDate ? `${sentence} ${sourceEffectiveDate}` : sentence,
+      temporalProfile
+    );
 
     if (
-      (temporalProfile.focus === "recent" ||
-        temporalProfile.focus === "this_week" ||
-        temporalProfile.focus === "today") &&
-      !hasExplicitDateSignal(sentence)
+      temporalProfile.isTemporal &&
+      !hasExplicitDateSignal(sentence) &&
+      sourceEffectiveDate === null
     ) {
       score -= 4;
     }
@@ -530,16 +744,8 @@ export class ResearchVerifier {
   private buildNoReliableSourceNote(
     temporalProfile: ReturnType<typeof buildDefaultTemporalProfile>
   ) {
-    if (temporalProfile.focus === "this_week" && temporalProfile.dateRangeStart && temporalProfile.dateRangeEnd) {
-      return `No reliable source could verify the claim inside the window ${describeTemporalWindow(temporalProfile)}.`;
-    }
-
-    if (temporalProfile.focus === "recent" && temporalProfile.dateRangeStart && temporalProfile.dateRangeEnd) {
-      return `No reliable source could verify the claim inside the recent window ${describeTemporalWindow(temporalProfile)}.`;
-    }
-
-    if (temporalProfile.focus === "today" || temporalProfile.focus === "latest" || temporalProfile.focus === "current") {
-      return `No reliable source could confirm the claim as of ${temporalProfile.absoluteDateHint ?? "the requested date"}.`;
+    if (temporalProfile.isTemporal) {
+      return `Research attempted, but no sufficiently recent source was found for ${describeTemporalWindow(temporalProfile) ?? temporalProfile.absoluteDateHint ?? "the requested timeframe"}.`;
     }
 
     return "The requested claim could not be verified from reliable sources.";
@@ -552,8 +758,17 @@ export class ResearchVerifier {
     }
 
     return [
-      `Temporal verification mode: ${profile.focus.replaceAll("_", " ")} anchored to ${describeTemporalWindow(profile) ?? profile.absoluteDateHint ?? "the requested date"}.`
+      `Temporal verification mode: ${profile.queryType.replaceAll("_", " ")} anchored to ${describeTemporalWindow(profile) ?? profile.absoluteDateHint ?? "the requested date"}.`
     ];
+  }
+
+  private parseDate(value: string | null) {
+    if (!value) {
+      return null;
+    }
+
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
 
   private uniqueNormalized(values: string[]) {

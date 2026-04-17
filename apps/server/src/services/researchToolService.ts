@@ -63,7 +63,12 @@ function buildEmptyResearchLog(decision: ResearchDecision): ResearchToolLog {
     verification: {
       sourceCount: 0,
       extractedSourceCount: 0,
-      corroboratedSignals: []
+      corroboratedSignals: [],
+      freshnessSatisfied: true,
+      freshnessWindow: "none",
+      mostRecentSourceDate: null,
+      oldestAcceptedSourceDate: null,
+      staleSourcesRejectedCount: 0
     },
     truth: {
       verified_facts: [],
@@ -128,7 +133,6 @@ export class ResearchToolService {
 
       return this.verifier.buildFailureLog({
         decision,
-        args,
         startedAt,
         error
       });
@@ -329,11 +333,13 @@ export class ResearchToolService {
     const baseNeedScore =
       falseClaimCount * 18 +
       (temporalProfile.isTemporal
-        ? temporalProfile.focus === "this_week" || temporalProfile.focus === "today"
-          ? 26
-          : temporalProfile.focus === "recent"
-            ? 22
-            : 18
+        ? temporalProfile.queryType === "recent_updates"
+          ? temporalProfile.focus === "this_week" || temporalProfile.focus === "today"
+            ? 30
+            : 26
+          : temporalProfile.queryType === "release_freshness"
+            ? 24
+            : 20
         : 0) +
       (highFactualRisk ? 28 : mediumFactualRisk ? 16 : elevatedFactualRisk ? 8 : 0) +
       (providerSpecific ? 8 : 0) +
@@ -375,6 +381,7 @@ export class ResearchToolService {
 
     if (falseClaimCount > 0) addSignal("potentially_false_claims");
     if (temporalProfile.isTemporal) addSignal(`temporal_${temporalProfile.focus}`);
+    if (temporalProfile.queryType !== "none") addSignal(`temporal_query_${temporalProfile.queryType}`);
     if (highFactualRisk) addSignal("high_factual_risk");
     else if (mediumFactualRisk) addSignal("medium_factual_risk");
     else if (elevatedFactualRisk) addSignal("elevated_factual_risk");

@@ -3,6 +3,7 @@ import type {
   QuestionCategory,
   ResearchDecisionMode,
   ResearchExpectedValue,
+  ResearchFreshnessWindow,
   ResearchIntent,
   ResearchTemporalProfile,
   RedTeamOutput,
@@ -192,10 +193,22 @@ const ISO_DATE_PATTERN = /\b20\d{2}-\d{2}-\d{2}\b/g;
 const SLASH_DATE_PATTERN = /\b\d{1,2}\/\d{1,2}\/20\d{2}\b/g;
 const MONTH_DAY_YEAR_PATTERN =
   /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\s+\d{1,2})?,\s+20\d{2}\b/gi;
+const MONTH_YEAR_PATTERN =
+  /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+20\d{2}\b/gi;
 const RELATIVE_DATE_PATTERN = /\b(\d{1,2})\s+(hours?|days?|weeks?)\s+ago\b/gi;
 
 function startOfUtcDay(value: Date) {
   return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
+}
+
+function startOfUtcMonth(value: Date) {
+  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), 1));
+}
+
+function startOfUtcWeek(value: Date) {
+  const day = value.getUTCDay();
+  const delta = day === 0 ? -6 : 1 - day;
+  return shiftUtcDays(startOfUtcDay(value), delta);
 }
 
 function shiftUtcDays(value: Date, deltaDays: number) {
@@ -217,6 +230,14 @@ export function formatCalendarDate(value: Date) {
   }).format(value);
 }
 
+export function formatCalendarMonth(value: Date) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC"
+  }).format(value);
+}
+
 export function formatIsoDayForSearch(value: string) {
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return Number.isNaN(parsed.getTime()) ? value : formatCalendarDate(parsed);
@@ -226,6 +247,7 @@ export function buildDefaultTemporalProfile(): ResearchTemporalProfile {
   return {
     isTemporal: false,
     focus: "none",
+    queryType: "none",
     recencyDays: null,
     absoluteDateHint: null,
     dateRangeStart: null,
@@ -251,17 +273,74 @@ export function detectTemporalQuery(value: string, now = new Date()): ResearchTe
   const normalized = value.toLowerCase();
   const today = startOfUtcDay(now);
   const absoluteDateHint = formatCalendarDate(today);
-  const thisWeekStart = shiftUtcDays(today, -6);
+  const thisWeekStart = startOfUtcWeek(today);
+  const thisWeekEnd = shiftUtcDays(thisWeekStart, 6);
+  const thisMonthStart = startOfUtcMonth(today);
+  const thisMonthLabel = formatCalendarMonth(today);
+  const hasCurrentStateCue = matchesAny(normalized, [
+    /\bcurrent\b/i,
+    /\bcurrently\b/i,
+    /\bas of\b/i,
+    /\bright now\b/i,
+    /\bwho is\b/i,
+    /\bceo\b/i,
+    /\bpresident\b/i,
+    /\bprime minister\b/i,
+    /\bgovernor\b/i,
+    /\bchair\b/i,
+    /\bleader(ship)?\b/i,
+    /\bowner\b/i,
+    /\bstatus\b/i,
+    /\bavailability\b/i,
+    /\bavailable\b/i,
+    /\bprice\b/i
+  ]);
+  const hasReleaseCue = matchesAny(normalized, [
+    /\brelease(?:d|s| notes?)?\b/i,
+    /\bversion\b/i,
+    /\bchangelog\b/i,
+    /\bannounce(?:d|ment|ments)?\b/i,
+    /\blaunch(?:ed)?\b/i,
+    /\broll(?:ed)? out\b/i,
+    /\bga\b/i,
+    /\bgeneral availability\b/i,
+    /\bwhat'?s new\b/i,
+    /\bnew features?\b/i
+  ]);
+  const hasRecentUpdatesCue =
+    matchesAny(normalized, [
+      /\brecent\b/i,
+      /\brecently\b/i,
+      /\bthis week\b/i,
+      /\bthis month\b/i,
+      /\blast 7 days\b/i,
+      /\blast 30 days\b/i,
+      /\bpast week\b/i,
+      /\bpast month\b/i,
+      /\bnews\b/i,
+      /\bheadline(?:s)?\b/i,
+      /\bupdates?\b/i,
+      /\bwhat happened\b/i,
+      /\bmajor\b/i
+    ]) ||
+    (/\bnew\b/i.test(normalized) &&
+      matchesAny(normalized, [/\bupdates?\b/i, /\bfeatures?\b/i, /\bannouncements?\b/i, /\bmodels?\b/i]));
+
+  const buildTemporalProfile = (profile: Partial<ResearchTemporalProfile>): ResearchTemporalProfile => ({
+    ...buildDefaultTemporalProfile(),
+    isTemporal: true,
+    absoluteDateHint,
+    ...profile
+  });
 
   if (/\bthis week\b|\bpast week\b|\blast 7 days\b|\bseven days\b/i.test(normalized)) {
-    const windowLabel = `${formatCalendarDate(thisWeekStart)} to ${absoluteDateHint}`;
-    return {
-      isTemporal: true,
+    const windowLabel = `${formatCalendarDate(thisWeekStart)} to ${formatCalendarDate(thisWeekEnd)}`;
+    return buildTemporalProfile({
       focus: "this_week",
+      queryType: "recent_updates",
       recencyDays: 7,
-      absoluteDateHint,
       dateRangeStart: toIsoDay(thisWeekStart),
-      dateRangeEnd: toIsoDay(today),
+      dateRangeEnd: toIsoDay(thisWeekEnd),
       queryDirectives: [
         `Resolve "this week" to ${windowLabel} before searching.`,
         "Prefer primary sources with an explicit publication or update date in that window.",
@@ -272,15 +351,36 @@ export function detectTemporalQuery(value: string, now = new Date()): ResearchTe
         "Do not paraphrase the result as just 'this week' without the concrete dates.",
         "If no reliable source falls inside the window, say that the weekly claim could not be verified."
       ]
-    };
+    });
+  }
+
+  if (/\bthis month\b|\bpast month\b|\blast 30 days\b/i.test(normalized)) {
+    const windowLabel = `${formatCalendarDate(thisMonthStart)} to ${absoluteDateHint}`;
+    return buildTemporalProfile({
+      focus: "this_month",
+      queryType: "recent_updates",
+      recencyDays: 30,
+      absoluteDateHint: thisMonthLabel,
+      dateRangeStart: toIsoDay(thisMonthStart),
+      dateRangeEnd: toIsoDay(today),
+      queryDirectives: [
+        `Resolve "this month" to ${thisMonthLabel} and treat the active window as ${windowLabel}.`,
+        "Prefer primary sources with an explicit publication or update date in the resolved month window.",
+        "Prefer official announcements, release posts, advisories, or status updates over timeless docs."
+      ],
+      answerDirectives: [
+        `State the resolved month ${thisMonthLabel} and, when useful, the active window ${windowLabel}.`,
+        "Do not leave 'this month' implicit in the final wording.",
+        "If no reliable source falls inside the resolved month window, say that the monthly claim could not be verified."
+      ]
+    });
   }
 
   if (/\btoday\b|\bas of today\b|\bright now\b/i.test(normalized)) {
-    return {
-      isTemporal: true,
+    return buildTemporalProfile({
       focus: "today",
+      queryType: hasReleaseCue ? "release_freshness" : "current_status",
       recencyDays: 2,
-      absoluteDateHint,
       dateRangeStart: toIsoDay(today),
       dateRangeEnd: toIsoDay(today),
       queryDirectives: [
@@ -293,20 +393,22 @@ export function detectTemporalQuery(value: string, now = new Date()): ResearchTe
         "Do not claim something is true today unless a reliable source supports that current state.",
         "If freshness is unclear, say that current status could not be confirmed."
       ]
-    };
+    });
   }
 
-  if (/\blatest\b|\bnewest\b|\bmost recent\b/i.test(normalized)) {
-    return {
-      isTemporal: true,
+  if (
+    (/\blatest\b|\bnewest\b|\bmost recent\b/i.test(normalized) && hasReleaseCue) ||
+    (hasReleaseCue && /\bnew\b/i.test(normalized))
+  ) {
+    return buildTemporalProfile({
       focus: "latest",
-      recencyDays: 60,
-      absoluteDateHint,
+      queryType: "release_freshness",
+      recencyDays: 365,
       dateRangeStart: null,
       dateRangeEnd: null,
       queryDirectives: [
         `Replace "latest" with an as-of date anchored to ${absoluteDateHint}.`,
-        "Prefer release notes, changelogs, official announcements, or current documentation.",
+        "Prefer release notes, changelogs, official announcements, or canonical version pages.",
         "Prefer sources that expose an explicit publication or update date."
       ],
       answerDirectives: [
@@ -314,20 +416,19 @@ export function detectTemporalQuery(value: string, now = new Date()): ResearchTe
         "Use concrete dates or version markers instead of repeating 'latest' loosely.",
         "If reliable sources do not establish what is latest, say that explicitly."
       ]
-    };
+    });
   }
 
-  if (/\bcurrent\b|\bcurrently\b|\bas of now\b/i.test(normalized)) {
-    return {
-      isTemporal: true,
+  if (hasCurrentStateCue) {
+    return buildTemporalProfile({
       focus: "current",
+      queryType: "current_status",
       recencyDays: 120,
-      absoluteDateHint,
       dateRangeStart: null,
       dateRangeEnd: null,
       queryDirectives: [
         `Replace "current" with an as-of date anchored to ${absoluteDateHint}.`,
-        "Prefer official documentation, status pages, or canonical product pages describing the current state.",
+        "Prefer official documentation, status pages, canonical leadership pages, or product pages describing the current state.",
         "Prefer sources that expose an explicit update date when available."
       ],
       answerDirectives: [
@@ -335,17 +436,20 @@ export function detectTemporalQuery(value: string, now = new Date()): ResearchTe
         "Use exact dates, versions, or status labels instead of generic 'currently' phrasing.",
         "If a reliable source does not confirm the present state, say that explicitly."
       ]
-    };
+    });
   }
 
-  if (/\brecent\b|\brecently\b/i.test(normalized)) {
+  if (
+    hasRecentUpdatesCue ||
+    /\brecent\b|\brecently\b/i.test(normalized) ||
+    /\bannounced\b/i.test(normalized)
+  ) {
     const recentStart = shiftUtcDays(today, -29);
     const windowLabel = `${formatCalendarDate(recentStart)} to ${absoluteDateHint}`;
-    return {
-      isTemporal: true,
+    return buildTemporalProfile({
       focus: "recent",
+      queryType: "recent_updates",
       recencyDays: 30,
-      absoluteDateHint,
       dateRangeStart: toIsoDay(recentStart),
       dateRangeEnd: toIsoDay(today),
       queryDirectives: [
@@ -358,10 +462,48 @@ export function detectTemporalQuery(value: string, now = new Date()): ResearchTe
         "Do not leave 'recent' undefined in the final wording.",
         "If reliable sources do not support the claim inside that window, say so explicitly."
       ]
-    };
+    });
+  }
+
+  if (/\blatest\b|\bnewest\b|\bmost recent\b/i.test(normalized)) {
+    return buildTemporalProfile({
+      focus: "latest",
+      queryType: "current_status",
+      recencyDays: 120,
+      queryDirectives: [
+        `Replace "latest" with an as-of date anchored to ${absoluteDateHint}.`,
+        "Prefer official or primary sources that describe the present state and expose a date when available.",
+        "Do not rely on timeless background pages when a dated current-state source exists."
+      ],
+      answerDirectives: [
+        `State that the answer is verified as of ${absoluteDateHint}.`,
+        "Use a concrete date or status marker instead of vague 'latest' phrasing.",
+        "If no reliable current-state source can be established, say that explicitly."
+      ]
+    });
   }
 
   return buildDefaultTemporalProfile();
+}
+
+export function resolveFreshnessWindow(profile: ResearchTemporalProfile): ResearchFreshnessWindow {
+  if (!profile.isTemporal) {
+    return "none";
+  }
+
+  if (profile.queryType === "current_status" || profile.queryType === "release_freshness") {
+    return "current";
+  }
+
+  if (profile.focus === "this_week") {
+    return "7d";
+  }
+
+  if (profile.focus === "recent") {
+    return "30d";
+  }
+
+  return profile.dateRangeStart && profile.dateRangeEnd ? "explicit_date_range" : "current";
 }
 
 export type SearchCandidate = {
@@ -613,7 +755,7 @@ export function scoreTemporalFreshness(value: string, profile: ResearchTemporalP
   return score;
 }
 
-function extractDateCandidates(value: string, now = new Date()) {
+export function extractDateCandidates(value: string, now = new Date()) {
   const dates: Date[] = [];
 
   for (const match of value.matchAll(ISO_DATE_PATTERN)) {
@@ -637,6 +779,13 @@ function extractDateCandidates(value: string, now = new Date()) {
     }
   }
 
+  for (const match of value.matchAll(MONTH_YEAR_PATTERN)) {
+    const parsed = new Date(`${match[0]} 1`);
+    if (!Number.isNaN(parsed.getTime())) {
+      dates.push(parsed);
+    }
+  }
+
   for (const match of value.matchAll(RELATIVE_DATE_PATTERN)) {
     const amount = Number(match[1]);
     const unit = match[2]?.toLowerCase() ?? "";
@@ -649,4 +798,8 @@ function extractDateCandidates(value: string, now = new Date()) {
   }
 
   return dates;
+}
+
+export function toIsoDateTime(value: Date) {
+  return value.toISOString();
 }

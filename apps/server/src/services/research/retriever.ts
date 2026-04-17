@@ -107,9 +107,14 @@ export class ResearchRetriever {
   }
 
   private minimumCandidateScore(plan: SearchPlan) {
-    if (plan.temporalProfile.isTemporal) {
+    if (
+      plan.intent === "current_status" ||
+      plan.intent === "recent_updates" ||
+      plan.intent === "release_freshness"
+    ) {
       return plan.temporalProfile.focus === "recent" ||
         plan.temporalProfile.focus === "this_week" ||
+        plan.temporalProfile.focus === "this_month" ||
         plan.temporalProfile.focus === "today"
         ? 16
         : 14;
@@ -135,6 +140,25 @@ export class ResearchRetriever {
     const path = getPathname(candidate.url);
     const haystack = `${candidate.title} ${candidate.snippet}`.toLowerCase();
     const temporalHaystack = `${candidate.title} ${candidate.snippet} ${candidate.url}`;
+    const isDocPath = matchesAny(path, [
+      /\/docs?\//i,
+      /\/documentation/i,
+      /\/reference/i,
+      /\/guide/i,
+      /\/manual/i,
+      /\/troubleshoot/i,
+      /\/learn\//i
+    ]);
+    const isNewsPath = matchesAny(path, [/\/blog\//i, /\/news\//i, /\/press\//i, /\/announcements?\//i]);
+    const isReleasePath = matchesAny(path, [/\/release/i, /\/releases\//i, /\/changelog/i, /\/version/i]);
+    const isCurrentStatusPath = matchesAny(path, [
+      /\/status/i,
+      /\/team/i,
+      /\/leadership/i,
+      /\/executive/i,
+      /\/pricing/i,
+      /\/availability/i
+    ]);
     let score = this.getDomainTrustScore(domain, path, plan);
 
     if (plan.preferredDomains.some((preferred) => domain.endsWith(preferred.toLowerCase()))) {
@@ -158,23 +182,23 @@ export class ResearchRetriever {
       score += 6;
     }
 
-    if (
-      matchesAny(path, [
-        /\/docs?\//i,
-        /\/documentation/i,
-        /\/reference/i,
-        /\/guide/i,
-        /\/manual/i,
-        /\/troubleshoot/i,
-        /\/learn\//i
-      ])
-    ) {
-      score += 10;
+    if (isDocPath) {
+      if (plan.intent === "release_freshness") {
+        score += 4;
+      } else if (plan.intent === "current_status") {
+        score += 6;
+      } else {
+        score += 10;
+      }
     }
 
-    if (matchesAny(path, [/\/blog\//i, /\/news\//i, /\/release/i, /\/releases\//i])) {
-      if (plan.temporalProfile.isTemporal) {
-        score += this.isHighTrustDomain(domain, plan) ? 8 : 2;
+    if (isNewsPath || isReleasePath) {
+      if (plan.intent === "recent_updates") {
+        score += this.isHighTrustDomain(domain, plan) ? 12 : 5;
+      } else if (plan.intent === "release_freshness") {
+        score += isReleasePath ? (this.isHighTrustDomain(domain, plan) ? 14 : 6) : 4;
+      } else if (plan.intent === "current_status") {
+        score += isCurrentStatusPath ? 8 : -2;
       } else {
         score -= plan.intent === "metric_verification" ? 3 : 8;
       }
@@ -217,6 +241,21 @@ export class ResearchRetriever {
       case "metric_verification":
         if (matchesAny(haystack, [/\bmetric\b/i, /\badoption\b/i, /\bbenchmark\b/i, /\broi\b/i])) {
           score += 8;
+        }
+        break;
+      case "current_status":
+        if (matchesAny(haystack, [/\bcurrent\b/i, /\bleadership\b/i, /\bstatus\b/i, /\bversion\b/i])) {
+          score += 10;
+        }
+        break;
+      case "recent_updates":
+        if (matchesAny(haystack, [/\bupdate\b/i, /\bnews\b/i, /\bannouncement\b/i, /\bthis week\b/i])) {
+          score += 10;
+        }
+        break;
+      case "release_freshness":
+        if (matchesAny(haystack, [/\brelease\b/i, /\bversion\b/i, /\bchangelog\b/i, /\brelease notes\b/i])) {
+          score += 10;
         }
         break;
       default:
@@ -265,7 +304,10 @@ export class ResearchRetriever {
     }
 
     if (OFFICIAL_DOMAIN_PATTERNS.some((pattern) => pattern.test(domain))) {
-      return COMMUNITY_PATH_PATTERNS.some((pattern) => pattern.test(path)) ? 20 : 38;
+      if (COMMUNITY_PATH_PATTERNS.some((pattern) => pattern.test(path))) {
+        return plan.intent === "recent_updates" || plan.intent === "release_freshness" ? 34 : 20;
+      }
+      return 38;
     }
 
     if (

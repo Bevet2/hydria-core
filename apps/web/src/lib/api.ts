@@ -223,6 +223,10 @@ export type ResearchSource = {
   url: string;
   snippet: string;
   excerpt: string;
+  publishedAt: string | null;
+  modifiedAt: string | null;
+  effectiveDate: string | null;
+  dateSource: "meta" | "time" | "jsonld" | "text" | "search_result" | "unknown" | null;
 };
 
 export type ResearchDecisionMode =
@@ -237,7 +241,13 @@ export type ResearchTemporalFocus =
   | "current"
   | "recent"
   | "this_week"
+  | "this_month"
   | "today";
+export type ResearchTemporalQueryType =
+  | "none"
+  | "current_status"
+  | "recent_updates"
+  | "release_freshness";
 
 export type ResearchIntent =
   | "definition"
@@ -246,7 +256,10 @@ export type ResearchIntent =
   | "constraint_check"
   | "incident_guidance"
   | "diagnostic_docs"
-  | "metric_verification";
+  | "metric_verification"
+  | "current_status"
+  | "recent_updates"
+  | "release_freshness";
 
 export type ResearchExpectedValue = "low" | "medium" | "high";
 export type ResearchNetImpact = "positive" | "neutral" | "negative" | "unknown";
@@ -281,6 +294,7 @@ export type ResearchToolLog = {
     temporalProfile: {
       isTemporal: boolean;
       focus: ResearchTemporalFocus;
+      queryType: ResearchTemporalQueryType;
       recencyDays: number | null;
       absoluteDateHint: string | null;
       dateRangeStart: string | null;
@@ -297,6 +311,11 @@ export type ResearchToolLog = {
     sourceCount: number;
     extractedSourceCount: number;
     corroboratedSignals: string[];
+    freshnessSatisfied: boolean;
+    freshnessWindow: "none" | "current" | "7d" | "30d" | "explicit_date_range";
+    mostRecentSourceDate: string | null;
+    oldestAcceptedSourceDate: string | null;
+    staleSourcesRejectedCount: number;
   };
   truth: ResearchTruth;
   appliedTo: {

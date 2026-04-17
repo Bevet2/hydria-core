@@ -147,7 +147,11 @@ ${JSON.stringify(
       sources: args.research.sources.map((source) => ({
         title: source.title,
         url: source.url,
-        excerpt: source.excerpt
+        excerpt: source.excerpt,
+        published_at: source.publishedAt,
+        modified_at: source.modifiedAt,
+        effective_date: source.effectiveDate,
+        date_source: source.dateSource
       }))
     },
     null,
@@ -170,6 +174,11 @@ Answering rules:
 - when an uncertain claim is central to the question, prefer "I cannot verify X from reliable sources" over "X is true but uncertain"
 - if query_plan.temporal_profile.isTemporal is true, replace relative time words like latest/current/recent/this week with the exact date or date window from temporal_profile
 - if query_plan.temporal_profile.isTemporal is true, do not claim freshness without saying the as-of date or exact window used for verification
+- if query_plan.temporal_profile.isTemporal is true, do not answer the time-sensitive claim from general knowledge; use only the dated research findings
+- if query_plan.temporal_profile.queryType is current_status, prefer official or primary sources that describe the present state
+- if query_plan.temporal_profile.queryType is recent_updates or release_freshness, prefer sources with explicit publication or update dates over timeless docs
+- if verification.freshnessSatisfied is false for a temporal query, explicitly say that no sufficiently recent dated source was found and do not fill the gap with prior knowledge
+- if a temporal source has no effective_date, treat it as weak evidence and do not use it to assert current or recent status
 - if query_plan.temporal_profile.isTemporal is true and truth.no_reliable_source is true, explicitly say the current/recent claim could not be confirmed for that date or window
 - if the selected strategy is factual, stay concise and avoid extra structure or filler
 - do not add fluff

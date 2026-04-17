@@ -82,7 +82,14 @@ export const researchTemporalFocusSchema = z.enum([
   "current",
   "recent",
   "this_week",
+  "this_month",
   "today"
+]);
+export const researchTemporalQueryTypeSchema = z.enum([
+  "none",
+  "current_status",
+  "recent_updates",
+  "release_freshness"
 ]);
 export const researchIntentSchema = z.enum([
   "definition",
@@ -91,7 +98,10 @@ export const researchIntentSchema = z.enum([
   "constraint_check",
   "incident_guidance",
   "diagnostic_docs",
-  "metric_verification"
+  "metric_verification",
+  "current_status",
+  "recent_updates",
+  "release_freshness"
 ]);
 export const researchExpectedValueSchema = z.enum(["low", "medium", "high"]);
 export const researchNetImpactSchema = z.enum([
@@ -335,17 +345,43 @@ export const orchestrationPolicySchema = z.object({
   reasoning: z.array(z.string()).min(1).max(12)
 });
 
+export const researchSourceDateSourceSchema = z.enum([
+  "meta",
+  "time",
+  "jsonld",
+  "text",
+  "search_result",
+  "unknown"
+]);
+
 export const researchSourceSchema = z.object({
   title: z.string().min(1),
   url: z.string().url(),
   snippet: z.string().min(1),
-  excerpt: z.string().min(1)
+  excerpt: z.string().min(1),
+  publishedAt: z.string().datetime().nullable().default(null),
+  modifiedAt: z.string().datetime().nullable().default(null),
+  effectiveDate: z.string().datetime().nullable().default(null),
+  dateSource: researchSourceDateSourceSchema.nullable().default(null)
 });
+
+export const researchFreshnessWindowSchema = z.enum([
+  "none",
+  "current",
+  "7d",
+  "30d",
+  "explicit_date_range"
+]);
 
 export const researchVerificationSchema = z.object({
   sourceCount: z.number().int().nonnegative(),
   extractedSourceCount: z.number().int().nonnegative(),
-  corroboratedSignals: z.array(z.string()).max(8)
+  corroboratedSignals: z.array(z.string()).max(8),
+  freshnessSatisfied: z.boolean().default(true),
+  freshnessWindow: researchFreshnessWindowSchema.default("none"),
+  mostRecentSourceDate: z.string().datetime().nullable().default(null),
+  oldestAcceptedSourceDate: z.string().datetime().nullable().default(null),
+  staleSourcesRejectedCount: z.number().int().nonnegative().default(0)
 });
 
 export const researchTruthSchema = z.object({
@@ -369,6 +405,7 @@ export const researchDecisionDetailsSchema = z.object({
 export const researchTemporalProfileSchema = z.object({
   isTemporal: z.boolean().default(false),
   focus: researchTemporalFocusSchema.default("none"),
+  queryType: researchTemporalQueryTypeSchema.default("none"),
   recencyDays: z.number().int().min(0).max(365).nullable().default(null),
   absoluteDateHint: z.string().nullable().default(null),
   dateRangeStart: z.string().nullable().default(null),
@@ -533,6 +570,7 @@ export type OrchestrationResearchPolicy = z.infer<typeof orchestrationResearchPo
 export type OrchestrationCostPolicy = z.infer<typeof orchestrationCostPolicySchema>;
 export type ResearchDecisionMode = z.infer<typeof researchDecisionModeSchema>;
 export type ResearchTemporalFocus = z.infer<typeof researchTemporalFocusSchema>;
+export type ResearchTemporalQueryType = z.infer<typeof researchTemporalQueryTypeSchema>;
 export type ResearchIntent = z.infer<typeof researchIntentSchema>;
 export type ResearchExpectedValue = z.infer<typeof researchExpectedValueSchema>;
 export type ResearchNetImpact = z.infer<typeof researchNetImpactSchema>;
@@ -543,7 +581,9 @@ export type RouterSideSignal = z.infer<typeof routerSideSignalSchema>;
 export type RefineRouterDecisionDetails = z.infer<typeof refineRouterDecisionSchema>;
 export type RefineProfile = z.infer<typeof refineProfileSchema>;
 export type OrchestrationPolicyDetails = z.infer<typeof orchestrationPolicySchema>;
+export type ResearchSourceDateSource = z.infer<typeof researchSourceDateSourceSchema>;
 export type ResearchSource = z.infer<typeof researchSourceSchema>;
+export type ResearchFreshnessWindow = z.infer<typeof researchFreshnessWindowSchema>;
 export type ResearchVerification = z.infer<typeof researchVerificationSchema>;
 export type ResearchTruth = z.infer<typeof researchTruthSchema>;
 export type ResearchDecisionDetails = z.infer<typeof researchDecisionDetailsSchema>;
