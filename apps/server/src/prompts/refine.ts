@@ -170,11 +170,16 @@ ${JSON.stringify(
   )}
 ` : ""}
 
-${args.research?.used ? `EXTERNAL RESEARCH TOOL FINDINGS
+${args.research?.decision.shouldUse ? `EXTERNAL RESEARCH TOOL FINDINGS
 ${JSON.stringify(
     {
       query: args.research.query,
+      query_plan: {
+        selected_query: args.research.queryPlan.selectedQuery,
+        temporal_profile: args.research.queryPlan.temporalProfile
+      },
       summary: args.research.summary,
+      truth: args.research.truth,
       verification: args.research.verification,
       sources: args.research.sources.map((source) => ({
         title: source.title,
@@ -199,6 +204,9 @@ Reminders:
 - if external research findings are present, use them to verify, tighten, or qualify factual claims
 - if external research findings are present, prefer sourced claims over unsupported generic claims
 - if external research findings are incomplete or mixed, keep uncertainty explicit instead of pretending certainty
+- if query_plan.temporal_profile.isTemporal is true, replace relative time words with the exact date or date window from temporal_profile
+- if query_plan.temporal_profile.isTemporal is true, do not claim something is current/latest/recent without the explicit as-of date or verified window
+- if query_plan.temporal_profile.isTemporal is true and truth.no_reliable_source is true, say that the current/recent claim could not be confirmed for that date or window
 - if the category is product_strategy, prefer objective + priorities + phases + metrics + risks over polished but generic prose
 - if the category is product_strategy, keep the answer compact and decision-oriented rather than exhaustive
 - if the category is product_strategy, include an explicit wedge or first move, a sequencing choice, a success gate, and a major risk
@@ -266,11 +274,16 @@ ${JSON.stringify(
   )}
 ` : ""}
 
-${args.research?.used ? `EXTERNAL RESEARCH TOOL FINDINGS
+${args.research?.decision.shouldUse ? `EXTERNAL RESEARCH TOOL FINDINGS
 ${JSON.stringify(
     {
       query: args.research.query,
+      query_plan: {
+        selected_query: args.research.queryPlan.selectedQuery,
+        temporal_profile: args.research.queryPlan.temporalProfile
+      },
       summary: args.research.summary,
+      truth: args.research.truth,
       verification: args.research.verification,
       sources: args.research.sources.map((source) => ({
         title: source.title,
@@ -301,6 +314,8 @@ Repair instructions:
 - preserve the memory rules that match the current failure pattern when they improve precision
 - if external research findings are present, preserve the sourced constraints or examples when they materially improve precision
 - if external research findings are present, do not invent details that are not supported by the sources
+- if query_plan.temporal_profile.isTemporal is true, keep the explicit as-of date or date window in the repaired answer instead of reverting to vague relative wording
+- if query_plan.temporal_profile.isTemporal is true and truth.no_reliable_source is true, keep the freshness uncertainty explicit
 - if the category is product_strategy, preserve sequencing, priorities, metrics, risks, and dependencies
 - if the category is product_strategy, shorten and sharpen the answer instead of expanding it
 - if the category is product_strategy, include a clear first move, rollout gate, metrics, and top risk

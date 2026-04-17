@@ -4,6 +4,7 @@ import type {
   ResearchDecisionMode,
   ResearchExpectedValue,
   ResearchIntent,
+  ResearchTemporalProfile,
   RedTeamOutput,
   RespondentOutput
 } from "../../types/arena.js";
@@ -185,6 +186,184 @@ export const RESEARCH_MODE_COST_MS: Record<ResearchDecisionMode, number> = {
   verify_factual_subpart: 2100
 };
 
+const MONTH_NAME_PATTERN =
+  /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/i;
+const ISO_DATE_PATTERN = /\b20\d{2}-\d{2}-\d{2}\b/g;
+const SLASH_DATE_PATTERN = /\b\d{1,2}\/\d{1,2}\/20\d{2}\b/g;
+const MONTH_DAY_YEAR_PATTERN =
+  /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\s+\d{1,2})?,\s+20\d{2}\b/gi;
+const RELATIVE_DATE_PATTERN = /\b(\d{1,2})\s+(hours?|days?|weeks?)\s+ago\b/gi;
+
+function startOfUtcDay(value: Date) {
+  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
+}
+
+function shiftUtcDays(value: Date, deltaDays: number) {
+  const shifted = new Date(value);
+  shifted.setUTCDate(shifted.getUTCDate() + deltaDays);
+  return shifted;
+}
+
+function toIsoDay(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+export function formatCalendarDate(value: Date) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC"
+  }).format(value);
+}
+
+export function formatIsoDayForSearch(value: string) {
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(parsed.getTime()) ? value : formatCalendarDate(parsed);
+}
+
+export function buildDefaultTemporalProfile(): ResearchTemporalProfile {
+  return {
+    isTemporal: false,
+    focus: "none",
+    recencyDays: null,
+    absoluteDateHint: null,
+    dateRangeStart: null,
+    dateRangeEnd: null,
+    queryDirectives: [],
+    answerDirectives: []
+  };
+}
+
+export function describeTemporalWindow(profile: ResearchTemporalProfile) {
+  if (!profile.isTemporal) {
+    return null;
+  }
+
+  if (profile.dateRangeStart && profile.dateRangeEnd) {
+    return `${formatIsoDayForSearch(profile.dateRangeStart)} to ${formatIsoDayForSearch(profile.dateRangeEnd)}`;
+  }
+
+  return profile.absoluteDateHint;
+}
+
+export function detectTemporalQuery(value: string, now = new Date()): ResearchTemporalProfile {
+  const normalized = value.toLowerCase();
+  const today = startOfUtcDay(now);
+  const absoluteDateHint = formatCalendarDate(today);
+  const thisWeekStart = shiftUtcDays(today, -6);
+
+  if (/\bthis week\b|\bpast week\b|\blast 7 days\b|\bseven days\b/i.test(normalized)) {
+    const windowLabel = `${formatCalendarDate(thisWeekStart)} to ${absoluteDateHint}`;
+    return {
+      isTemporal: true,
+      focus: "this_week",
+      recencyDays: 7,
+      absoluteDateHint,
+      dateRangeStart: toIsoDay(thisWeekStart),
+      dateRangeEnd: toIsoDay(today),
+      queryDirectives: [
+        `Resolve "this week" to ${windowLabel} before searching.`,
+        "Prefer primary sources with an explicit publication or update date in that window.",
+        "Prefer official announcements, release notes, advisories, or status pages over commentary."
+      ],
+      answerDirectives: [
+        `State the exact window ${windowLabel}.`,
+        "Do not paraphrase the result as just 'this week' without the concrete dates.",
+        "If no reliable source falls inside the window, say that the weekly claim could not be verified."
+      ]
+    };
+  }
+
+  if (/\btoday\b|\bas of today\b|\bright now\b/i.test(normalized)) {
+    return {
+      isTemporal: true,
+      focus: "today",
+      recencyDays: 2,
+      absoluteDateHint,
+      dateRangeStart: toIsoDay(today),
+      dateRangeEnd: toIsoDay(today),
+      queryDirectives: [
+        `Resolve "today" to ${absoluteDateHint} before searching.`,
+        "Prefer sources that expose a concrete update date or status timestamp.",
+        "Prefer official pages over secondary summaries."
+      ],
+      answerDirectives: [
+        `State that the answer is anchored to ${absoluteDateHint}.`,
+        "Do not claim something is true today unless a reliable source supports that current state.",
+        "If freshness is unclear, say that current status could not be confirmed."
+      ]
+    };
+  }
+
+  if (/\blatest\b|\bnewest\b|\bmost recent\b/i.test(normalized)) {
+    return {
+      isTemporal: true,
+      focus: "latest",
+      recencyDays: 60,
+      absoluteDateHint,
+      dateRangeStart: null,
+      dateRangeEnd: null,
+      queryDirectives: [
+        `Replace "latest" with an as-of date anchored to ${absoluteDateHint}.`,
+        "Prefer release notes, changelogs, official announcements, or current documentation.",
+        "Prefer sources that expose an explicit publication or update date."
+      ],
+      answerDirectives: [
+        `State that the answer is verified as of ${absoluteDateHint}.`,
+        "Use concrete dates or version markers instead of repeating 'latest' loosely.",
+        "If reliable sources do not establish what is latest, say that explicitly."
+      ]
+    };
+  }
+
+  if (/\bcurrent\b|\bcurrently\b|\bas of now\b/i.test(normalized)) {
+    return {
+      isTemporal: true,
+      focus: "current",
+      recencyDays: 120,
+      absoluteDateHint,
+      dateRangeStart: null,
+      dateRangeEnd: null,
+      queryDirectives: [
+        `Replace "current" with an as-of date anchored to ${absoluteDateHint}.`,
+        "Prefer official documentation, status pages, or canonical product pages describing the current state.",
+        "Prefer sources that expose an explicit update date when available."
+      ],
+      answerDirectives: [
+        `State that the answer is anchored to ${absoluteDateHint}.`,
+        "Use exact dates, versions, or status labels instead of generic 'currently' phrasing.",
+        "If a reliable source does not confirm the present state, say that explicitly."
+      ]
+    };
+  }
+
+  if (/\brecent\b|\brecently\b/i.test(normalized)) {
+    const recentStart = shiftUtcDays(today, -29);
+    const windowLabel = `${formatCalendarDate(recentStart)} to ${absoluteDateHint}`;
+    return {
+      isTemporal: true,
+      focus: "recent",
+      recencyDays: 30,
+      absoluteDateHint,
+      dateRangeStart: toIsoDay(recentStart),
+      dateRangeEnd: toIsoDay(today),
+      queryDirectives: [
+        `Resolve "recent" to the rolling window ${windowLabel}.`,
+        "Prefer primary sources with a clear publication or update date inside that window.",
+        "Discard stale or undated sources when fresher primary sources are available."
+      ],
+      answerDirectives: [
+        `State the exact recent window ${windowLabel}.`,
+        "Do not leave 'recent' undefined in the final wording.",
+        "If reliable sources do not support the claim inside that window, say so explicitly."
+      ]
+    };
+  }
+
+  return buildDefaultTemporalProfile();
+}
+
 export type SearchCandidate = {
   title: string;
   url: string;
@@ -204,6 +383,7 @@ export type SearchPlan = {
   requiredTerms: string[];
   preferredDomains: string[];
   factFocusTerms: string[];
+  temporalProfile: ResearchTemporalProfile;
   reasoning: string;
 };
 
@@ -374,4 +554,99 @@ export function hasUncertaintySignals(respondent: RespondentOutput) {
     (count, pattern) => count + (joined.includes(pattern) ? 1 : 0),
     0
   );
+}
+
+export function hasExplicitDateSignal(value: string) {
+  return (
+    MONTH_NAME_PATTERN.test(value) ||
+    /\b20\d{2}\b/.test(value) ||
+    /\b\d{1,2}\s+(?:hours?|days?|weeks?)\s+ago\b/i.test(value) ||
+    /\bupdated\b|\bpublished\b|\breleased\b|\bannounced\b/i.test(value)
+  );
+}
+
+export function scoreTemporalFreshness(value: string, profile: ResearchTemporalProfile, now = new Date()) {
+  if (!profile.isTemporal) {
+    return 0;
+  }
+
+  const dates = extractDateCandidates(value, now);
+  const lower = value.toLowerCase();
+  let score = 0;
+
+  if (dates.length > 0) {
+    const freshest = dates.reduce((best, current) =>
+      current.getTime() > best.getTime() ? current : best
+    );
+    const ageDays = Math.max(
+      0,
+      Math.round((startOfUtcDay(now).getTime() - startOfUtcDay(freshest).getTime()) / 86_400_000)
+    );
+
+    if (profile.recencyDays !== null) {
+      if (ageDays <= profile.recencyDays) {
+        score += 12;
+      } else if (ageDays <= profile.recencyDays * 2) {
+        score += 4;
+      } else {
+        score -= 10;
+      }
+    } else {
+      score += 5;
+    }
+  } else if (profile.focus === "recent" || profile.focus === "this_week" || profile.focus === "today") {
+    score -= 6;
+  } else {
+    score -= 2;
+  }
+
+  if (/\bupdated\b|\blast updated\b|\bpublished\b|\bannounced\b|\breleased\b|\bchangelog\b|\brelease notes?\b/i.test(lower)) {
+    score += 4;
+  }
+
+  if (profile.focus === "latest" || profile.focus === "current") {
+    if (/\bcurrent\b|\blatest\b|\bversion\b|\bnow available\b|\bgenerally available\b/i.test(lower)) {
+      score += 3;
+    }
+  }
+
+  return score;
+}
+
+function extractDateCandidates(value: string, now = new Date()) {
+  const dates: Date[] = [];
+
+  for (const match of value.matchAll(ISO_DATE_PATTERN)) {
+    const parsed = new Date(`${match[0]}T00:00:00.000Z`);
+    if (!Number.isNaN(parsed.getTime())) {
+      dates.push(parsed);
+    }
+  }
+
+  for (const match of value.matchAll(SLASH_DATE_PATTERN)) {
+    const parsed = new Date(match[0]);
+    if (!Number.isNaN(parsed.getTime())) {
+      dates.push(parsed);
+    }
+  }
+
+  for (const match of value.matchAll(MONTH_DAY_YEAR_PATTERN)) {
+    const parsed = new Date(match[0]);
+    if (!Number.isNaN(parsed.getTime())) {
+      dates.push(parsed);
+    }
+  }
+
+  for (const match of value.matchAll(RELATIVE_DATE_PATTERN)) {
+    const amount = Number(match[1]);
+    const unit = match[2]?.toLowerCase() ?? "";
+    if (!Number.isFinite(amount)) {
+      continue;
+    }
+
+    const multiplier = unit.startsWith("hour") ? 0 : unit.startsWith("week") ? 7 : 1;
+    dates.push(shiftUtcDays(startOfUtcDay(now), -(amount * multiplier)));
+  }
+
+  return dates;
 }

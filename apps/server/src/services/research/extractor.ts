@@ -4,9 +4,11 @@ import { logger } from "../../utils/logger.js";
 import {
   countRegexMatches,
   DOC_HINT_PATTERNS,
+  hasExplicitDateSignal,
   isHighTrustResearchSource,
   matchesAny,
   normalizeSpace,
+  scoreTemporalFreshness,
   splitSentences,
   type SearchCandidate,
   type SearchPlan,
@@ -83,6 +85,30 @@ export class ResearchExtractor {
         }
         if (matchesAny(sentence, [/\bmust\b/i, /\bshould\b/i, /\brequires?\b/i, /\bmeans\b/i])) {
           score += 2;
+        }
+        if (plan.temporalProfile.isTemporal) {
+          score += scoreTemporalFreshness(sentence, plan.temporalProfile);
+          if (
+            matchesAny(sentence, [
+              /\bupdated\b/i,
+              /\blast updated\b/i,
+              /\bpublished\b/i,
+              /\bannounced\b/i,
+              /\breleased\b/i,
+              /\brelease notes?\b/i,
+              /\bchangelog\b/i
+            ])
+          ) {
+            score += 4;
+          }
+          if (
+            (plan.temporalProfile.focus === "recent" ||
+              plan.temporalProfile.focus === "this_week" ||
+              plan.temporalProfile.focus === "today") &&
+            !hasExplicitDateSignal(sentence)
+          ) {
+            score -= 3;
+          }
         }
 
         return { index, sentence, score };

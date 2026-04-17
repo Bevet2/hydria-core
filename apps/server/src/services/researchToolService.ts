@@ -9,7 +9,10 @@ import { logger } from "../utils/logger.js";
 import { KnowledgeLayerService } from "./knowledgeLayerService.js";
 import { KnowledgeMemoryService } from "./knowledgeMemoryService.js";
 import {
+  buildDefaultTemporalProfile,
   countRegexMatches,
+  describeTemporalWindow,
+  detectTemporalQuery,
   hasUncertaintySignals,
   matchesAny,
   RESEARCH_MODE_COST_MS,
@@ -50,7 +53,8 @@ function buildEmptyResearchLog(decision: ResearchDecision): ResearchToolLog {
       selectedQuery: null,
       requiredTerms: [],
       preferredDomains: [],
-      factFocusTerms: []
+      factFocusTerms: [],
+      temporalProfile: buildDefaultTemporalProfile()
     },
     query: null,
     reasons: decision.reasons,
@@ -184,6 +188,7 @@ export class ResearchToolService {
     const falseClaimCount = args.redTeam.potentially_false_claims.length;
     const combinedText = `${args.question} ${args.respondentA.answer} ${args.respondentB.answer} ${args.redTeam.potentially_false_claims.join(" ")}`.toLowerCase();
     const questionText = args.question.toLowerCase();
+    const temporalProfile = detectTemporalQuery(args.question);
     const factualCue = matchesAny(questionText, [
       /\bwhat is\b/i,
       /\bwhat are\b/i,
@@ -194,9 +199,7 @@ export class ResearchToolService {
       /\bwhy does\b/i,
       /\bhow would you debug\b/i
     ]);
-    const temporalOrOfficialCue = matchesAny(questionText, [
-      /\blatest\b/i,
-      /\bcurrent\b/i,
+    const temporalOrOfficialCue = temporalProfile.isTemporal || matchesAny(questionText, [
       /\btoday\b/i,
       /\bofficial\b/i,
       /\bstandard\b/i,
@@ -325,6 +328,13 @@ export class ResearchToolService {
     const categoryBias = knowledgeStrategy?.routerBias ?? 0;
     const baseNeedScore =
       falseClaimCount * 18 +
+      (temporalProfile.isTemporal
+        ? temporalProfile.focus === "this_week" || temporalProfile.focus === "today"
+          ? 26
+          : temporalProfile.focus === "recent"
+            ? 22
+            : 18
+        : 0) +
       (highFactualRisk ? 28 : mediumFactualRisk ? 16 : elevatedFactualRisk ? 8 : 0) +
       (providerSpecific ? 8 : 0) +
       (regulatoryOrStandardCue ? 8 : 0) +
@@ -364,6 +374,7 @@ export class ResearchToolService {
     };
 
     if (falseClaimCount > 0) addSignal("potentially_false_claims");
+    if (temporalProfile.isTemporal) addSignal(`temporal_${temporalProfile.focus}`);
     if (highFactualRisk) addSignal("high_factual_risk");
     else if (mediumFactualRisk) addSignal("medium_factual_risk");
     else if (elevatedFactualRisk) addSignal("elevated_factual_risk");
@@ -398,6 +409,11 @@ export class ResearchToolService {
     } else if (knowledgeStrategy?.toolRecommendation === "conditional") {
       addReason(
         `Knowledge layer marks ${args.category} as conditional: research should only fire when the factual sub-problem is explicit.`
+      );
+    }
+    if (temporalProfile.isTemporal) {
+      addReason(
+        `The question asks for ${temporalProfile.focus.replaceAll("_", " ")} information, so claims must be anchored to ${describeTemporalWindow(temporalProfile) ?? temporalProfile.absoluteDateHint ?? "a concrete date"} and checked against dated primary sources.`
       );
     }
     if (studentFactualVerifyFirst) {
@@ -457,6 +473,7 @@ export class ResearchToolService {
       factualCue,
       temporalOrOfficialCue,
       verificationNeed,
+      temporalProfile,
       uncertaintySignals,
       structuralRiskCount,
       baseNeedScore,
@@ -470,7 +487,8 @@ export class ResearchToolService {
       ? this.planner.buildPlan(args, knowledgeStrategy, orchestration)
       : null;
     const expectedValue =
-      shouldUse && baseNeedScore >= 55
+      shouldUse &&
+      (temporalProfile.isTemporal || baseNeedScore >= 55)
         ? "high"
         : shouldUse && baseNeedScore >= 35
           ? "medium"
@@ -510,6 +528,7 @@ export class ResearchToolService {
     factualCue: boolean;
     temporalOrOfficialCue: boolean;
     verificationNeed: boolean;
+    temporalProfile: ReturnType<typeof detectTemporalQuery>;
     uncertaintySignals: number;
     structuralRiskCount: number;
     baseNeedScore: number;
@@ -519,6 +538,10 @@ export class ResearchToolService {
     studentFactualVerifyFirst?: boolean;
     studentOpenLike?: boolean;
   }) {
+    if (args.temporalProfile.isTemporal) {
+      return true;
+    }
+
     if (
       args.studentOpenLike &&
       args.falseClaimCount === 0 &&

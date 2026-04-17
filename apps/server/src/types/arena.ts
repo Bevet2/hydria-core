@@ -76,6 +76,14 @@ export const researchDecisionModeSchema = z.enum([
   "fact_check_only",
   "verify_factual_subpart"
 ]);
+export const researchTemporalFocusSchema = z.enum([
+  "none",
+  "latest",
+  "current",
+  "recent",
+  "this_week",
+  "today"
+]);
 export const researchIntentSchema = z.enum([
   "definition",
   "fact_check",
@@ -358,13 +366,25 @@ export const researchDecisionDetailsSchema = z.object({
   reasoning: z.string().min(1).max(400)
 });
 
+export const researchTemporalProfileSchema = z.object({
+  isTemporal: z.boolean().default(false),
+  focus: researchTemporalFocusSchema.default("none"),
+  recencyDays: z.number().int().min(0).max(365).nullable().default(null),
+  absoluteDateHint: z.string().nullable().default(null),
+  dateRangeStart: z.string().nullable().default(null),
+  dateRangeEnd: z.string().nullable().default(null),
+  queryDirectives: z.array(z.string()).max(8).default([]),
+  answerDirectives: z.array(z.string()).max(8).default([])
+});
+
 export const researchQueryPlanSchema = z.object({
   intent: researchIntentSchema,
   queries: z.array(z.string()).max(3),
   selectedQuery: z.string().nullable(),
   requiredTerms: z.array(z.string()).max(8),
   preferredDomains: z.array(z.string()).max(8),
-  factFocusTerms: z.array(z.string()).max(8)
+  factFocusTerms: z.array(z.string()).max(8),
+  temporalProfile: researchTemporalProfileSchema
 });
 
 export const researchImpactSchema = z.object({
@@ -512,6 +532,7 @@ export type OrchestrationRefinePolicy = z.infer<typeof orchestrationRefinePolicy
 export type OrchestrationResearchPolicy = z.infer<typeof orchestrationResearchPolicySchema>;
 export type OrchestrationCostPolicy = z.infer<typeof orchestrationCostPolicySchema>;
 export type ResearchDecisionMode = z.infer<typeof researchDecisionModeSchema>;
+export type ResearchTemporalFocus = z.infer<typeof researchTemporalFocusSchema>;
 export type ResearchIntent = z.infer<typeof researchIntentSchema>;
 export type ResearchExpectedValue = z.infer<typeof researchExpectedValueSchema>;
 export type ResearchNetImpact = z.infer<typeof researchNetImpactSchema>;
@@ -526,6 +547,7 @@ export type ResearchSource = z.infer<typeof researchSourceSchema>;
 export type ResearchVerification = z.infer<typeof researchVerificationSchema>;
 export type ResearchTruth = z.infer<typeof researchTruthSchema>;
 export type ResearchDecisionDetails = z.infer<typeof researchDecisionDetailsSchema>;
+export type ResearchTemporalProfile = z.infer<typeof researchTemporalProfileSchema>;
 export type ResearchQueryPlan = z.infer<typeof researchQueryPlanSchema>;
 export type ResearchImpact = z.infer<typeof researchImpactSchema>;
 export type ResearchToolLog = z.infer<typeof researchToolLogSchema>;

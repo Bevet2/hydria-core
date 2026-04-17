@@ -24,6 +24,7 @@ import {
 } from "../types/arena.js";
 import { env } from "../utils/env.js";
 import { buildLegacyOrchestrationPolicy } from "./orchestrationPolicy.js";
+import { buildDefaultTemporalProfile } from "./research/common.js";
 import { buildLegacyRouterDecision } from "./refineRouter.js";
 import { deriveRoundMetrics } from "./roundMetrics.js";
 import { RoundDatasetStore } from "./roundDatasetStore.js";
@@ -173,7 +174,8 @@ export class HistoryStore {
         selectedQuery: null,
         requiredTerms: [],
         preferredDomains: [],
-        factFocusTerms: []
+        factFocusTerms: [],
+        temporalProfile: buildDefaultTemporalProfile()
       },
       query: null,
       reasons: ["Legacy round stored before research-tool logging was introduced."],

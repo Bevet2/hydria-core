@@ -138,6 +138,10 @@ ${JSON.stringify(
 ${args.research?.decision.shouldUse ? `Truth engine findings:
 ${JSON.stringify(
     {
+      query_plan: {
+        selected_query: args.research.queryPlan.selectedQuery,
+        temporal_profile: args.research.queryPlan.temporalProfile
+      },
       truth: args.research.truth,
       verification: args.research.verification,
       sources: args.research.sources.map((source) => ({
@@ -164,6 +168,9 @@ Answering rules:
 - if truth.conflicting_info is non-empty, briefly say that reliable sources conflict on that point
 - if truth.no_reliable_source is true, do not restate the uncertain claim as a fact; explicitly say the claim could not be verified from reliable sources
 - when an uncertain claim is central to the question, prefer "I cannot verify X from reliable sources" over "X is true but uncertain"
+- if query_plan.temporal_profile.isTemporal is true, replace relative time words like latest/current/recent/this week with the exact date or date window from temporal_profile
+- if query_plan.temporal_profile.isTemporal is true, do not claim freshness without saying the as-of date or exact window used for verification
+- if query_plan.temporal_profile.isTemporal is true and truth.no_reliable_source is true, explicitly say the current/recent claim could not be confirmed for that date or window
 - if the selected strategy is factual, stay concise and avoid extra structure or filler
 - do not add fluff
 - return valid JSON only`;

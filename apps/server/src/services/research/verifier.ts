@@ -6,9 +6,13 @@ import type {
   RespondentOutput
 } from "../../types/arena.js";
 import {
+  buildDefaultTemporalProfile,
+  describeTemporalWindow,
   extractTerms,
   getSourceTrustScore,
+  hasExplicitDateSignal,
   normalizeSpace,
+  scoreTemporalFreshness,
   splitSentences,
   type ResearchDecision,
   type ResearchDecisionArgs,
@@ -79,7 +83,8 @@ export class ResearchVerifier {
         selectedQuery: decision.plan?.queries[0] ?? null,
         requiredTerms: decision.plan?.requiredTerms ?? [],
         preferredDomains: decision.plan?.preferredDomains ?? [],
-        factFocusTerms: decision.plan?.factFocusTerms ?? []
+        factFocusTerms: decision.plan?.factFocusTerms ?? [],
+        temporalProfile: decision.plan?.temporalProfile ?? buildDefaultTemporalProfile()
       },
       query: decision.plan?.queries[0] ?? decision.plan?.queries.join(" || ") ?? null,
       reasons: decision.reasons,
@@ -109,10 +114,14 @@ export class ResearchVerifier {
       },
       impactNotes: used
         ? [
-            `Truth engine produced ${truth.verified_facts.length} verified fact(s), ${truth.uncertain_claims.length} uncertain claim(s), and ${truth.conflicting_info.length} conflict marker(s).`
+            `Truth engine produced ${truth.verified_facts.length} verified fact(s), ${truth.uncertain_claims.length} uncertain claim(s), and ${truth.conflicting_info.length} conflict marker(s).`,
+            ...this.buildTemporalImpactNotes(decision)
           ]
         : truth.no_reliable_source
-          ? ["Research ran, but no reliable source could verify the target claim set."]
+          ? [
+              "Research ran, but no reliable source could verify the target claim set.",
+              ...this.buildTemporalImpactNotes(decision)
+            ]
           : ["Research was triggered, but no usable truth payload was recovered."],
       durationMs: Date.now() - startedAt
     };
@@ -138,7 +147,8 @@ export class ResearchVerifier {
         selectedQuery: decision.plan?.queries[0] ?? null,
         requiredTerms: decision.plan?.requiredTerms ?? [],
         preferredDomains: decision.plan?.preferredDomains ?? [],
-        factFocusTerms: decision.plan?.factFocusTerms ?? []
+        factFocusTerms: decision.plan?.factFocusTerms ?? [],
+        temporalProfile: decision.plan?.temporalProfile ?? buildDefaultTemporalProfile()
       },
       query: decision.plan?.queries[0] ?? decision.plan?.queries.join(" || ") ?? null,
       reasons: decision.reasons,
@@ -168,7 +178,10 @@ export class ResearchVerifier {
         costSharePct: 0,
         netImpact: "negative"
       },
-      impactNotes: [`Research failed before refinement: ${String(error)}`],
+      impactNotes: [
+        `Research failed before refinement: ${String(error)}`,
+        ...this.buildTemporalImpactNotes(decision)
+      ],
       durationMs: Date.now() - startedAt
     };
   }
@@ -316,6 +329,7 @@ export class ResearchVerifier {
     sources: ResearchSource[];
     corroboratedSignals: string[];
   }): ResearchTruth {
+    const temporalProfile = args.decision.plan?.temporalProfile ?? buildDefaultTemporalProfile();
     const preferredDomains = args.decision.plan?.preferredDomains ?? [];
     const genericTerms = new Set([
       "official",
@@ -338,7 +352,10 @@ export class ResearchVerifier {
       "guidance",
       "policy",
       "weeks",
-      "week"
+      "week",
+      "recent",
+      "current",
+      "today"
     ]);
     const requiredTerms = [
       ...(args.decision.plan?.requiredTerms ?? []),
@@ -363,7 +380,7 @@ export class ResearchVerifier {
       }))
       .filter((entry) => entry.trustScore >= 26);
 
-    const candidateFacts = reliableSources
+    let candidateFacts = reliableSources
       .flatMap((entry) =>
         splitSentences(entry.source.excerpt).map((sentence, index) => ({
           sentence: normalizeSpace(sentence),
@@ -372,7 +389,8 @@ export class ResearchVerifier {
             requiredTerms,
             focusTerms,
             entry.trustScore,
-            index
+            index,
+            temporalProfile
           ),
           trustScore: entry.trustScore
         }))
@@ -380,6 +398,18 @@ export class ResearchVerifier {
       .filter((entry) => entry.score >= 6)
       .sort((left, right) => right.score - left.score || right.trustScore - left.trustScore)
       .map((entry) => entry.sentence);
+
+    if (
+      temporalProfile.focus === "recent" ||
+      temporalProfile.focus === "this_week" ||
+      temporalProfile.focus === "today"
+    ) {
+      candidateFacts = candidateFacts.filter(
+        (sentence) =>
+          hasExplicitDateSignal(sentence) ||
+          scoreTemporalFreshness(sentence, temporalProfile) >= 4
+      );
+    }
 
     const verifiedFacts = this.uniqueNormalized(candidateFacts).slice(0, 6);
     const sourceText = reliableSources
@@ -391,7 +421,11 @@ export class ResearchVerifier {
         .filter((claim) => !this.claimSupported(claim, sourceText, verifiedFacts))
         .slice(0, 5)
     );
-    const conflictingInfo = this.detectConflicts(args.decision.targetClaims, verifiedFacts);
+    const conflictingInfo = this.detectConflicts(
+      args.decision.targetClaims,
+      verifiedFacts,
+      temporalProfile
+    );
     const noReliableSource = reliableSources.length === 0 || verifiedFacts.length === 0;
     const confidenceScore = noReliableSource
       ? 0
@@ -413,7 +447,7 @@ export class ResearchVerifier {
       uncertain_claims: noReliableSource
         ? uncertainClaims.length > 0
           ? uncertainClaims
-          : ["The requested claim could not be verified from reliable sources."]
+          : [this.buildNoReliableSourceNote(temporalProfile)]
         : uncertainClaims,
       conflicting_info: conflictingInfo,
       confidence_score: Math.round(confidenceScore * 100) / 100,
@@ -426,7 +460,8 @@ export class ResearchVerifier {
     requiredTerms: string[],
     focusTerms: string[],
     trustScore: number,
-    index: number
+    index: number,
+    temporalProfile = buildDefaultTemporalProfile()
   ) {
     const normalized = sentence.toLowerCase();
     let score = Math.min(5, Math.round(trustScore / 10));
@@ -449,6 +484,16 @@ export class ResearchVerifier {
       : 0;
     score -= /\b(may|might|could|appears|seems)\b/i.test(sentence) ? 2 : 0;
     score -= index > 3 ? 1 : 0;
+    score += scoreTemporalFreshness(sentence, temporalProfile);
+
+    if (
+      (temporalProfile.focus === "recent" ||
+        temporalProfile.focus === "this_week" ||
+        temporalProfile.focus === "today") &&
+      !hasExplicitDateSignal(sentence)
+    ) {
+      score -= 4;
+    }
 
     return score;
   }
@@ -465,13 +510,50 @@ export class ResearchVerifier {
     );
   }
 
-  private detectConflicts(targetClaims: string[], verifiedFacts: string[]) {
+  private detectConflicts(
+    targetClaims: string[],
+    verifiedFacts: string[],
+    temporalProfile = buildDefaultTemporalProfile()
+  ) {
     const yearMatches = [...new Set(verifiedFacts.flatMap((fact) => fact.match(/\b20\d{2}\b/g) ?? []))];
     if (yearMatches.length >= 2 && targetClaims.length > 0) {
-      return [`Reliable sources expose conflicting timing/details for: ${targetClaims[0]}`];
+      return [
+        temporalProfile.isTemporal
+          ? `Reliable sources disagree on the timing or freshness for: ${targetClaims[0]}`
+          : `Reliable sources expose conflicting timing/details for: ${targetClaims[0]}`
+      ];
     }
 
     return [];
+  }
+
+  private buildNoReliableSourceNote(
+    temporalProfile: ReturnType<typeof buildDefaultTemporalProfile>
+  ) {
+    if (temporalProfile.focus === "this_week" && temporalProfile.dateRangeStart && temporalProfile.dateRangeEnd) {
+      return `No reliable source could verify the claim inside the window ${describeTemporalWindow(temporalProfile)}.`;
+    }
+
+    if (temporalProfile.focus === "recent" && temporalProfile.dateRangeStart && temporalProfile.dateRangeEnd) {
+      return `No reliable source could verify the claim inside the recent window ${describeTemporalWindow(temporalProfile)}.`;
+    }
+
+    if (temporalProfile.focus === "today" || temporalProfile.focus === "latest" || temporalProfile.focus === "current") {
+      return `No reliable source could confirm the claim as of ${temporalProfile.absoluteDateHint ?? "the requested date"}.`;
+    }
+
+    return "The requested claim could not be verified from reliable sources.";
+  }
+
+  private buildTemporalImpactNotes(decision: ResearchDecision) {
+    const profile = decision.plan?.temporalProfile ?? buildDefaultTemporalProfile();
+    if (!profile.isTemporal) {
+      return [];
+    }
+
+    return [
+      `Temporal verification mode: ${profile.focus.replaceAll("_", " ")} anchored to ${describeTemporalWindow(profile) ?? profile.absoluteDateHint ?? "the requested date"}.`
+    ];
   }
 
   private uniqueNormalized(values: string[]) {

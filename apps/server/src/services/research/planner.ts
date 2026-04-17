@@ -6,9 +6,12 @@ import type { KnowledgeCategoryStrategy } from "../../types/knowledge.js";
 import type { ResearchDecisionArgs, SearchPlan } from "./common.js";
 import {
   CATEGORY_SUFFIX,
+  describeTemporalWindow,
+  detectTemporalQuery,
   extractLiteralTokens,
   extractTerms,
   formatQueryTerm,
+  formatIsoDayForSearch,
   normalizeSpace,
   stripQuestionNoise,
   TERM_DOMAIN_HINTS,
@@ -21,6 +24,7 @@ export class ResearchPlanner {
     strategy: KnowledgeCategoryStrategy | null,
     orchestration: OrchestrationPolicyDetails | null
   ): SearchPlan {
+    const temporalProfile = detectTemporalQuery(args.question);
     const combinedText = `${args.question} ${args.respondentA.answer} ${args.respondentB.answer} ${args.redTeam.potentially_false_claims.join(" ")}`;
     const signalHints = this.collectSignalHints(combinedText);
     const preferredDomains = uniqueStrings(signalHints.flatMap((hint) => hint.domains));
@@ -67,12 +71,27 @@ export class ResearchPlanner {
           ]
         : [query];
 
-    const strategyMode = this.selectModeForStrategy(args.category, strategy);
+    const strategyMode = temporalProfile.isTemporal
+      ? ("targeted_verify" as const)
+      : this.selectModeForStrategy(args.category, strategy);
     const orchestrationMode = this.selectModeForOrchestration(
       strategyMode,
       args.category,
       orchestration
     );
+    const temporalQueries = temporalProfile.isTemporal
+      ? this.buildTemporalQueries({
+          category: args.category,
+          coreTopic,
+          primaryFocus,
+          factFocusQuery,
+          preferredDomains,
+          temporalProfile
+        })
+      : null;
+    const temporalReasoning = temporalProfile.isTemporal
+      ? `Temporal query detected (${temporalProfile.focus}). Anchor verification to ${describeTemporalWindow(temporalProfile) ?? temporalProfile.absoluteDateHint ?? "the current date"} and prefer dated primary sources.`
+      : "";
     const strategyReasoning = strategy
       ? `${strategy.note} Tool recommendation: ${strategy.toolRecommendation}.`
       : "Using category-default research behavior because no knowledge layer strategy was available.";
@@ -85,130 +104,146 @@ export class ResearchPlanner {
         return {
           intent: "definition",
           mode: orchestrationMode,
-          queries: uniqueStrings(
-            withDomains(
-              `${coreTopic} official documentation reference ${factFocusQuery}`,
-              "documentation reference"
-            ).concat(preferredDomains.length === 0 ? [`${standardsQuery} rfc mdn`] : [])
-          ).slice(0, 3),
+          queries: temporalQueries ??
+            uniqueStrings(
+              withDomains(
+                `${coreTopic} official documentation reference ${factFocusQuery}`,
+                "documentation reference"
+              ).concat(preferredDomains.length === 0 ? [`${standardsQuery} rfc mdn`] : [])
+            ).slice(0, 3),
           requiredTerms,
           preferredDomains,
           factFocusTerms,
-          reasoning: `Technical explanation benefits from documentation-grade definitions and precise factual distinctions. ${strategyReasoning} ${orchestrationReasoning}`
+          temporalProfile,
+          reasoning: `Technical explanation benefits from documentation-grade definitions and precise factual distinctions. ${temporalReasoning} ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
       case "debug_diagnostic":
         return {
           intent: "diagnostic_docs",
           mode: orchestrationMode,
-          queries: uniqueStrings(
-            withDomains(
-              `${coreTopic} troubleshooting documentation ${factFocusQuery}`,
-              "troubleshooting documentation"
-            ).concat(preferredDomains.length === 0 ? [`${coreTopic} error reference troubleshooting`] : [])
-          ).slice(0, 3),
+          queries: temporalQueries ??
+            uniqueStrings(
+              withDomains(
+                `${coreTopic} troubleshooting documentation ${factFocusQuery}`,
+                "troubleshooting documentation"
+              ).concat(preferredDomains.length === 0 ? [`${coreTopic} error reference troubleshooting`] : [])
+            ).slice(0, 3),
           requiredTerms,
           preferredDomains,
           factFocusTerms,
-          reasoning: `Debug diagnostics only benefit from grounding when the issue maps to concrete product behavior or documented errors. ${strategyReasoning} ${orchestrationReasoning}`
+          temporalProfile,
+          reasoning: `Debug diagnostics only benefit from grounding when the issue maps to concrete product behavior or documented errors. ${temporalReasoning} ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
       case "mixed_reasoning":
         return {
           intent: "fact_check",
           mode: orchestrationMode,
-          queries: uniqueStrings(
-            withDomains(
-              `${coreTopic} documentation examples ${factFocusQuery}`,
-              "documentation reference"
-            ).concat(preferredDomains.length === 0 ? [`${standardsQuery} examples`] : [])
-          ).slice(0, 3),
+          queries: temporalQueries ??
+            uniqueStrings(
+              withDomains(
+                `${coreTopic} documentation examples ${factFocusQuery}`,
+                "documentation reference"
+              ).concat(preferredDomains.length === 0 ? [`${standardsQuery} examples`] : [])
+            ).slice(0, 3),
           requiredTerms,
           preferredDomains,
           factFocusTerms,
-          reasoning: `Mixed reasoning needs verification only for the factual subpart, not for the whole reasoning chain. ${strategyReasoning} ${orchestrationReasoning}`
+          temporalProfile,
+          reasoning: `Mixed reasoning needs verification only for the factual subpart, not for the whole reasoning chain. ${temporalReasoning} ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
       case "incident_response":
         return {
           intent: "incident_guidance",
           mode: orchestrationMode,
-          queries: uniqueStrings(
-            withDomains(
-              `${coreTopic} official incident response guidance ${factFocusQuery}`,
-              "official incident response guidance"
-            ).concat(preferredDomains.length === 0 ? [`${coreTopic} official policy guidance`] : [])
-          ).slice(0, 3),
+          queries: temporalQueries ??
+            uniqueStrings(
+              withDomains(
+                `${coreTopic} official incident response guidance ${factFocusQuery}`,
+                "official incident response guidance"
+              ).concat(preferredDomains.length === 0 ? [`${coreTopic} official policy guidance`] : [])
+            ).slice(0, 3),
           requiredTerms,
           preferredDomains,
           factFocusTerms,
-          reasoning: `Incident response research should verify provider-, standard-, or policy-specific claims only. ${strategyReasoning} ${orchestrationReasoning}`
+          temporalProfile,
+          reasoning: `Incident response research should verify provider-, standard-, or policy-specific claims only. ${temporalReasoning} ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
       case "architecture_design":
         return {
           intent: "constraint_check",
           mode: orchestrationMode,
-          queries: uniqueStrings(
-            withDomains(
-              `${coreTopic} architecture constraints documentation ${factFocusQuery}`,
-              "constraints documentation"
-            ).concat(
-              preferredDomains.length === 0
-                ? [`${coreTopic} limits throughput latency failover documentation`]
-                : []
-            )
-          ).slice(0, 3),
+          queries: temporalQueries ??
+            uniqueStrings(
+              withDomains(
+                `${coreTopic} architecture constraints documentation ${factFocusQuery}`,
+                "constraints documentation"
+              ).concat(
+                preferredDomains.length === 0
+                  ? [`${coreTopic} limits throughput latency failover documentation`]
+                  : []
+              )
+            ).slice(0, 3),
           requiredTerms,
           preferredDomains,
           factFocusTerms,
-          reasoning: `Architecture research should verify hard constraints and concrete platform behaviors, not fetch generic design advice. ${strategyReasoning} ${orchestrationReasoning}`
+          temporalProfile,
+          reasoning: `Architecture research should verify hard constraints and concrete platform behaviors, not fetch generic design advice. ${temporalReasoning} ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
       case "product_strategy":
         return {
           intent: "metric_verification",
           mode: orchestrationMode,
-          queries: uniqueStrings(
-            withDomains(
-              `${coreTopic} market metrics adoption benchmark ${factFocusQuery}`,
-              "benchmark adoption metrics"
-            ).concat(preferredDomains.length === 0 ? [`${coreTopic} benchmark report adoption metrics`] : [])
-          ).slice(0, 3),
+          queries: temporalQueries ??
+            uniqueStrings(
+              withDomains(
+                `${coreTopic} market metrics adoption benchmark ${factFocusQuery}`,
+                "benchmark adoption metrics"
+              ).concat(preferredDomains.length === 0 ? [`${coreTopic} benchmark report adoption metrics`] : [])
+            ).slice(0, 3),
           requiredTerms,
           preferredDomains,
           factFocusTerms,
-          reasoning: `Product strategy research should only verify external claims, not replace strategic judgment. ${strategyReasoning} ${orchestrationReasoning}`
+          temporalProfile,
+          reasoning: `Product strategy research should only verify external claims, not replace strategic judgment. ${temporalReasoning} ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
       case "operational_writing":
         return {
           intent: "fact_check",
           mode: orchestrationMode,
-          queries: uniqueStrings(
-            withDomains(
-              `${coreTopic} official communication policy ${factFocusQuery}`,
-              "official communication guidance"
-            ).concat(
-              preferredDomains.length === 0
-                ? [`${coreTopic} official incident communication guidance`]
-                : []
-            )
-          ).slice(0, 3),
+          queries: temporalQueries ??
+            uniqueStrings(
+              withDomains(
+                `${coreTopic} official communication policy ${factFocusQuery}`,
+                "official communication guidance"
+              ).concat(
+                preferredDomains.length === 0
+                  ? [`${coreTopic} official incident communication guidance`]
+                  : []
+              )
+            ).slice(0, 3),
           requiredTerms,
           preferredDomains,
           factFocusTerms,
-          reasoning: `Operational writing research should only validate required facts, chronology, or official wording. ${strategyReasoning} ${orchestrationReasoning}`
+          temporalProfile,
+          reasoning: `Operational writing research should only validate required facts, chronology, or official wording. ${temporalReasoning} ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
       case "other":
       default:
         return {
           intent: "fact_check",
           mode: orchestrationMode,
-          queries: uniqueStrings(
-            withDomains(
-              `${coreTopic} official guidance ${factFocusQuery}`,
-              "official guidance"
-            ).concat(preferredDomains.length === 0 ? [`${standardsQuery}`] : [])
-          ).slice(0, 3),
+          queries: temporalQueries ??
+            uniqueStrings(
+              withDomains(
+                `${coreTopic} official guidance ${factFocusQuery}`,
+                "official guidance"
+              ).concat(preferredDomains.length === 0 ? [`${standardsQuery}`] : [])
+            ).slice(0, 3),
           requiredTerms,
           preferredDomains,
           factFocusTerms,
-          reasoning: `General research should stay focused on externally verifiable claims. ${strategyReasoning} ${orchestrationReasoning}`
+          temporalProfile,
+          reasoning: `General research should stay focused on externally verifiable claims. ${temporalReasoning} ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
     }
   }
@@ -224,6 +259,80 @@ export class ResearchPlanner {
           ]
         : []
     );
+  }
+
+  private buildTemporalQueries(args: {
+    category: QuestionCategory;
+    coreTopic: string;
+    primaryFocus: string;
+    factFocusQuery: string;
+    preferredDomains: string[];
+    temporalProfile: SearchPlan["temporalProfile"];
+  }) {
+    const anchor = this.buildTemporalAnchor(args.temporalProfile);
+    const freshnessTerms = this.buildTemporalFreshnessTerms(args.temporalProfile);
+    const categoryTerms = this.buildTemporalCategoryTerms(args.category);
+    const focus = args.factFocusQuery || args.primaryFocus || args.coreTopic;
+
+    const domainQueries = args.preferredDomains.slice(0, 2).map((domain) =>
+      normalizeSpace(`${focus} ${freshnessTerms} ${anchor} ${categoryTerms} site:${domain}`)
+    );
+
+    return uniqueStrings(
+      [
+        ...domainQueries,
+        `${args.coreTopic} ${args.factFocusQuery} ${freshnessTerms} ${anchor} ${categoryTerms}`,
+        `${args.coreTopic} ${anchor} ${categoryTerms}`
+      ].map((query) => normalizeSpace(query))
+    ).slice(0, 3);
+  }
+
+  private buildTemporalAnchor(profile: SearchPlan["temporalProfile"]) {
+    if (profile.dateRangeStart && profile.dateRangeEnd) {
+      return `${formatIsoDayForSearch(profile.dateRangeStart)} ${formatIsoDayForSearch(profile.dateRangeEnd)}`;
+    }
+
+    return profile.absoluteDateHint ?? "";
+  }
+
+  private buildTemporalFreshnessTerms(profile: SearchPlan["temporalProfile"]) {
+    switch (profile.focus) {
+      case "this_week":
+        return "announcement update release published this week";
+      case "today":
+        return "current today updated status";
+      case "recent":
+        return "recent announcement update release";
+      case "latest":
+        return "latest current release notes changelog";
+      case "current":
+        return "current official updated";
+      case "none":
+      default:
+        return "official updated";
+    }
+  }
+
+  private buildTemporalCategoryTerms(category: QuestionCategory) {
+    switch (category) {
+      case "technical_explanation":
+        return "official documentation reference release notes";
+      case "debug_diagnostic":
+        return "official troubleshooting advisory status";
+      case "incident_response":
+        return "official advisory incident update";
+      case "architecture_design":
+        return "official documentation limits release notes";
+      case "product_strategy":
+        return "official report announcement benchmark";
+      case "operational_writing":
+        return "official statement communication update";
+      case "mixed_reasoning":
+        return "official documentation announcement";
+      case "other":
+      default:
+        return "official guidance announcement";
+    }
   }
 
   private selectModeForStrategy(

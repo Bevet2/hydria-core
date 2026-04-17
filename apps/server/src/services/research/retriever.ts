@@ -5,9 +5,11 @@ import {
   DOC_HINT_PATTERNS,
   getHostname,
   getPathname,
+  hasExplicitDateSignal,
   LOW_TRUST_DOMAIN_PATTERNS,
   matchesAny,
   OFFICIAL_DOMAIN_PATTERNS,
+  scoreTemporalFreshness,
   type ScoredCandidate,
   SEARCH_ENGINE_HOST_PATTERNS,
   stripSiteOperators,
@@ -105,6 +107,14 @@ export class ResearchRetriever {
   }
 
   private minimumCandidateScore(plan: SearchPlan) {
+    if (plan.temporalProfile.isTemporal) {
+      return plan.temporalProfile.focus === "recent" ||
+        plan.temporalProfile.focus === "this_week" ||
+        plan.temporalProfile.focus === "today"
+        ? 16
+        : 14;
+    }
+
     switch (plan.intent) {
       case "definition":
       case "product_docs":
@@ -124,6 +134,7 @@ export class ResearchRetriever {
     const domain = getHostname(candidate.url);
     const path = getPathname(candidate.url);
     const haystack = `${candidate.title} ${candidate.snippet}`.toLowerCase();
+    const temporalHaystack = `${candidate.title} ${candidate.snippet} ${candidate.url}`;
     let score = this.getDomainTrustScore(domain, path, plan);
 
     if (plan.preferredDomains.some((preferred) => domain.endsWith(preferred.toLowerCase()))) {
@@ -162,7 +173,11 @@ export class ResearchRetriever {
     }
 
     if (matchesAny(path, [/\/blog\//i, /\/news\//i, /\/release/i, /\/releases\//i])) {
-      score -= plan.intent === "metric_verification" ? 3 : 8;
+      if (plan.temporalProfile.isTemporal) {
+        score += this.isHighTrustDomain(domain, plan) ? 8 : 2;
+      } else {
+        score -= plan.intent === "metric_verification" ? 3 : 8;
+      }
     }
 
     score += Math.min(
@@ -206,6 +221,31 @@ export class ResearchRetriever {
         break;
       default:
         break;
+    }
+
+    if (plan.temporalProfile.isTemporal) {
+      score += scoreTemporalFreshness(temporalHaystack, plan.temporalProfile);
+
+      if (
+        matchesAny(haystack, [
+          /\brelease notes?\b/i,
+          /\bchangelog\b/i,
+          /\bannounc(?:ed|ement)\b/i,
+          /\bupdated?\b/i,
+          /\bstatus\b/i
+        ])
+      ) {
+        score += 8;
+      }
+
+      if (
+        (plan.temporalProfile.focus === "recent" ||
+          plan.temporalProfile.focus === "this_week" ||
+          plan.temporalProfile.focus === "today") &&
+        !hasExplicitDateSignal(temporalHaystack)
+      ) {
+        score -= 6;
+      }
     }
 
     return score;

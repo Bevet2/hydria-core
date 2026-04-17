@@ -189,7 +189,17 @@ export const defaultDatasetResearch = {
     selectedQuery: null,
     requiredTerms: [],
     preferredDomains: [],
-    factFocusTerms: []
+    factFocusTerms: [],
+    temporalProfile: {
+      isTemporal: false,
+      focus: "none" as const,
+      recencyDays: null,
+      absoluteDateHint: null,
+      dateRangeStart: null,
+      dateRangeEnd: null,
+      queryDirectives: [],
+      answerDirectives: []
+    }
   },
   query: null,
   reasons: ["Legacy dataset entry stored before research-tool logging was introduced."],

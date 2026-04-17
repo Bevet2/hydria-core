@@ -231,6 +231,13 @@ export type ResearchDecisionMode =
   | "constraint_check"
   | "fact_check_only"
   | "verify_factual_subpart";
+export type ResearchTemporalFocus =
+  | "none"
+  | "latest"
+  | "current"
+  | "recent"
+  | "this_week"
+  | "today";
 
 export type ResearchIntent =
   | "definition"
@@ -271,6 +278,16 @@ export type ResearchToolLog = {
     requiredTerms: string[];
     preferredDomains: string[];
     factFocusTerms: string[];
+    temporalProfile: {
+      isTemporal: boolean;
+      focus: ResearchTemporalFocus;
+      recencyDays: number | null;
+      absoluteDateHint: string | null;
+      dateRangeStart: string | null;
+      dateRangeEnd: string | null;
+      queryDirectives: string[];
+      answerDirectives: string[];
+    };
   };
   query: string | null;
   reasons: string[];
