@@ -1,6 +1,7 @@
 import { load } from "cheerio";
 import { logger } from "../../utils/logger.js";
 import {
+  countEntityTermHits,
   COMMUNITY_PATH_PATTERNS,
   DOC_HINT_PATTERNS,
   getHostname,
@@ -141,6 +142,11 @@ export class ResearchRetriever {
     const path = getPathname(candidate.url);
     const haystack = `${candidate.title} ${candidate.snippet}`.toLowerCase();
     const temporalHaystack = `${candidate.title} ${candidate.snippet} ${candidate.url}`;
+    const entityHitStats = countEntityTermHits(
+      temporalHaystack,
+      plan.entityTerms,
+      plan.preferredDomains
+    );
     const isDocPath = matchesAny(path, [
       /\/docs?\//i,
       /\/documentation/i,
@@ -165,6 +171,9 @@ export class ResearchRetriever {
     if (plan.preferredDomains.some((preferred) => domain.endsWith(preferred.toLowerCase()))) {
       score += 20;
     }
+
+    score += Math.min(18, entityHitStats.totalHits * 9);
+    score += Math.min(14, entityHitStats.specificHits * 10);
 
     score += Math.min(
       24,
@@ -264,6 +273,30 @@ export class ResearchRetriever {
     }
 
     if (plan.temporalProfile.isTemporal) {
+      if (
+        (plan.intent === "current_status" || plan.intent === "release_freshness") &&
+        plan.entityTerms.length > 0 &&
+        entityHitStats.totalHits === 0
+      ) {
+        return -20;
+      }
+
+      if (plan.preferredDomains.length > 0 && entityHitStats.identityHits === 0) {
+        return -18;
+      }
+
+      if (
+        (plan.intent === "current_status" || plan.intent === "release_freshness") &&
+        entityHitStats.totalHits > 0 &&
+        entityHitStats.specificHits === 0
+      ) {
+        if (candidate.retrievalOrigin === "known_endpoint") {
+          score -= 8;
+        } else {
+          return -14;
+        }
+      }
+
       score += scoreTemporalFreshness(temporalHaystack, plan.temporalProfile);
 
       if (
@@ -676,7 +709,10 @@ export class ResearchRetriever {
     return {
       title: normalizeSpace(candidate.title),
       url: candidate.url,
-      snippet: normalizeSpace(candidate.snippet || fallbackSnippet || candidate.title)
+      snippet: normalizeSpace(candidate.snippet || fallbackSnippet || candidate.title),
+      retrievalChannel: candidate.retrievalChannel,
+      retrievalOrigin: candidate.retrievalOrigin,
+      retrievalEngine: candidate.retrievalEngine
     };
   }
 

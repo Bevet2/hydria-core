@@ -39,7 +39,7 @@ export const KNOWN_FRESH_ENDPOINTS: KnownFreshEndpoint[] = [
     snippet: "Official OpenAI company and leadership page.",
     intents: ["current_status"],
     domains: ["openai.com"],
-    termHints: ["openai", "ceo", "leadership"],
+    termHints: ["openai", "ceo", "leadership", "team"],
     priority: 72
   },
   {
@@ -89,7 +89,7 @@ export const KNOWN_FRESH_ENDPOINTS: KnownFreshEndpoint[] = [
     snippet: "Canonical Next.js release feed on GitHub.",
     intents: ["release_freshness", "current_status"],
     domains: ["github.com", "nextjs.org", "vercel.com"],
-    termHints: ["next.js", "nextjs"],
+    termHints: ["next.js", "nextjs", "release", "version", "stable", "major"],
     priority: 95
   },
   {
@@ -129,7 +129,7 @@ export const KNOWN_FRESH_ENDPOINTS: KnownFreshEndpoint[] = [
     snippet: "Official Node.js current and LTS release lines.",
     intents: ["current_status", "release_freshness"],
     domains: ["nodejs.org"],
-    termHints: ["node.js", "nodejs"],
+    termHints: ["node.js", "nodejs", "version", "stable", "lts", "current"],
     priority: 91
   },
   {
@@ -149,7 +149,7 @@ export const KNOWN_FRESH_ENDPOINTS: KnownFreshEndpoint[] = [
     snippet: "Canonical TypeScript release feed on GitHub.",
     intents: ["release_freshness", "current_status"],
     domains: ["github.com", "typescriptlang.org", "microsoft.com"],
-    termHints: ["typescript"],
+    termHints: ["typescript", "release", "version", "stable", "current"],
     priority: 95
   },
   {
@@ -189,7 +189,7 @@ export const KNOWN_FRESH_ENDPOINTS: KnownFreshEndpoint[] = [
     snippet: "Official Kubernetes release information and current version guidance.",
     intents: ["release_freshness", "current_status"],
     domains: ["kubernetes.io"],
-    termHints: ["kubernetes"],
+    termHints: ["kubernetes", "release", "version", "stable", "current"],
     priority: 90
   },
   {

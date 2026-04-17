@@ -175,6 +175,7 @@ export class HistoryStore {
         requiredTerms: [],
         preferredDomains: [],
         factFocusTerms: [],
+        entityTerms: [],
         temporalProfile: buildDefaultTemporalProfile()
       },
       query: null,

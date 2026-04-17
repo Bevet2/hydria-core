@@ -74,6 +74,57 @@ export const STOPWORDS = new Set([
   "together"
 ]);
 
+const FOCUS_STOPWORDS = new Set([
+  "a",
+  "an",
+  "the",
+  "of",
+  "for",
+  "to",
+  "in",
+  "on",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "by",
+  "at",
+  "who",
+  "what",
+  "when",
+  "where",
+  "which",
+  "current",
+  "currently",
+  "latest",
+  "newest",
+  "recent",
+  "recently",
+  "official",
+  "today",
+  "week",
+  "month",
+  "right",
+  "status",
+  "guidance",
+  "announcement",
+  "announcements",
+  "updates",
+  "update",
+  "release",
+  "releases",
+  "released",
+  "announced",
+  "about",
+  "this",
+  "that",
+  "from",
+  "with",
+  "have",
+  "into"
+]);
+
 export const LOW_TRUST_DOMAIN_PATTERNS = [
   /stackoverflow\.com$/i,
   /stackexchange\.com$/i,
@@ -544,6 +595,7 @@ export type SearchPlan = {
   requiredTerms: string[];
   preferredDomains: string[];
   factFocusTerms: string[];
+  entityTerms: string[];
   temporalProfile: ResearchTemporalProfile;
   reasoning: string;
 };
@@ -597,6 +649,74 @@ export function extractTerms(value: string) {
   return [...counts.entries()]
     .sort((left, right) => right[1] - left[1])
     .map(([term]) => term);
+}
+
+export function normalizeFocusToken(value: string) {
+  const normalized = value
+    .toLowerCase()
+    .replace(/node\.js/g, "nodejs")
+    .replace(/next\.js/g, "nextjs")
+    .replace(/type\s*script/g, "typescript")
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+
+  if (normalized.length < 3 || FOCUS_STOPWORDS.has(normalized)) {
+    return "";
+  }
+
+  return normalized;
+}
+
+export function extractFocusTerms(value: string) {
+  return uniqueStrings(
+    value
+      .replace(/node\.js/gi, "nodejs")
+      .replace(/next\.js/gi, "nextjs")
+      .replace(/type\s*script/gi, "typescript")
+      .split(/[^a-zA-Z0-9.+-]+/)
+      .map((token) => normalizeFocusToken(token))
+      .filter(Boolean)
+  );
+}
+
+export function extractPreferredDomainFocusTerms(preferredDomains: string[]) {
+  return uniqueStrings(
+    preferredDomains.flatMap((domain) =>
+      domain
+        .replace(/\./g, " ")
+        .split(/[^a-zA-Z0-9]+/)
+        .map((token) => normalizeFocusToken(token))
+        .filter(Boolean)
+    )
+  );
+}
+
+export function countEntityTermHits(
+  text: string,
+  entityTerms: string[],
+  preferredDomains: string[]
+) {
+  const normalizedText = normalizeSpace(text)
+    .toLowerCase()
+    .replace(/node\.js/g, "nodejs")
+    .replace(/next\.js/g, "nextjs")
+    .replace(/type\s*script/g, "typescript");
+  const normalizedTerms = uniqueStrings(
+    entityTerms.map((term) => normalizeFocusToken(term)).filter(Boolean)
+  );
+  const domainTerms = new Set(extractPreferredDomainFocusTerms(preferredDomains));
+  const matchedTerms = normalizedTerms.filter((term) => normalizedText.includes(term));
+  const matchedIdentityTerms = matchedTerms.filter((term) => domainTerms.has(term));
+  const matchedSpecificTerms = matchedTerms.filter((term) => !domainTerms.has(term));
+
+  return {
+    totalHits: matchedTerms.length,
+    identityHits: matchedIdentityTerms.length,
+    specificHits: matchedSpecificTerms.length,
+    matchedTerms,
+    matchedIdentityTerms,
+    matchedSpecificTerms
+  };
 }
 
 export function matchesAny(value: string, patterns: RegExp[]) {

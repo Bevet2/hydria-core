@@ -8,6 +8,7 @@ import {
   CATEGORY_SUFFIX,
   describeTemporalWindow,
   detectTemporalQuery,
+  extractFocusTerms,
   extractLiteralTokens,
   extractTerms,
   formatQueryTerm,
@@ -61,6 +62,14 @@ export class ResearchPlanner {
           factFocusTerms
         })
       : null;
+    const entityTerms = this.buildEntityTerms({
+      question: args.question,
+      temporalSubject,
+      signalTerms,
+      literalTokens,
+      questionTerms,
+      factFocusTerms
+    });
     const standardsQuery =
       preferredDomains.length === 0
         ? `${coreTopic} ${CATEGORY_SUFFIX[args.category]} documentation reference standard`
@@ -109,6 +118,7 @@ export class ResearchPlanner {
         requiredTerms,
         preferredDomains,
         factFocusTerms,
+        entityTerms,
         temporalProfile,
         reasoning: `Temporal research requires a freshness-aware retrieval path for ${temporalProfile.queryType.replaceAll("_", " ")}. Anchor verification to ${describeTemporalWindow(temporalProfile) ?? temporalProfile.absoluteDateHint ?? "the current date"} and prefer dated primary sources. ${strategyReasoning} ${orchestrationReasoning}`.trim()
       };
@@ -128,6 +138,7 @@ export class ResearchPlanner {
           requiredTerms,
           preferredDomains,
           factFocusTerms,
+          entityTerms,
           temporalProfile,
           reasoning: `Technical explanation benefits from documentation-grade definitions and precise factual distinctions. ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
@@ -144,6 +155,7 @@ export class ResearchPlanner {
           requiredTerms,
           preferredDomains,
           factFocusTerms,
+          entityTerms,
           temporalProfile,
           reasoning: `Debug diagnostics only benefit from grounding when the issue maps to concrete product behavior or documented errors. ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
@@ -160,6 +172,7 @@ export class ResearchPlanner {
           requiredTerms,
           preferredDomains,
           factFocusTerms,
+          entityTerms,
           temporalProfile,
           reasoning: `Mixed reasoning needs verification only for the factual subpart, not for the whole reasoning chain. ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
@@ -176,6 +189,7 @@ export class ResearchPlanner {
           requiredTerms,
           preferredDomains,
           factFocusTerms,
+          entityTerms,
           temporalProfile,
           reasoning: `Incident response research should verify provider-, standard-, or policy-specific claims only. ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
@@ -196,6 +210,7 @@ export class ResearchPlanner {
           requiredTerms,
           preferredDomains,
           factFocusTerms,
+          entityTerms,
           temporalProfile,
           reasoning: `Architecture research should verify hard constraints and concrete platform behaviors, not fetch generic design advice. ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
@@ -212,6 +227,7 @@ export class ResearchPlanner {
           requiredTerms,
           preferredDomains,
           factFocusTerms,
+          entityTerms,
           temporalProfile,
           reasoning: `Product strategy research should only verify external claims, not replace strategic judgment. ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
@@ -232,6 +248,7 @@ export class ResearchPlanner {
           requiredTerms,
           preferredDomains,
           factFocusTerms,
+          entityTerms,
           temporalProfile,
           reasoning: `Operational writing research should only validate required facts, chronology, or official wording. ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
@@ -249,6 +266,7 @@ export class ResearchPlanner {
           requiredTerms,
           preferredDomains,
           factFocusTerms,
+          entityTerms,
           temporalProfile,
           reasoning: `General research should stay focused on externally verifiable claims. ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
@@ -470,6 +488,24 @@ export class ResearchPlanner {
     );
 
     return fallbackTerms.slice(0, 3).join(" ");
+  }
+
+  private buildEntityTerms(args: {
+    question: string;
+    temporalSubject: string | null;
+    signalTerms: string[];
+    literalTokens: string[];
+    questionTerms: string[];
+    factFocusTerms: string[];
+  }) {
+    return uniqueStrings([
+      ...extractFocusTerms(args.temporalSubject ?? ""),
+      ...args.signalTerms.flatMap((term) => extractFocusTerms(term)),
+      ...args.literalTokens.flatMap((term) => extractFocusTerms(term)),
+      ...args.questionTerms.flatMap((term) => extractFocusTerms(term)),
+      ...args.factFocusTerms.flatMap((term) => extractFocusTerms(term)),
+      ...extractFocusTerms(args.question)
+    ]).slice(0, 8);
   }
 
   private selectModeForStrategy(

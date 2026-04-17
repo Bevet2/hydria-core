@@ -438,6 +438,7 @@ export const researchQueryPlanSchema = z.object({
   requiredTerms: z.array(z.string()).max(8),
   preferredDomains: z.array(z.string()).max(8),
   factFocusTerms: z.array(z.string()).max(8),
+  entityTerms: z.array(z.string()).max(8).default([]),
   temporalProfile: researchTemporalProfileSchema
 });
 

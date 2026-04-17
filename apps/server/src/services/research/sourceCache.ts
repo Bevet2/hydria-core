@@ -4,6 +4,7 @@ import type { ResearchSource } from "../../types/arena.js";
 import { env } from "../../utils/env.js";
 import { logger } from "../../utils/logger.js";
 import {
+  countEntityTermHits,
   getHostname,
   normalizeSpace,
   scoreTemporalFreshness,
@@ -60,7 +61,9 @@ export class ResearchSourceCacheService {
         const now = new Date().toISOString();
         const nextByUrl = new Map(payload.entries.map((entry) => [entry.url, entry]));
         const planTerms = uniqueStrings(
-          [...plan.requiredTerms, ...plan.factFocusTerms].map((term) => term.toLowerCase())
+          [...plan.requiredTerms, ...plan.factFocusTerms, ...plan.entityTerms].map((term) =>
+            term.toLowerCase()
+          )
         ).slice(0, 16);
 
         for (const source of sources) {
@@ -167,6 +170,11 @@ export class ResearchSourceCacheService {
     const domainMatch = entry.domains.some((domain) =>
       plan.preferredDomains.some((preferred) => domain.endsWith(preferred.toLowerCase()))
     );
+    const entityHitStats = countEntityTermHits(
+      `${text} ${entry.terms.join(" ")}`,
+      plan.entityTerms,
+      plan.preferredDomains
+    );
     const termHits = uniqueStrings([...plan.requiredTerms, ...plan.factFocusTerms]).filter(
       (term) =>
         term.length >= 4 &&
@@ -179,8 +187,29 @@ export class ResearchSourceCacheService {
       plan.temporalProfile
     );
     const hasDate = Boolean(entry.effectiveDate);
+    const requiresSpecificEntityHit =
+      plan.intent === "current_status" || plan.intent === "release_freshness";
 
-    if (!domainMatch && termHits === 0) {
+    if (
+      plan.temporalProfile.isTemporal &&
+      entityHitStats.totalHits === 0
+    ) {
+      return -24;
+    }
+
+    if (plan.preferredDomains.length > 0 && entityHitStats.identityHits === 0) {
+      return -22;
+    }
+
+    if (
+      requiresSpecificEntityHit &&
+      entityHitStats.totalHits > 0 &&
+      entityHitStats.specificHits === 0
+    ) {
+      return -18;
+    }
+
+    if (!domainMatch && termHits === 0 && entityHitStats.totalHits === 0) {
       return -20;
     }
 
@@ -190,6 +219,8 @@ export class ResearchSourceCacheService {
 
     return (
       (domainMatch ? 18 : 0) +
+      entityHitStats.totalHits * 8 +
+      entityHitStats.specificHits * 10 +
       termHits * 5 +
       (intentMatch ? 10 : 0) +
       freshness +

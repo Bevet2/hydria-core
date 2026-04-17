@@ -56,6 +56,7 @@ function buildEmptyResearchLog(decision: ResearchDecision): ResearchToolLog {
       requiredTerms: [],
       preferredDomains: [],
       factFocusTerms: [],
+      entityTerms: [],
       temporalProfile: buildDefaultTemporalProfile()
     },
     query: null,

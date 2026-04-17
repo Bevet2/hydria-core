@@ -190,6 +190,7 @@ export const defaultDatasetResearch = {
     requiredTerms: [],
     preferredDomains: [],
     factFocusTerms: [],
+    entityTerms: [],
     temporalProfile: {
       isTemporal: false,
       focus: "none" as const,

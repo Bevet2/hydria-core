@@ -87,9 +87,40 @@ export class ResearchExtractor {
             total + (term.length >= 4 && normalized.includes(term.toLowerCase()) ? 4 : 0),
           0
         );
+        score += plan.entityTerms.reduce(
+          (total, term) =>
+            total + (term.length >= 3 && normalized.includes(term.toLowerCase()) ? 6 : 0),
+          0
+        );
 
         if (countRegexMatches(sentence, /\b\d+(?:\.\d+)?%?\b/g) > 0) {
           score += 2;
+        }
+        if (
+          plan.intent === "current_status" &&
+          /\bv?\d+(?:\.\d+){0,2}\b/i.test(sentence)
+        ) {
+          score += 4;
+        }
+        if (
+          (plan.intent === "current_status" || plan.intent === "release_freshness") &&
+          /\b(?:lts|current|release|version)\b/i.test(sentence)
+        ) {
+          score += 3;
+        }
+        if (
+          (plan.intent === "current_status" || plan.intent === "release_freshness") &&
+          /\bv?\d+(?:\.\d+){0,2}\b/i.test(sentence) &&
+          /\b(?:current|lts|maintenance|eol|release)\b/i.test(sentence)
+        ) {
+          score += 10;
+        }
+        if (
+          (plan.intent === "current_status" || plan.intent === "release_freshness") &&
+          /\bv?\d+(?:\.\d+){0,2}\b/i.test(sentence) &&
+          /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/i.test(sentence)
+        ) {
+          score += 6;
         }
         if (matchesAny(sentence, DOC_HINT_PATTERNS)) {
           score += 3;
@@ -179,17 +210,27 @@ export class ResearchExtractor {
           : $("body").first();
 
     const chunks: string[] = [];
-    root.find("h1,h2,h3,p,li,time").each((_index, element) => {
+    const structureSelector =
+      plan.intent === "current_status" || plan.intent === "release_freshness"
+        ? "h1,h2,h3,p,li,time,tr,td,th,code"
+        : "h1,h2,h3,p,li,time";
+
+    root.find(structureSelector).each((_index, element) => {
+      const tagName = element.tagName?.toLowerCase() ?? "";
       const text = normalizeSpace($(element).text());
-      if (text.length >= 30) {
-        chunks.push(text);
+      const contextualText =
+        (tagName === "tr" || tagName === "td" || tagName === "th") && result.title
+          ? normalizeSpace(`${result.title} ${text}`)
+          : text;
+      if (contextualText.length >= 30) {
+        chunks.push(contextualText);
       }
-      if (chunks.length >= 16) {
+      if (chunks.length >= 24) {
         return false;
       }
     });
 
-    const rawText = normalizeSpace([metaDescription, ...chunks].filter(Boolean).join(" "));
+    const rawText = normalizeSpace([metaDescription, ...chunks].filter(Boolean).join(". "));
     const excerpt = this.buildRelevantExcerpt(rawText, plan, result.snippet, result.title);
     if (!excerpt) {
       return null;

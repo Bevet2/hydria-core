@@ -8,11 +8,14 @@ import type {
 } from "../../types/arena.js";
 import {
   buildDefaultTemporalProfile,
+  countEntityTermHits,
   describeTemporalWindow,
+  extractFocusTerms,
   extractTerms,
   getPathname,
   getSourceTrustScore,
   hasExplicitDateSignal,
+  normalizeFocusToken,
   normalizeSpace,
   resolveFreshnessWindow,
   scoreTemporalFreshness,
@@ -117,6 +120,7 @@ export class ResearchVerifier {
         requiredTerms: decision.plan?.requiredTerms ?? [],
         preferredDomains: decision.plan?.preferredDomains ?? [],
         factFocusTerms: decision.plan?.factFocusTerms ?? [],
+        entityTerms: decision.plan?.entityTerms ?? [],
         temporalProfile: decision.plan?.temporalProfile ?? buildDefaultTemporalProfile()
       },
       query: decision.plan?.queries[0] ?? decision.plan?.queries.join(" || ") ?? null,
@@ -183,6 +187,7 @@ export class ResearchVerifier {
         requiredTerms: decision.plan?.requiredTerms ?? [],
         preferredDomains: decision.plan?.preferredDomains ?? [],
         factFocusTerms: decision.plan?.factFocusTerms ?? [],
+        entityTerms: decision.plan?.entityTerms ?? [],
         temporalProfile
       },
       query: decision.plan?.queries[0] ?? decision.plan?.queries.join(" || ") ?? null,
@@ -310,6 +315,7 @@ export class ResearchVerifier {
 
   private buildAcceptedEntries(decision: ResearchDecision, sources: ResearchSource[]) {
     const preferredDomains = decision.plan?.preferredDomains ?? [];
+    const entityTerms = decision.plan?.entityTerms ?? [];
 
     return sources
       .map((source) => ({
@@ -317,7 +323,15 @@ export class ResearchVerifier {
         trustScore: getSourceTrustScore(source.url, preferredDomains),
         effectiveDate: this.parseDate(source.effectiveDate ?? source.modifiedAt ?? source.publishedAt)
       }))
-      .filter((entry) => entry.trustScore >= 26);
+      .filter((entry) => entry.trustScore >= 26)
+      .filter((entry) =>
+        this.sourceMatchesEntityTerms(
+          entry.source,
+          entityTerms,
+          decision.plan?.intent ?? "fact_check",
+          preferredDomains
+        )
+      );
   }
 
   private auditFreshness(decision: ResearchDecision, entries: SourceEntry[]): FreshnessAudit {
@@ -576,17 +590,22 @@ export class ResearchVerifier {
     const requiredTerms = [
       ...(args.decision.plan?.requiredTerms ?? []),
       ...(args.decision.plan?.factFocusTerms ?? []),
+      ...(args.decision.plan?.entityTerms ?? []),
       ...extractTerms(args.decision.targetClaims.join(" ")).slice(0, 6)
     ];
     const claimAnchorTerms = this.uniqueNormalized(
-      extractTerms(args.decision.targetClaims.join(" ")).filter(
-        (term) => !genericTerms.has(term.toLowerCase())
-      )
+      [
+        ...extractTerms(args.decision.targetClaims.join(" ")),
+        ...extractFocusTerms(args.decision.targetClaims.join(" "))
+      ].filter((term) => !genericTerms.has(term.toLowerCase()))
     ).slice(0, 8);
     const fallbackFocusTerms = this.uniqueNormalized(
-      extractTerms(
-        `${args.args.question} ${args.args.respondentA.answer} ${args.args.respondentB.answer}`
-      ).filter((term) => !genericTerms.has(term.toLowerCase()))
+      [
+        ...extractTerms(
+          `${args.args.question} ${args.args.respondentA.answer} ${args.args.respondentB.answer}`
+        ),
+        ...extractFocusTerms(args.args.question)
+      ].filter((term) => !genericTerms.has(term.toLowerCase()))
     ).slice(0, 8);
     const focusTerms = claimAnchorTerms.length > 0 ? claimAnchorTerms : fallbackFocusTerms;
 
@@ -687,15 +706,18 @@ export class ResearchVerifier {
     temporalProfile = buildDefaultTemporalProfile(),
     sourceEffectiveDate: string | null = null
   ) {
-    const normalized = sentence.toLowerCase();
+    const normalized = this.normalizeMatchingText(sentence);
+    const hasStructuredVersionRow =
+      /\bv?\d+(?:\.\d+){0,2}\b/i.test(sentence) &&
+      /\b(?:current|lts|maintenance|release)\b/i.test(sentence);
     let score = Math.min(5, Math.round(trustScore / 10));
 
     score += requiredTerms.reduce(
-      (total, term) => total + (term.length >= 4 && normalized.includes(term.toLowerCase()) ? 3 : 0),
+      (total, term) => total + (term.length >= 4 && this.textIncludesTerm(normalized, term) ? 3 : 0),
       0
     );
     const focusHits = focusTerms.filter(
-      (term) => term.length >= 4 && normalized.includes(term.toLowerCase())
+      (term) => term.length >= 4 && this.textIncludesTerm(normalized, term)
     ).length;
     if (focusTerms.length > 0 && focusHits === 0) {
       return -10;
@@ -704,13 +726,30 @@ export class ResearchVerifier {
       (temporalProfile.queryType === "current_status" ||
         temporalProfile.queryType === "release_freshness") &&
       focusTerms.length >= 2 &&
-      focusHits < 2
+      focusHits < 2 &&
+      !hasStructuredVersionRow
     ) {
       return -10;
     }
     score += focusHits * 4;
     score += /\b\d{4}\b/.test(sentence) ? 2 : 0;
     score += /\b\d+(?:\.\d+)?%?\b/.test(sentence) ? 1 : 0;
+    if (
+      (temporalProfile.queryType === "current_status" ||
+        temporalProfile.queryType === "release_freshness") &&
+      /\bv?\d+(?:\.\d+){0,2}\b/i.test(sentence) &&
+      /\b(?:current|lts|maintenance|release)\b/i.test(sentence)
+    ) {
+      score += 12;
+    }
+    if (
+      (temporalProfile.queryType === "current_status" ||
+        temporalProfile.queryType === "release_freshness") &&
+      /\bv?\d+(?:\.\d+){0,2}\b/i.test(sentence) &&
+      /\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/i.test(sentence)
+    ) {
+      score += 6;
+    }
     score += /\b(is|are|means|refers to|announced|released|updated|requires?)\b/i.test(sentence)
       ? 2
       : 0;
@@ -752,13 +791,16 @@ export class ResearchVerifier {
     text: string,
     temporalProfile = buildDefaultTemporalProfile()
   ) {
-    const terms = extractTerms(claim).slice(0, 4);
+    const terms = this.uniqueNormalized([
+      ...extractTerms(claim),
+      ...extractFocusTerms(claim)
+    ]).slice(0, 5);
     if (terms.length === 0) {
       return false;
     }
 
-    const normalizedText = text.toLowerCase();
-    const hits = terms.filter((term) => normalizedText.includes(term.toLowerCase())).length;
+    const normalizedText = this.normalizeMatchingText(text);
+    const hits = terms.filter((term) => this.textIncludesTerm(normalizedText, term)).length;
 
     return hits >= Math.min(terms.length, this.minimumSupportHits(terms.length, temporalProfile));
   }
@@ -833,5 +875,49 @@ export class ResearchVerifier {
     }
 
     return deduped;
+  }
+
+  private normalizeMatchingText(value: string) {
+    return normalizeSpace(value)
+      .toLowerCase()
+      .replace(/node\.js/g, "nodejs")
+      .replace(/next\.js/g, "nextjs")
+      .replace(/type\s*script/g, "typescript");
+  }
+
+  private textIncludesTerm(text: string, term: string) {
+    const normalizedTerm = normalizeFocusToken(term);
+    return text.includes(term.toLowerCase()) || (normalizedTerm !== "" && text.includes(normalizedTerm));
+  }
+
+  private sourceMatchesEntityTerms(
+    source: ResearchSource,
+    entityTerms: string[],
+    intent: ResearchDecision["plan"] extends infer _ ? NonNullable<ResearchDecision["plan"]>["intent"] : never,
+    preferredDomains: string[]
+  ) {
+    if (entityTerms.length === 0) {
+      return true;
+    }
+
+    if (intent !== "current_status" && intent !== "release_freshness") {
+      return true;
+    }
+
+    const text = `${source.title} ${source.snippet} ${source.excerpt} ${source.url}`.toLowerCase();
+    const hitStats = countEntityTermHits(text, entityTerms, preferredDomains);
+    if (hitStats.totalHits === 0) {
+      return false;
+    }
+
+    if (preferredDomains.length > 0 && hitStats.identityHits === 0) {
+      return false;
+    }
+
+    if (intent === "current_status" || intent === "release_freshness") {
+      return hitStats.specificHits > 0 || hitStats.totalHits >= 2;
+    }
+
+    return true;
   }
 }
