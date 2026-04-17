@@ -485,10 +485,14 @@ export type StudentAnswerPreview = {
   question: string;
   category: QuestionCategory;
   knowledge: KnowledgeInjection | null;
+  orchestration: OrchestrationPolicyDetails;
+  research: ResearchToolLog;
   strategy: StudentResponseStrategy;
   student: {
+    rawDraft: StudentAnswer;
     draft: StudentAnswer;
     baselineDraft: StudentAnswer | null;
+    toolApplied: boolean;
   };
   trace: {
     student: ExecutionTrace;

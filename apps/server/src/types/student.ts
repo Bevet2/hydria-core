@@ -156,10 +156,14 @@ export const studentAnswerPreviewSchema = z.object({
   question: z.string().min(1),
   category: questionCategorySchema,
   knowledge: knowledgeInjectionSchema.nullable(),
+  orchestration: orchestrationPolicySchema,
+  research: researchToolLogSchema,
   strategy: studentResponseStrategySchema,
   student: z.object({
+    rawDraft: studentAnswerSchema,
     draft: studentAnswerSchema,
-    baselineDraft: studentAnswerSchema.nullable().default(null)
+    baselineDraft: studentAnswerSchema.nullable().default(null),
+    toolApplied: z.boolean().default(false)
   }),
   trace: z.object({
     student: executionTraceSchema

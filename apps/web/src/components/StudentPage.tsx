@@ -97,6 +97,9 @@ export function StudentPage() {
   const displayedKnowledge = preview?.knowledge ?? currentSession?.knowledge ?? null;
   const displayedStrategy = preview?.strategy ?? currentSession?.strategy ?? null;
   const displayedDraft = preview?.student.draft ?? currentSession?.student.draft ?? null;
+  const displayedResearch = preview?.research ?? currentSession?.research ?? null;
+  const displayedOrchestration = preview?.orchestration ?? currentSession?.orchestration ?? null;
+  const displayedToolApplied = preview?.student.toolApplied ?? currentSession?.student.toolApplied ?? false;
   const canAnalyze = !!preview && preview.question === question;
   const finalStudentAnswer =
     currentSession && answersDiffer(currentSession.student.draft.answer, currentSession.student.final.answer)
@@ -190,7 +193,7 @@ export function StudentPage() {
                 disabled={answering || analyzing}
                 onClick={handleAnswerOnly}
               >
-                {answering ? "Student thinking..." : "Student only"}
+                {answering ? "Student thinking..." : "Student draft"}
               </button>
               <button
                 type="button"
@@ -203,8 +206,8 @@ export function StudentPage() {
             </div>
 
             <div className="info-strip">
-              <span>Step 1: local student only</span>
-              <span>Step 2: Red Team + Judge + teacher refinement</span>
+              <span>Step 1: local student draft, with truth engine if triggered</span>
+              <span>Step 2: Red Team + Judge + teacher refinement on the same draft</span>
               <span>Stored cycles feed future Qwen learning datasets</span>
             </div>
           </section>
@@ -263,50 +266,66 @@ export function StudentPage() {
           <section className="panel">
             <div className="panel__header">
               <h2>Truth Engine</h2>
-              {currentSession ? (
+              {displayedResearch ? (
                 <span className="pill">
-                  {currentSession.tooling.toolUsed ? currentSession.tooling.toolImpact : "not used"}
+                  {displayedToolApplied
+                    ? currentSession?.tooling.toolImpact ?? displayedResearch.route
+                    : displayedResearch.route}
                 </span>
               ) : null}
             </div>
-            {currentSession ? (
+            {displayedResearch ? (
               <>
                 <div className="summary-grid">
                   <div className="summary-card">
                     <span>Tool used</span>
-                    <strong>{currentSession.tooling.toolUsed ? "yes" : "no"}</strong>
+                    <strong>{displayedToolApplied ? "yes" : "no"}</strong>
                   </div>
                   <div className="summary-card">
                     <span>Truth confidence</span>
-                    <strong>{Math.round(currentSession.tooling.confidenceScore * 100)}%</strong>
+                    <strong>
+                      {Math.round(
+                        (currentSession?.tooling.confidenceScore ?? displayedResearch.truth.confidence_score) *
+                          100
+                      )}
+                      %
+                    </strong>
                   </div>
                   <div className="summary-card">
                     <span>No reliable source</span>
-                    <strong>{currentSession.tooling.noReliableSource ? "yes" : "no"}</strong>
+                    <strong>
+                      {currentSession?.tooling.noReliableSource ?? displayedResearch.truth.no_reliable_source
+                        ? "yes"
+                        : "no"}
+                    </strong>
                   </div>
                   <div className="summary-card">
-                    <span>Judge delta</span>
-                    <strong>{currentSession.tooling.metrics.judgeOverallDelta}</strong>
+                    <span>Research mode</span>
+                    <strong>{displayedResearch.decision.mode}</strong>
                   </div>
                   <div className="summary-card">
-                    <span>Gain global</span>
-                    <strong>{currentSession.tooling.metrics.gainGlobal}</strong>
+                    <span>Freshness</span>
+                    <strong>{displayedResearch.verification.freshnessSatisfied ? "ok" : "stale"}</strong>
                   </div>
                 </div>
-                <p>{currentSession.tooling.toolReason}</p>
+                {currentSession ? (
+                  <p>{currentSession.tooling.toolReason}</p>
+                ) : (
+                  <p>{displayedResearch.decision.reasoning}</p>
+                )}
                 <h4>Verified facts</h4>
                 {renderBulletList(
-                  currentSession.research.truth.verified_facts,
+                  displayedResearch.truth.verified_facts,
                   "No verified facts were injected."
                 )}
                 <h4>Uncertain claims</h4>
                 {renderBulletList(
-                  currentSession.research.truth.uncertain_claims,
+                  displayedResearch.truth.uncertain_claims,
                   "No explicit uncertainty markers."
                 )}
                 <h4>Conflicting information</h4>
                 {renderBulletList(
-                  currentSession.research.truth.conflicting_info,
+                  displayedResearch.truth.conflicting_info,
                   "No conflicts detected across reliable sources."
                 )}
               </>
@@ -441,7 +460,7 @@ export function StudentPage() {
               {displayedDraft ? (
                 <span className="pill">
                   Confidence {displayedDraft.confidence}
-                  {preview ? ` | ${preview.durationMs} ms` : ""}
+                  {preview ? ` | ${preview.durationMs} ms | ${preview.student.toolApplied ? "tool connected" : "no tool"}` : ""}
                 </span>
               ) : null}
             </div>
@@ -659,11 +678,11 @@ export function StudentPage() {
               </div>
               <div className="overview-item">
                 <span>Research route</span>
-                <strong>{currentSession?.research.route ?? "not run"}</strong>
+                <strong>{displayedResearch?.route ?? "not run"}</strong>
               </div>
               <div className="overview-item">
                 <span>Research mode</span>
-                <strong>{currentSession?.research.decision.mode ?? "n/a"}</strong>
+                <strong>{displayedResearch?.decision.mode ?? "n/a"}</strong>
               </div>
               <div className="overview-item">
                 <span>Research cost share</span>
@@ -738,25 +757,37 @@ export function StudentPage() {
               </>
             ) : null}
 
-            {currentSession ? (
+            {displayedOrchestration ? (
               <>
                 <h4>Orchestration</h4>
                 <ul className="bullet-list">
-                  <li>Focus: {currentSession.orchestration.focus}</li>
-                  <li>Refine policy: {currentSession.orchestration.refinePolicy}</li>
-                  <li>Research policy: {currentSession.orchestration.researchPolicy}</li>
-                  <li>Cost policy: {currentSession.orchestration.costPolicy}</li>
+                  <li>Focus: {displayedOrchestration.focus}</li>
+                  <li>Refine policy: {displayedOrchestration.refinePolicy}</li>
+                  <li>Research policy: {displayedOrchestration.researchPolicy}</li>
+                  <li>Cost policy: {displayedOrchestration.costPolicy}</li>
                 </ul>
+              </>
+            ) : null}
+            {displayedResearch ? (
+              <>
                 <h4>Tool reasoning</h4>
-                <p>{currentSession.research.decision.reasoning}</p>
-                <h4>Truth engine impact</h4>
-                <p>
-                  {currentSession.tooling.toolImpact} | {currentSession.tooling.metrics.judgeOverallDelta} judge delta | {currentSession.tooling.noReliableSource ? "no reliable source" : "reliable sources found"}
-                </p>
+                <p>{displayedResearch.decision.reasoning}</p>
+                {currentSession ? (
+                  <>
+                    <h4>Truth engine impact</h4>
+                    <p>
+                      {currentSession.tooling.toolImpact} | {currentSession.tooling.metrics.judgeOverallDelta} judge delta | {currentSession.tooling.noReliableSource ? "no reliable source" : "reliable sources found"}
+                    </p>
+                  </>
+                ) : null}
                 {renderBulletList(
-                  currentSession.research.decision.triggerSignals,
+                  displayedResearch.decision.triggerSignals,
                   "No tool trigger signals."
                 )}
+              </>
+            ) : null}
+            {currentSession ? (
+              <>
                 <h4>Category progress highlights</h4>
                 {summary && summary.categoryHighlights.length > 0 ? (
                   <ul className="bullet-list">

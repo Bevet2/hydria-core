@@ -228,6 +228,7 @@ export class StudentService {
   }
 
   async answerOnly(question: string): Promise<StudentAnswerPreview> {
+    const startedAt = performance.now();
     const category = classifyQuestion(question);
     const knowledge = await this.knowledgeInjectionService.buildForCategory(category, { question });
     const baselineKnowledge = buildKnowledgeWithoutStudentMemory(knowledge);
@@ -250,31 +251,79 @@ export class StudentService {
             knowledge: baselineKnowledge
           })
         : null;
-    const draftResult = await this.localModelService.answerQuestionDetailed({
+    const rawDraftResult = await this.localModelService.answerQuestionDetailed({
       question,
       category,
       strategy,
       knowledge
     });
-    const draftTrace = toStudentTrace({
+    const rawDraftTrace = toStudentTrace({
       requestedModel: env.LOCAL_MODEL_NAME,
-      usedRetry: draftResult.usedRetry,
+      usedRetry: rawDraftResult.usedRetry,
       note: "Local student produced the initial standalone answer."
     });
+    const rawDraftRespondent = toRespondentOutput(rawDraftResult.output);
+    const initialRedTeam = await this.runStudentRedTeam(question, category, rawDraftRespondent);
+    const orchestration = await this.orchestrationPolicyService.planRound({
+      question,
+      category,
+      respondentA: rawDraftRespondent,
+      respondentB: rawDraftRespondent,
+      redTeam: initialRedTeam.output
+    });
+    const research = await this.researchToolService.maybeCollect({
+      question,
+      category,
+      respondentA: rawDraftRespondent,
+      respondentB: rawDraftRespondent,
+      redTeam: initialRedTeam.output,
+      shouldRefineA: true,
+      shouldRefineB: false,
+      orchestration,
+      studentStrategy: strategy
+    });
+
+    let previewDraft = rawDraftResult.output;
+    let previewTrace = rawDraftTrace;
+    let toolApplied = false;
+
+    if (research.decision.shouldUse) {
+      const groundedResult = await this.localModelService.answerQuestionDetailed({
+        question,
+        category,
+        strategy,
+        knowledge,
+        research
+      });
+      previewDraft = groundedResult.output;
+      previewTrace = toStudentTrace({
+        requestedModel: env.LOCAL_MODEL_NAME,
+        usedRetry: groundedResult.usedRetry,
+        note: research.truth.no_reliable_source
+          ? "Local student produced the preview answer after truth-engine abstention guidance."
+          : "Local student produced the preview answer after tool-guided factual grounding."
+      });
+      toolApplied = true;
+    }
+
     const preview = studentAnswerPreviewSchema.parse({
       previewId: randomUUID(),
       question,
       category,
       knowledge,
+      orchestration,
+      research,
       strategy,
       student: {
-        draft: draftResult.output,
-        baselineDraft: baselineDraftResult?.output ?? null
+        rawDraft: rawDraftResult.output,
+        draft: previewDraft,
+        baselineDraft: baselineDraftResult?.output ?? null,
+        toolApplied
       },
       trace: {
-        student: draftTrace
+        student: previewTrace
       },
-      durationMs: draftResult.durationMs
+      durationMs: Math.round(performance.now() - startedAt)
     });
     this.rememberPreview(preview);
     return preview;
@@ -285,11 +334,15 @@ export class StudentService {
     const session = await this.analyzeDraft({
       question: preview.question,
       category: preview.category,
+      rawDraft: preview.student.rawDraft,
       draft: preview.student.draft,
       baselineDraft: preview.student.baselineDraft,
       trace: preview.trace.student,
       knowledge: preview.knowledge,
-      strategy: preview.strategy
+      strategy: preview.strategy,
+      orchestration: preview.orchestration,
+      research: preview.research,
+      toolApplied: preview.student.toolApplied
     });
     this.previewStore.delete(previewId);
     return session;
@@ -298,68 +351,82 @@ export class StudentService {
   private async analyzeDraft(args: {
     question: string;
     category: QuestionCategory;
+    rawDraft: StudentAnswer;
     draft: StudentAnswer;
     baselineDraft?: StudentAnswer | null;
     trace: ExecutionTrace;
     knowledge: KnowledgeInjection | null;
     strategy: StudentAnswerPreview["strategy"];
+    orchestration?: StudentAnswerPreview["orchestration"];
+    research?: ResearchToolLog;
+    toolApplied?: boolean;
   }): Promise<StudentSession> {
     const startedAt = performance.now();
     const sessionId = randomUUID();
     const createdAt = new Date().toISOString();
     const knowledge = args.knowledge;
     const strategy = args.strategy;
-    const draftRespondent = toRespondentOutput(args.draft);
+    const rawDraftRespondent = toRespondentOutput(args.rawDraft);
     const baselineRespondent = args.baselineDraft ? toRespondentOutput(args.baselineDraft) : null;
-    const initialRedTeam = await this.runStudentRedTeam(
-      args.question,
-      args.category,
-      draftRespondent
-    );
-    const orchestration = await this.orchestrationPolicyService.planRound({
-      question: args.question,
-      category: args.category,
-      respondentA: draftRespondent,
-      respondentB: draftRespondent,
-      redTeam: initialRedTeam.output
-    });
-    const researchBeforeTeacher = await this.researchToolService.maybeCollect({
-      question: args.question,
-      category: args.category,
-      respondentA: draftRespondent,
-      respondentB: draftRespondent,
-      redTeam: initialRedTeam.output,
-      shouldRefineA: true,
-      shouldRefineB: false,
-      orchestration,
-      studentStrategy: strategy
-    });
-    const shouldApplyResearchToStudent = researchBeforeTeacher.decision.shouldUse;
 
+    let orchestration = args.orchestration;
+    let researchBeforeTeacher = args.research;
+    let shouldApplyResearchToStudent = args.toolApplied ?? false;
     let finalStudentAnswer = args.draft;
     let finalStudentTrace = args.trace;
-    let finalStudentRespondent = draftRespondent;
-    let redTeamResult = initialRedTeam;
+    let finalStudentRespondent = toRespondentOutput(finalStudentAnswer);
 
-    if (shouldApplyResearchToStudent) {
-      const groundedResult = await this.localModelService.answerQuestionDetailed({
+    if (!orchestration || !researchBeforeTeacher) {
+      const initialRedTeam = await this.runStudentRedTeam(
+        args.question,
+        args.category,
+        rawDraftRespondent
+      );
+      orchestration = await this.orchestrationPolicyService.planRound({
         question: args.question,
         category: args.category,
-        strategy,
-        knowledge,
-        research: researchBeforeTeacher
+        respondentA: rawDraftRespondent,
+        respondentB: rawDraftRespondent,
+        redTeam: initialRedTeam.output
       });
-      finalStudentAnswer = groundedResult.output;
-      finalStudentTrace = toStudentTrace({
-        requestedModel: env.LOCAL_MODEL_NAME,
-        usedRetry: groundedResult.usedRetry,
-        note: researchBeforeTeacher.truth.no_reliable_source
-          ? "Local student produced the final answer after truth-engine abstention guidance."
-          : "Local student produced the final answer after tool-guided factual grounding."
+      researchBeforeTeacher = await this.researchToolService.maybeCollect({
+        question: args.question,
+        category: args.category,
+        respondentA: rawDraftRespondent,
+        respondentB: rawDraftRespondent,
+        redTeam: initialRedTeam.output,
+        shouldRefineA: true,
+        shouldRefineB: false,
+        orchestration,
+        studentStrategy: strategy
       });
-      finalStudentRespondent = toRespondentOutput(finalStudentAnswer);
-      redTeamResult = await this.runStudentRedTeam(args.question, args.category, finalStudentRespondent);
+      shouldApplyResearchToStudent = researchBeforeTeacher.decision.shouldUse;
+
+      if (shouldApplyResearchToStudent) {
+        const groundedResult = await this.localModelService.answerQuestionDetailed({
+          question: args.question,
+          category: args.category,
+          strategy,
+          knowledge,
+          research: researchBeforeTeacher
+        });
+        finalStudentAnswer = groundedResult.output;
+        finalStudentTrace = toStudentTrace({
+          requestedModel: env.LOCAL_MODEL_NAME,
+          usedRetry: groundedResult.usedRetry,
+          note: researchBeforeTeacher.truth.no_reliable_source
+            ? "Local student produced the final answer after truth-engine abstention guidance."
+            : "Local student produced the final answer after tool-guided factual grounding."
+        });
+        finalStudentRespondent = toRespondentOutput(finalStudentAnswer);
+      }
     }
+
+    const redTeamResult = await this.runStudentRedTeam(
+      args.question,
+      args.category,
+      finalStudentRespondent
+    );
 
     const teacherResult = await this.runTeacher({
       question: args.question,
@@ -417,8 +484,8 @@ export class StudentService {
     const tooling = await this.measureToolImpact({
       question: args.question,
       category: args.category,
-      baselineDraft: args.draft,
-      baselineRespondent: draftRespondent,
+      baselineDraft: args.rawDraft,
+      baselineRespondent: rawDraftRespondent,
       finalDraft: finalStudentAnswer,
       research: finalizedResearch
     });
@@ -426,7 +493,7 @@ export class StudentService {
       question: args.question,
       category: args.category,
       strategy,
-      selectedDraft: args.draft,
+      selectedDraft: args.rawDraft,
       knowledge
     });
 
@@ -447,7 +514,7 @@ export class StudentService {
       strategy,
       research: finalizedResearch,
       student: {
-        draft: args.draft,
+        draft: args.rawDraft,
         final: finalStudentAnswer,
         toolApplied: shouldApplyResearchToStudent
       },
