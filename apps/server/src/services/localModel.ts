@@ -29,6 +29,7 @@ import {
   type StudentResponseStrategy
 } from "../types/student.js";
 import { env } from "../utils/env.js";
+import { describeTemporalWindow, extractTerms } from "./research/common.js";
 
 type OllamaTagsResponse = {
   models?: Array<{
@@ -50,6 +51,73 @@ type LocalObservationArgs = {
   judge: JudgeOutput;
   synthesizer: SynthesizerOutput;
 };
+
+const ABSTENTION_PATTERN =
+  /\b(?:cannot|can't|could not)\s+(?:verify|confirm)\b|\bno reliable source\b/i;
+
+function normalizeText(value: string) {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function buildResearchAnchor(research: ResearchToolLog) {
+  const temporalProfile = research.queryPlan.temporalProfile;
+  if (!temporalProfile.isTemporal) {
+    return null;
+  }
+
+  return describeTemporalWindow(temporalProfile) ?? temporalProfile.absoluteDateHint ?? null;
+}
+
+function usesVerifiedSignals(answer: string, research: ResearchToolLog) {
+  const normalizedAnswer = normalizeText(answer);
+  const signalTerms = extractTerms(research.truth.verified_facts.join(" ")).slice(0, 12);
+
+  return signalTerms.some(
+    (term) => term.length >= 4 && normalizedAnswer.includes(term.toLowerCase())
+  );
+}
+
+function buildTruthAnchoredFallback(
+  currentAnswer: StudentAnswer,
+  research: ResearchToolLog | null
+): StudentAnswer | null {
+  if (!research) {
+    return null;
+  }
+
+  if (
+    !research.decision.shouldUse ||
+    !research.verification.freshnessSatisfied ||
+    research.truth.no_reliable_source ||
+    research.truth.verified_facts.length === 0
+  ) {
+    return null;
+  }
+
+  const currentText = normalizeText(currentAnswer.answer);
+  const alreadyGrounded =
+    !ABSTENTION_PATTERN.test(currentText) && usesVerifiedSignals(currentAnswer.answer, research);
+  if (alreadyGrounded) {
+    return null;
+  }
+
+  const anchor = buildResearchAnchor(research);
+  const verifiedFacts = research.truth.verified_facts.slice(0, 3);
+  const answer = `${verifiedFacts.join(" ")}${
+    anchor ? ` Verified for ${anchor}.` : ""
+  }`.trim();
+
+  return studentAnswerSchema.parse({
+    modelRole: "student",
+    answer,
+    key_points: verifiedFacts.slice(0, 4),
+    assumptions: research.truth.uncertain_claims.slice(0, 3),
+    confidence: Math.max(
+      currentAnswer.confidence,
+      Math.max(0, Math.min(100, Math.round(research.truth.confidence_score * 100)))
+    )
+  });
+}
 
 export class LocalModelService {
   async healthcheck(): Promise<LocalModelHealth> {
@@ -165,12 +233,13 @@ export class LocalModelService {
         studentDirectSystemPrompt
       );
       previousResponse = primary.response;
+      const parsed = parseStructuredOutput(
+        primary.response,
+        studentAnswerSchema,
+        "Local student direct answer"
+      );
       return {
-        output: parseStructuredOutput(
-          primary.response,
-          studentAnswerSchema,
-          "Local student direct answer"
-        ),
+        output: buildTruthAnchoredFallback(parsed, args.research ?? null) ?? parsed,
         durationMs: primary.durationMs,
         raw: primary.response,
         usedRetry: false
@@ -192,13 +261,14 @@ export class LocalModelService {
       studentDirectSystemPrompt
     );
     previousResponse = repair.response;
+    const parsed = parseStructuredOutput(
+      repair.response,
+      studentAnswerSchema,
+      "Local student direct answer"
+    );
 
     return {
-      output: parseStructuredOutput(
-        repair.response,
-        studentAnswerSchema,
-        "Local student direct answer"
-      ),
+      output: buildTruthAnchoredFallback(parsed, args.research ?? null) ?? parsed,
       durationMs: repair.durationMs,
       raw: repair.response,
       usedRetry: true

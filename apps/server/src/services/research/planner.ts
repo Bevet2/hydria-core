@@ -426,15 +426,23 @@ export class ResearchPlanner {
     const strippedQuestion = normalizeSpace(
       args.question
         .replace(/[?]/g, " ")
-        .replace(/\b(?:who is|who are|what is|what are|what was|what were|show me|tell me|give me)\b/gi, " ")
-        .replace(/\b(?:current|currently|latest|newest|most recent|recent|recently|today|right now|this week|this month|as of|announced|announcement|announcements|released|release|releases|release notes|updates?|version|major|new)\b/gi, " ")
+        .replace(/\bwhat recent updates were announced for\b/gi, " ")
+        .replace(/\bwhat recent updates were announced\b/gi, " ")
+        .replace(/\bwhat were the main\b/gi, " ")
+        .replace(/\bwhat were the recent\b/gi, " ")
+        .replace(/\bwhat were the\b/gi, " ")
+        .replace(/\bwhat are the latest\b/gi, " ")
+        .replace(/\bwhat is the latest\b/gi, " ")
+        .replace(/\bwhat is the current\b/gi, " ")
+        .replace(/\b(?:who is|who are|what is|what are|what was|what were|show me|tell me|give me|list|summarize)\b/gi, " ")
+        .replace(/\b(?:main|current|currently|latest|newest|most recent|recent|recently|today|right now|this week|this month|as of|announced|announcement|announcements|released|release|releases|release notes|updates?|version|major|new)\b/gi, " ")
         .replace(/\b(?:official|status)\b/gi, " ")
     );
     const candidate = normalizeSpace(
       strippedQuestion
         .replace(/\s+/g, " ")
-        .replace(/^(?:the|a|an)\s+/i, "")
-        .replace(/^\bof\b/i, "")
+        .replace(/^(?:the|a|an|for|of|about|on)\s+/i, "")
+        .replace(/\s+(?:for|of|about|on)$/i, "")
     );
     if (candidate.length >= 3) {
       return candidate;
@@ -453,6 +461,7 @@ export class ResearchPlanner {
           "recent",
           "updates",
           "update",
+          "main",
           "release",
           "releases",
           "version",

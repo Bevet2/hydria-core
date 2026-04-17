@@ -619,14 +619,25 @@ export class ResearchVerifier {
       );
     }
 
-    const verifiedFacts = this.uniqueNormalized(candidateFacts.map((entry) => entry.sentence)).slice(0, 6);
+    const verifiedFacts = this.uniqueNormalized(candidateFacts.map((entry) => entry.sentence))
+      .filter(
+        (fact) =>
+          args.decision.targetClaims.length === 0 ||
+          args.decision.targetClaims.some((claim) =>
+            this.textSupportsClaim(claim, fact, temporalProfile)
+          )
+      )
+      .slice(0, 6);
     const sourceText = args.entries
       .map((entry) => `${entry.source.title} ${entry.source.snippet} ${entry.source.excerpt}`)
       .join(" ")
       .toLowerCase();
+    const supportedClaimCount = args.decision.targetClaims.filter((claim) =>
+      this.claimSupported(claim, sourceText, verifiedFacts, temporalProfile)
+    ).length;
     const uncertainClaims = this.uniqueNormalized(
       args.decision.targetClaims
-        .filter((claim) => !this.claimSupported(claim, sourceText, verifiedFacts))
+        .filter((claim) => !this.claimSupported(claim, sourceText, verifiedFacts, temporalProfile))
         .slice(0, 5)
     );
     const conflictingInfo = this.detectConflicts(
@@ -637,6 +648,7 @@ export class ResearchVerifier {
     const noReliableSource =
       args.entries.length === 0 ||
       verifiedFacts.length === 0 ||
+      (args.decision.targetClaims.length > 0 && supportedClaimCount === 0) ||
       (temporalProfile.isTemporal && args.entries.every((entry) => entry.source.effectiveDate === null));
     const confidenceScore = noReliableSource
       ? 0
@@ -688,6 +700,14 @@ export class ResearchVerifier {
     if (focusTerms.length > 0 && focusHits === 0) {
       return -10;
     }
+    if (
+      (temporalProfile.queryType === "current_status" ||
+        temporalProfile.queryType === "release_freshness") &&
+      focusTerms.length >= 2 &&
+      focusHits < 2
+    ) {
+      return -10;
+    }
     score += focusHits * 4;
     score += /\b\d{4}\b/.test(sentence) ? 2 : 0;
     score += /\b\d+(?:\.\d+)?%?\b/.test(sentence) ? 1 : 0;
@@ -712,16 +732,45 @@ export class ResearchVerifier {
     return score;
   }
 
-  private claimSupported(claim: string, sourceText: string, verifiedFacts: string[]) {
+  private minimumSupportHits(
+    termCount: number,
+    temporalProfile = buildDefaultTemporalProfile()
+  ) {
+    if (
+      (temporalProfile.queryType === "current_status" ||
+        temporalProfile.queryType === "release_freshness") &&
+      termCount >= 2
+    ) {
+      return 2;
+    }
+
+    return 1;
+  }
+
+  private textSupportsClaim(
+    claim: string,
+    text: string,
+    temporalProfile = buildDefaultTemporalProfile()
+  ) {
     const terms = extractTerms(claim).slice(0, 4);
     if (terms.length === 0) {
       return false;
     }
 
-    const factText = verifiedFacts.join(" ").toLowerCase();
-    return terms.some(
-      (term) => sourceText.includes(term.toLowerCase()) || factText.includes(term.toLowerCase())
-    );
+    const normalizedText = text.toLowerCase();
+    const hits = terms.filter((term) => normalizedText.includes(term.toLowerCase())).length;
+
+    return hits >= Math.min(terms.length, this.minimumSupportHits(terms.length, temporalProfile));
+  }
+
+  private claimSupported(
+    claim: string,
+    sourceText: string,
+    verifiedFacts: string[],
+    temporalProfile = buildDefaultTemporalProfile()
+  ) {
+    const factText = verifiedFacts.join(" ");
+    return this.textSupportsClaim(claim, `${sourceText} ${factText}`, temporalProfile);
   }
 
   private detectConflicts(

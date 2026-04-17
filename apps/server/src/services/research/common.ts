@@ -403,7 +403,7 @@ export function detectTemporalQuery(value: string, now = new Date()): ResearchTe
     return buildTemporalProfile({
       focus: "latest",
       queryType: "release_freshness",
-      recencyDays: 365,
+      recencyDays: 180,
       dateRangeStart: null,
       dateRangeEnd: null,
       queryDirectives: [

@@ -168,6 +168,8 @@ Answering rules:
 - follow the highest-confidence memory rules when they fit the current question
 - proactively avoid the recurring student failure patterns from student_memory_rules when they match the question
 - if truth.verified_facts is present, replace fragile factual claims with those verified facts
+- if verification.freshnessSatisfied is true and truth.no_reliable_source is false and truth.verified_facts is non-empty, answer from those verified facts instead of abstaining
+- if verification.freshnessSatisfied is true and truth.no_reliable_source is false, do not say "I cannot verify" or "no reliable source" unless you are describing a separate uncertain sub-claim
 - if truth.uncertain_claims is non-empty, mark those points as uncertain instead of asserting them
 - if truth.conflicting_info is non-empty, briefly say that reliable sources conflict on that point
 - if truth.no_reliable_source is true, do not restate the uncertain claim as a fact; explicitly say the claim could not be verified from reliable sources
