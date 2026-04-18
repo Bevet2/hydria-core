@@ -97,7 +97,8 @@ export class ResearchVerifierTruthService {
             entry.source.effectiveDate
           ),
           trustScore: entry.trustScore,
-          effectiveDate: entry.source.effectiveDate
+          effectiveDate: entry.source.effectiveDate,
+          sourceContext: `${entry.source.title} ${entry.source.snippet} ${entry.source.excerpt} ${entry.source.url}`
         }))
       )
       .filter((entry) => entry.score >= 6)
@@ -108,7 +109,8 @@ export class ResearchVerifierTruthService {
         (entry) =>
           entry.effectiveDate !== null ||
           hasExplicitDateSignal(entry.sentence) ||
-          scoreTemporalFreshness(entry.sentence, temporalProfile) >= 4
+          scoreTemporalFreshness(entry.sentence, temporalProfile) >= 4 ||
+          this.supportsUndatedCurrentStatus(entry.sourceContext, entry.trustScore, temporalProfile)
       );
     }
 
@@ -142,7 +144,9 @@ export class ResearchVerifierTruthService {
       args.entries.length === 0 ||
       verifiedFacts.length === 0 ||
       (args.decision.targetClaims.length > 0 && supportedClaimCount === 0) ||
-      (temporalProfile.isTemporal && args.entries.every((entry) => entry.source.effectiveDate === null));
+      (temporalProfile.isTemporal &&
+        temporalProfile.queryType !== "current_status" &&
+        args.entries.every((entry) => entry.source.effectiveDate === null));
     const confidenceScore = noReliableSource
       ? 0
       : Math.max(
@@ -264,5 +268,19 @@ export class ResearchVerifierTruthService {
     }
 
     return "The requested claim could not be verified from reliable sources.";
+  }
+
+  private supportsUndatedCurrentStatus(
+    sourceContext: string,
+    trustScore: number,
+    temporalProfile: ResearchTemporalProfile
+  ) {
+    if (temporalProfile.queryType !== "current_status" || trustScore < 55) {
+      return false;
+    }
+
+    return /\b(?:current|leadership|ceo|president|chief|status|pricing|availability|version|team)\b/i.test(
+      sourceContext
+    );
   }
 }

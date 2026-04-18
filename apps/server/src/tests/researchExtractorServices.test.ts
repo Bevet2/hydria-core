@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { load } from "cheerio";
+import { ResearchExtractor } from "../services/research/extractor.js";
 import { ResearchExtractorDateService } from "../services/research/extractorDateService.js";
 import { ResearchExtractorPageService } from "../services/research/extractorPageService.js";
 import type { SearchPlan } from "../services/research/common.js";
@@ -81,4 +82,69 @@ test("extractor date service prefers explicit meta dates over weaker fallbacks",
   assert.equal(metadata.modifiedAt, "2026-04-15T10:30:00.000Z");
   assert.equal(metadata.effectiveDate, "2026-04-15T10:30:00.000Z");
   assert.equal(metadata.dateSource, "meta");
+});
+
+test("research extractor pulls dated excerpts from atom release feeds", () => {
+  const extractor = new ResearchExtractor();
+  const extracted = (extractor as any).tryExtractFeedDocument(
+    {
+      title: "Next.js Releases Atom",
+      url: "https://github.com/vercel/next.js/releases.atom",
+      snippet: "Canonical Next.js release feed.",
+      retrievalChannel: "live",
+      retrievalOrigin: "known_endpoint",
+      retrievalEngine: "known_endpoint"
+    },
+    `<?xml version="1.0" encoding="utf-8"?>
+      <feed xmlns="http://www.w3.org/2005/Atom">
+        <entry>
+          <title>v16.0.0</title>
+          <updated>2026-04-14T12:00:00Z</updated>
+          <summary>Next.js 16.0.0 release with cache components and routing updates.</summary>
+        </entry>
+        <entry>
+          <title>v15.4.2</title>
+          <updated>2026-03-22T08:30:00Z</updated>
+          <summary>Patch release.</summary>
+        </entry>
+      </feed>`,
+    buildPlan({
+      intent: "release_freshness",
+      queries: ["nextjs latest release official"],
+      preferredDomains: ["nextjs.org", "github.com"],
+      factFocusTerms: ["release", "version", "nextjs"],
+      entityTerms: ["nextjs", "release", "version"],
+      temporalProfile: {
+        ...buildDefaultTemporalProfile(),
+        isTemporal: true,
+        focus: "latest",
+        queryType: "release_freshness",
+        recencyDays: 180,
+        absoluteDateHint: "April 18, 2026"
+      }
+    })
+  );
+
+  assert.ok(extracted);
+  assert.match(extracted.excerpt, /Next\.js 16\.0\.0 release/i);
+  assert.equal(extracted.effectiveDate, "2026-04-14T12:00:00.000Z");
+  assert.doesNotMatch(extracted.excerpt, /<[^>]+>/);
+});
+
+test("research extractor rejects 404 or challenge pages as unusable sources", async () => {
+  const extractor = new ResearchExtractor();
+  const extracted = (extractor as any).tryBuildSnippetFallback(
+    {
+      title: "OpenAI leadership",
+      url: "https://openai.com/leadership",
+      snippet:
+        "URL Source: http://openai.com/leadership Warning: Target URL returned error 404: Not Found Markdown Content: # 404: This page could not be found.",
+      retrievalChannel: "live",
+      retrievalOrigin: "known_endpoint",
+      retrievalEngine: "known_endpoint"
+    },
+    buildPlan()
+  );
+
+  assert.equal(extracted, null);
 });

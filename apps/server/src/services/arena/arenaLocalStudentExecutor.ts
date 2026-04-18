@@ -80,6 +80,7 @@ export class ArenaLocalStudentExecutor {
         mode: "primary"
       });
       const result = await this.localModelService.observeRoundDetailed(promptArgs);
+      const usedDegradedParse = result.degraded || result.parseMode === "fallback";
       return {
         output: result.output,
         trace: {
@@ -89,10 +90,12 @@ export class ArenaLocalStudentExecutor {
           finalProvider: "ollama",
           finalModel: env.LOCAL_MODEL_NAME,
           usedRetry: false,
-          usedFallback: false,
-          validationFailures: 0,
-          outcome: "success",
-          note: "Dedicated local Ollama student produced validated JSON."
+          usedFallback: usedDegradedParse,
+          validationFailures: result.validationIssues.length,
+          outcome: usedDegradedParse ? "fallback_success" : "success",
+          note: usedDegradedParse
+            ? "Dedicated local Ollama student returned degraded output; a repaired local observation was stored."
+            : "Dedicated local Ollama student produced validated JSON."
         },
         durationMs: result.durationMs
       };

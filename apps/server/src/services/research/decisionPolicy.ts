@@ -204,7 +204,8 @@ export class ResearchDecisionPolicyService {
       args.category === "product_strategy";
     const targetClaims = [...new Set([
       ...args.redTeam.potentially_false_claims.slice(0, 4),
-      ...args.redTeam.shared_risks.slice(0, 2)
+      ...args.redTeam.shared_risks.slice(0, 2),
+      ...this.buildTemporalTargetClaims(args.question, temporalProfile)
     ])].slice(0, 6);
     const memorySignals = [...new Set([
       highFactualRisk ? "high_factual_risk" : "",
@@ -425,6 +426,29 @@ export class ResearchDecisionPolicyService {
       knowledgeStrategy,
       plan
     };
+  }
+
+  private buildTemporalTargetClaims(
+    question: string,
+    temporalProfile: ReturnType<typeof detectTemporalQuery>
+  ) {
+    if (!temporalProfile.isTemporal) {
+      return [];
+    }
+
+    const normalizedQuestion = question.trim().replace(/\s+/g, " ");
+    if (!normalizedQuestion) {
+      return [];
+    }
+
+    const prefixedQuestion =
+      temporalProfile.queryType === "current_status"
+        ? `Current status target: ${normalizedQuestion}`
+        : temporalProfile.queryType === "release_freshness"
+          ? `Latest release target: ${normalizedQuestion}`
+          : `Recent updates target: ${normalizedQuestion}`;
+
+    return [prefixedQuestion];
   }
 
   private async loadKnowledgeInsight(category: QuestionCategory): Promise<KnowledgeCategoryInsight | null> {

@@ -113,6 +113,10 @@ export class ResearchExtractor {
       return null;
     }
 
+    if (this.isFeedLikeDocument(fetched.contentType, fetched.body)) {
+      return this.tryExtractFeedDocument(result, fetched.body, plan);
+    }
+
     const $ = load(fetched.body);
     const metadata = this.dateService.extractDateMetadata({
       $,
@@ -147,13 +151,81 @@ export class ResearchExtractor {
       result.snippet,
       result.title
     );
-    if (!excerpt) {
+    if (!excerpt || this.isRejectedExtraction(excerpt)) {
       return null;
     }
 
     return {
       excerpt,
       ...metadata
+    };
+  }
+
+  private tryExtractFeedDocument(
+    result: SearchCandidate,
+    body: string,
+    plan: SearchPlan
+  ): ExtractedPage | null {
+    const feedEntries = this.extractFeedEntries(body);
+    if (feedEntries.length === 0) {
+      return null;
+    }
+
+    const feedTextChunks = feedEntries
+      .map((entry) =>
+        normalizeSpace(
+          [
+            entry.title ? `Release ${entry.title}` : "",
+            entry.dateText ? `updated ${entry.dateText}` : "",
+            entry.summary
+          ]
+            .filter(Boolean)
+            .join(". ")
+        )
+      )
+      .filter(Boolean);
+    const firstDate = feedEntries[0]?.dateText ?? null;
+    const primaryEntrySummary = feedTextChunks[0] ?? "";
+
+    const rawText = normalizeSpace(feedTextChunks.join(". "));
+    if (!rawText) {
+      return null;
+    }
+
+    const pageType = this.pageService.detectPageType(result, plan);
+    const excerpt = this.pageService.buildRelevantExcerpt(
+      rawText,
+      plan,
+      pageType,
+      result.snippet,
+      result.title
+    );
+    const releaseFocusedExcerpt =
+      plan.intent === "release_freshness" && primaryEntrySummary
+        ? normalizeSpace([result.title, primaryEntrySummary].filter(Boolean).join(" ")).slice(0, 1800)
+        : "";
+    const fallbackExcerpt = normalizeSpace(
+      [result.title, primaryEntrySummary, ...feedTextChunks.slice(1, 2)].filter(Boolean).join(" ")
+    ).slice(0, 1800);
+    const finalExcerpt =
+      (releaseFocusedExcerpt.length >= 80 ? releaseFocusedExcerpt : null) ??
+      excerpt ??
+      (fallbackExcerpt.length >= 80 ? fallbackExcerpt : null);
+    if (!finalExcerpt || this.isRejectedExtraction(finalExcerpt)) {
+      return null;
+    }
+
+    const parsedDate =
+      firstDate && !Number.isNaN(new Date(firstDate).getTime())
+        ? new Date(firstDate).toISOString()
+        : null;
+
+    return {
+      excerpt: finalExcerpt,
+      publishedAt: parsedDate,
+      modifiedAt: parsedDate,
+      effectiveDate: parsedDate,
+      dateSource: parsedDate ? "text" : null
     };
   }
 
@@ -176,7 +248,7 @@ export class ResearchExtractor {
       result.snippet,
       result.title
     );
-    if (!excerpt) {
+    if (!excerpt || this.isRejectedExtraction(excerpt)) {
       return null;
     }
 
@@ -195,7 +267,7 @@ export class ResearchExtractor {
     }
 
     const fallback = normalizeSpace(`${result.title}. ${result.snippet}`.replace(/^\.\s*/, ""));
-    if (fallback.length < 80) {
+    if (fallback.length < 80 || this.isRejectedExtraction(fallback)) {
       return null;
     }
 
@@ -257,5 +329,91 @@ export class ResearchExtractor {
     }
 
     return fetched;
+  }
+
+  private isFeedLikeDocument(contentType: string, body: string) {
+    const normalizedType = contentType.toLowerCase();
+    if (
+      normalizedType.includes("application/atom+xml") ||
+      normalizedType.includes("application/rss+xml") ||
+      normalizedType.includes("application/xml") ||
+      normalizedType.includes("text/xml")
+    ) {
+      return true;
+    }
+
+    return /^\s*<(?:\?xml|feed\b|rss\b)/i.test(body);
+  }
+
+  private extractFeedEntries(body: string) {
+    const $ = load(body, { xml: true });
+    const entries = $("entry, item").slice(0, 3);
+    if (entries.length > 0) {
+      const parsed: Array<{ title: string; summary: string; dateText: string }> = [];
+      entries.each((_index, element) => {
+        const node = $(element);
+        parsed.push({
+          title: normalizeSpace(node.find("title").first().text()),
+          summary: this.normalizeFeedSummary(
+            node.find("summary").first().text() ||
+              node.find("description").first().text() ||
+              node.find("content").first().text() ||
+              node.text()
+          ),
+          dateText: normalizeSpace(
+            node.find("updated").first().text() ||
+              node.find("published").first().text() ||
+              node.find("pubDate").first().text()
+          )
+        });
+      });
+      return parsed.filter((entry) => entry.title || entry.summary);
+    }
+
+    const blocks = [...body.matchAll(/<(entry|item)\b[\s\S]*?>([\s\S]*?)<\/\1>/gi)]
+      .map((match) => match[2] ?? "")
+      .slice(0, 3);
+
+    return blocks
+      .map((block) => ({
+        title: this.matchFeedTag(block, ["title"]),
+        summary: this.normalizeFeedSummary(
+          this.matchFeedTag(block, ["summary", "description", "content"])
+        ),
+        dateText: this.matchFeedTag(block, ["updated", "published", "pubDate"])
+      }))
+      .filter((entry) => entry.title || entry.summary);
+  }
+
+  private matchFeedTag(block: string, tagNames: string[]) {
+    for (const tagName of tagNames) {
+      const match = block.match(
+        new RegExp(`<(?:[a-z0-9_-]+:)?${tagName}\\b[^>]*>([\\s\\S]*?)<\\/(?:[a-z0-9_-]+:)?${tagName}>`, "i")
+      );
+      if (match?.[1]) {
+        return normalizeSpace(match[1].replace(/<[^>]+>/g, " "));
+      }
+    }
+
+    return "";
+  }
+
+  private isRejectedExtraction(text: string) {
+    return (
+      /target url returned error 404/i.test(text) ||
+      /\b404\b.*could not be found/i.test(text) ||
+      /just a moment/i.test(text) ||
+      /enable javascript and cookies to continue/i.test(text)
+    );
+  }
+
+  private normalizeFeedSummary(value: string) {
+    const normalized = normalizeSpace(value);
+    if (!/[<&]/.test(normalized)) {
+      return normalized;
+    }
+
+    const $ = load(`<div>${normalized}</div>`);
+    return normalizeSpace($("div").text());
   }
 }

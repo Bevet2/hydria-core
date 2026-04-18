@@ -94,6 +94,9 @@ test("decision policy always triggers research for temporal freshness queries", 
   assert.equal(decision.plan?.intent, "current_status");
   assert.ok(decision.triggerSignals.includes("temporal_query_current_status"));
   assert.equal(decision.expectedValue, "high");
+  assert.ok(
+    decision.targetClaims.some((claim) => /current status target:\s*who is the current ceo of openai/i.test(claim))
+  );
 });
 
 test("decision policy keeps research off for open-like writing tasks without external verification pressure", async () => {

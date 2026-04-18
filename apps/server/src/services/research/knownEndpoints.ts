@@ -24,6 +24,8 @@ export class ResearchKnownEndpointService {
       );
       const requiresSpecificHit =
         plan.intent === "current_status" || plan.intent === "release_freshness";
+      const allowHighPrioritySpecificAlias =
+        endpoint.priority >= 90 && termHitStats.specificHits > 0;
       const intentMatch = endpoint.intents.includes(plan.intent);
       const score =
         endpoint.priority +
@@ -32,16 +34,22 @@ export class ResearchKnownEndpointService {
         termHitStats.totalHits * 10 +
         termHitStats.specificHits * 12;
 
+      const allowHighPriorityIdentityOnly =
+        requiresSpecificHit && termHitStats.identityHits > 0 && endpoint.priority >= 90;
+
       return {
         endpoint,
         score,
         include:
           !excluded.has(endpoint.url) &&
           termHitStats.totalHits > 0 &&
-          (plan.preferredDomains.length === 0 || termHitStats.identityHits > 0) &&
+          (plan.preferredDomains.length === 0 ||
+            termHitStats.identityHits > 0 ||
+            allowHighPrioritySpecificAlias) &&
           (!requiresSpecificHit ||
             termHitStats.specificHits > 0 ||
-            termHitStats.totalHits >= 2) &&
+            termHitStats.totalHits >= 2 ||
+            allowHighPriorityIdentityOnly) &&
           (intentMatch || domainMatch) &&
           score >= 92
       };
@@ -110,6 +118,15 @@ export class ResearchKnownEndpointService {
             termHitStats.specificHits * 12 +
             (termHitStats.identityHits > 0 ? 18 : 0);
 
+          const allowHighPriorityIdentityOnly =
+            (plan.intent === "current_status" || plan.intent === "release_freshness") &&
+            termHitStats.identityHits > 0 &&
+            score >= 92;
+          const allowHighPrioritySpecificAlias =
+            (plan.intent === "current_status" || plan.intent === "release_freshness") &&
+            termHitStats.specificHits > 0 &&
+            score >= 92;
+
           return {
             endpoint: {
               url,
@@ -120,8 +137,10 @@ export class ResearchKnownEndpointService {
             include:
               !excluded.has(url) &&
               termHitStats.totalHits > 0 &&
-              termHitStats.identityHits > 0 &&
-              (termHitStats.specificHits > 0 || termHitStats.totalHits >= 2)
+              (termHitStats.identityHits > 0 || allowHighPrioritySpecificAlias) &&
+              (termHitStats.specificHits > 0 ||
+                termHitStats.totalHits >= 2 ||
+                allowHighPriorityIdentityOnly)
           };
         })
         .filter((entry) => entry.include)

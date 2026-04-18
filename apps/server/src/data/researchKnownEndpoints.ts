@@ -93,6 +93,16 @@ export const KNOWN_FRESH_ENDPOINTS: KnownFreshEndpoint[] = [
     priority: 95
   },
   {
+    id: "nextjs-releases-atom",
+    title: "Next.js Releases Atom",
+    url: "https://github.com/vercel/next.js/releases.atom",
+    snippet: "Canonical Next.js release feed with dated entries.",
+    intents: ["release_freshness", "recent_updates"],
+    domains: ["github.com", "nextjs.org", "vercel.com"],
+    termHints: ["next.js", "nextjs", "release", "version"],
+    priority: 97
+  },
+  {
     id: "nextjs-blog",
     title: "Next.js Blog",
     url: "https://nextjs.org/blog",
@@ -153,6 +163,16 @@ export const KNOWN_FRESH_ENDPOINTS: KnownFreshEndpoint[] = [
     priority: 95
   },
   {
+    id: "typescript-releases-atom",
+    title: "TypeScript Releases Atom",
+    url: "https://github.com/microsoft/TypeScript/releases.atom",
+    snippet: "Canonical TypeScript release feed with dated entries.",
+    intents: ["release_freshness", "recent_updates"],
+    domains: ["github.com", "typescriptlang.org", "microsoft.com"],
+    termHints: ["typescript", "release", "version"],
+    priority: 97
+  },
+  {
     id: "typescript-blog",
     title: "TypeScript Blog",
     url: "https://devblogs.microsoft.com/typescript/",
@@ -181,6 +201,16 @@ export const KNOWN_FRESH_ENDPOINTS: KnownFreshEndpoint[] = [
     domains: ["github.com", "kubernetes.io"],
     termHints: ["kubernetes"],
     priority: 95
+  },
+  {
+    id: "kubernetes-releases-atom",
+    title: "Kubernetes Releases Atom",
+    url: "https://github.com/kubernetes/kubernetes/releases.atom",
+    snippet: "Canonical Kubernetes release feed with dated entries.",
+    intents: ["release_freshness", "recent_updates"],
+    domains: ["github.com", "kubernetes.io"],
+    termHints: ["kubernetes", "release", "version"],
+    priority: 97
   },
   {
     id: "kubernetes-release-site",

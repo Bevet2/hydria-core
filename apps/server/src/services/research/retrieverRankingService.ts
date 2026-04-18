@@ -156,6 +156,12 @@ export class ResearchRetrieverRankingService {
       /\/pricing/i,
       /\/availability/i
     ]);
+    const allowKnownEndpointCrossDomain =
+      candidate.retrievalOrigin === "known_endpoint" &&
+      plan.temporalProfile.isTemporal &&
+      (plan.intent === "current_status" || plan.intent === "release_freshness") &&
+      /github\.com$/i.test(domain) &&
+      entityHitStats.specificHits > 0;
     let score = getSearchDomainTrustScore({
       domain,
       path,
@@ -276,7 +282,11 @@ export class ResearchRetrieverRankingService {
         return -20;
       }
 
-      if (plan.preferredDomains.length > 0 && entityHitStats.identityHits === 0) {
+      if (
+        plan.preferredDomains.length > 0 &&
+        entityHitStats.identityHits === 0 &&
+        !allowKnownEndpointCrossDomain
+      ) {
         return -18;
       }
 

@@ -132,6 +132,35 @@ test("research verifier rejects stale temporal sources and reports freshness fai
   assert.match(log.impactNotes[0] ?? "", /no sufficiently recent source/i);
 });
 
+test("research verifier accepts trusted current-status pages without explicit dates", () => {
+  const verifier = new ResearchVerifier();
+  const log = verifier.buildLog({
+    decision: buildDecision(30),
+    args: buildArgs(),
+    searchResults: buildSearchResults(),
+    sources: [
+      {
+        title: "OpenAI leadership",
+        url: "https://openai.com/leadership",
+        snippet: "Leadership team and CEO",
+        excerpt: "OpenAI leadership page lists Sam Altman as CEO of OpenAI.",
+        publishedAt: null,
+        modifiedAt: null,
+        effectiveDate: null,
+        dateSource: null,
+        retrievalChannel: "live",
+        retrievalOrigin: "known_endpoint",
+        retrievalEngine: "known_endpoint"
+      }
+    ],
+    startedAt: Date.now() - 50
+  });
+
+  assert.equal(log.used, true);
+  assert.equal(log.verification.freshnessSatisfied, true);
+  assert.equal(log.truth.no_reliable_source, false);
+});
+
 test("research verifier impact accounting marks visible source uptake as positive", () => {
   const verifier = new ResearchVerifier();
   const log = verifier.buildLog({

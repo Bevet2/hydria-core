@@ -18,6 +18,9 @@ Rules:
 - Extract concrete learning notes for future imitation or supervised fine-tuning.
 - Return strict JSON only.
 - Never include markdown fences.
+- Always include every required field, even when uncertain.
+- "student_summary" must be a short string.
+- "learning_notes" must always be a JSON array of strings.
 
 Output schema:
 {

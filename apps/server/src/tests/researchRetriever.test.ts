@@ -112,3 +112,44 @@ test("research retriever keeps high-trust release pages when ranking temporal re
 
   assert.equal(ranked[0]?.url, "https://nodejs.org/en/blog/release/v24.1.0");
 });
+
+test("research retriever keeps known GitHub release feeds for temporal release queries when the canonical product domain differs", async () => {
+  const retriever = new ResearchRetriever({
+    searchService: {
+      async search() {
+        return [];
+      }
+    }
+  });
+
+  const ranked = await retriever.searchAll(
+    buildPlan({
+      intent: "release_freshness",
+      queries: ["TypeScript latest release official"],
+      preferredDomains: ["typescriptlang.org", "devblogs.microsoft.com", "github.com"],
+      requiredTerms: ["typescript", "latest", "release"],
+      factFocusTerms: ["latest", "typescript", "release"],
+      entityTerms: ["typescript"],
+      temporalProfile: {
+        ...buildDefaultTemporalProfile(),
+        isTemporal: true,
+        focus: "latest",
+        queryType: "release_freshness",
+        recencyDays: 365,
+        absoluteDateHint: "April 18, 2026"
+      }
+    }),
+    [
+      {
+        title: "TypeScript Releases Atom",
+        url: "https://github.com/microsoft/TypeScript/releases.atom",
+        snippet: "Canonical TypeScript release feed with dated entries.",
+        retrievalChannel: "live",
+        retrievalOrigin: "known_endpoint",
+        retrievalEngine: "known_endpoint"
+      }
+    ]
+  );
+
+  assert.equal(ranked[0]?.url, "https://github.com/microsoft/TypeScript/releases.atom");
+});

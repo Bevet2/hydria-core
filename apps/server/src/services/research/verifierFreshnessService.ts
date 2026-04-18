@@ -87,10 +87,6 @@ export class ResearchVerifierFreshnessService {
     intent: ResearchIntent
   ) {
     const date = entry.effectiveDate;
-    if (!date) {
-      return false;
-    }
-
     const sourceText = `${entry.source.title} ${entry.source.snippet} ${entry.source.excerpt} ${entry.source.url}`;
     const path = getPathname(entry.source.url);
 
@@ -117,6 +113,14 @@ export class ResearchVerifierFreshnessService {
       if (!currentLike) {
         return false;
       }
+
+      if (!date) {
+        return entry.trustScore >= 55;
+      }
+    }
+
+    if (!date) {
+      return false;
     }
 
     return this.dateWithinWindow(date, temporalProfile);
@@ -171,14 +175,24 @@ export class ResearchVerifierFreshnessService {
 
     const text = `${source.title} ${source.snippet} ${source.excerpt} ${source.url}`.toLowerCase();
     const hitStats = countEntityTermHits(text, entityTerms, preferredDomains);
+    const allowKnownEndpointIdentityOnly =
+      source.retrievalOrigin === "known_endpoint" &&
+      (intent === "current_status" || intent === "release_freshness") &&
+      hitStats.identityHits > 0;
     if (hitStats.totalHits === 0) {
       return false;
     }
 
-    if (preferredDomains.length > 0 && hitStats.identityHits === 0) {
+    const allowKnownEndpointCrossDomain =
+      source.retrievalOrigin === "known_endpoint" &&
+      (intent === "current_status" || intent === "release_freshness") &&
+      /github\.com/i.test(source.url) &&
+      hitStats.specificHits > 0;
+
+    if (preferredDomains.length > 0 && hitStats.identityHits === 0 && !allowKnownEndpointCrossDomain) {
       return false;
     }
 
-    return hitStats.specificHits > 0 || hitStats.totalHits >= 2;
+    return hitStats.specificHits > 0 || hitStats.totalHits >= 2 || allowKnownEndpointIdentityOnly;
   }
 }

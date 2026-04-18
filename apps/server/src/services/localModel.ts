@@ -22,7 +22,7 @@ import {
   type LocalModelTestResponse,
   type LocalStudentOutput
 } from "../types/localModel.js";
-import { parseLooseJson, parseStructuredOutput, stripCodeFences } from "../utils/jsonRepair.js";
+import { parseLooseJson, stripCodeFences } from "../utils/jsonRepair.js";
 import {
   studentAnswerSchema,
   type StudentAnswer,
@@ -327,6 +327,146 @@ function buildResearchAnchor(research: ResearchToolLog) {
   return describeTemporalWindow(temporalProfile) ?? temporalProfile.absoluteDateHint ?? null;
 }
 
+type LocalObservationParseResult = {
+  output: LocalStudentOutput;
+  parseMode: LocalStudentParseMode;
+  validationIssues: string[];
+};
+
+function deriveObservationSummary(answerText: string) {
+  return splitLooseItems(answerText)[0]?.slice(0, 220) ?? answerText.slice(0, 220);
+}
+
+function deriveLearningNotes(answerText: string, summaryText: string) {
+  return uniqueNonEmpty([
+    ...splitLooseItems(summaryText),
+    ...splitLooseItems(answerText)
+  ]).slice(0, 6);
+}
+
+function findLocalObservationLikeObject(value: unknown, depth = 0): Record<string, unknown> | null {
+  if (depth > 4 || !value) {
+    return null;
+  }
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const nested = findLocalObservationLikeObject(entry, depth + 1);
+      if (nested) {
+        return nested;
+      }
+    }
+    return null;
+  }
+
+  if (typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (
+    ["student_answer", "student_summary", "learning_notes", "answer", "summary", "notes"].some(
+      (key) => key in record
+    )
+  ) {
+    return record;
+  }
+
+  for (const entry of Object.values(record)) {
+    const nested = findLocalObservationLikeObject(entry, depth + 1);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return null;
+}
+
+function buildLocalObservationFromObject(value: unknown): LocalStudentOutput | null {
+  const record = findLocalObservationLikeObject(value);
+  if (!record) {
+    return null;
+  }
+
+  const studentAnswer = coerceText(
+    record.student_answer ??
+      record.answer ??
+      record.response ??
+      record.output ??
+      record.content ??
+      record.message
+  );
+  if (!studentAnswer) {
+    return null;
+  }
+
+  const studentSummary =
+    coerceText(record.student_summary ?? record.summary ?? record.studentSummary) ??
+    deriveObservationSummary(studentAnswer);
+  const learningNotes = uniqueNonEmpty([
+    ...coerceStringArray(
+      record.learning_notes ??
+        record.learningNotes ??
+        record.notes ??
+        record.lessons ??
+        record.key_points
+    ),
+    ...deriveLearningNotes(studentAnswer, studentSummary)
+  ]).slice(0, 12);
+
+  const parsed = localStudentOutputSchema.safeParse({
+    modelRole: "local_student",
+    student_answer: studentAnswer,
+    student_summary: studentSummary,
+    learning_notes: learningNotes
+  });
+
+  return parsed.success ? parsed.data : null;
+}
+
+function extractFallbackObservationText(raw: string) {
+  const cleaned = stripCodeFences(raw)
+    .replace(/^[\s{[]+/, "")
+    .replace(/[\]}]+$/, "")
+    .replace(/\b(?:modelRole|learning_notes|student_summary)\b\s*:\s*/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) {
+    return "Local observation could not be parsed from the model output.";
+  }
+
+  const answerMatch = cleaned.match(/student_answer\s*[:=-]\s*(.+)$/i);
+  if (answerMatch?.[1]) {
+    return answerMatch[1].trim();
+  }
+
+  return cleaned.slice(0, 900);
+}
+
+function buildFallbackLocalObservation(
+  raw: string,
+  validationIssues: string[]
+): LocalObservationParseResult {
+  const studentAnswer = extractFallbackObservationText(raw);
+  const studentSummary = deriveObservationSummary(studentAnswer);
+  const learningNotes = deriveLearningNotes(studentAnswer, studentSummary);
+
+  return {
+    output: localStudentOutputSchema.parse({
+      modelRole: "local_student",
+      student_answer: studentAnswer,
+      student_summary: studentSummary,
+      learning_notes: learningNotes
+    }),
+    parseMode: "fallback",
+    validationIssues: uniqueNonEmpty([
+      ...validationIssues,
+      "Used degraded local observation fallback because the model output could not be parsed cleanly."
+    ])
+  };
+}
+
 function usesVerifiedSignals(answer: string, research: ResearchToolLog) {
   const normalizedAnswer = normalizeText(answer);
   const signalTerms = extractTerms(research.truth.verified_facts.join(" ")).slice(0, 12);
@@ -379,6 +519,44 @@ function buildTruthAnchoredFallback(
 }
 
 export class LocalModelService {
+  private parseLocalObservationResponse(raw: string): LocalObservationParseResult {
+    const validationIssues: string[] = [];
+
+    try {
+      const strict = localStudentOutputSchema.parse(JSON.parse(stripCodeFences(raw)));
+      return {
+        output: strict,
+        parseMode: "strict",
+        validationIssues
+      };
+    } catch (error) {
+      validationIssues.push(error instanceof Error ? error.message : String(error));
+    }
+
+    try {
+      const repaired = buildLocalObservationFromObject(
+        parseLooseJson(raw, "Local student observation")
+      );
+      if (repaired) {
+        return {
+          output: repaired,
+          parseMode: "repaired",
+          validationIssues
+        };
+      }
+      validationIssues.push("Recovered JSON still did not expose a valid local observation shape.");
+    } catch (error) {
+      validationIssues.push(error instanceof Error ? error.message : String(error));
+    }
+
+    const fallback = buildFallbackLocalObservation(raw, validationIssues);
+    logger.warn("Local student observation fell back to degraded parsing", {
+      validationIssues: fallback.validationIssues.slice(0, 4),
+      rawPreview: raw.slice(0, 400)
+    });
+    return fallback;
+  }
+
   private parseStudentAnswerResponse(raw: string): StudentAnswerParseResult {
     const validationIssues: string[] = [];
 
@@ -498,14 +676,15 @@ export class LocalModelService {
   async observeRoundDetailed(args: LocalObservationArgs) {
     const prompt = buildLocalStudentPrompt(args);
     const response = await this.testPrompt(prompt, localStudentSystemPrompt);
+    const parsed = this.parseLocalObservationResponse(response.response);
+
     return {
-      output: parseStructuredOutput(
-        response.response,
-        localStudentOutputSchema,
-        "Local student model"
-      ),
+      output: parsed.output,
       durationMs: response.durationMs,
-      raw: response.response
+      raw: response.response,
+      parseMode: parsed.parseMode,
+      degraded: parsed.parseMode === "fallback",
+      validationIssues: parsed.validationIssues
     };
   }
 
