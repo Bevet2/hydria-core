@@ -1,16 +1,46 @@
 {
   "version": "hydria-student-strategy-impact-v1",
-  "builtAt": "2026-04-17T00:36:51.708Z",
+  "builtAt": "2026-04-17T17:07:57.572Z",
   "sourceStats": {
-    "studentSessionsAnalyzed": 58,
-    "comparedSessions": 50,
-    "strategyObservations": 50
+    "studentSessionsAnalyzed": 59,
+    "comparedSessions": 51,
+    "strategyObservations": 51
   },
   "strategies": [
     {
+      "strategyId": "open_scope_anchor",
+      "observations": 1,
+      "usageRate": 1.96,
+      "successRate": 100,
+      "positiveImpactRate": 100,
+      "averageJudgeDelta": 22,
+      "averageGainGlobal": 22,
+      "averageLengthDeltaWords": 24,
+      "averageStructureDelta": 5,
+      "empiricalConfidence": 0.95,
+      "activation": "cautious",
+      "contexts": [
+        {
+          "questionType": "open",
+          "promptLength": "short",
+          "signals": [],
+          "observations": 1,
+          "usageRate": 1.96,
+          "successRate": 100,
+          "positiveImpactRate": 100,
+          "averageJudgeDelta": 22,
+          "averageGainGlobal": 22,
+          "averageLengthDeltaWords": 24,
+          "averageStructureDelta": 5,
+          "empiricalConfidence": 0.95,
+          "activation": "cautious"
+        }
+      ]
+    },
+    {
       "strategyId": "factual_verify_first",
       "observations": 12,
-      "usageRate": 24,
+      "usageRate": 23.53,
       "successRate": 100,
       "positiveImpactRate": 100,
       "averageJudgeDelta": 13.08,
@@ -28,7 +58,7 @@
             "claims"
           ],
           "observations": 10,
-          "usageRate": 20,
+          "usageRate": 19.61,
           "successRate": 100,
           "positiveImpactRate": 100,
           "averageJudgeDelta": 14.5,
@@ -45,7 +75,7 @@
             "claims"
           ],
           "observations": 2,
-          "usageRate": 4,
+          "usageRate": 3.92,
           "successRate": 100,
           "positiveImpactRate": 100,
           "averageJudgeDelta": 6,
@@ -60,7 +90,7 @@
     {
       "strategyId": "explanatory_medium",
       "observations": 5,
-      "usageRate": 10,
+      "usageRate": 9.8,
       "successRate": 100,
       "positiveImpactRate": 100,
       "averageJudgeDelta": 12,
@@ -75,7 +105,7 @@
           "promptLength": "medium",
           "signals": [],
           "observations": 5,
-          "usageRate": 10,
+          "usageRate": 9.8,
           "successRate": 100,
           "positiveImpactRate": 100,
           "averageJudgeDelta": 12,
@@ -90,7 +120,7 @@
     {
       "strategyId": "strategic_medium",
       "observations": 5,
-      "usageRate": 10,
+      "usageRate": 9.8,
       "successRate": 100,
       "positiveImpactRate": 100,
       "averageJudgeDelta": 10.6,
@@ -107,7 +137,7 @@
             "uncertainty"
           ],
           "observations": 4,
-          "usageRate": 8,
+          "usageRate": 7.84,
           "successRate": 100,
           "positiveImpactRate": 100,
           "averageJudgeDelta": 11.25,
@@ -125,7 +155,7 @@
             "abstraction"
           ],
           "observations": 1,
-          "usageRate": 2,
+          "usageRate": 1.96,
           "successRate": 100,
           "positiveImpactRate": 100,
           "averageJudgeDelta": 8,
@@ -140,7 +170,7 @@
     {
       "strategyId": "open_short",
       "observations": 19,
-      "usageRate": 38,
+      "usageRate": 37.25,
       "successRate": 89.47,
       "positiveImpactRate": 89.47,
       "averageJudgeDelta": 6.74,
@@ -155,7 +185,7 @@
           "promptLength": "short",
           "signals": [],
           "observations": 19,
-          "usageRate": 38,
+          "usageRate": 37.25,
           "successRate": 89.47,
           "positiveImpactRate": 89.47,
           "averageJudgeDelta": 6.74,
@@ -170,7 +200,7 @@
     {
       "strategyId": "explanatory_short",
       "observations": 2,
-      "usageRate": 4,
+      "usageRate": 3.92,
       "successRate": 100,
       "positiveImpactRate": 100,
       "averageJudgeDelta": 6,
@@ -185,7 +215,7 @@
           "promptLength": "short",
           "signals": [],
           "observations": 2,
-          "usageRate": 4,
+          "usageRate": 3.92,
           "successRate": 100,
           "positiveImpactRate": 100,
           "averageJudgeDelta": 6,
@@ -200,7 +230,7 @@
     {
       "strategyId": "factual_medium",
       "observations": 6,
-      "usageRate": 12,
+      "usageRate": 11.76,
       "successRate": 66.67,
       "positiveImpactRate": 66.67,
       "averageJudgeDelta": -2.17,
@@ -218,7 +248,7 @@
             "claims"
           ],
           "observations": 4,
-          "usageRate": 8,
+          "usageRate": 7.84,
           "successRate": 75,
           "positiveImpactRate": 75,
           "averageJudgeDelta": -3.5,
@@ -235,7 +265,7 @@
             "claims"
           ],
           "observations": 2,
-          "usageRate": 4,
+          "usageRate": 3.92,
           "successRate": 50,
           "positiveImpactRate": 50,
           "averageJudgeDelta": 0.5,
@@ -250,7 +280,7 @@
     {
       "strategyId": "reasoning_bridge_medium",
       "observations": 1,
-      "usageRate": 2,
+      "usageRate": 1.96,
       "successRate": 0,
       "positiveImpactRate": 0,
       "averageJudgeDelta": -21,
@@ -265,7 +295,7 @@
           "promptLength": "medium",
           "signals": [],
           "observations": 1,
-          "usageRate": 2,
+          "usageRate": 1.96,
           "successRate": 0,
           "positiveImpactRate": 0,
           "averageJudgeDelta": -21,

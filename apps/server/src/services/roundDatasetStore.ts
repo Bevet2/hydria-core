@@ -25,6 +25,16 @@ export class RoundDatasetStore {
     await appendFile(this.filePath, `${JSON.stringify(entry)}\n`, "utf8");
   }
 
+  async rebuildFromRounds(rounds: ArenaRound[]) {
+    const lines = rounds
+      .slice()
+      .reverse()
+      .map((round) => JSON.stringify(roundDatasetEntrySchema.parse(this.buildEntry(round))))
+      .join("\n");
+
+    await writeFile(this.filePath, lines.length > 0 ? `${lines}\n` : "", "utf8");
+  }
+
   private buildEntry(round: ArenaRound): RoundDatasetEntry {
     const usefulForTraining =
       round.refineDecision.global === "YES" &&

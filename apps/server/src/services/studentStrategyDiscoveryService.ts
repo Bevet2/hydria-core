@@ -100,6 +100,7 @@ type DiscoverySummary = {
 type SeedTarget = {
   baseStrategyId: StudentStrategyProfile;
   candidateStrategyId: StudentStrategyProfile;
+  category: QuestionCategory;
   context: DiscoveryProposal["context"];
   reason: string;
 };
@@ -252,19 +253,24 @@ function buildSeedTargets(category: QuestionCategory): SeedTarget[] {
 
 export class StudentStrategyDiscoveryService {
   private readonly strategyImpactTrackerService = new StudentStrategyImpactTrackerService();
-  private readonly strategyAssetService = new StudentStrategyAssetService();
+  private readonly strategyAssetService: StudentStrategyAssetService;
 
   constructor(
     private readonly discoveryFile = env.STUDENT_STRATEGY_DISCOVERY_FILE
-  ) {}
+  ) {
+    this.strategyAssetService = new StudentStrategyAssetService(
+      env.STUDENT_STRATEGY_ASSETS_FILE,
+      discoveryFile
+    );
+  }
 
   async load() {
-    try {
-      const raw = await readFile(this.discoveryFile, "utf8");
-      return JSON.parse(raw) as StrategyDiscoveryFile;
-    } catch {
-      return null;
+    const current = await this.readRawDiscoveryFile();
+    if (current) {
+      return current;
     }
+
+    return this.buildFallbackDiscovery();
   }
 
   async identifyWeakContexts(category: QuestionCategory = "other"): Promise<DiscoveryProposal[]> {
@@ -500,6 +506,115 @@ export class StudentStrategyDiscoveryService {
     await writeFile(this.discoveryFile, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
     await this.strategyAssetService.buildAndPersist(payload);
     return payload;
+  }
+
+  private async buildFallbackDiscovery() {
+    const tracker = await this.strategyImpactTrackerService.load();
+    const assets = await this.strategyAssetService.load();
+    const adoptedAdoptions: DiscoveryAdoption[] = (assets?.assets ?? []).map((asset) => ({
+      baseStrategyId: asset.baseStrategyId,
+      candidateStrategyId: asset.adoptedStrategyId,
+      category: asset.category,
+      context: asset.context,
+      observations: asset.evidence.observations,
+      winRate: asset.evidence.winRate,
+      averageJudgeDelta: asset.evidence.averageJudgeDelta,
+      averageGainGlobal: asset.evidence.averageGainGlobal,
+      averageLengthDeltaWords: asset.evidence.averageLengthDeltaWords,
+      averageAbsoluteLengthDeltaWords: Math.abs(asset.evidence.averageLengthDeltaWords),
+      averageStructureDelta: 0,
+      averageNoiseDelta: asset.evidence.averageNoiseDelta,
+      averageClarityDelta: asset.evidence.averageClarityDelta,
+      productGuard: asset.evidence.productGuard,
+      adoption: "adopted",
+      reason: asset.trace.adoptionReason
+    }));
+    const proposalMap = new Map<string, DiscoveryProposal>();
+
+    for (const adoption of adoptedAdoptions) {
+      const key = `${adoption.baseStrategyId}::${adoption.candidateStrategyId}::${contextKey(adoption.context)}`;
+      proposalMap.set(key, {
+        baseStrategyId: adoption.baseStrategyId,
+        candidateStrategyId: adoption.candidateStrategyId,
+        category: adoption.category,
+        context: adoption.context,
+        currentActivation: "active",
+        currentAverageJudgeDelta: adoption.averageJudgeDelta,
+        reason: adoption.reason
+      });
+    }
+
+    for (const seed of buildSeedTargets("other")) {
+      const key = `${seed.baseStrategyId}::${seed.candidateStrategyId}::${contextKey(seed.context)}`;
+      if (!proposalMap.has(key)) {
+        proposalMap.set(key, {
+          baseStrategyId: seed.baseStrategyId,
+          candidateStrategyId: seed.candidateStrategyId,
+          category: seed.category,
+          context: seed.context,
+          currentActivation: "cautious",
+          currentAverageJudgeDelta: 0,
+          reason: seed.reason
+        });
+      }
+    }
+
+    if (tracker) {
+      for (const strategy of tracker.strategies) {
+        for (const context of strategy.contexts) {
+          const candidate = this.proposeCandidate(strategy, context);
+          if (!candidate) {
+            continue;
+          }
+
+          const key = `${strategy.strategyId}::${candidate.candidateStrategyId}::${contextKey(context)}`;
+          if (!proposalMap.has(key)) {
+            proposalMap.set(key, {
+              baseStrategyId: strategy.strategyId,
+              candidateStrategyId: candidate.candidateStrategyId,
+              category: "other",
+              context: {
+                questionType: context.questionType,
+                promptLength: context.promptLength,
+                signals: context.signals
+              },
+              currentActivation: context.activation,
+              currentAverageJudgeDelta: context.averageJudgeDelta,
+              reason: candidate.reason
+            });
+          }
+        }
+      }
+    }
+
+    const payload: StrategyDiscoveryFile = {
+      version: "hydria-student-strategy-discovery-v1",
+      builtAt: new Date().toISOString(),
+      sourceStats: {
+        proposals: proposalMap.size,
+        evaluations: 0,
+        adoptedReplacements: adoptedAdoptions.length
+      },
+      proposals: [...proposalMap.values()],
+      evaluations: [],
+      adoptions: adoptedAdoptions.sort(
+        (left, right) =>
+          right.averageJudgeDelta - left.averageJudgeDelta || right.observations - left.observations
+      )
+    };
+
+    await mkdir(dirname(this.discoveryFile), { recursive: true });
+    await writeFile(this.discoveryFile, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+    return payload;
+  }
+
+  private async readRawDiscoveryFile() {
+    try {
+      const raw = await readFile(this.discoveryFile, "utf8");
+      return JSON.parse(raw) as StrategyDiscoveryFile;
+    } catch {
+      return null;
+    }
   }
 
   private dedupeProposals(proposals: DiscoveryProposal[]) {

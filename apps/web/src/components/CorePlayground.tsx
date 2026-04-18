@@ -4,20 +4,20 @@ import {
   fetchArenaRound,
   fetchHistory,
   fetchLocalHealth,
+  fetchPersistenceHealth,
   runArena,
   testLocalModel,
   type AppHealth,
   type ArenaModels,
   type ArenaRound,
   type LocalModelHealth,
-  type LocalModelTestResponse
+  type LocalModelTestResponse,
+  type PersistenceHealthReport
 } from "../lib/api";
 import { AppNav } from "./AppNav";
 import { ArenaForm } from "./ArenaForm";
-import { HistoryPanel } from "./HistoryPanel";
-import { LocalModelPanel } from "./LocalModelPanel";
+import { CorePlaygroundSidebar } from "./CorePlaygroundSidebar";
 import { PipelinePanel } from "./PipelinePanel";
-import { TracePanel } from "./TracePanel";
 
 const initialModels: ArenaModels = {
   respondentA: "qwen/qwen3.6-plus",
@@ -38,6 +38,7 @@ export function CorePlayground() {
   const [currentRound, setCurrentRound] = useState<ArenaRound | null>(null);
   const [appHealth, setAppHealth] = useState<AppHealth | null>(null);
   const [localHealth, setLocalHealth] = useState<LocalModelHealth | null>(null);
+  const [persistenceHealth, setPersistenceHealth] = useState<PersistenceHealthReport | null>(null);
   const [lastLocalTest, setLastLocalTest] = useState<LocalModelTestResponse | null>(null);
   const requestedRoundId = new URLSearchParams(window.location.search).get("roundId");
 
@@ -75,9 +76,13 @@ export function CorePlayground() {
   }
 
   async function refreshAppHealth() {
-    const health = await fetchAppHealth();
+    const [health, persistence] = await Promise.all([
+      fetchAppHealth(),
+      fetchPersistenceHealth()
+    ]);
     setAppHealth(health);
     setLocalHealth(health.localModel);
+    setPersistenceHealth(persistence);
   }
 
   async function refreshLocalHealth() {
@@ -143,23 +148,20 @@ export function CorePlayground() {
           {error ? <div className="error-banner">{error}</div> : null}
           <PipelinePanel round={currentRound} />
         </section>
-        <aside className="right-column">
-          <TracePanel round={currentRound} />
-          <LocalModelPanel
-            health={localHealth}
-            lastTest={lastLocalTest}
-            onRefreshHealth={refreshLocalHealth}
-            onRunTest={handleLocalTest}
-          />
-          <HistoryPanel
-            rounds={rounds}
-            currentRoundId={currentRound?.roundId}
-            onSelectRound={(round) => {
-              setCurrentRound(round);
-              syncRoundInUrl(round.roundId);
-            }}
-          />
-        </aside>
+        <CorePlaygroundSidebar
+          round={currentRound}
+          rounds={rounds}
+          localHealth={localHealth}
+          persistenceHealth={persistenceHealth}
+          lastLocalTest={lastLocalTest}
+          onRefreshHealth={refreshLocalHealth}
+          onRefreshPersistence={refreshAppHealth}
+          onRunTest={handleLocalTest}
+          onSelectRound={(round) => {
+            setCurrentRound(round);
+            syncRoundInUrl(round.roundId);
+          }}
+        />
       </div>
     </main>
   );

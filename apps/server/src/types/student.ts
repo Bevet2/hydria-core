@@ -8,9 +8,15 @@ import {
   redTeamOutputSchema,
   refinerOutputSchema
 } from "./arena.js";
+import {
+  hydriaMemorySnapshotSchema,
+  hydriaWorkflowRunSchema
+} from "./core.js";
 import { knowledgeInjectionSchema } from "./knowledge.js";
 
 const boundedScoreSchema = z.coerce.number().min(0).max(100);
+const LEGACY_NIL_UUID = "00000000-0000-0000-0000-000000000000";
+const LEGACY_DATETIME = "1970-01-01T00:00:00.000Z";
 
 export const studentSessionRequestSchema = z.object({
   question: z.string().trim().min(3).max(8000)
@@ -151,14 +157,48 @@ const defaultStudentStrategy = {
   ]
 };
 
+const defaultHydriaMemorySnapshot = {
+  snapshotId: LEGACY_NIL_UUID,
+  question: "Legacy student session",
+  category: "other" as const,
+  summary: "Legacy session loaded before Hydria core memory snapshots were recorded.",
+  core: [],
+  episodic: [],
+  semantic: [],
+  archival: [],
+  retrieval: {
+    strategyId: "legacy",
+    researchIntent: null,
+    temporalQueryType: null,
+    preferredDomains: [],
+    studentRuleIds: []
+  }
+};
+
+const defaultHydriaWorkflowRun = {
+  runId: LEGACY_NIL_UUID,
+  scope: "student_session" as const,
+  status: "partial" as const,
+  question: "Legacy student session",
+  category: "other" as const,
+  startedAt: LEGACY_DATETIME,
+  completedAt: LEGACY_DATETIME,
+  messages: [],
+  handoffs: [],
+  tasks: [],
+  outcome: "Legacy session loaded before Hydria workflow metadata was recorded."
+};
+
 export const studentAnswerPreviewSchema = z.object({
   previewId: z.string().uuid(),
   question: z.string().min(1),
   category: questionCategorySchema,
   knowledge: knowledgeInjectionSchema.nullable(),
+  memory: hydriaMemorySnapshotSchema,
   orchestration: orchestrationPolicySchema,
   research: researchToolLogSchema,
   strategy: studentResponseStrategySchema,
+  workflow: hydriaWorkflowRunSchema,
   student: z.object({
     rawDraft: studentAnswerSchema,
     draft: studentAnswerSchema,
@@ -321,8 +361,10 @@ export const studentSessionSchema = z.object({
   models: studentSessionModelsSchema,
   orchestration: orchestrationPolicySchema,
   knowledge: knowledgeInjectionSchema.nullable(),
+  memory: hydriaMemorySnapshotSchema.default(defaultHydriaMemorySnapshot),
   strategy: studentResponseStrategySchema.default(defaultStudentStrategy),
   research: researchToolLogSchema,
+  workflow: hydriaWorkflowRunSchema.default(defaultHydriaWorkflowRun),
   student: z.object({
     draft: studentAnswerSchema,
     final: studentAnswerSchema,

@@ -2,7 +2,6 @@ import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import {
   studentCycleDatasetEntrySchema,
-  studentSessionHistorySchema,
   studentSessionSchema,
   type StudentCycleDatasetEntry,
   type StudentProgressSummary,
@@ -10,55 +9,87 @@ import {
 } from "../types/student.js";
 import { env } from "../utils/env.js";
 import { logger } from "../utils/logger.js";
-import { deepSanitizeStrings } from "../utils/textCleanup.js";
 import { KnowledgeMemoryService } from "./knowledgeMemoryService.js";
+import { HydriaStateDatabase } from "./storage/hydriaStateDatabase.js";
+import { normalizeStudentSessionHistoryFile } from "./storage/studentSessionHistoryNormalizer.js";
 import { StudentRuleImpactTrackerService } from "./studentRuleImpactTrackerService.js";
 import { StudentStrategyImpactTrackerService } from "./studentStrategyImpactTrackerService.js";
 import { StudentToolImpactTrackerService } from "./studentToolImpactTrackerService.js";
 import { buildStudentProgressSummary, enrichStudentSession } from "./studentLearning.js";
 
-const EMPTY_HISTORY = {
-  sessions: [] as StudentSession[]
-};
-
 export class StudentSessionStore {
   private writeQueue = Promise.resolve();
-  private readonly knowledgeMemoryService = new KnowledgeMemoryService();
-  private readonly studentRuleImpactTrackerService = new StudentRuleImpactTrackerService();
-  private readonly studentStrategyImpactTrackerService = new StudentStrategyImpactTrackerService();
-  private readonly studentToolImpactTrackerService = new StudentToolImpactTrackerService();
+  private readonly knowledgeMemoryService: KnowledgeMemoryService;
+  private readonly studentRuleImpactTrackerService: StudentRuleImpactTrackerService;
+  private readonly studentStrategyImpactTrackerService: StudentStrategyImpactTrackerService;
+  private readonly studentToolImpactTrackerService: StudentToolImpactTrackerService;
+  private readonly database: HydriaStateDatabase;
 
   constructor(
     private readonly historyFile = env.STUDENT_SESSION_HISTORY_FILE,
-    private readonly datasetFile = env.STUDENT_SESSION_DATASET_FILE
-  ) {}
+    private readonly datasetFile = env.STUDENT_SESSION_DATASET_FILE,
+    databaseFile = env.PERSISTENCE_DB_FILE
+  ) {
+    this.database = new HydriaStateDatabase(databaseFile);
+    this.knowledgeMemoryService = new KnowledgeMemoryService(
+      env.KNOWLEDGE_MEMORY_FILE,
+      historyFile,
+      env.KNOWLEDGE_LAYER_FILE,
+      databaseFile
+    );
+    this.studentRuleImpactTrackerService = new StudentRuleImpactTrackerService(
+      historyFile,
+      env.STUDENT_RULE_IMPACT_FILE,
+      databaseFile
+    );
+    this.studentStrategyImpactTrackerService = new StudentStrategyImpactTrackerService(
+      historyFile,
+      env.STUDENT_STRATEGY_IMPACT_FILE,
+      databaseFile
+    );
+    this.studentToolImpactTrackerService = new StudentToolImpactTrackerService(
+      historyFile,
+      env.STUDENT_TOOL_IMPACT_FILE,
+      databaseFile
+    );
+  }
 
   async ensureReady() {
     await mkdir(dirname(this.historyFile), { recursive: true });
     await mkdir(dirname(this.datasetFile), { recursive: true });
+    await this.database.ensureReady();
 
-    try {
-      await readFile(this.historyFile, "utf8");
-    } catch {
-      await writeFile(this.historyFile, JSON.stringify(EMPTY_HISTORY, null, 2), "utf8");
+    const persistedCount = await this.database.countStudentSessions();
+    if (persistedCount === 0) {
+      const legacySessions = await this.readLegacyHistoryFile();
+      if (legacySessions.length > 0) {
+        await this.database.replaceStudentSessions(legacySessions);
+        await this.writeHistoryProjection(legacySessions);
+        await this.rebuildDatasetFile(legacySessions);
+        return;
+      }
     }
+
+    const sessions = await this.database.listStudentSessions();
+    await this.writeHistoryProjection(sessions);
 
     try {
       await readFile(this.datasetFile, "utf8");
     } catch {
-      await writeFile(this.datasetFile, "", "utf8");
+      await this.rebuildDatasetFile(sessions);
     }
   }
 
   async listSessions() {
     await this.waitForPendingWrites();
-    const history = await this.readHistory();
-    return history.sessions.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+    await this.ensureReady();
+    return this.database.listStudentSessions();
   }
 
   async getSession(sessionId: string) {
-    const sessions = await this.listSessions();
-    return sessions.find((entry) => entry.sessionId === sessionId) ?? null;
+    await this.waitForPendingWrites();
+    await this.ensureReady();
+    return this.database.getStudentSession(sessionId);
   }
 
   async getSummary(): Promise<StudentProgressSummary> {
@@ -68,12 +99,11 @@ export class StudentSessionStore {
 
   async appendSession(session: StudentSession) {
     await this.runExclusive(async () => {
-      const history = await this.readHistory();
       const parsed = enrichStudentSession(studentSessionSchema.parse(session));
-      const nextHistory = {
-        sessions: [parsed, ...history.sessions]
-      };
-      await writeFile(this.historyFile, JSON.stringify(nextHistory, null, 2), "utf8");
+      await this.ensureReady();
+      await this.database.appendStudentSession(parsed);
+      const sessions = await this.database.listStudentSessions();
+      await this.writeHistoryProjection(sessions);
 
       const datasetEntry = studentCycleDatasetEntrySchema.parse(this.buildDatasetEntry(parsed));
       await appendFile(this.datasetFile, `${JSON.stringify(datasetEntry)}\n`, "utf8");
@@ -91,6 +121,10 @@ export class StudentSessionStore {
     });
   }
 
+  async close() {
+    this.database.close();
+  }
+
   private async waitForPendingWrites() {
     await this.writeQueue;
   }
@@ -104,20 +138,19 @@ export class StudentSessionStore {
     return pending;
   }
 
-  private async readHistory() {
-    await this.ensureReady();
-    const raw = await readFile(this.historyFile, "utf8");
-    const parsed = studentSessionHistorySchema.parse(deepSanitizeStrings(JSON.parse(raw)));
-    const sessions = parsed.sessions.map((session) => enrichStudentSession(session));
-    const normalizedHistory = { sessions };
-    const normalizedRaw = `${JSON.stringify(normalizedHistory, null, 2)}\n`;
+  private async readLegacyHistoryFile() {
+    try {
+      const raw = await readFile(this.historyFile, "utf8");
+      const normalized = normalizeStudentSessionHistoryFile(raw);
 
-    if (raw.trim() !== normalizedRaw.trim()) {
-      await writeFile(this.historyFile, normalizedRaw, "utf8");
-      await this.rebuildDatasetFile(sessions);
+      if (normalized.needsRewrite) {
+        await writeFile(this.historyFile, normalized.serialized, "utf8");
+      }
+
+      return normalized.history.sessions;
+    } catch {
+      return [] as StudentSession[];
     }
-
-    return normalizedHistory;
   }
 
   private buildDatasetEntry(session: StudentSession): StudentCycleDatasetEntry {
@@ -154,5 +187,12 @@ export class StudentSessionStore {
       .join("\n");
 
     await writeFile(this.datasetFile, lines.length > 0 ? `${lines}\n` : "", "utf8");
+  }
+
+  private async writeHistoryProjection(sessions: StudentSession[]) {
+    const payload = {
+      sessions
+    };
+    await writeFile(this.historyFile, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
   }
 }

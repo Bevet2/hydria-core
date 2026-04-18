@@ -7,15 +7,13 @@ import {
   type StudentCuratedExample
 } from "../types/knowledge.js";
 import {
-  studentSessionHistorySchema,
   type StudentRuleImpactContext,
   type StudentSession
 } from "../types/student.js";
 import { env } from "../utils/env.js";
-import { deepSanitizeStrings } from "../utils/textCleanup.js";
 import { KnowledgeLayerService } from "./knowledgeLayerService.js";
 import { KnowledgeMemoryService } from "./knowledgeMemoryService.js";
-import { enrichStudentSession } from "./studentLearning.js";
+import { listPersistedStudentSessions } from "./storage/studentSessionPersistence.js";
 import { buildStudentRuleContext, scoreStudentRuleContextMatch } from "./studentRuleContext.js";
 import {
   StudentRuleImpactTrackerService,
@@ -243,14 +241,10 @@ export class KnowledgeInjectionService {
   }
 
   private async readStudentSessions() {
-    try {
-      const raw = await readFile(env.STUDENT_SESSION_HISTORY_FILE, "utf8");
-      return studentSessionHistorySchema
-        .parse(deepSanitizeStrings(JSON.parse(raw)))
-        .sessions.map((session) => enrichStudentSession(session));
-    } catch {
-      return [] as StudentSession[];
-    }
+    return listPersistedStudentSessions({
+      historyFile: env.STUDENT_SESSION_HISTORY_FILE,
+      databaseFile: env.PERSISTENCE_DB_FILE
+    });
   }
 
   private buildStudentMemoryRules(

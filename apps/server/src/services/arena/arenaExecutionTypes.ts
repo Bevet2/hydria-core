@@ -1,0 +1,84 @@
+import type {
+  ExecutionTrace,
+  JudgeOutput,
+  RefinerOutput,
+  QuestionCategory,
+  RespondentOutput,
+  SynthesizerOutput
+} from "../../types/arena.js";
+import type { LocalStudentOutput } from "../../types/localModel.js";
+
+export type StepResult<T> = {
+  output: T;
+  trace: ExecutionTrace;
+  durationMs: number;
+};
+
+export type RespondentExecutionResult = {
+  parsed: RespondentOutput;
+  raw: string;
+  trace: ExecutionTrace;
+  latencyMs: number;
+};
+
+export type RespondentSlot = "A" | "B";
+
+export type RespondentStepSnapshot = {
+  slot: RespondentSlot;
+  output: RespondentOutput | null;
+  trace: ExecutionTrace;
+  durationMs: number;
+};
+
+export type ArenaJudgeStepResult = StepResult<JudgeOutput>;
+export type ArenaSynthesizerStepResult = StepResult<SynthesizerOutput>;
+export type ArenaRefinementStepResult = StepResult<RefinerOutput>;
+export type ArenaLocalStudentStepResult = StepResult<LocalStudentOutput>;
+
+export class RespondentExecutionError extends Error {
+  constructor(
+    readonly snapshot: RespondentStepSnapshot,
+    cause?: unknown
+  ) {
+    super(
+      `Respondent ${snapshot.slot} failed after ${snapshot.trace.attempts.length} attempt(s): ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`
+    );
+    this.name = "RespondentExecutionError";
+  }
+}
+
+export class RespondentStageError extends Error {
+  constructor(
+    readonly category: QuestionCategory,
+    readonly respondentA: RespondentStepSnapshot,
+    readonly respondentB: RespondentStepSnapshot
+  ) {
+    super(
+      `Respondent stage failed for category ${category}: A=${respondentA.trace.outcome}, B=${respondentB.trace.outcome}`
+    );
+    this.name = "RespondentStageError";
+  }
+}
+
+export function buildOpenRouterTrace(model: string, note: string): ExecutionTrace {
+  return {
+    requestedProvider: "openrouter",
+    requestedModel: model,
+    attempts: [
+      {
+        provider: "openrouter",
+        model,
+        mode: "primary"
+      }
+    ],
+    finalProvider: "openrouter",
+    finalModel: model,
+    usedRetry: false,
+    usedFallback: false,
+    validationFailures: 0,
+    outcome: "success",
+    note
+  };
+}

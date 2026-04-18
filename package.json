@@ -11,6 +11,7 @@
     "dev": "concurrently -n server,web -c cyan,yellow \"npm run dev -w @hydria-arena/server\" \"npm run dev -w @hydria-arena/web\"",
     "build": "npm run build -w @hydria-arena/server && npm run build -w @hydria-arena/web",
     "check": "npm run check -w @hydria-arena/server && npm run build -w @hydria-arena/web",
+    "test": "npm run test -w @hydria-arena/server && npm run test -w @hydria-arena/web",
     "start": "npm run start -w @hydria-arena/server",
     "knowledge:refresh": "npm run knowledge:refresh -w @hydria-arena/server",
     "student:temporal-eval": "npm run student:temporal-eval -w @hydria-arena/server",

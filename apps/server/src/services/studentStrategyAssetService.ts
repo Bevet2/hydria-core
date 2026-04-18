@@ -106,20 +106,26 @@ function defaultProductGuard(): StrategyAssetGuard {
 
 export class StudentStrategyAssetService {
   constructor(
-    private readonly assetFile = env.STUDENT_STRATEGY_ASSETS_FILE
+    private readonly assetFile = env.STUDENT_STRATEGY_ASSETS_FILE,
+    private readonly discoveryFile = env.STUDENT_STRATEGY_DISCOVERY_FILE
   ) {}
 
   async load() {
-    try {
-      const raw = await readFile(this.assetFile, "utf8");
-      return JSON.parse(raw) as StudentStrategyAssetFile;
-    } catch {
+    const current = await this.readRawAssetFile();
+    if (current) {
+      return current;
+    }
+
+    const discovery = await this.readRawDiscoveryFile();
+    if (!discovery) {
       return null;
     }
+
+    return this.buildAndPersist(discovery);
   }
 
   async buildAndPersist(discovery: StrategyDiscoveryFile) {
-    const current = await this.load();
+    const current = await this.readRawAssetFile();
     const currentVersions = new Map(current?.assets.map((asset) => [asset.assetId, asset.assetVersion]) ?? []);
     const proposalIndex = new Map(
       discovery.proposals.map((proposal) => [
@@ -234,6 +240,24 @@ export class StudentStrategyAssetService {
   async listByCategory(category: QuestionCategory) {
     const assets = await this.load();
     return (assets?.assets ?? []).filter((asset) => asset.category === category);
+  }
+
+  private async readRawAssetFile() {
+    try {
+      const raw = await readFile(this.assetFile, "utf8");
+      return JSON.parse(raw) as StudentStrategyAssetFile;
+    } catch {
+      return null;
+    }
+  }
+
+  private async readRawDiscoveryFile() {
+    try {
+      const raw = await readFile(this.discoveryFile, "utf8");
+      return JSON.parse(raw) as StrategyDiscoveryFile;
+    } catch {
+      return null;
+    }
   }
 }
 

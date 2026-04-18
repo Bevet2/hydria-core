@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  hydriaMemorySnapshotSchema,
+  hydriaWorkflowRunSchema
+} from "./core.js";
 
 const boundedScoreSchema = z.coerce.number().min(0).max(100);
 const refineConfidenceSchema = z.coerce.number().int().min(0).max(10);
@@ -547,8 +551,10 @@ export const arenaRoundSchema = z.object({
   }),
   trace: arenaTraceSchema,
   orchestration: orchestrationPolicySchema,
+  memory: hydriaMemorySnapshotSchema,
   router: refineRouterDecisionSchema,
   research: researchToolLogSchema,
+  workflow: hydriaWorkflowRunSchema,
   refineProfile: refineProfileSchema,
   timings: arenaTimingsSchema,
   metrics: arenaMetricsSchema,

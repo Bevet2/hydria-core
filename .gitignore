@@ -7,6 +7,9 @@ apps/server/dist
 apps/web/dist
 apps/web/.vite
 storage/history/history.json
+storage/history/hydria-state-v1.sqlite
+storage/history/hydria-state-v1.sqlite-shm
+storage/history/hydria-state-v1.sqlite-wal
 storage/history/*.html
 storage/history/*.log
 storage/cache/

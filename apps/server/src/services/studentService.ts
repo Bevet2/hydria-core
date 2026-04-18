@@ -1,52 +1,38 @@
 import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import {
-  buildStudentJudgeSystemPrompt,
-  buildStudentJudgeUserPrompt
-} from "../prompts/judge.js";
-import { buildRefineRepairUserPrompt, buildRefineSystemPrompt, buildRefineUserPrompt } from "../prompts/refine.js";
-import { buildStudentRedTeamUserPrompt, buildRedTeamSystemPrompt } from "../prompts/redteam.js";
-import {
-  redTeamOutputSchema,
-  respondentOutputSchema,
   type ExecutionTrace,
   type QuestionCategory,
-  type RefinerOutput,
-  type ResearchToolLog,
-  type RespondentOutput
+  type ResearchToolLog
 } from "../types/arena.js";
 import type { KnowledgeInjection } from "../types/knowledge.js";
 import {
   studentAnswerPreviewSchema,
-  studentJudgeOutputSchema,
   studentSessionSchema,
-  type StudentRuleImpact,
-  type StudentStrategyImpact,
-  type StudentToolImpact,
   type StudentAnswer,
   type StudentAnswerPreview,
-  type StudentJudgeOutput,
   type StudentSession,
   type StudentStrategyProfile
 } from "../types/student.js";
 import { logger } from "../utils/logger.js";
 import { env, defaultArenaModels } from "../utils/env.js";
-import { parseStructuredOutput } from "../utils/jsonRepair.js";
-import { parseRefinerOutput } from "../utils/refineOutput.js";
 import { classifyQuestion } from "./questionClassifier.js";
 import { KnowledgeInjectionService } from "./knowledgeInjectionService.js";
 import { LocalModelService } from "./localModel.js";
 import { OpenRouterService } from "./openrouter.js";
 import { OrchestrationPolicyService } from "./orchestrationPolicy.js";
 import { ResearchToolService } from "./researchToolService.js";
-import { executeOpenRouterStructuredStep } from "./arena/openRouterStructuredStep.js";
 import { StudentSessionStore } from "./studentSessionStore.js";
 import { enrichStudentSession } from "./studentLearning.js";
-import { buildStudentRuleContext } from "./studentRuleContext.js";
 import {
-  inferBaseStudentStrategyId,
   StudentStrategySelectorService
 } from "./studentStrategySelector.js";
+import { HydriaCoreMemoryService } from "./core/hydriaCoreMemoryService.js";
+import { HydriaCoreWorkflowService } from "./core/hydriaCoreWorkflowService.js";
+import { StudentStepExecutor } from "./student/studentStepExecutor.js";
+import { StudentImpactMeasurementService } from "./student/studentImpactMeasurementService.js";
+import { StudentPreparationService } from "./student/studentPreparationService.js";
+import { toRespondentOutput } from "./student/studentShared.js";
 
 type StoredStudentPreview = {
   preview: StudentAnswerPreview;
@@ -60,137 +46,6 @@ function uniqueStrings(values: string[]) {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
-function toStudentTrace(args: {
-  requestedModel: string;
-  usedRetry: boolean;
-  note: string;
-}): ExecutionTrace {
-  return {
-    requestedProvider: "ollama",
-    requestedModel: args.requestedModel,
-    attempts: [
-      {
-        provider: "ollama",
-        model: args.requestedModel,
-        mode: "primary"
-      },
-      ...(args.usedRetry
-        ? [
-            {
-              provider: "ollama" as const,
-              model: args.requestedModel,
-              mode: "repair_retry" as const
-            }
-          ]
-        : [])
-    ],
-    finalProvider: "ollama",
-    finalModel: args.requestedModel,
-    usedRetry: args.usedRetry,
-    usedFallback: false,
-    validationFailures: args.usedRetry ? 1 : 0,
-    outcome: args.usedRetry ? "retry_success" : "success",
-    note: args.note
-  };
-}
-
-function buildOpenRouterTrace(model: string, note: string): ExecutionTrace {
-  return {
-    requestedProvider: "openrouter",
-    requestedModel: model,
-    attempts: [
-      {
-        provider: "openrouter",
-        model,
-        mode: "primary"
-      }
-    ],
-    finalProvider: "openrouter",
-    finalModel: model,
-    usedRetry: false,
-    usedFallback: false,
-    validationFailures: 0,
-    outcome: "success",
-    note
-  };
-}
-
-function toRespondentOutput(answer: StudentAnswer): RespondentOutput {
-  return respondentOutputSchema.parse({
-    modelRole: "respondent",
-    answer: answer.answer,
-    key_points: answer.key_points.length > 0 ? answer.key_points : ["See answer body."],
-    assumptions: answer.assumptions,
-    confidence: answer.confidence
-  });
-}
-
-function buildTeacherFallback(
-  respondent: RespondentOutput,
-  category: QuestionCategory,
-  error?: unknown
-): RefinerOutput {
-  return {
-    modelRole: "refiner",
-    improved_answer: respondent.answer,
-    fixes_applied: [],
-    remaining_uncertainties: [
-      `Teacher refinement failed for ${category}, so the student answer was preserved.`,
-      ...(error ? [`Last teacher error: ${String(error)}`] : []),
-      ...respondent.assumptions.slice(0, 2)
-    ],
-    confidence: Math.max(0, Math.min(10, Math.round(respondent.confidence / 10))),
-    routerSkipped: false
-  };
-}
-
-function buildKnowledgeWithoutStudentMemory(knowledge: KnowledgeInjection | null) {
-  if (!knowledge) {
-    return null;
-  }
-
-  return {
-    ...knowledge,
-    studentMemorySummary: "Student memory disabled for baseline comparison.",
-    studentMemoryRules: []
-  } satisfies KnowledgeInjection;
-}
-
-function buildRuleComparisonRefiner(args: {
-  studentAnswer: StudentAnswer;
-  knowledge: KnowledgeInjection | null;
-}): RefinerOutput {
-  return {
-    modelRole: "refiner",
-    improved_answer: args.studentAnswer.answer,
-    fixes_applied: (args.knowledge?.studentMemoryRules ?? []).map(
-      (rule) => `Applied student memory rule: ${rule.rule}`
-    ),
-    remaining_uncertainties: args.studentAnswer.assumptions.slice(0, 3),
-    confidence: Math.max(0, Math.min(10, Math.round(args.studentAnswer.confidence / 10))),
-    routerSkipped: false
-  };
-}
-
-function countWords(value: string) {
-  return value
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean).length;
-}
-
-function buildEmptyImpactMetrics() {
-  return {
-    judgeOverallDelta: 0,
-    gainGlobal: 0,
-    lengthDeltaWords: 0,
-    keyPointsDelta: 0,
-    assumptionsDelta: 0,
-    structureDelta: 0,
-    success: false
-  };
-}
-
 export class StudentPreviewNotFoundError extends Error {
   constructor(previewId: string) {
     super(`Student preview ${previewId} was not found or has expired.`);
@@ -202,6 +57,11 @@ export class StudentService {
   private readonly previewStore = new Map<string, StoredStudentPreview>();
   private readonly knowledgeInjectionService = new KnowledgeInjectionService();
   private readonly studentStrategySelectorService = new StudentStrategySelectorService();
+  private readonly hydriaCoreMemoryService = new HydriaCoreMemoryService();
+  private readonly hydriaCoreWorkflowService = new HydriaCoreWorkflowService();
+  private readonly studentStepExecutor: StudentStepExecutor;
+  private readonly impactMeasurementService: StudentImpactMeasurementService;
+  private readonly preparationService: StudentPreparationService;
 
   constructor(
     private readonly localModelService: LocalModelService,
@@ -209,7 +69,23 @@ export class StudentService {
     private readonly orchestrationPolicyService: OrchestrationPolicyService,
     private readonly researchToolService: ResearchToolService,
     private readonly studentSessionStore: StudentSessionStore
-  ) {}
+  ) {
+    this.studentStepExecutor = new StudentStepExecutor(this.openRouterService);
+    this.preparationService = new StudentPreparationService(
+      this.localModelService,
+      this.orchestrationPolicyService,
+      this.researchToolService,
+      this.knowledgeInjectionService,
+      this.studentStrategySelectorService,
+      this.studentStepExecutor
+    );
+    this.impactMeasurementService = new StudentImpactMeasurementService(
+      this.localModelService,
+      this.studentStepExecutor,
+      this.studentStrategySelectorService,
+      toRespondentOutput
+    );
+  }
 
   async ensureReady() {
     await this.studentSessionStore.ensureReady();
@@ -228,102 +104,49 @@ export class StudentService {
   }
 
   async answerOnly(question: string): Promise<StudentAnswerPreview> {
-    const startedAt = performance.now();
-    const category = classifyQuestion(question);
-    const knowledge = await this.knowledgeInjectionService.buildForCategory(category, { question });
-    const baselineKnowledge = buildKnowledgeWithoutStudentMemory(knowledge);
-    const strategy = await this.studentStrategySelectorService.select({
+    const prepared = await this.preparationService.preparePreview(question);
+    const previewId = randomUUID();
+    const memory = this.hydriaCoreMemoryService.buildStudentSnapshot({
       question,
-      category,
-      knowledge
+      category: prepared.category,
+      knowledge: prepared.knowledge,
+      strategy: prepared.strategy,
+      research: prepared.research,
+      extraEpisodicItems: prepared.knowledge?.coachingHints ?? []
     });
-    const baselineStrategy = await this.studentStrategySelectorService.select({
-      question,
-      category,
-      knowledge: baselineKnowledge
-    });
-    const baselineDraftResult =
-      knowledge && knowledge.studentMemoryRules.length > 0
-        ? await this.localModelService.answerQuestionDetailed({
-            question,
-            category,
-            strategy: baselineStrategy,
-            knowledge: baselineKnowledge
-          })
-        : null;
-    const rawDraftResult = await this.localModelService.answerQuestionDetailed({
-      question,
-      category,
-      strategy,
-      knowledge
-    });
-    const rawDraftTrace = toStudentTrace({
-      requestedModel: env.LOCAL_MODEL_NAME,
-      usedRetry: rawDraftResult.usedRetry,
-      note: "Local student produced the initial standalone answer."
-    });
-    const rawDraftRespondent = toRespondentOutput(rawDraftResult.output);
-    const initialRedTeam = await this.runStudentRedTeam(question, category, rawDraftRespondent);
-    const orchestration = await this.orchestrationPolicyService.planRound({
-      question,
-      category,
-      respondentA: rawDraftRespondent,
-      respondentB: rawDraftRespondent,
-      redTeam: initialRedTeam.output
-    });
-    const research = await this.researchToolService.maybeCollect({
-      question,
-      category,
-      respondentA: rawDraftRespondent,
-      respondentB: rawDraftRespondent,
-      redTeam: initialRedTeam.output,
-      shouldRefineA: true,
-      shouldRefineB: false,
-      orchestration,
-      studentStrategy: strategy
-    });
-
-    let previewDraft = rawDraftResult.output;
-    let previewTrace = rawDraftTrace;
-    let toolApplied = false;
-
-    if (research.decision.shouldUse) {
-      const groundedResult = await this.localModelService.answerQuestionDetailed({
-        question,
-        category,
-        strategy,
-        knowledge,
-        research
-      });
-      previewDraft = groundedResult.output;
-      previewTrace = toStudentTrace({
-        requestedModel: env.LOCAL_MODEL_NAME,
-        usedRetry: groundedResult.usedRetry,
-        note: research.truth.no_reliable_source
-          ? "Local student produced the preview answer after truth-engine abstention guidance."
-          : "Local student produced the preview answer after tool-guided factual grounding."
-      });
-      toolApplied = true;
-    }
-
     const preview = studentAnswerPreviewSchema.parse({
-      previewId: randomUUID(),
+      previewId,
       question,
-      category,
-      knowledge,
-      orchestration,
-      research,
-      strategy,
+      category: prepared.category,
+      knowledge: prepared.knowledge,
+      memory,
+      orchestration: prepared.orchestration,
+      research: prepared.research,
+      strategy: prepared.strategy,
+      workflow: this.hydriaCoreWorkflowService.buildStudentPreviewRun({
+        previewId,
+        question,
+        category: prepared.category,
+        startedAt: prepared.startedAtIso,
+        durationMs: prepared.durationMs,
+        knowledge: prepared.knowledge,
+        strategy: prepared.strategy,
+        research: prepared.research,
+        rawDraft: prepared.rawDraft,
+        previewDraft: prepared.previewDraft,
+        toolApplied: prepared.toolApplied,
+        trace: prepared.previewTrace
+      }),
       student: {
-        rawDraft: rawDraftResult.output,
-        draft: previewDraft,
-        baselineDraft: baselineDraftResult?.output ?? null,
-        toolApplied
+        rawDraft: prepared.rawDraft,
+        draft: prepared.previewDraft,
+        baselineDraft: prepared.baselineDraft,
+        toolApplied: prepared.toolApplied
       },
       trace: {
-        student: previewTrace
+        student: prepared.previewTrace
       },
-      durationMs: Math.round(performance.now() - startedAt)
+      durationMs: prepared.durationMs
     });
     this.rememberPreview(preview);
     return preview;
@@ -366,92 +189,51 @@ export class StudentService {
     const createdAt = new Date().toISOString();
     const knowledge = args.knowledge;
     const strategy = args.strategy;
-    const rawDraftRespondent = toRespondentOutput(args.rawDraft);
     const baselineRespondent = args.baselineDraft ? toRespondentOutput(args.baselineDraft) : null;
+    const rawDraftRespondent = toRespondentOutput(args.rawDraft);
+    const prepared = await this.preparationService.ensureAnalysisPreparation({
+      question: args.question,
+      category: args.category,
+      rawDraft: args.rawDraft,
+      draft: args.draft,
+      trace: args.trace,
+      knowledge,
+      strategy,
+      orchestration: args.orchestration,
+      research: args.research,
+      toolApplied: args.toolApplied
+    });
 
-    let orchestration = args.orchestration;
-    let researchBeforeTeacher = args.research;
-    let shouldApplyResearchToStudent = args.toolApplied ?? false;
-    let finalStudentAnswer = args.draft;
-    let finalStudentTrace = args.trace;
-    let finalStudentRespondent = toRespondentOutput(finalStudentAnswer);
-
-    if (!orchestration || !researchBeforeTeacher) {
-      const initialRedTeam = await this.runStudentRedTeam(
-        args.question,
-        args.category,
-        rawDraftRespondent
-      );
-      orchestration = await this.orchestrationPolicyService.planRound({
-        question: args.question,
-        category: args.category,
-        respondentA: rawDraftRespondent,
-        respondentB: rawDraftRespondent,
-        redTeam: initialRedTeam.output
-      });
-      researchBeforeTeacher = await this.researchToolService.maybeCollect({
-        question: args.question,
-        category: args.category,
-        respondentA: rawDraftRespondent,
-        respondentB: rawDraftRespondent,
-        redTeam: initialRedTeam.output,
-        shouldRefineA: true,
-        shouldRefineB: false,
-        orchestration,
-        studentStrategy: strategy
-      });
-      shouldApplyResearchToStudent = researchBeforeTeacher.decision.shouldUse;
-
-      if (shouldApplyResearchToStudent) {
-        const groundedResult = await this.localModelService.answerQuestionDetailed({
-          question: args.question,
-          category: args.category,
-          strategy,
-          knowledge,
-          research: researchBeforeTeacher
-        });
-        finalStudentAnswer = groundedResult.output;
-        finalStudentTrace = toStudentTrace({
-          requestedModel: env.LOCAL_MODEL_NAME,
-          usedRetry: groundedResult.usedRetry,
-          note: researchBeforeTeacher.truth.no_reliable_source
-            ? "Local student produced the final answer after truth-engine abstention guidance."
-            : "Local student produced the final answer after tool-guided factual grounding."
-        });
-        finalStudentRespondent = toRespondentOutput(finalStudentAnswer);
-      }
-    }
-
-    const redTeamResult = await this.runStudentRedTeam(
+    const redTeamResult = await this.studentStepExecutor.runStudentRedTeam(
       args.question,
       args.category,
-      finalStudentRespondent
+      prepared.finalStudentRespondent
     );
 
-    const teacherResult = await this.runTeacher({
+    const teacherResult = await this.studentStepExecutor.runTeacher({
       question: args.question,
       category: args.category,
-      student: finalStudentRespondent,
+      student: prepared.finalStudentRespondent,
       redTeam: redTeamResult.output,
-      research: researchBeforeTeacher,
+      research: prepared.research,
       knowledge
     });
-    const judgeResult = await this.runStudentJudge({
+    const judgeResult = await this.studentStepExecutor.runStudentJudge({
       question: args.question,
       category: args.category,
-      student: finalStudentRespondent,
+      student: prepared.finalStudentRespondent,
       teacher: teacherResult.output,
       redTeam: redTeamResult.output
     });
 
     const finalizedResearch = this.researchToolService.finalizeRoundAccounting(
       this.researchToolService.finalizeImpact({
-        log: researchBeforeTeacher,
-        respondentA: finalStudentRespondent,
-        respondentB: finalStudentRespondent,
+        log: prepared.research,
+        respondentA: prepared.finalStudentRespondent,
+        respondentB: prepared.finalStudentRespondent,
         refineA: teacherResult.output,
         refineB: {
-          improved_answer: finalStudentRespondent.answer,
+          improved_answer: prepared.finalStudentRespondent.answer,
           fixes_applied: []
         }
       }),
@@ -473,28 +255,37 @@ export class StudentService {
         ? ["Use external grounding selectively when factual claims or constraints need verification."]
         : [])
     ]).slice(0, 12);
-    const ruleImpact = await this.measureRuleImpact({
+    const durationMs = Math.round(performance.now() - startedAt);
+    const ruleImpact = await this.impactMeasurementService.measureRuleImpact({
       question: args.question,
       category: args.category,
       baselineDraft: args.baselineDraft ?? null,
       baselineRespondent,
-      injectedDraft: finalStudentAnswer,
+      injectedDraft: prepared.finalStudentAnswer,
       knowledge
     });
-    const tooling = await this.measureToolImpact({
+    const tooling = await this.impactMeasurementService.measureToolImpact({
       question: args.question,
       category: args.category,
       baselineDraft: args.rawDraft,
       baselineRespondent: rawDraftRespondent,
-      finalDraft: finalStudentAnswer,
+      finalDraft: prepared.finalStudentAnswer,
       research: finalizedResearch
     });
-    const strategyImpact = await this.measureStrategyImpact({
+    const strategyImpact = await this.impactMeasurementService.measureStrategyImpact({
       question: args.question,
       category: args.category,
       strategy,
       selectedDraft: args.rawDraft,
       knowledge
+    });
+    const memory = this.hydriaCoreMemoryService.buildStudentSnapshot({
+      question: args.question,
+        category: args.category,
+        knowledge,
+        strategy,
+        research: finalizedResearch,
+      extraEpisodicItems: [...weakPoints, ...coachingNotes]
     });
 
     const session = enrichStudentSession(
@@ -509,14 +300,34 @@ export class StudentService {
         redTeamModel: defaultArenaModels.redTeam,
         judgeModel: defaultArenaModels.judge
       },
-      orchestration,
+      orchestration: prepared.orchestration,
       knowledge,
+      memory,
       strategy,
       research: finalizedResearch,
+      workflow: this.hydriaCoreWorkflowService.buildStudentSessionRun({
+        sessionId,
+        question: args.question,
+        category: args.category,
+        createdAt,
+        durationMs,
+        strategy,
+        knowledge,
+        research: finalizedResearch,
+        rawDraft: args.rawDraft,
+        finalStudentAnswer: prepared.finalStudentAnswer,
+        studentTrace: prepared.finalStudentTrace,
+        redTeam: redTeamResult.output,
+        teacher: teacherResult.output,
+        judge: judgeResult.output,
+        toolApplied: prepared.toolApplied,
+        weakPoints,
+        coachingNotes
+      }),
       student: {
         draft: args.rawDraft,
-        final: finalStudentAnswer,
-        toolApplied: shouldApplyResearchToStudent
+        final: prepared.finalStudentAnswer,
+        toolApplied: prepared.toolApplied
       },
       redTeam: redTeamResult.output,
       judge: judgeResult.output,
@@ -527,12 +338,12 @@ export class StudentService {
       ruleImpact,
       strategyImpact,
       traces: {
-        student: finalStudentTrace,
+        student: prepared.finalStudentTrace,
         redTeam: redTeamResult.trace,
         teacher: teacherResult.trace,
         judge: judgeResult.trace
       },
-      durationMs: Math.round(performance.now() - startedAt)
+      durationMs
       })
     );
 
@@ -595,7 +406,7 @@ export class StudentService {
       strategy: candidateStrategy,
       knowledge
     });
-    const comparison = await this.measureDraftComparison({
+    const comparison = await this.impactMeasurementService.measureDraftComparison({
       question: args.question,
       category,
       baselineDraft: baselineDraft.output,
@@ -613,470 +424,6 @@ export class StudentService {
       candidateDraft: candidateDraft.output,
       comparison
     };
-  }
-
-  private async runStudentRedTeam(
-    question: string,
-    category: QuestionCategory,
-    studentAnswer: RespondentOutput
-  ) {
-    const result = await this.openRouterService.completeJson({
-      model: defaultArenaModels.redTeam,
-      systemPrompt: buildRedTeamSystemPrompt(category),
-      userPrompt: buildStudentRedTeamUserPrompt({
-        category,
-        question,
-        studentAnswer
-      }),
-      schema: redTeamOutputSchema,
-      label: "Student Red Team",
-      maxTokens: 700,
-      temperature: 0.1
-    });
-
-    return {
-      output: result.parsed,
-      trace: buildOpenRouterTrace(
-        defaultArenaModels.redTeam,
-        "Primary OpenRouter student red-team analysis produced validated JSON."
-      ),
-      durationMs: result.latencyMs
-    };
-  }
-
-  private async runTeacher(args: {
-    question: string;
-    category: QuestionCategory;
-    student: RespondentOutput;
-    redTeam: import("../types/arena.js").RedTeamOutput;
-    research: ResearchToolLog;
-    knowledge: KnowledgeInjection | null;
-  }) {
-    const result = await executeOpenRouterStructuredStep({
-      openRouterService: this.openRouterService,
-      primaryModel: defaultArenaModels.respondentA,
-      fallbackModels: this.filterFallbackModels([
-        env.ARENA_REFINE_FALLBACK_MODEL,
-        defaultArenaModels.judge,
-        defaultArenaModels.redTeam
-      ], [defaultArenaModels.respondentA]),
-      systemPrompt: buildRefineSystemPrompt(args.category),
-      buildPrimaryUserPrompt: () =>
-        buildRefineUserPrompt({
-          question: args.question,
-          slot: "A",
-          category: args.category,
-          originalResponse: args.student,
-          redTeam: args.redTeam,
-          research: args.research,
-          knowledge: args.knowledge
-        }),
-      buildRepairUserPrompt: ({ previousResponse, validationIssues }) =>
-        buildRefineRepairUserPrompt({
-          question: args.question,
-          slot: "A",
-          category: args.category,
-          originalResponse: args.student,
-          redTeam: args.redTeam,
-          previousResponse,
-          validationIssues,
-          research: args.research,
-          knowledge: args.knowledge
-        }),
-      parse: (raw) =>
-        parseRefinerOutput({
-          raw,
-          label: "Teacher",
-          category: args.category,
-          originalResponse: args.student
-        }),
-      maxTokens: args.category === "product_strategy" ? 560 : 900,
-      primaryTemperature: 0.15,
-      countValidationFailure: () => true,
-      getValidationIssues: (error) => [error instanceof Error ? error.message : String(error)],
-      onAttemptFailure: ({ model, primaryModel, nextModel, attempt, error, isLastAttempt, index }) =>
-        logger.warn(
-          isLastAttempt
-            ? "Teacher attempt failed with no more models available"
-            : index === 0
-              ? "Teacher attempt failed; retrying with repair prompt"
-              : "Teacher attempt failed; retrying with fallback model",
-          {
-            model,
-            primaryModel,
-            nextModel,
-            attempt,
-            error: String(error)
-          }
-        ),
-      onRetryFailure: ({ model, nextModel, error }) =>
-        logger.warn("Teacher repair retry failed", {
-          model,
-          nextModel,
-          error: String(error)
-        }),
-      onFallbackSuccess: ({ model, primaryModel, attempt }) =>
-        logger.info("Teacher fallback succeeded", {
-          fallbackModel: model,
-          primaryModel,
-          attempt
-        })
-    });
-
-    if (result.status === "failure") {
-      return {
-        output: buildTeacherFallback(args.student, args.category, result.lastError),
-        trace: {
-          requestedProvider: "openrouter",
-          requestedModel: defaultArenaModels.respondentA,
-          attempts: result.attempts,
-          finalProvider: "fallback",
-          finalModel: "student-answer-preserved",
-          usedRetry: result.usedRetry,
-          usedFallback: true,
-          validationFailures: result.validationFailures,
-          outcome: "static_fallback",
-          note: `Teacher failed to refine the student answer for ${args.category}; the original student answer was preserved.`
-        },
-        durationMs: result.durationMs
-      };
-    }
-
-    return {
-      output: result.output,
-      trace: {
-        requestedProvider: "openrouter",
-        requestedModel: defaultArenaModels.respondentA,
-        attempts: result.attempts,
-        finalProvider: "openrouter",
-        finalModel: result.finalModel,
-        usedRetry: result.usedRetry,
-        usedFallback: result.usedFallback,
-        validationFailures: result.validationFailures,
-        outcome: result.usedFallback ? "fallback_success" : result.usedRetry ? "retry_success" : "success",
-        note: result.usedFallback
-          ? `Teacher fallback model produced the corrected answer for ${args.category}.`
-          : result.usedRetry
-            ? `Teacher repair retry produced the corrected answer for ${args.category}.`
-            : `Primary teacher refinement produced the corrected answer for ${args.category}.`
-      },
-      durationMs: result.durationMs
-    };
-  }
-
-  private async runStudentJudge(args: {
-    question: string;
-    category: QuestionCategory;
-    student: RespondentOutput;
-    teacher: RefinerOutput;
-    redTeam: import("../types/arena.js").RedTeamOutput;
-  }) {
-    const result = await this.openRouterService.complete({
-      model: defaultArenaModels.judge,
-      systemPrompt: buildStudentJudgeSystemPrompt(args.category),
-      userPrompt: buildStudentJudgeUserPrompt({
-        category: args.category,
-        question: args.question,
-        studentAnswer: args.student,
-        teacherAnswer: args.teacher,
-        redTeam: args.redTeam
-      }),
-      maxTokens: 700,
-      temperature: 0.1
-    });
-    const parsed = parseStructuredOutput(
-      result.content,
-      studentJudgeOutputSchema,
-      "Student judge"
-    ) as StudentJudgeOutput;
-
-    return {
-      output: parsed,
-      trace: buildOpenRouterTrace(
-        defaultArenaModels.judge,
-        "Primary OpenRouter student-judge analysis produced validated JSON."
-      ),
-      durationMs: result.latencyMs
-    };
-  }
-
-  private async measureRuleImpact(args: {
-    question: string;
-    category: QuestionCategory;
-    baselineDraft: StudentAnswer | null;
-    baselineRespondent: RespondentOutput | null;
-    injectedDraft: StudentAnswer;
-    knowledge: KnowledgeInjection | null;
-  }): Promise<StudentRuleImpact> {
-    const activeRules = args.knowledge?.studentMemoryRules ?? [];
-    const context = buildStudentRuleContext(args.question, args.category);
-    const emptyMetrics = buildEmptyImpactMetrics();
-
-    if (!args.baselineDraft || !args.baselineRespondent || activeRules.length === 0) {
-      return {
-        compared: false,
-        baselineAvailable: Boolean(args.baselineDraft),
-        context,
-        activatedRuleIds: activeRules.map((rule) => rule.ruleId),
-        judge: null,
-        metrics: { ...emptyMetrics },
-        perRule: []
-      };
-    }
-
-    const { judge: comparisonJudge, metrics } = await this.measureDraftComparison({
-      question: args.question,
-      category: args.category,
-      baselineDraft: args.baselineDraft,
-      baselineRespondent: args.baselineRespondent,
-      comparisonDraft: args.injectedDraft,
-      knowledge: args.knowledge
-    });
-
-    return {
-      compared: true,
-      baselineAvailable: true,
-      context,
-      activatedRuleIds: activeRules.map((rule) => rule.ruleId),
-      judge: {
-        initial_score: comparisonJudge.output.initial_score,
-        improved_score: comparisonJudge.output.improved_score,
-        verdict: comparisonJudge.output.verdict,
-        worthIt: comparisonJudge.output.worthIt,
-        reasoning: comparisonJudge.output.reasoning
-      },
-      metrics,
-      perRule: activeRules.map((rule) => ({
-        ruleId: rule.ruleId,
-        failureType: rule.failureType,
-        rule: rule.rule,
-        activationConfidence: rule.activationConfidence,
-        evidenceCount: rule.evidenceCount,
-        conditions: rule.conditions,
-        metrics
-      }))
-    };
-  }
-
-  private async measureDraftComparison(args: {
-    question: string;
-    category: QuestionCategory;
-    baselineDraft: StudentAnswer;
-    baselineRespondent: RespondentOutput;
-    comparisonDraft: StudentAnswer;
-    knowledge: KnowledgeInjection | null;
-  }) {
-    const baselineRedTeam = await this.runStudentRedTeam(
-      args.question,
-      args.category,
-      args.baselineRespondent
-    );
-    const comparisonJudge = await this.runStudentJudge({
-      question: args.question,
-      category: args.category,
-      student: args.baselineRespondent,
-      teacher: buildRuleComparisonRefiner({
-        studentAnswer: args.comparisonDraft,
-        knowledge: args.knowledge
-      }),
-      redTeam: baselineRedTeam.output
-    });
-
-    const judgeOverallDelta =
-      comparisonJudge.output.improved_score.overall - comparisonJudge.output.initial_score.overall;
-    const keyPointsDelta =
-      args.comparisonDraft.key_points.length - args.baselineDraft.key_points.length;
-    const assumptionsDelta =
-      args.comparisonDraft.assumptions.length - args.baselineDraft.assumptions.length;
-    const lengthDeltaWords =
-      countWords(args.comparisonDraft.answer) - countWords(args.baselineDraft.answer);
-    const structureDelta = keyPointsDelta * 2 + assumptionsDelta;
-    const success =
-      comparisonJudge.output.worthIt === "YES" &&
-      (comparisonJudge.output.verdict === "improved" || comparisonJudge.output.verdict === "minor");
-
-    return {
-      judge: comparisonJudge,
-      metrics: {
-        judgeOverallDelta,
-        gainGlobal: judgeOverallDelta,
-        lengthDeltaWords,
-        keyPointsDelta,
-        assumptionsDelta,
-        structureDelta,
-        success
-      }
-    };
-  }
-
-  private async measureStrategyImpact(args: {
-    question: string;
-    category: QuestionCategory;
-    strategy: StudentSession["strategy"];
-    selectedDraft: StudentAnswer;
-    knowledge: KnowledgeInjection | null;
-  }): Promise<StudentStrategyImpact> {
-    const emptyMetrics = buildEmptyImpactMetrics();
-    const baseStrategyId = inferBaseStudentStrategyId(
-      args.strategy.context.questionType,
-      args.strategy.context.promptLength
-    );
-
-    if (args.strategy.strategyId === baseStrategyId) {
-      return {
-        compared: false,
-        baselineAvailable: false,
-        strategyId: args.strategy.strategyId,
-        activationMode: args.strategy.activationMode,
-        impactStatus: args.strategy.impactStatus,
-        impactConfidence: args.strategy.impactConfidence,
-        context: args.strategy.context,
-        judge: null,
-        metrics: { ...emptyMetrics }
-      };
-    }
-
-    try {
-      const baselineStrategy = await this.studentStrategySelectorService.select({
-        question: args.question,
-        category: args.category,
-        knowledge: args.knowledge,
-        overrideStrategyId: baseStrategyId,
-        allowDiscoveryOverride: false
-      });
-      const baselineDraft = await this.localModelService.answerQuestionDetailed({
-        question: args.question,
-        category: args.category,
-        strategy: baselineStrategy,
-        knowledge: args.knowledge
-      });
-      const { judge: comparisonJudge, metrics } = await this.measureDraftComparison({
-        question: args.question,
-        category: args.category,
-        baselineDraft: baselineDraft.output,
-        baselineRespondent: toRespondentOutput(baselineDraft.output),
-        comparisonDraft: args.selectedDraft,
-        knowledge: null
-      });
-
-      return {
-        compared: true,
-        baselineAvailable: true,
-        strategyId: args.strategy.strategyId,
-        activationMode: args.strategy.activationMode,
-        impactStatus: args.strategy.impactStatus,
-        impactConfidence: args.strategy.impactConfidence,
-        context: args.strategy.context,
-        judge: {
-          initial_score: comparisonJudge.output.initial_score,
-          improved_score: comparisonJudge.output.improved_score,
-          verdict: comparisonJudge.output.verdict,
-          worthIt: comparisonJudge.output.worthIt,
-          reasoning: comparisonJudge.output.reasoning
-        },
-        metrics
-      };
-    } catch (error) {
-      logger.warn("Strategy impact measurement failed", {
-        question: args.question,
-        category: args.category,
-        strategyId: args.strategy.strategyId,
-        baseStrategyId,
-        error: String(error)
-      });
-
-      return {
-        compared: false,
-        baselineAvailable: false,
-        strategyId: args.strategy.strategyId,
-        activationMode: args.strategy.activationMode,
-        impactStatus: args.strategy.impactStatus,
-        impactConfidence: args.strategy.impactConfidence,
-        context: args.strategy.context,
-        judge: null,
-        metrics: { ...emptyMetrics }
-      };
-    }
-  }
-
-  private async measureToolImpact(args: {
-    question: string;
-    category: QuestionCategory;
-    baselineDraft: StudentAnswer;
-    baselineRespondent: RespondentOutput;
-    finalDraft: StudentAnswer;
-    research: ResearchToolLog;
-  }): Promise<StudentToolImpact> {
-    const context = buildStudentRuleContext(args.question, args.category);
-    const emptyMetrics = buildEmptyImpactMetrics();
-    const toolUsed = args.research.used;
-
-    if (!toolUsed) {
-      return {
-        toolUsed: false,
-        toolReason: args.research.decision.reasoning,
-        toolImpact: "no_impact",
-        compared: false,
-        baselineAvailable: false,
-        context,
-        noReliableSource: false,
-        confidenceScore: 0,
-        judge: null,
-        metrics: { ...emptyMetrics }
-      };
-    }
-
-    const { judge: comparisonJudge, metrics } = await this.measureDraftComparison({
-      question: args.question,
-      category: args.category,
-      baselineDraft: args.baselineDraft,
-      baselineRespondent: args.baselineRespondent,
-      comparisonDraft: args.finalDraft,
-      knowledge: null
-    });
-
-    const toolImpact =
-      metrics.judgeOverallDelta < 0
-        ? "negative"
-        : args.research.truth.no_reliable_source
-          ? metrics.success
-            ? "reduced_uncertainty"
-            : "no_reliable_source"
-          : args.research.impact.correctedClaimsCount > 0 ||
-              (args.research.truth.verified_facts.length > 0 && metrics.success)
-            ? "improved_factual_accuracy"
-            : args.research.truth.uncertain_claims.length > 0 && metrics.success
-              ? "reduced_uncertainty"
-              : "no_impact";
-
-    return {
-      toolUsed: true,
-      toolReason: args.research.decision.reasoning,
-      toolImpact,
-      compared: true,
-      baselineAvailable: true,
-      context,
-      noReliableSource: args.research.truth.no_reliable_source,
-      confidenceScore: args.research.truth.confidence_score,
-      judge: {
-        initial_score: comparisonJudge.output.initial_score,
-        improved_score: comparisonJudge.output.improved_score,
-        verdict: comparisonJudge.output.verdict,
-        worthIt: comparisonJudge.output.worthIt,
-        reasoning: comparisonJudge.output.reasoning
-      },
-      metrics
-    };
-  }
-
-  private filterFallbackModels(candidates: string[], exclude: string[]) {
-    const excluded = new Set(exclude);
-    return candidates.filter(
-      (candidate, index, list) =>
-        candidate.trim().length > 0 &&
-        !excluded.has(candidate) &&
-        list.indexOf(candidate) === index
-    );
   }
 
   private rememberPreview(preview: StudentAnswerPreview) {

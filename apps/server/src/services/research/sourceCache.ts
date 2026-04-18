@@ -7,10 +7,10 @@ import {
   countEntityTermHits,
   getHostname,
   normalizeSpace,
-  scoreTemporalFreshness,
   uniqueStrings,
   type SearchPlan
 } from "./common.js";
+import { scoreTemporalFreshness } from "./temporal.js";
 
 type CachedResearchSource = ResearchSource & {
   intents: SearchPlan["intent"][];

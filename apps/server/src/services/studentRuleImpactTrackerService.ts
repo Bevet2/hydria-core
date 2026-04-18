@@ -1,11 +1,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { QuestionCategory } from "../types/arena.js";
-import type { StudentRuleImpactContext, StudentSession } from "../types/student.js";
-import { studentSessionHistorySchema } from "../types/student.js";
+import type { StudentRuleImpactContext } from "../types/student.js";
 import { env } from "../utils/env.js";
-import { deepSanitizeStrings } from "../utils/textCleanup.js";
-import { enrichStudentSession } from "./studentLearning.js";
+import { listPersistedStudentSessions } from "./storage/studentSessionPersistence.js";
 import { scoreStudentRuleContextMatch } from "./studentRuleContext.js";
 
 type StudentRuleImpactContextAggregate = {
@@ -120,7 +118,8 @@ function summarizeAggregate(entry: {
 export class StudentRuleImpactTrackerService {
   constructor(
     private readonly historyFile = env.STUDENT_SESSION_HISTORY_FILE,
-    private readonly impactFile = env.STUDENT_RULE_IMPACT_FILE
+    private readonly impactFile = env.STUDENT_RULE_IMPACT_FILE,
+    private readonly databaseFile = env.PERSISTENCE_DB_FILE
   ) {}
 
   async load() {
@@ -128,7 +127,7 @@ export class StudentRuleImpactTrackerService {
       const raw = await readFile(this.impactFile, "utf8");
       return JSON.parse(raw) as StudentRuleImpactFile;
     } catch {
-      return null;
+      return this.buildAndPersist();
     }
   }
 
@@ -300,14 +299,10 @@ export class StudentRuleImpactTrackerService {
   }
 
   private async readSessions() {
-    try {
-      const raw = await readFile(this.historyFile, "utf8");
-      return studentSessionHistorySchema
-        .parse(deepSanitizeStrings(JSON.parse(raw)))
-        .sessions.map((session) => enrichStudentSession(session));
-    } catch {
-      return [] as StudentSession[];
-    }
+    return listPersistedStudentSessions({
+      historyFile: this.historyFile,
+      databaseFile: this.databaseFile
+    });
   }
 }
 

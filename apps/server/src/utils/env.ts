@@ -39,6 +39,10 @@ const envSchema = z.object({
   ARENA_REFINE_FALLBACK_MODEL: z.string().min(1).default("openai/gpt-5.4-mini"),
   OPENROUTER_TIMEOUT_MS: z.coerce.number().int().min(1000).default(90000),
   HISTORY_FILE: z.string().min(1).default("F:/hydria-arena/storage/history/history.json"),
+  PERSISTENCE_DB_FILE: z
+    .string()
+    .min(1)
+    .default("F:/hydria-arena/storage/history/hydria-state-v1.sqlite"),
   BENCHMARK_PACK_FILE: z
     .string()
     .min(1)

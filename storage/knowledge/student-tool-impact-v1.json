@@ -1,11 +1,11 @@
 {
   "version": "hydria-student-tool-impact-v1",
-  "builtAt": "2026-04-17T00:37:01.710Z",
+  "builtAt": "2026-04-17T17:07:57.086Z",
   "sourceStats": {
-    "studentSessionsAnalyzed": 58,
+    "studentSessionsAnalyzed": 59,
     "toolUsedSessions": 10,
-    "toolUnusedSessions": 48,
-    "comparedSessions": 13
+    "toolUnusedSessions": 0,
+    "comparedSessions": 10
   },
   "overall": {
     "used": {
@@ -19,7 +19,7 @@
       "noReliableSourceRate": 10
     },
     "unused": {
-      "observations": 3,
+      "observations": 0,
       "successRate": 0,
       "positiveImpactRate": 0,
       "averageJudgeDelta": 0,
@@ -75,7 +75,7 @@
         "noReliableSourceRate": 0
       },
       "unused": {
-        "observations": 1,
+        "observations": 0,
         "successRate": 0,
         "positiveImpactRate": 0,
         "averageJudgeDelta": 0,
@@ -139,35 +139,6 @@
         "noReliableSourceRate": 0
       },
       "averageJudgeDeltaDelta": -4
-    },
-    {
-      "questionType": "strategic",
-      "promptLength": "medium",
-      "signals": [
-        "uncertainty",
-        "abstraction"
-      ],
-      "used": {
-        "observations": 0,
-        "successRate": 0,
-        "positiveImpactRate": 0,
-        "averageJudgeDelta": 0,
-        "averageGainGlobal": 0,
-        "averageLengthDeltaWords": 0,
-        "averageStructureDelta": 0,
-        "noReliableSourceRate": 0
-      },
-      "unused": {
-        "observations": 2,
-        "successRate": 0,
-        "positiveImpactRate": 0,
-        "averageJudgeDelta": 0,
-        "averageGainGlobal": 0,
-        "averageLengthDeltaWords": 0,
-        "averageStructureDelta": 0,
-        "noReliableSourceRate": 0
-      },
-      "averageJudgeDeltaDelta": 0
     }
   ]
 }

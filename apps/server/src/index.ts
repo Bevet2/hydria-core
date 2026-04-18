@@ -25,6 +25,7 @@ import { OpenRouterService } from "./services/openrouter.js";
 import { OrchestrationPolicyService } from "./services/orchestrationPolicy.js";
 import { ResearchToolService } from "./services/researchToolService.js";
 import { RefineRouterService } from "./services/refineRouter.js";
+import { PersistenceHealthService } from "./services/storage/persistenceHealthService.js";
 import { StudentService } from "./services/studentService.js";
 import { StudentSessionStore } from "./services/studentSessionStore.js";
 import { defaultArenaModels, env } from "./utils/env.js";
@@ -38,6 +39,7 @@ const studentSessionStore = new StudentSessionStore();
 const orchestrationPolicyService = new OrchestrationPolicyService();
 const refineRouterService = new RefineRouterService();
 const researchToolService = new ResearchToolService();
+const persistenceHealthService = new PersistenceHealthService();
 const studentService = new StudentService(
   localModelService,
   openRouterService,
@@ -71,8 +73,17 @@ app.use(
 );
 app.use(express.json({ limit: "2mb" }));
 
+app.get("/api/health/persistence", async (_request, response, next) => {
+  try {
+    response.json(await persistenceHealthService.getReport());
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/api/health", async (_request, response) => {
   const local = await localModelService.healthcheck();
+  const persistence = await persistenceHealthService.getSummary();
   response.json({
     status: "ok",
     defaultArenaModels,
@@ -87,7 +98,8 @@ app.get("/api/health", async (_request, response) => {
       refineFallbackModel: env.ARENA_REFINE_FALLBACK_MODEL,
       localStudentFallbackModel: env.LOCAL_STUDENT_FALLBACK_MODEL
     },
-    localModel: local
+    localModel: local,
+    persistence
   });
 });
 

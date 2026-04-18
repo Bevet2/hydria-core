@@ -6,18 +6,20 @@ import type { KnowledgeCategoryStrategy } from "../../types/knowledge.js";
 import type { ResearchDecisionArgs, SearchPlan } from "./common.js";
 import {
   CATEGORY_SUFFIX,
-  describeTemporalWindow,
-  detectTemporalQuery,
   extractFocusTerms,
   extractLiteralTokens,
   extractTerms,
   formatQueryTerm,
-  formatIsoDayForSearch,
   normalizeSpace,
   stripQuestionNoise,
-  TERM_DOMAIN_HINTS,
   uniqueStrings
 } from "./common.js";
+import {
+  describeTemporalWindow,
+  detectTemporalQuery,
+  formatIsoDayForSearch
+} from "./temporal.js";
+import { TERM_DOMAIN_HINTS } from "./trust.js";
 
 export class ResearchPlanner {
   buildPlan(

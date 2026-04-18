@@ -10,11 +10,10 @@ import {
   type KnowledgeMemoryCategory,
   type KnowledgeMemoryRule
 } from "../types/knowledge.js";
-import { studentSessionHistorySchema, type StudentSession } from "../types/student.js";
+import type { StudentSession } from "../types/student.js";
 import { env } from "../utils/env.js";
-import { deepSanitizeStrings } from "../utils/textCleanup.js";
 import { knowledgeCategories } from "./knowledge/common.js";
-import { enrichStudentSession } from "./studentLearning.js";
+import { listPersistedStudentSessions } from "./storage/studentSessionPersistence.js";
 
 type StudentRuleGroup = {
   rule: string;
@@ -445,7 +444,8 @@ export class KnowledgeMemoryService {
   constructor(
     private readonly memoryFile = env.KNOWLEDGE_MEMORY_FILE,
     private readonly studentSessionHistoryFile = env.STUDENT_SESSION_HISTORY_FILE,
-    private readonly knowledgeLayerFile = env.KNOWLEDGE_LAYER_FILE
+    private readonly knowledgeLayerFile = env.KNOWLEDGE_LAYER_FILE,
+    private readonly studentSessionDatabaseFile = env.PERSISTENCE_DB_FILE
   ) {}
 
   async loadMemory(): Promise<KnowledgeMemory | null> {
@@ -453,7 +453,7 @@ export class KnowledgeMemoryService {
       const raw = await readFile(this.memoryFile, "utf8");
       return knowledgeMemorySchema.parse(JSON.parse(raw));
     } catch {
-      return null;
+      return this.buildAndPersist();
     }
   }
 
@@ -524,14 +524,10 @@ export class KnowledgeMemoryService {
   }
 
   private async readStudentSessions() {
-    try {
-      const raw = await readFile(this.studentSessionHistoryFile, "utf8");
-      return studentSessionHistorySchema
-        .parse(deepSanitizeStrings(JSON.parse(raw)))
-        .sessions.map((session) => enrichStudentSession(session));
-    } catch {
-      return [] as StudentSession[];
-    }
+    return listPersistedStudentSessions({
+      historyFile: this.studentSessionHistoryFile,
+      databaseFile: this.studentSessionDatabaseFile
+    });
   }
 
   private async readKnowledgeLayer() {

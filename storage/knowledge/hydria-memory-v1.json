@@ -1,11 +1,11 @@
 {
   "version": "hydria-memory-v1",
-  "builtAt": "2026-04-17T00:36:52.247Z",
+  "builtAt": "2026-04-17T17:07:58.039Z",
   "sourceStats": {
     "benchmarkRunsAnalyzed": 30,
     "roundDatasetEntriesAnalyzed": 265,
-    "studentSessionsAnalyzed": 58,
-    "lessonsLearnedAnalyzed": 72
+    "studentSessionsAnalyzed": 59,
+    "lessonsLearnedAnalyzed": 74
   },
   "categories": [
     {
@@ -1021,8 +1021,8 @@
               "Category signal: High risk and clear critique volume"
             ],
             "roundCount": 24,
-            "studentSessionCount": 56,
-            "repeatedLessonCount": 490
+            "studentSessionCount": 57,
+            "repeatedLessonCount": 501
           },
           "influence": {
             "routingBias": 0,
@@ -1036,9 +1036,9 @@
           "domain": "reasoning",
           "conditions": [
             "Student answer is short relative to the question scope.",
+            "Category signal: High risk and clear critique volume",
             "Question is open-ended and expects more than a narrow definition.",
-            "Current error pattern indicates too generic.",
-            "Category signal: High risk and clear critique volume"
+            "Current error pattern indicates too generic."
           ],
           "conditionSignals": [
             "reasoning_gap",
@@ -1055,11 +1055,11 @@
               "Add concrete risks, dependencies, and fallback conditions.",
               "Improve pedagogy with examples, contrasts, and clearer definitions.",
               "Student answer is short relative to the question scope.",
-              "Question is open-ended and expects more than a narrow definition."
+              "Category signal: High risk and clear critique volume"
             ],
             "roundCount": 24,
-            "studentSessionCount": 56,
-            "repeatedLessonCount": 243
+            "studentSessionCount": 57,
+            "repeatedLessonCount": 247
           },
           "influence": {
             "routingBias": 0,
@@ -1094,7 +1094,7 @@
               "Question is open-ended and expects more than a narrow definition."
             ],
             "roundCount": 24,
-            "studentSessionCount": 56,
+            "studentSessionCount": 57,
             "repeatedLessonCount": 12
           },
           "influence": {
@@ -1128,7 +1128,7 @@
               "static fallback 0%"
             ],
             "roundCount": 24,
-            "studentSessionCount": 56,
+            "studentSessionCount": 57,
             "repeatedLessonCount": 0
           },
           "influence": {
@@ -1161,7 +1161,7 @@
               "static fallback 0%"
             ],
             "roundCount": 24,
-            "studentSessionCount": 56,
+            "studentSessionCount": 57,
             "repeatedLessonCount": 0
           },
           "influence": {
@@ -1193,7 +1193,7 @@
               "positive research impact 0%"
             ],
             "roundCount": 24,
-            "studentSessionCount": 56,
+            "studentSessionCount": 57,
             "repeatedLessonCount": 0
           },
           "influence": {

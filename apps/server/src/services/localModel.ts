@@ -30,7 +30,8 @@ import {
 } from "../types/student.js";
 import { env } from "../utils/env.js";
 import { logger } from "../utils/logger.js";
-import { describeTemporalWindow, extractTerms } from "./research/common.js";
+import { extractTerms } from "./research/common.js";
+import { describeTemporalWindow } from "./research/temporal.js";
 
 type OllamaTagsResponse = {
   models?: Array<{

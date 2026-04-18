@@ -1,0 +1,191 @@
+import { z } from "zod";
+
+const hydriaQuestionCategorySchema = z.enum([
+  "incident_response",
+  "architecture_design",
+  "technical_explanation",
+  "debug_diagnostic",
+  "product_strategy",
+  "operational_writing",
+  "mixed_reasoning",
+  "other"
+]);
+
+const hydriaResearchIntentSchema = z.enum([
+  "definition",
+  "fact_check",
+  "product_docs",
+  "constraint_check",
+  "incident_guidance",
+  "diagnostic_docs",
+  "metric_verification",
+  "current_status",
+  "recent_updates",
+  "release_freshness"
+]);
+
+const hydriaResearchTemporalQueryTypeSchema = z.enum([
+  "none",
+  "current_status",
+  "recent_updates",
+  "release_freshness"
+]);
+
+export const hydriaWorkflowScopeSchema = z.enum([
+  "arena_round",
+  "student_preview",
+  "student_session",
+  "research_grounding"
+]);
+
+export const hydriaWorkflowStatusSchema = z.enum(["completed", "partial", "failed"]);
+
+export const hydriaActorRoleSchema = z.enum([
+  "orchestrator",
+  "knowledge_memory",
+  "respondent",
+  "student",
+  "local_student",
+  "research_planner",
+  "research_retriever",
+  "research_verifier",
+  "red_team",
+  "teacher",
+  "judge",
+  "synthesizer",
+  "session_store",
+  "history_store"
+]);
+
+export const hydriaSourceProviderSchema = z.enum([
+  "internal",
+  "ollama",
+  "openrouter",
+  "web",
+  "storage"
+]);
+
+export const hydriaMessageKindSchema = z.enum([
+  "question",
+  "instruction",
+  "memory",
+  "draft",
+  "decision",
+  "evidence",
+  "critique",
+  "answer",
+  "evaluation",
+  "persistence"
+]);
+
+export const hydriaTaskKindSchema = z.enum([
+  "plan_work",
+  "load_memory",
+  "draft_answer",
+  "ground_claims",
+  "critique_answer",
+  "refine_answer",
+  "evaluate_answer",
+  "synthesize_answer",
+  "observe_learning",
+  "persist_learning"
+]);
+
+export const hydriaTaskStatusSchema = z.enum(["completed", "skipped", "failed"]);
+
+export const hydriaWorkflowMessageSchema = z.object({
+  messageId: z.string().uuid(),
+  role: hydriaActorRoleSchema,
+  kind: hydriaMessageKindSchema,
+  summary: z.string().min(1).max(240),
+  content: z.string().min(1).max(4000),
+  tags: z.array(z.string().min(1).max(64)).max(12).default([]),
+  source: z.object({
+    provider: hydriaSourceProviderSchema,
+    service: z.string().min(1).max(120),
+    model: z.string().min(1).max(120).nullable().default(null)
+  })
+});
+
+export const hydriaWorkflowHandoffSchema = z.object({
+  handoffId: z.string().uuid(),
+  from: hydriaActorRoleSchema,
+  to: hydriaActorRoleSchema,
+  reason: z.string().min(1).max(240),
+  artifacts: z.array(z.string().min(1).max(120)).max(8).default([]),
+  accepted: z.boolean().default(true)
+});
+
+export const hydriaWorkflowTaskSchema = z.object({
+  taskId: z.string().uuid(),
+  kind: hydriaTaskKindSchema,
+  owner: hydriaActorRoleSchema,
+  objective: z.string().min(1).max(240),
+  status: hydriaTaskStatusSchema,
+  notes: z.array(z.string().min(1).max(240)).max(8).default([])
+});
+
+export const hydriaWorkflowRunSchema = z.object({
+  runId: z.string().uuid(),
+  scope: hydriaWorkflowScopeSchema,
+  status: hydriaWorkflowStatusSchema,
+  question: z.string().min(1).max(8000),
+  category: hydriaQuestionCategorySchema,
+  startedAt: z.string().datetime(),
+  completedAt: z.string().datetime().nullable(),
+  messages: z.array(hydriaWorkflowMessageSchema).max(24),
+  handoffs: z.array(hydriaWorkflowHandoffSchema).max(16),
+  tasks: z.array(hydriaWorkflowTaskSchema).max(12),
+  outcome: z.string().min(1).max(320)
+});
+
+export const hydriaMemoryLayerSchema = z.enum([
+  "core",
+  "episodic",
+  "semantic",
+  "archival"
+]);
+
+export const hydriaMemoryPrioritySchema = z.enum(["high", "medium", "low"]);
+
+export const hydriaMemoryItemSchema = z.object({
+  itemId: z.string().uuid(),
+  layer: hydriaMemoryLayerSchema,
+  priority: hydriaMemoryPrioritySchema,
+  title: z.string().min(1).max(140),
+  content: z.string().min(1).max(320),
+  tags: z.array(z.string().min(1).max(64)).max(8).default([])
+});
+
+export const hydriaMemorySnapshotSchema = z.object({
+  snapshotId: z.string().uuid(),
+  question: z.string().min(1).max(8000),
+  category: hydriaQuestionCategorySchema,
+  summary: z.string().min(1).max(320),
+  core: z.array(hydriaMemoryItemSchema).max(6),
+  episodic: z.array(hydriaMemoryItemSchema).max(8),
+  semantic: z.array(hydriaMemoryItemSchema).max(10),
+  archival: z.array(hydriaMemoryItemSchema).max(8),
+  retrieval: z.object({
+    strategyId: z.string().min(1).max(80),
+    researchIntent: hydriaResearchIntentSchema.nullable(),
+    temporalQueryType: hydriaResearchTemporalQueryTypeSchema.nullable(),
+    preferredDomains: z.array(z.string().min(1).max(120)).max(8),
+    studentRuleIds: z.array(z.string().min(1).max(160)).max(8)
+  })
+});
+
+export type HydriaWorkflowScope = z.infer<typeof hydriaWorkflowScopeSchema>;
+export type HydriaWorkflowStatus = z.infer<typeof hydriaWorkflowStatusSchema>;
+export type HydriaActorRole = z.infer<typeof hydriaActorRoleSchema>;
+export type HydriaMessageKind = z.infer<typeof hydriaMessageKindSchema>;
+export type HydriaTaskKind = z.infer<typeof hydriaTaskKindSchema>;
+export type HydriaTaskStatus = z.infer<typeof hydriaTaskStatusSchema>;
+export type HydriaWorkflowMessage = z.infer<typeof hydriaWorkflowMessageSchema>;
+export type HydriaWorkflowHandoff = z.infer<typeof hydriaWorkflowHandoffSchema>;
+export type HydriaWorkflowTask = z.infer<typeof hydriaWorkflowTaskSchema>;
+export type HydriaWorkflowRun = z.infer<typeof hydriaWorkflowRunSchema>;
+export type HydriaMemoryLayer = z.infer<typeof hydriaMemoryLayerSchema>;
+export type HydriaMemoryPriority = z.infer<typeof hydriaMemoryPrioritySchema>;
+export type HydriaMemoryItem = z.infer<typeof hydriaMemoryItemSchema>;
+export type HydriaMemorySnapshot = z.infer<typeof hydriaMemorySnapshotSchema>;
