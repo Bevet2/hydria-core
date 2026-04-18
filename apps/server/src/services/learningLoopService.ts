@@ -30,7 +30,7 @@ type LearningLoopServiceOptions = {
   strategyDiscoveryService?: Pick<StudentStrategyDiscoveryService, "load">;
   learningGovernanceService?: Pick<
     LearningGovernanceService,
-    "buildReport" | "buildActiveMemory" | "persistReport" | "persistActiveMemory"
+    "buildReport" | "buildActiveMemory" | "persistReport" | "persistActiveMemory" | "loadReport"
   >;
   temporalEvalService?: Pick<StudentTemporalEvalService, "run"> | null;
 };
@@ -46,7 +46,7 @@ export class LearningLoopService {
   private readonly strategyDiscoveryService: Pick<StudentStrategyDiscoveryService, "load">;
   private readonly learningGovernanceService: Pick<
     LearningGovernanceService,
-    "buildReport" | "buildActiveMemory" | "persistReport" | "persistActiveMemory"
+    "buildReport" | "buildActiveMemory" | "persistReport" | "persistActiveMemory" | "loadReport"
   >;
   private readonly temporalEvalService: Pick<StudentTemporalEvalService, "run"> | null;
 
@@ -74,8 +74,9 @@ export class LearningLoopService {
   }> {
     const validationMode = args.validationMode ?? "none";
 
-    const [rounds, sessions, knowledgeLayer, ruleImpact, strategyImpact, toolImpact, strategyDiscovery] =
+    const [previousReport, rounds, sessions, knowledgeLayer, ruleImpact, strategyImpact, toolImpact, strategyDiscovery] =
       await Promise.all([
+        this.learningGovernanceService.loadReport(),
         this.historyStore.listRounds(),
         this.listStudentSessions({
           historyFile: env.STUDENT_SESSION_HISTORY_FILE,
@@ -100,6 +101,7 @@ export class LearningLoopService {
       strategyImpact,
       toolImpact,
       strategyDiscovery,
+      previousReport,
       validation
     });
     const activeMemory = this.learningGovernanceService.buildActiveMemory(report);

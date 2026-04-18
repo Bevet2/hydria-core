@@ -9,6 +9,7 @@ import {
   type LearningActiveMemoryItem,
   type LearningGovernanceReport,
   type LearningHotspot,
+  type LearningLiveMonitoringStatus,
   type LearningPolicyItem,
   type LearningPolicyScope,
   type LearningPolicyState,
@@ -38,6 +39,7 @@ type BuildGovernanceArgs = {
   strategyImpact: StudentStrategyImpactFile | null;
   toolImpact: StudentToolImpactFile | null;
   strategyDiscovery: StrategyDiscoveryFile | null;
+  previousReport?: LearningGovernanceReport | null;
   validation?: LearningValidationSummary;
 };
 
@@ -52,6 +54,22 @@ function clamp(value: number, min: number, max: number) {
 
 function uniqueStrings(values: string[]) {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function average(values: number[]) {
+  if (values.length === 0) {
+    return null;
+  }
+
+  return Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(1));
+}
+
+function percentage(matches: number, total: number) {
+  if (total <= 0) {
+    return null;
+  }
+
+  return Number(((matches / total) * 100).toFixed(1));
 }
 
 function buildScope(args: {
@@ -134,13 +152,21 @@ export class LearningGovernanceService {
       strategyImpact: args.strategyImpact,
       toolImpact: args.toolImpact
     });
-    const policies = this.buildPolicies({
+    const draftPolicies = this.buildPolicies({
       hotspots,
       ruleImpact: args.ruleImpact,
       strategyImpact: args.strategyImpact,
       toolImpact: args.toolImpact,
       strategyDiscovery: args.strategyDiscovery
     });
+    const rawMonitoringItems = this.buildLiveMonitoringItems({
+      policies: draftPolicies,
+      previousReport: args.previousReport ?? null,
+      rounds: args.rounds,
+      sessions: args.sessions
+    });
+    const policies = this.applyLiveMonitoring(draftPolicies, rawMonitoringItems);
+    const liveMonitoring = this.buildLiveMonitoringSummary(policies, rawMonitoringItems);
     const lifecycle = {
       rawObservations: args.rounds.length + args.sessions.length,
       analyzedItems: hotspots.length + policies.length,
@@ -166,6 +192,7 @@ export class LearningGovernanceService {
       score,
       hotspots,
       policies,
+      liveMonitoring,
       lifecycle,
       validation: args.validation ?? { mode: "none", summary: {} }
     });
@@ -437,6 +464,326 @@ export class LearningGovernanceService {
           right.validation.observations - left.validation.observations
       )
       .slice(0, 48);
+  }
+
+  private buildLiveMonitoringItems(args: {
+    policies: LearningPolicyItem[];
+    previousReport: LearningGovernanceReport | null;
+    rounds: ArenaRound[];
+    sessions: StudentSession[];
+  }) {
+    const windowStart = args.previousReport?.generatedAt ?? null;
+    if (!windowStart) {
+      return args.policies.map((policy) => ({
+        policyId: policy.policyId,
+        target: policy.target,
+        targetId: policy.targetId,
+        state: policy.state,
+        status: "insufficient_data" as LearningLiveMonitoringStatus,
+        windowStart: null,
+        observations: 0,
+        averageJudgeDelta: null,
+        averageGainGlobal: null,
+        positiveImpactRate: null,
+        noOpRate: null,
+        noReliableSourceRate: null,
+        partialRate: null,
+        regressionDelta: null,
+        profitabilityScore: 0,
+        riskScore: 0,
+        summary: "No previous governance report exists yet, so live post-promotion monitoring has not started."
+      }));
+    }
+
+    const startMs = new Date(windowStart).getTime();
+    const recentSessions = args.sessions.filter(
+      (session) => new Date(session.createdAt).getTime() >= startMs
+    );
+    const recentRounds = args.rounds.filter(
+      (round) => new Date(round.createdAt).getTime() >= startMs
+    );
+
+    return args.policies.map((policy) => {
+      const metrics = this.collectLiveMetrics(policy, recentSessions, recentRounds);
+      const regressionDelta =
+        metrics.averageJudgeDelta !== null && policy.validation.averageJudgeDelta !== null
+          ? Number((metrics.averageJudgeDelta - policy.validation.averageJudgeDelta).toFixed(1))
+          : null;
+      const profitabilityScore = clamp(
+        (Math.max(metrics.averageJudgeDelta ?? 0, 0) / 10) * 45 +
+          ((metrics.positiveImpactRate ?? 0) / 100) * 35 +
+          clamp(metrics.observations / 6, 0, 1) * 20,
+        0,
+        100
+      );
+      const riskScore = clamp(
+        (Math.max(-(metrics.averageJudgeDelta ?? 0), 0) / 6) * 38 +
+          ((metrics.noReliableSourceRate ?? 0) / 100) * 26 +
+          ((metrics.noOpRate ?? 0) / 100) * 18 +
+          ((metrics.partialRate ?? 0) / 100) * 18,
+        0,
+        100
+      );
+      const falsePositiveRisk =
+        policy.state === "active" &&
+        metrics.observations >= HYDRIA_LEARNING_CONSTITUTION.promotionCriteria.minObservations &&
+        ((metrics.averageJudgeDelta ?? 0) <= 0 ||
+          (regressionDelta ?? 0) <=
+            -HYDRIA_LEARNING_CONSTITUTION.demotionCriteria.regressionTriggerDelta ||
+          riskScore >= 60);
+      let status: LearningLiveMonitoringStatus = "stable";
+      let summary = "Policy stayed within its expected live behavior window.";
+
+      if (metrics.observations === 0) {
+        status = "insufficient_data";
+        summary = "No live round or session has matched this policy since the previous learning cycle.";
+      } else if (falsePositiveRisk) {
+        status = "false_positive_risk";
+        summary =
+          "Live behavior is materially worse than validation suggested; keep this policy under watch.";
+      } else if (
+        regressionDelta !== null &&
+        regressionDelta <= -HYDRIA_LEARNING_CONSTITUTION.demotionCriteria.regressionTriggerDelta
+      ) {
+        status = "regressing";
+        summary = "Live impact regressed versus the validation baseline for this policy.";
+      } else if ((metrics.averageJudgeDelta ?? 0) >= Math.max(policy.validation.averageJudgeDelta ?? 0, 0)) {
+        status = "improving";
+        summary = "Live rounds confirm or exceed the validated improvement for this policy.";
+      }
+
+      return {
+        policyId: policy.policyId,
+        target: policy.target,
+        targetId: policy.targetId,
+        state: policy.state,
+        status,
+        windowStart,
+        observations: metrics.observations,
+        averageJudgeDelta: metrics.averageJudgeDelta,
+        averageGainGlobal: metrics.averageGainGlobal,
+        positiveImpactRate: metrics.positiveImpactRate,
+        noOpRate: metrics.noOpRate,
+        noReliableSourceRate: metrics.noReliableSourceRate,
+        partialRate: metrics.partialRate,
+        regressionDelta,
+        profitabilityScore: Number(profitabilityScore.toFixed(1)),
+        riskScore: Number(riskScore.toFixed(1)),
+        summary
+      };
+    });
+  }
+
+  private collectLiveMetrics(
+    policy: LearningPolicyItem,
+    sessions: StudentSession[],
+    rounds: ArenaRound[]
+  ) {
+    const judgeDeltas: number[] = [];
+    const gains: number[] = [];
+    let positiveCount = 0;
+    let noOpCount = 0;
+    let noReliableSourceCount = 0;
+    let partialCount = 0;
+    let observations = 0;
+
+    if (policy.target === "student_rule") {
+      for (const session of sessions) {
+        if (!session.ruleImpact.compared) {
+          continue;
+        }
+
+        const perRuleMatches = session.ruleImpact.perRule.filter(
+          (entry) => entry.ruleId === policy.targetId
+        );
+        for (const entry of perRuleMatches) {
+          observations += 1;
+          judgeDeltas.push(entry.metrics.judgeOverallDelta);
+          gains.push(entry.metrics.gainGlobal);
+          positiveCount += Number(entry.metrics.success && entry.metrics.judgeOverallDelta > 0);
+          noOpCount += Number(Math.abs(entry.metrics.judgeOverallDelta) < 1);
+        }
+      }
+    } else if (policy.target === "student_strategy") {
+      for (const session of sessions) {
+        if (!session.strategyImpact.compared || session.strategyImpact.strategyId !== policy.targetId) {
+          continue;
+        }
+
+        observations += 1;
+        judgeDeltas.push(session.strategyImpact.metrics.judgeOverallDelta);
+        gains.push(session.strategyImpact.metrics.gainGlobal);
+        positiveCount += Number(
+          session.strategyImpact.metrics.success && session.strategyImpact.metrics.judgeOverallDelta > 0
+        );
+        noOpCount += Number(Math.abs(session.strategyImpact.metrics.judgeOverallDelta) < 1);
+      }
+    } else if (policy.target === "research_policy" || policy.target === "tool_policy") {
+      for (const session of sessions) {
+        if (!session.tooling.compared || !session.tooling.toolUsed) {
+          continue;
+        }
+
+        observations += 1;
+        judgeDeltas.push(session.tooling.metrics.judgeOverallDelta);
+        gains.push(session.tooling.metrics.gainGlobal);
+        positiveCount += Number(
+          session.tooling.metrics.success && session.tooling.metrics.judgeOverallDelta > 0
+        );
+        noOpCount += Number(Math.abs(session.tooling.metrics.judgeOverallDelta) < 1);
+        noReliableSourceCount += Number(session.tooling.noReliableSource);
+      }
+    } else if (policy.target === "local_student_policy") {
+      for (const round of rounds) {
+        observations += 1;
+        const localReasons = round.workflow.degradationReasons.filter(
+          (reason) => reason.role === "local_student"
+        );
+        partialCount += Number(localReasons.length > 0);
+        positiveCount += Number(localReasons.length === 0);
+      }
+    }
+
+    return {
+      observations,
+      averageJudgeDelta: average(judgeDeltas),
+      averageGainGlobal: average(gains),
+      positiveImpactRate: percentage(positiveCount, observations),
+      noOpRate: percentage(noOpCount, observations),
+      noReliableSourceRate:
+        policy.target === "research_policy" || policy.target === "tool_policy"
+          ? percentage(noReliableSourceCount, observations)
+          : null,
+      partialRate: policy.target === "local_student_policy" ? percentage(partialCount, observations) : null
+    };
+  }
+
+  private applyLiveMonitoring(
+    policies: LearningPolicyItem[],
+    items: Array<{
+      policyId: string;
+      status: LearningLiveMonitoringStatus;
+      summary: string;
+    }>
+  ) {
+    const itemById = new Map(items.map((item) => [item.policyId, item]));
+
+    return policies.map((policy) => {
+      const monitoring = itemById.get(policy.policyId);
+      if (!monitoring) {
+        return policy;
+      }
+
+      if (monitoring.status === "false_positive_risk" && policy.state === "active") {
+        return {
+          ...policy,
+          state: "guarded" as const,
+          memoryState: "risky" as const,
+          rationale: `${policy.rationale} Live monitoring alert: ${monitoring.summary}`
+        };
+      }
+
+      return policy;
+    });
+  }
+
+  private buildLiveMonitoringSummary(
+    policies: LearningPolicyItem[],
+    rawItems: Array<{
+      policyId: string;
+      target: LearningPolicyTarget;
+      targetId: string;
+      state: LearningPolicyState;
+      status: LearningLiveMonitoringStatus;
+      windowStart: string | null;
+      observations: number;
+      averageJudgeDelta: number | null;
+      averageGainGlobal: number | null;
+      positiveImpactRate: number | null;
+      noOpRate: number | null;
+      noReliableSourceRate: number | null;
+      partialRate: number | null;
+      regressionDelta: number | null;
+      profitabilityScore: number;
+      riskScore: number;
+      summary: string;
+    }>
+  ) {
+    const policyById = new Map(policies.map((policy) => [policy.policyId, policy]));
+    const items = rawItems.map((item) => ({
+      ...item,
+      state: policyById.get(item.policyId)?.state ?? item.state
+    }));
+    const withLiveData = items.filter((item) => item.observations > 0);
+    const activeItems = items.filter((item) => item.state === "active" || item.state === "guarded");
+    const topGains = [...withLiveData]
+      .sort(
+        (left, right) =>
+          (right.averageJudgeDelta ?? -Infinity) - (left.averageJudgeDelta ?? -Infinity) ||
+          right.profitabilityScore - left.profitabilityScore
+      )
+      .slice(0, 5)
+      .map((item) => ({
+        policyId: item.policyId,
+        targetId: item.targetId,
+        state: item.state,
+        score: item.profitabilityScore,
+        averageJudgeDelta: item.averageJudgeDelta,
+        observations: item.observations,
+        summary: item.summary
+      }));
+    const topRegressions = [...withLiveData]
+      .sort(
+        (left, right) =>
+          (left.regressionDelta ?? Infinity) - (right.regressionDelta ?? Infinity) ||
+          (left.averageJudgeDelta ?? Infinity) - (right.averageJudgeDelta ?? Infinity)
+      )
+      .slice(0, 5)
+      .map((item) => ({
+        policyId: item.policyId,
+        targetId: item.targetId,
+        state: item.state,
+        score: item.riskScore,
+        averageJudgeDelta: item.averageJudgeDelta,
+        observations: item.observations,
+        summary: item.summary
+      }));
+    const mostProfitableActive = [...activeItems]
+      .sort((left, right) => right.profitabilityScore - left.profitabilityScore)
+      .slice(0, 5)
+      .map((item) => ({
+        policyId: item.policyId,
+        targetId: item.targetId,
+        state: item.state,
+        score: item.profitabilityScore,
+        averageJudgeDelta: item.averageJudgeDelta,
+        observations: item.observations,
+        summary: item.summary
+      }));
+    const mostRiskyActive = [...activeItems]
+      .sort((left, right) => right.riskScore - left.riskScore)
+      .slice(0, 5)
+      .map((item) => ({
+        policyId: item.policyId,
+        targetId: item.targetId,
+        state: item.state,
+        score: item.riskScore,
+        averageJudgeDelta: item.averageJudgeDelta,
+        observations: item.observations,
+        summary: item.summary
+      }));
+
+    return {
+      windowStart: rawItems[0]?.windowStart ?? null,
+      monitoredPolicies: items.length,
+      policiesWithLiveData: withLiveData.length,
+      falsePositiveAlerts: items.filter((item) => item.status === "false_positive_risk").length,
+      items,
+      topGains,
+      topRegressions,
+      mostProfitableActive,
+      mostRiskyActive
+    };
   }
 
   private buildDiscoveryPolicy(adoption: DiscoveryAdoption): LearningPolicyItem {

@@ -61,6 +61,8 @@ console.log(
       })),
       activePolicies: result.report.policies.filter((policy) => policy.state === "active").length,
       guardedPolicies: result.report.policies.filter((policy) => policy.state === "guarded").length,
+      falsePositiveAlerts: result.report.liveMonitoring.falsePositiveAlerts,
+      topRegression: result.report.liveMonitoring.topRegressions[0]?.targetId ?? null,
       validation: result.report.validation
     },
     null,

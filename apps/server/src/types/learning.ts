@@ -194,6 +194,14 @@ export const learningValidationSummarySchema = z.object({
   summary: z.record(z.string(), z.union([z.number(), z.string(), z.boolean(), z.null()])).default({})
 });
 
+export const learningLiveMonitoringStatusSchema = z.enum([
+  "insufficient_data",
+  "improving",
+  "stable",
+  "regressing",
+  "false_positive_risk"
+]);
+
 export const learningConstitutionSchema = z.object({
   version: z.literal("hydria-learning-constitution-v1"),
   defaultScope: z.enum(["local_first"]),
@@ -236,6 +244,77 @@ export const learningGovernanceReportSchema = z.object({
   score: learningImprovementScoreSchema,
   hotspots: z.array(learningHotspotSchema).max(48),
   policies: z.array(learningPolicyItemSchema).max(96),
+  liveMonitoring: z.object({
+    windowStart: z.string().datetime().nullable(),
+    monitoredPolicies: z.number().int().nonnegative(),
+    policiesWithLiveData: z.number().int().nonnegative(),
+    falsePositiveAlerts: z.number().int().nonnegative(),
+    items: z.array(
+      z.object({
+        policyId: z.string().min(1).max(120),
+        target: learningPolicyTargetSchema,
+        targetId: z.string().min(1).max(160),
+        state: learningPolicyStateSchema,
+        status: learningLiveMonitoringStatusSchema,
+        windowStart: z.string().datetime().nullable(),
+        observations: z.number().int().nonnegative(),
+        averageJudgeDelta: z.number().min(-100).max(100).nullable(),
+        averageGainGlobal: z.number().min(-100).max(100).nullable(),
+        positiveImpactRate: z.number().min(0).max(100).nullable(),
+        noOpRate: z.number().min(0).max(100).nullable(),
+        noReliableSourceRate: z.number().min(0).max(100).nullable(),
+        partialRate: z.number().min(0).max(100).nullable(),
+        regressionDelta: z.number().min(-100).max(100).nullable(),
+        profitabilityScore: z.number().min(0).max(100),
+        riskScore: z.number().min(0).max(100),
+        summary: z.string().min(1).max(320)
+      })
+    ).max(96),
+    topGains: z.array(
+      z.object({
+        policyId: z.string().min(1).max(120),
+        targetId: z.string().min(1).max(160),
+        state: learningPolicyStateSchema,
+        score: z.number().min(0).max(100),
+        averageJudgeDelta: z.number().min(-100).max(100).nullable(),
+        observations: z.number().int().nonnegative(),
+        summary: z.string().min(1).max(240)
+      })
+    ).max(8),
+    topRegressions: z.array(
+      z.object({
+        policyId: z.string().min(1).max(120),
+        targetId: z.string().min(1).max(160),
+        state: learningPolicyStateSchema,
+        score: z.number().min(0).max(100),
+        averageJudgeDelta: z.number().min(-100).max(100).nullable(),
+        observations: z.number().int().nonnegative(),
+        summary: z.string().min(1).max(240)
+      })
+    ).max(8),
+    mostProfitableActive: z.array(
+      z.object({
+        policyId: z.string().min(1).max(120),
+        targetId: z.string().min(1).max(160),
+        state: learningPolicyStateSchema,
+        score: z.number().min(0).max(100),
+        averageJudgeDelta: z.number().min(-100).max(100).nullable(),
+        observations: z.number().int().nonnegative(),
+        summary: z.string().min(1).max(240)
+      })
+    ).max(8),
+    mostRiskyActive: z.array(
+      z.object({
+        policyId: z.string().min(1).max(120),
+        targetId: z.string().min(1).max(160),
+        state: learningPolicyStateSchema,
+        score: z.number().min(0).max(100),
+        averageJudgeDelta: z.number().min(-100).max(100).nullable(),
+        observations: z.number().int().nonnegative(),
+        summary: z.string().min(1).max(240)
+      })
+    ).max(8)
+  }),
   lifecycle: learningLifecycleSummarySchema,
   validation: learningValidationSummarySchema
 });
@@ -263,6 +342,7 @@ export type LearningLifecycleSummary = z.infer<typeof learningLifecycleSummarySc
 export type LearningActiveMemoryItem = z.infer<typeof learningActiveMemoryItemSchema>;
 export type LearningActiveMemory = z.infer<typeof learningActiveMemorySchema>;
 export type LearningValidationSummary = z.infer<typeof learningValidationSummarySchema>;
+export type LearningLiveMonitoringStatus = z.infer<typeof learningLiveMonitoringStatusSchema>;
 export type LearningConstitution = z.infer<typeof learningConstitutionSchema>;
 export type LearningGovernanceReport = z.infer<typeof learningGovernanceReportSchema>;
 export type LearningGovernanceState = z.infer<typeof learningGovernanceStateSchema>;

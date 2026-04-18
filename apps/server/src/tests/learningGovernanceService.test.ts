@@ -253,3 +253,61 @@ test("learning governance promotes, guards, and rejects policies using existing 
   );
   assert.ok(activeMemory.items.some((item) => item.state === "active"));
 });
+
+test("learning governance flags live false positives after promotion and moves active policies to guarded", () => {
+  const service = new LearningGovernanceService();
+  const previousReport = service.buildReport({
+    rounds: [buildArenaRoundFixture()],
+    sessions: [buildStudentSessionFixture()],
+    knowledgeLayer: buildKnowledgeLayerFixture(),
+    arenaQuality: new ArenaQualityAnalyticsService().buildReport([buildArenaRoundFixture()]),
+    ruleImpact: buildRuleImpactFixture(),
+    strategyImpact: buildStrategyImpactFixture(),
+    toolImpact: buildToolImpactFixture(),
+    strategyDiscovery: buildDiscoveryFixture()
+  });
+  const regressingSessions = [1, 2, 3].map((index) =>
+    buildStudentSessionFixture({
+      sessionId: `77777777-7777-4777-8777-77777777777${index}`,
+      createdAt: `2026-04-19T10:0${index}:00.000Z`,
+      strategyImpact: {
+        ...buildStudentSessionFixture().strategyImpact,
+        compared: true,
+        strategyId: "explanatory_compact_example",
+        metrics: {
+          judgeOverallDelta: -4,
+          gainGlobal: -4,
+          lengthDeltaWords: -10,
+          keyPointsDelta: -1,
+          assumptionsDelta: 0,
+          structureDelta: -2,
+          success: false
+        }
+      }
+    })
+  );
+  const currentReport = service.buildReport({
+    rounds: [buildArenaRoundFixture()],
+    sessions: regressingSessions,
+    knowledgeLayer: buildKnowledgeLayerFixture(),
+    arenaQuality: new ArenaQualityAnalyticsService().buildReport([buildArenaRoundFixture()]),
+    ruleImpact: buildRuleImpactFixture(),
+    strategyImpact: buildStrategyImpactFixture(),
+    toolImpact: buildToolImpactFixture(),
+    strategyDiscovery: buildDiscoveryFixture(),
+    previousReport
+  });
+  const monitored = currentReport.liveMonitoring.items.find(
+    (item) => item.target === "student_strategy" && item.targetId === "explanatory_compact_example"
+  );
+  const updatedPolicy = currentReport.policies.find(
+    (policy) =>
+      policy.target === "student_strategy" &&
+      policy.targetId === "explanatory_compact_example" &&
+      policy.scope.category === null
+  );
+
+  assert.equal(monitored?.status, "false_positive_risk");
+  assert.equal(currentReport.liveMonitoring.falsePositiveAlerts >= 1, true);
+  assert.equal(updatedPolicy?.state, "guarded");
+});

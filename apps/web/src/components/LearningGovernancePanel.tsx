@@ -13,6 +13,14 @@ function formatConfidence(value: number) {
   return `${Math.round(value * 100)}%`;
 }
 
+function formatDelta(value: number | null | undefined) {
+  if (typeof value !== "number") {
+    return "n/a";
+  }
+
+  return value > 0 ? `+${value}` : `${value}`;
+}
+
 export function LearningGovernancePanel({ state, onRefresh }: LearningGovernancePanelProps) {
   const report = state?.report ?? null;
   const activeMemory = state?.activeMemory ?? null;
@@ -41,6 +49,7 @@ export function LearningGovernancePanel({ state, onRefresh }: LearningGovernance
   const topHotspots = report.hotspots.slice(0, 4);
   const promotedPolicies = activePolicies.slice(0, 4);
   const watchlistPolicies = guardedPolicies.slice(0, 3);
+  const liveMonitoring = report.liveMonitoring;
 
   return (
     <section className="panel">
@@ -48,7 +57,8 @@ export function LearningGovernancePanel({ state, onRefresh }: LearningGovernance
         <div>
           <h2>Learning Governance</h2>
           <p className="muted">
-            Structured promotion, watchlist, and rollback posture for Hydria learning.
+            Structured promotion, watchlist, rollback, and live post-promotion monitoring for
+            Hydria learning.
           </p>
         </div>
         <button type="button" className="button button--secondary" onClick={() => void onRefresh()}>
@@ -85,6 +95,20 @@ export function LearningGovernancePanel({ state, onRefresh }: LearningGovernance
             {report.constitution.promotionCriteria.minObservations} obs /{" "}
             {formatConfidence(report.constitution.promotionCriteria.minConfidence)}
           </strong>
+        </div>
+        <div className="summary-card">
+          <span>Live monitored / alerts</span>
+          <strong>
+            {liveMonitoring.policiesWithLiveData} / {liveMonitoring.falsePositiveAlerts}
+          </strong>
+        </div>
+        <div className="summary-card">
+          <span>Top gain</span>
+          <strong>{liveMonitoring.topGains[0]?.targetId ?? "n/a"}</strong>
+        </div>
+        <div className="summary-card">
+          <span>Top regression</span>
+          <strong>{liveMonitoring.topRegressions[0]?.targetId ?? "n/a"}</strong>
         </div>
       </div>
 
@@ -149,6 +173,114 @@ export function LearningGovernancePanel({ state, onRefresh }: LearningGovernance
         ))}
       </div>
 
+      <h3>Live verification after promotion</h3>
+      <div className="summary-grid">
+        <div className="summary-card summary-card--strong">
+          <span>Monitoring window</span>
+          <strong>
+            {liveMonitoring.windowStart
+              ? new Date(liveMonitoring.windowStart).toLocaleString()
+              : "not started"}
+          </strong>
+        </div>
+        <div className="summary-card">
+          <span>Policies with live data</span>
+          <strong>{liveMonitoring.policiesWithLiveData}</strong>
+        </div>
+        <div className="summary-card">
+          <span>False positive alerts</span>
+          <strong>{liveMonitoring.falsePositiveAlerts}</strong>
+        </div>
+        <div className="summary-card">
+          <span>Most risky active</span>
+          <strong>{liveMonitoring.mostRiskyActive[0]?.targetId ?? "n/a"}</strong>
+        </div>
+      </div>
+
+      <h3>Top gains</h3>
+      {liveMonitoring.topGains.length === 0 ? (
+        <p className="muted">No live gain has been observed yet.</p>
+      ) : (
+        <div className="workflow-task-grid">
+          {liveMonitoring.topGains.map((item) => (
+            <article key={item.policyId} className="workflow-task">
+              <div className="memory-item__header">
+                <strong>{item.targetId}</strong>
+                <span className="pill">{item.score}</span>
+              </div>
+              <p>{item.summary}</p>
+              <div className="meta-row">
+                <span>judge delta {formatDelta(item.averageJudgeDelta)}</span>
+                <span>{item.observations} obs</span>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+
+      <h3>Top regressions</h3>
+      {liveMonitoring.topRegressions.length === 0 ? (
+        <p className="muted">No regression has been observed on monitored policies yet.</p>
+      ) : (
+        <div className="workflow-task-grid">
+          {liveMonitoring.topRegressions.map((item) => (
+            <article key={item.policyId} className="workflow-task">
+              <div className="memory-item__header">
+                <strong>{item.targetId}</strong>
+                <span className="pill">{item.score}</span>
+              </div>
+              <p>{item.summary}</p>
+              <div className="meta-row">
+                <span>judge delta {formatDelta(item.averageJudgeDelta)}</span>
+                <span>{item.observations} obs</span>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+
+      <h3>Most profitable active</h3>
+      {liveMonitoring.mostProfitableActive.length === 0 ? (
+        <p className="muted">No active policy has enough live evidence yet.</p>
+      ) : (
+        <div className="workflow-task-grid">
+          {liveMonitoring.mostProfitableActive.map((item) => (
+            <article key={item.policyId} className="workflow-task">
+              <div className="memory-item__header">
+                <strong>{item.targetId}</strong>
+                <span className="pill">{item.score}</span>
+              </div>
+              <p>{item.summary}</p>
+              <div className="meta-row">
+                <span>judge delta {formatDelta(item.averageJudgeDelta)}</span>
+                <span>{item.state}</span>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+
+      <h3>Most risky active</h3>
+      {liveMonitoring.mostRiskyActive.length === 0 ? (
+        <p className="muted">No active policy is currently flagged as risky.</p>
+      ) : (
+        <div className="workflow-task-grid">
+          {liveMonitoring.mostRiskyActive.map((item) => (
+            <article key={item.policyId} className="workflow-task">
+              <div className="memory-item__header">
+                <strong>{item.targetId}</strong>
+                <span className="pill">{item.score}</span>
+              </div>
+              <p>{item.summary}</p>
+              <div className="meta-row">
+                <span>judge delta {formatDelta(item.averageJudgeDelta)}</span>
+                <span>{item.state}</span>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+
       <h3>Promoted policies</h3>
       {promotedPolicies.length === 0 ? (
         <p className="muted">No active policy has been promoted yet.</p>
@@ -184,7 +316,7 @@ export function LearningGovernancePanel({ state, onRefresh }: LearningGovernance
               </div>
               <p>{policy.rationale}</p>
               <div className="meta-row">
-                <span>judge Δ {policy.validation.averageJudgeDelta ?? "n/a"}</span>
+                <span>judge delta {policy.validation.averageJudgeDelta ?? "n/a"}</span>
                 <span>no-op {formatPct(policy.validation.noOpRate)}</span>
                 <span>nrs {formatPct(policy.validation.noReliableSourceRate)}</span>
               </div>
