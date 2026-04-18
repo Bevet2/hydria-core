@@ -4,6 +4,7 @@ import {
   fetchArenaQualityReport,
   fetchArenaRound,
   fetchHistory,
+  fetchLearningGovernanceState,
   fetchLocalHealth,
   fetchPersistenceHealth,
   runArena,
@@ -12,6 +13,7 @@ import {
   type ArenaModels,
   type ArenaQualityAnalyticsReport,
   type ArenaRound,
+  type LearningGovernanceState,
   type LocalModelHealth,
   type LocalModelTestResponse,
   type PersistenceHealthReport
@@ -39,6 +41,7 @@ export function CorePlayground() {
   const [rounds, setRounds] = useState<ArenaRound[]>([]);
   const [currentRound, setCurrentRound] = useState<ArenaRound | null>(null);
   const [qualityReport, setQualityReport] = useState<ArenaQualityAnalyticsReport | null>(null);
+  const [learningState, setLearningState] = useState<LearningGovernanceState | null>(null);
   const [appHealth, setAppHealth] = useState<AppHealth | null>(null);
   const [localHealth, setLocalHealth] = useState<LocalModelHealth | null>(null);
   const [persistenceHealth, setPersistenceHealth] = useState<PersistenceHealthReport | null>(null);
@@ -89,13 +92,18 @@ export function CorePlayground() {
     setPersistenceHealth(persistence);
   }
 
+  async function refreshLearningState() {
+    const nextState = await fetchLearningGovernanceState();
+    setLearningState(nextState);
+  }
+
   async function refreshLocalHealth() {
     const health = await fetchLocalHealth();
     setLocalHealth(health);
   }
 
   useEffect(() => {
-    void Promise.all([refreshHistory(), refreshAppHealth()]).catch((cause: unknown) => {
+    void Promise.all([refreshHistory(), refreshAppHealth(), refreshLearningState()]).catch((cause: unknown) => {
       setError(cause instanceof Error ? cause.message : "Initial load failed.");
     });
   }, []);
@@ -156,10 +164,12 @@ export function CorePlayground() {
           round={currentRound}
           rounds={rounds}
           qualityReport={qualityReport}
+          learningState={learningState}
           localHealth={localHealth}
           persistenceHealth={persistenceHealth}
           lastLocalTest={lastLocalTest}
           onRefreshHealth={refreshLocalHealth}
+          onRefreshLearning={refreshLearningState}
           onRefreshPersistence={refreshAppHealth}
           onRunTest={handleLocalTest}
           onSelectRound={(round) => {

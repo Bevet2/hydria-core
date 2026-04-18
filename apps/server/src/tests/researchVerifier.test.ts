@@ -73,6 +73,36 @@ function buildDecision(recencyDays = 365): ResearchDecision {
   };
 }
 
+function buildGenericCurrentStatusDecision(recencyDays = 365): ResearchDecision {
+  return {
+    shouldUse: true,
+    reasons: ["Temporal current-status query requires fresh sourcing."],
+    triggerSignals: ["temporal_query_current_status"],
+    targetClaims: ["Current status target: Who is the current CEO of OpenAI?"],
+    expectedValue: "high",
+    expectedCostMs: 2600,
+    knowledgeStrategy: null,
+    plan: {
+      intent: "current_status",
+      mode: "targeted_verify",
+      queries: ["CEO of OpenAI current official April 18, 2026 site:openai.com"],
+      requiredTerms: ["openai", "current", "ceo"],
+      preferredDomains: ["openai.com"],
+      factFocusTerms: ["ceo", "openai"],
+      entityTerms: ["ceo", "openai"],
+      temporalProfile: {
+        ...buildDefaultTemporalProfile(),
+        isTemporal: true,
+        focus: "current",
+        queryType: "current_status",
+        recencyDays,
+        absoluteDateHint: "April 18, 2026"
+      },
+      reasoning: "Verify the current status from official leadership pages."
+    }
+  };
+}
+
 function buildSearchResults(): SearchCandidate[] {
   return [
     {
@@ -159,6 +189,72 @@ test("research verifier accepts trusted current-status pages without explicit da
   assert.equal(log.used, true);
   assert.equal(log.verification.freshnessSatisfied, true);
   assert.equal(log.truth.no_reliable_source, false);
+});
+
+test("research verifier accepts canonical current-status governance pages even when their explicit date is older than the freshness window", () => {
+  const verifier = new ResearchVerifier();
+  const log = verifier.buildLog({
+    decision: buildDecision(120),
+    args: buildArgs(),
+    searchResults: buildSearchResults(),
+    sources: [
+      {
+        title: "OpenAI Our Structure",
+        url: "https://openai.com/our-structure/",
+        snippet: "Official OpenAI structure and governance page.",
+        excerpt:
+          "The OpenAI Foundation is governed by its board of directors, which includes CEO Sam Altman.",
+        publishedAt: null,
+        modifiedAt: null,
+        effectiveDate: "2025-10-27T23:00:00.000Z",
+        dateSource: "text",
+        retrievalChannel: "live",
+        retrievalOrigin: "known_endpoint",
+        retrievalEngine: "known_endpoint"
+      }
+    ],
+    startedAt: Date.now() - 50
+  });
+
+  assert.equal(log.used, true);
+  assert.equal(log.verification.freshnessSatisfied, true);
+  assert.equal(log.truth.no_reliable_source, false);
+  assert.ok(log.truth.verified_facts.some((fact) => /sam altman/i.test(fact)));
+});
+
+test("research verifier uses source title context to verify current-status claims when the entity is not repeated in the excerpt sentence", () => {
+  const verifier = new ResearchVerifier();
+  const log = verifier.buildLog({
+    decision: buildGenericCurrentStatusDecision(120),
+    args: buildArgs(),
+    searchResults: buildSearchResults(),
+    sources: [
+      {
+        title: "OpenAI Our Structure",
+        url: "https://openai.com/our-structure/",
+        snippet: "Official OpenAI structure and governance page.",
+        excerpt:
+          "The OpenAI Foundation is governed by its board of directors, which includes CEO Sam Altman.",
+        publishedAt: null,
+        modifiedAt: null,
+        effectiveDate: "2025-10-27T23:00:00.000Z",
+        dateSource: "text",
+        retrievalChannel: "live",
+        retrievalOrigin: "known_endpoint",
+        retrievalEngine: "known_endpoint"
+      }
+    ],
+    startedAt: Date.now() - 50
+  });
+
+  assert.equal(log.used, true);
+  assert.equal(log.verification.freshnessSatisfied, true);
+  assert.equal(log.truth.no_reliable_source, false);
+  assert.ok(
+    log.truth.verified_facts.some(
+      (fact) => /openai/i.test(fact) && /ceo sam altman/i.test(fact)
+    )
+  );
 });
 
 test("research verifier impact accounting marks visible source uptake as positive", () => {

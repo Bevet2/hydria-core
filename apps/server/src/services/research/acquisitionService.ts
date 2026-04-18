@@ -104,13 +104,19 @@ export class ResearchAcquisitionService {
     cachedUrls: Set<string>,
     plan: SearchPlan
   ) {
-    return searchResults
+    const prioritized = searchResults
       .filter((candidate) => !cachedUrls.has(candidate.url))
       .sort((left, right) => {
         const leftKnown = left.retrievalOrigin === "known_endpoint" ? 1 : 0;
         const rightKnown = right.retrievalOrigin === "known_endpoint" ? 1 : 0;
         if (leftKnown !== rightKnown) {
           return rightKnown - leftKnown;
+        }
+
+        const leftPathPriority = this.getPathPriority(left.url, plan);
+        const rightPathPriority = this.getPathPriority(right.url, plan);
+        if (leftPathPriority !== rightPathPriority) {
+          return rightPathPriority - leftPathPriority;
         }
 
         const leftPreferred = plan.preferredDomains.some((domain) =>
@@ -129,6 +135,16 @@ export class ResearchAcquisitionService {
 
         return left.url.localeCompare(right.url);
       });
+
+    const uniqueByCanonicalUrl = new Map<string, SearchCandidate>();
+    for (const candidate of prioritized) {
+      const key = this.normalizeCandidateUrl(candidate.url);
+      if (!uniqueByCanonicalUrl.has(key)) {
+        uniqueByCanonicalUrl.set(key, candidate);
+      }
+    }
+
+    return [...uniqueByCanonicalUrl.values()];
   }
 
   private mergeSources(sources: ResearchSource[]) {
@@ -146,5 +162,46 @@ export class ResearchAcquisitionService {
     }
 
     return [...bestByUrl.values()].slice(0, 5);
+  }
+
+  private getPathPriority(url: string, plan: SearchPlan) {
+    const path = safePathname(url);
+
+    if (plan.intent === "current_status") {
+      if (/\/our-structure/i.test(path)) return 6;
+      if (/\/leadership/i.test(path)) return 5;
+      if (/\/team/i.test(path)) return 4;
+      if (/\/about/i.test(path)) return 3;
+      if (/\/status/i.test(path)) return 2;
+      if (/\/pricing/i.test(path)) return 1;
+    }
+
+    if (plan.intent === "release_freshness") {
+      if (/\/releases?(\.|\/|$)/i.test(path)) return 5;
+      if (/\/changelog/i.test(path)) return 4;
+      if (/\/release/i.test(path)) return 3;
+      if (/\/blog/i.test(path)) return 1;
+    }
+
+    return 0;
+  }
+
+  private normalizeCandidateUrl(url: string) {
+    try {
+      const parsed = new URL(url);
+      const normalizedPath =
+        parsed.pathname.length > 1 ? parsed.pathname.replace(/\/+$/, "") : parsed.pathname;
+      return `${parsed.protocol}//${parsed.host}${normalizedPath}${parsed.search}`;
+    } catch {
+      return url.replace(/\/+$/, "");
+    }
+  }
+}
+
+function safePathname(url: string) {
+  try {
+    return new URL(url).pathname.toLowerCase();
+  } catch {
+    return "";
   }
 }

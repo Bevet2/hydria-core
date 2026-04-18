@@ -99,6 +99,14 @@ const envSchema = z.object({
     .string()
     .min(1)
     .default("F:/hydria-arena/storage/knowledge/student-strategy-assets-v1.json"),
+  LEARNING_GOVERNANCE_FILE: z
+    .string()
+    .min(1)
+    .default("F:/hydria-arena/storage/learning/hydria-learning-governance-v1.json"),
+  LEARNING_ACTIVE_MEMORY_FILE: z
+    .string()
+    .min(1)
+    .default("F:/hydria-arena/storage/learning/hydria-learning-active-memory-v1.json"),
   RESEARCH_SOURCE_CACHE_FILE: z
     .string()
     .min(1)

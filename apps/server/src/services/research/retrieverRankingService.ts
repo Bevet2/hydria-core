@@ -152,6 +152,8 @@ export class ResearchRetrieverRankingService {
       /\/status/i,
       /\/team/i,
       /\/leadership/i,
+      /\/about/i,
+      /\/our-structure/i,
       /\/executive/i,
       /\/pricing/i,
       /\/availability/i
@@ -171,6 +173,10 @@ export class ResearchRetrieverRankingService {
 
     if (plan.preferredDomains.some((preferred) => domain.endsWith(preferred.toLowerCase()))) {
       score += 20;
+    }
+
+    if (plan.intent === "current_status" && /\/our-structure/i.test(path)) {
+      score += 8;
     }
 
     score += Math.min(18, entityHitStats.totalHits * 9);
@@ -209,7 +215,7 @@ export class ResearchRetrieverRankingService {
       } else if (plan.intent === "release_freshness") {
         score += isReleasePath ? (this.isHighTrustDomain(domain, plan) ? 14 : 6) : 4;
       } else if (plan.intent === "current_status") {
-        score += isCurrentStatusPath ? 8 : -2;
+        score += isCurrentStatusPath ? 10 : -2;
       } else {
         score -= plan.intent === "metric_verification" ? 3 : 8;
       }
@@ -255,7 +261,18 @@ export class ResearchRetrieverRankingService {
         }
         break;
       case "current_status":
-        if (matchesAny(haystack, [/\bcurrent\b/i, /\bleadership\b/i, /\bstatus\b/i, /\bversion\b/i])) {
+        if (
+          matchesAny(haystack, [
+            /\bcurrent\b/i,
+            /\bleadership\b/i,
+            /\bstatus\b/i,
+            /\bversion\b/i,
+            /\bboard\b/i,
+            /\bgovernance\b/i,
+            /\bstructure\b/i,
+            /\bceo\b/i
+          ])
+        ) {
           score += 10;
         }
         break;
@@ -296,7 +313,7 @@ export class ResearchRetrieverRankingService {
         entityHitStats.specificHits === 0
       ) {
         if (candidate.retrievalOrigin === "known_endpoint") {
-          score -= 8;
+          score += isCurrentStatusPath ? 2 : -8;
         } else {
           return -14;
         }

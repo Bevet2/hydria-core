@@ -1,6 +1,7 @@
 import type {
   ArenaQualityAnalyticsReport,
   ArenaRound,
+  LearningGovernanceState,
   LocalModelHealth,
   LocalModelTestResponse
 } from "../lib/api";
@@ -8,6 +9,7 @@ import { ArenaQualityPanel } from "./ArenaQualityPanel";
 import { HistoryPanel } from "./HistoryPanel";
 import { HydriaMemoryPanel } from "./HydriaMemoryPanel";
 import { HydriaWorkflowPanel } from "./HydriaWorkflowPanel";
+import { LearningGovernancePanel } from "./LearningGovernancePanel";
 import { LocalModelPanel } from "./LocalModelPanel";
 import { PersistenceHealthPanel } from "./PersistenceHealthPanel";
 import { TracePanel } from "./TracePanel";
@@ -17,10 +19,12 @@ type CorePlaygroundSidebarProps = {
   round: ArenaRound | null;
   rounds: ArenaRound[];
   qualityReport: ArenaQualityAnalyticsReport | null;
+  learningState: LearningGovernanceState | null;
   localHealth: LocalModelHealth | null;
   persistenceHealth: PersistenceHealthReport | null;
   lastLocalTest: LocalModelTestResponse | null;
   onRefreshHealth: () => Promise<void>;
+  onRefreshLearning: () => Promise<void>;
   onRefreshPersistence: () => Promise<void>;
   onRunTest: (prompt: string) => Promise<void>;
   onSelectRound: (round: ArenaRound) => void;
@@ -30,10 +34,12 @@ export function CorePlaygroundSidebar({
   round,
   rounds,
   qualityReport,
+  learningState,
   localHealth,
   persistenceHealth,
   lastLocalTest,
   onRefreshHealth,
+  onRefreshLearning,
   onRefreshPersistence,
   onRunTest,
   onSelectRound
@@ -42,6 +48,7 @@ export function CorePlaygroundSidebar({
     <aside className="right-column">
       <TracePanel round={round} />
       <ArenaQualityPanel report={qualityReport} />
+      <LearningGovernancePanel state={learningState} onRefresh={onRefreshLearning} />
       <HydriaWorkflowPanel workflow={round?.workflow ?? null} title="Hydria Workflow Trace" />
       <HydriaMemoryPanel memory={round?.memory ?? null} title="Hydria Memory Snapshot" />
       <PersistenceHealthPanel

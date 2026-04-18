@@ -56,3 +56,29 @@ test("known endpoint service keeps high-priority TypeScript release feeds despit
     )
   );
 });
+
+test("known endpoint service surfaces OpenAI governance pages for current CEO queries", () => {
+  const service = new ResearchKnownEndpointService();
+  const candidates = service.getCandidates({
+    intent: "current_status",
+    mode: "targeted_verify",
+    queries: ["CEO of OpenAI current official April 18, 2026 site:openai.com"],
+    requiredTerms: ["openai", "ceo", "current"],
+    preferredDomains: ["openai.com"],
+    factFocusTerms: ["ceo", "leadership", "current"],
+    entityTerms: ["ceo", "openai", "altman"],
+    temporalProfile: {
+      ...buildDefaultTemporalProfile(),
+      isTemporal: true,
+      focus: "current",
+      queryType: "current_status",
+      recencyDays: 180,
+      absoluteDateHint: "April 18, 2026"
+    },
+    reasoning: "Test plan."
+  });
+
+  assert.ok(
+    candidates.some((candidate) => candidate.url === "https://openai.com/our-structure/")
+  );
+});

@@ -7,6 +7,7 @@ import { ZodError } from "zod";
 import { createArenaRouter } from "./routes/arena.js";
 import { createBenchmarkRouter } from "./routes/benchmark.js";
 import { createHistoryRouter } from "./routes/history.js";
+import { createLearningRouter } from "./routes/learning.js";
 import { createLocalModelRouter } from "./routes/localModel.js";
 import { createStudentRouter } from "./routes/student.js";
 import {
@@ -21,6 +22,7 @@ import { ArenaQualityAnalyticsService } from "./services/arenaQualityAnalyticsSe
 import { BenchmarkService } from "./services/benchmarkService.js";
 import { BenchmarkStore } from "./services/benchmarkStore.js";
 import { HistoryStore } from "./services/historyStore.js";
+import { LearningGovernanceService } from "./services/learningGovernanceService.js";
 import { LocalModelService } from "./services/localModel.js";
 import { OpenRouterService } from "./services/openrouter.js";
 import { OrchestrationPolicyService } from "./services/orchestrationPolicy.js";
@@ -42,6 +44,7 @@ const refineRouterService = new RefineRouterService();
 const researchToolService = new ResearchToolService();
 const persistenceHealthService = new PersistenceHealthService();
 const arenaQualityAnalyticsService = new ArenaQualityAnalyticsService();
+const learningGovernanceService = new LearningGovernanceService();
 const studentService = new StudentService(
   localModelService,
   openRouterService,
@@ -114,6 +117,7 @@ app.use(
 app.use("/api/arena/history", createHistoryRouter(historyStore));
 app.use("/api/benchmark", createBenchmarkRouter(benchmarkService));
 app.use("/api/local-model", createLocalModelRouter(localModelService));
+app.use("/api/learning", createLearningRouter(learningGovernanceService));
 app.use("/api/student", createStudentRouter(studentService));
 
 if (hasBuiltWebApp) {

@@ -94,6 +94,8 @@ test("decision policy always triggers research for temporal freshness queries", 
   assert.equal(decision.plan?.intent, "current_status");
   assert.ok(decision.triggerSignals.includes("temporal_query_current_status"));
   assert.equal(decision.expectedValue, "high");
+  assert.ok(decision.plan?.requiredTerms.includes("ceo"));
+  assert.ok(decision.plan?.factFocusTerms.includes("ceo"));
   assert.ok(
     decision.targetClaims.some((claim) => /current status target:\s*who is the current ceo of openai/i.test(claim))
   );

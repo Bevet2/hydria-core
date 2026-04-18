@@ -25,6 +25,23 @@ import {
   type SourceEntry
 } from "./verifierShared.js";
 
+const HIGH_VALUE_SHORT_FOCUS_TERMS = new Set([
+  "ceo",
+  "cto",
+  "cfo",
+  "coo",
+  "cpo",
+  "cio",
+  "cmo",
+  "cso",
+  "cao",
+  "lts"
+]);
+
+function isScorableFocusTerm(term: string) {
+  return term.length >= 4 || HIGH_VALUE_SHORT_FOCUS_TERMS.has(term.toLowerCase());
+}
+
 type BuildTruthArgs = {
   decision: ResearchDecision;
   args: ResearchDecisionArgs;
@@ -59,7 +76,9 @@ export class ResearchVerifierTruthService {
       "week",
       "recent",
       "current",
-      "today"
+      "today",
+      "status",
+      "target"
     ]);
     const requiredTerms = [
       ...(args.decision.plan?.requiredTerms ?? []),
@@ -85,21 +104,27 @@ export class ResearchVerifierTruthService {
 
     let candidateFacts = args.entries
       .flatMap((entry) =>
-        splitSentences(entry.source.excerpt).map((sentence, index) => ({
-          sentence: normalizeSpace(sentence),
-          score: this.scoreFactSentence(
-            sentence,
-            requiredTerms,
-            focusTerms,
-            entry.trustScore,
-            index,
-            temporalProfile,
-            entry.source.effectiveDate
-          ),
-          trustScore: entry.trustScore,
-          effectiveDate: entry.source.effectiveDate,
-          sourceContext: `${entry.source.title} ${entry.source.snippet} ${entry.source.excerpt} ${entry.source.url}`
-        }))
+        splitSentences(entry.source.excerpt).map((sentence, index) => {
+          const contextualSentence = normalizeSpace(
+            [entry.source.title, sentence].filter(Boolean).join(" ")
+          );
+
+          return {
+            sentence: contextualSentence,
+            score: this.scoreFactSentence(
+              contextualSentence,
+              requiredTerms,
+              focusTerms,
+              entry.trustScore,
+              index,
+              temporalProfile,
+              entry.source.effectiveDate
+            ),
+            trustScore: entry.trustScore,
+            effectiveDate: entry.source.effectiveDate,
+            sourceContext: `${entry.source.title} ${entry.source.snippet} ${entry.source.excerpt} ${entry.source.url}`
+          };
+        })
       )
       .filter((entry) => entry.score >= 6)
       .sort((left, right) => right.score - left.score || right.trustScore - left.trustScore);
@@ -191,11 +216,11 @@ export class ResearchVerifierTruthService {
     let score = Math.min(5, Math.round(trustScore / 10));
 
     score += requiredTerms.reduce(
-      (total, term) => total + (term.length >= 4 && textIncludesTerm(normalized, term) ? 3 : 0),
+      (total, term) => total + (isScorableFocusTerm(term) && textIncludesTerm(normalized, term) ? 3 : 0),
       0
     );
     const focusHits = focusTerms.filter(
-      (term) => term.length >= 4 && textIncludesTerm(normalized, term)
+      (term) => isScorableFocusTerm(term) && textIncludesTerm(normalized, term)
     ).length;
     if (focusTerms.length > 0 && focusHits === 0) {
       return -10;

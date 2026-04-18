@@ -33,10 +33,15 @@ export class ResearchPlanner {
     const preferredDomains = uniqueStrings(signalHints.flatMap((hint) => hint.domains));
     const signalTerms = uniqueStrings(signalHints.map((hint) => hint.canonical));
     const questionTerms = extractTerms(stripQuestionNoise(args.question)).slice(0, 6);
+    const currentStatusRoleTerms =
+      temporalProfile.queryType === "current_status"
+        ? this.extractCurrentStatusRoleTerms(args.question)
+        : [];
     const literalTokens = extractLiteralTokens(
       `${args.question} ${args.redTeam.potentially_false_claims.join(" ")}`
     );
     const factFocusTerms = uniqueStrings([
+      ...currentStatusRoleTerms,
       ...extractTerms(args.redTeam.potentially_false_claims.join(" "))
         .filter((term) => questionTerms.includes(term) || signalTerms.includes(term))
         .slice(0, 4),
@@ -45,10 +50,12 @@ export class ResearchPlanner {
         .slice(0, 3),
       ...literalTokens
     ]).slice(0, 5);
-    const requiredTerms = uniqueStrings([...signalTerms, ...questionTerms, ...factFocusTerms]).slice(
-      0,
-      8
-    );
+    const requiredTerms = uniqueStrings([
+      ...signalTerms,
+      ...questionTerms,
+      ...currentStatusRoleTerms,
+      ...factFocusTerms
+    ]).slice(0, 8);
     const baseQuestion = normalizeSpace(args.question.replace(/[?]/g, ""));
     const queryTerms = uniqueStrings([...signalTerms, ...literalTokens, ...questionTerms])
       .slice(0, 6)
@@ -508,6 +515,33 @@ export class ResearchPlanner {
       ...args.factFocusTerms.flatMap((term) => extractFocusTerms(term)),
       ...extractFocusTerms(args.question)
     ]).slice(0, 8);
+  }
+
+  private extractCurrentStatusRoleTerms(question: string) {
+    const lowered = question.toLowerCase();
+    const roleTerms: string[] = [];
+
+    const patterns: Array<{ pattern: RegExp; term: string }> = [
+      { pattern: /\bceo\b|chief executive officer/i, term: "ceo" },
+      { pattern: /\bcto\b|chief technology officer/i, term: "cto" },
+      { pattern: /\bcfo\b|chief financial officer/i, term: "cfo" },
+      { pattern: /\bcpo\b|chief product officer|chief people officer/i, term: "cpo" },
+      { pattern: /\bchief scientist\b/i, term: "chief scientist" },
+      { pattern: /\bchief economist\b/i, term: "chief economist" },
+      { pattern: /\bpresident\b/i, term: "president" },
+      { pattern: /\bfounder\b|co-founder/i, term: "founder" },
+      { pattern: /\bchair\b|chairman|chairwoman/i, term: "chair" },
+      { pattern: /\bleadership\b/i, term: "leadership" },
+      { pattern: /\bboard\b/i, term: "board" }
+    ];
+
+    for (const entry of patterns) {
+      if (entry.pattern.test(lowered)) {
+        roleTerms.push(entry.term);
+      }
+    }
+
+    return uniqueStrings(roleTerms).slice(0, 4);
   }
 
   private selectModeForStrategy(

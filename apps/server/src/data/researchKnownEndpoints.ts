@@ -43,6 +43,16 @@ export const KNOWN_FRESH_ENDPOINTS: KnownFreshEndpoint[] = [
     priority: 72
   },
   {
+    id: "openai-our-structure",
+    title: "OpenAI Our Structure",
+    url: "https://openai.com/our-structure/",
+    snippet: "Official OpenAI structure and governance page.",
+    intents: ["current_status"],
+    domains: ["openai.com"],
+    termHints: ["openai", "ceo", "leadership", "board", "governance", "structure", "sam altman"],
+    priority: 84
+  },
+  {
     id: "vercel-changelog",
     title: "Vercel Changelog",
     url: "https://vercel.com/changelog",

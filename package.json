@@ -14,6 +14,7 @@
     "test": "npm run test -w @hydria-arena/server && npm run test -w @hydria-arena/web",
     "start": "npm run start -w @hydria-arena/server",
     "knowledge:refresh": "npm run knowledge:refresh -w @hydria-arena/server",
+    "learning:loop": "npm run learning:loop -w @hydria-arena/server",
     "student:temporal-eval": "npm run student:temporal-eval -w @hydria-arena/server",
     "student:temporal-eval:record": "npm run student:temporal-eval:record -w @hydria-arena/server",
     "student:temporal-eval:replay": "npm run student:temporal-eval:replay -w @hydria-arena/server",

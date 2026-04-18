@@ -53,6 +53,34 @@ test("extractor page service detects leadership pages and surfaces leadership cl
   assert.match(excerpt ?? "", /Sam Altman is the CEO of OpenAI/i);
 });
 
+test("extractor page service treats governance pages as leadership sources when they name the CEO", () => {
+  const service = new ResearchExtractorPageService();
+  const plan = buildPlan({
+    requiredTerms: ["openai", "ceo", "current"],
+    factFocusTerms: ["ceo", "leadership", "current"],
+    entityTerms: ["openai", "ceo", "sam altman"]
+  });
+  const pageType = service.detectPageType(
+    {
+      title: "OpenAI Our Structure",
+      url: "https://openai.com/our-structure/",
+      snippet: "Official OpenAI structure and governance page."
+    },
+    plan
+  );
+
+  const excerpt = service.buildRelevantExcerpt(
+    "OpenAI structure overview. We designed OpenAI's structure so the mission and governance stay aligned over time. This recapitalization provides OpenAI Group with the structure to raise capital and attract and retain talent needed to advance the mission. Additional governance details follow. The OpenAI Foundation is governed by its board of directors, which includes CEO Sam Altman. The structure is designed so the mission and governance stay aligned.",
+    plan,
+    pageType,
+    "Official OpenAI structure and governance page.",
+    "OpenAI Our Structure"
+  );
+
+  assert.equal(pageType, "leadership");
+  assert.match(excerpt ?? "", /CEO Sam Altman/i);
+});
+
 test("extractor date service prefers explicit meta dates over weaker fallbacks", () => {
   const service = new ResearchExtractorDateService();
   const $ = load(`

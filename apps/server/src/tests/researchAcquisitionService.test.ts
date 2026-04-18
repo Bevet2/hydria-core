@@ -206,3 +206,125 @@ test("research acquisition prefers dated or richer sources when merging duplicat
   assert.equal(merged.effectiveDate, "2026-04-15T00:00:00.000Z");
   assert.match(merged.excerpt, /explicit publication date/i);
 });
+
+test("research acquisition deduplicates equivalent current-status urls and keeps higher-priority governance paths in extraction slots", async () => {
+  const extractedCalls: { urls: string[] }[] = [];
+  const service = new ResearchAcquisitionService({
+    sourceCacheEnabled: true,
+    sourceCacheService: {
+      async getFreshSources() {
+        return [
+          {
+            title: "OpenAI API Pricing",
+            url: "https://openai.com/api/pricing/",
+            snippet: "Pricing page",
+            excerpt: "Pricing details.",
+            publishedAt: "2026-03-30T00:00:00.000Z",
+            modifiedAt: null,
+            effectiveDate: "2026-03-30T00:00:00.000Z",
+            dateSource: "meta",
+            retrievalChannel: "cache",
+            retrievalOrigin: "known_endpoint",
+            retrievalEngine: "cache"
+          },
+          {
+            title: "OpenAI About",
+            url: "https://openai.com/about/",
+            snippet: "About page",
+            excerpt: "About OpenAI.",
+            publishedAt: null,
+            modifiedAt: null,
+            effectiveDate: null,
+            dateSource: null,
+            retrievalChannel: "cache",
+            retrievalOrigin: "known_endpoint",
+            retrievalEngine: "cache"
+          }
+        ];
+      },
+      async rememberSources() {}
+    },
+    knownEndpointService: {
+      getCandidates() {
+        return [
+          {
+            title: "OpenAI About",
+            url: "https://openai.com/about/",
+            snippet: "About page",
+            retrievalChannel: "live",
+            retrievalOrigin: "known_endpoint",
+            retrievalEngine: "known_endpoint"
+          },
+          {
+            title: "openai.com About",
+            url: "https://openai.com/about",
+            snippet: "About page",
+            retrievalChannel: "live",
+            retrievalOrigin: "known_endpoint",
+            retrievalEngine: "known_endpoint"
+          },
+          {
+            title: "OpenAI Our Structure",
+            url: "https://openai.com/our-structure/",
+            snippet: "Official OpenAI structure and governance page.",
+            retrievalChannel: "live",
+            retrievalOrigin: "known_endpoint",
+            retrievalEngine: "known_endpoint"
+          }
+        ];
+      }
+    },
+    retriever: {
+      async searchAll() {
+        return [
+          {
+            title: "OpenAI About",
+            url: "https://openai.com/about/",
+            snippet: "About page",
+            retrievalChannel: "live",
+            retrievalOrigin: "known_endpoint",
+            retrievalEngine: "known_endpoint"
+          },
+          {
+            title: "openai.com About",
+            url: "https://openai.com/about",
+            snippet: "About page",
+            retrievalChannel: "live",
+            retrievalOrigin: "known_endpoint",
+            retrievalEngine: "known_endpoint"
+          },
+          {
+            title: "OpenAI Our Structure",
+            url: "https://openai.com/our-structure/",
+            snippet: "Official OpenAI structure and governance page.",
+            retrievalChannel: "live",
+            retrievalOrigin: "known_endpoint",
+            retrievalEngine: "known_endpoint"
+          },
+          {
+            title: "OpenAI Pricing",
+            url: "https://openai.com/pricing",
+            snippet: "Pricing page",
+            retrievalChannel: "live",
+            retrievalOrigin: "known_endpoint",
+            retrievalEngine: "known_endpoint"
+          }
+        ];
+      }
+    },
+    extractor: {
+      async extractSources(results) {
+        extractedCalls.push({ urls: results.map((result) => result.url) });
+        return [];
+      }
+    }
+  });
+
+  await service.collect(buildPlan());
+
+  assert.deepEqual(extractedCalls[0]?.urls, [
+    "https://openai.com/our-structure/",
+    "https://openai.com/about",
+    "https://openai.com/pricing"
+  ]);
+});

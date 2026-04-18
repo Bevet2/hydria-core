@@ -5,6 +5,7 @@ import {
   matchesAny,
   normalizeSpace,
   splitSentences,
+  uniqueStrings,
   type SearchCandidate,
   type SearchPlan
 } from "./common.js";
@@ -22,6 +23,11 @@ export class ResearchExtractorPageService {
     fallbackSnippet = "",
     title = ""
   ) {
+    const focusedExcerpt = this.buildFocusedCurrentStatusExcerpt(rawText, plan, pageType, title);
+    if (focusedExcerpt) {
+      return focusedExcerpt;
+    }
+
     const sentences = splitSentences(rawText);
     if (sentences.length === 0) {
       const fallback = normalizeSpace(`${title}. ${fallbackSnippet}`);
@@ -71,6 +77,12 @@ export class ResearchExtractorPageService {
           score += 10;
         }
         if (
+          pageType === "leadership" &&
+          matchesAny(sentence, [/\bboard\b/i, /\bdirectors?\b/i, /\bgovernance\b/i, /\bstructure\b/i])
+        ) {
+          score += 6;
+        }
+        if (
           matchesAny(sentence, [/\boperational\b/i, /\bincident\b/i, /\boutage\b/i, /\bresolved\b/i]) &&
           pageType === "status"
         ) {
@@ -110,13 +122,74 @@ export class ResearchExtractorPageService {
     return fallback.length >= 80 ? fallback.slice(0, 600) : null;
   }
 
+  private buildFocusedCurrentStatusExcerpt(
+    rawText: string,
+    plan: SearchPlan,
+    pageType: ExtractorPageType,
+    title: string
+  ) {
+    if (plan.intent !== "current_status" || pageType !== "leadership") {
+      return null;
+    }
+
+    const normalized = normalizeSpace(rawText);
+    if (!normalized) {
+      return null;
+    }
+
+    const entityTerms = uniqueStrings(
+      [...plan.entityTerms, ...plan.factFocusTerms].map((term) => term.toLowerCase())
+    ).filter((term) => term.length >= 3);
+    const leadershipTerms = ["ceo", "president", "chief", "leadership", "board", "governance"];
+    const anchorPatterns = uniqueStrings([
+      ...entityTerms,
+      ...leadershipTerms,
+      "sam altman"
+    ]).filter(Boolean);
+
+    for (const term of anchorPatterns) {
+      const index = normalized.toLowerCase().indexOf(term);
+      if (index < 0) {
+        continue;
+      }
+
+      const start = Math.max(0, index - 220);
+      const end = Math.min(normalized.length, index + 420);
+      const window = normalizeSpace(normalized.slice(start, end));
+      const hasLeadershipTerm = leadershipTerms.some((entry) =>
+        window.toLowerCase().includes(entry)
+      );
+      const hasEntityTerm =
+        entityTerms.length === 0 ||
+        entityTerms.some((entry) => window.toLowerCase().includes(entry));
+
+      if (window.length >= 80 && hasLeadershipTerm && hasEntityTerm) {
+        return normalizeSpace([title, window].filter(Boolean).join(" ")).slice(0, 800);
+      }
+    }
+
+    return null;
+  }
+
   detectPageType(result: SearchCandidate, plan: SearchPlan): ExtractorPageType {
     const haystack = `${result.title} ${result.snippet} ${getPathname(result.url)}`.toLowerCase();
 
     if (matchesAny(haystack, [/\bstatus\b/i, /\bincident\b/i, /\boutage\b/i, /\/status/i])) {
       return "status";
     }
-    if (matchesAny(haystack, [/\bleadership\b/i, /\bceo\b/i, /\bpresident\b/i, /\/team/i, /\/about/i])) {
+    if (
+      matchesAny(haystack, [
+        /\bleadership\b/i,
+        /\bceo\b/i,
+        /\bpresident\b/i,
+        /\bboard\b/i,
+        /\bgovernance\b/i,
+        /\bstructure\b/i,
+        /\/team/i,
+        /\/about/i,
+        /\/our-structure/i
+      ])
+    ) {
       return "leadership";
     }
     if (matchesAny(haystack, [/\bchangelog\b/i, /\/changelog/i, /\bwhat's new\b/i])) {
@@ -158,7 +231,19 @@ export class ResearchExtractorPageService {
           pageType,
           selectors: "h1,h2,h3,h4,p,li,dt,dd,span,a",
           maxChunks: 20,
-          inclusionPatterns: [/\bceo\b/i, /\bpresident\b/i, /\bchief\b/i, /\bleadership\b/i, /\bexecutive\b/i, /\bfounder\b/i],
+          inclusionPatterns: [
+            /\bceo\b/i,
+            /\bpresident\b/i,
+            /\bchief\b/i,
+            /\bleadership\b/i,
+            /\bexecutive\b/i,
+            /\bfounder\b/i,
+            /\bboard\b/i,
+            /\bdirectors?\b/i,
+            /\bgovernance\b/i,
+            /\bstructure\b/i,
+            /\bsam altman\b/i
+          ],
           contextualizeStructuredRows: false
         };
       case "status":

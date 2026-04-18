@@ -7,6 +7,10 @@ import {
   type StudentCuratedExample
 } from "../types/knowledge.js";
 import {
+  learningActiveMemorySchema,
+  type LearningActiveMemory
+} from "../types/learning.js";
+import {
   type StudentRuleImpactContext,
   type StudentSession
 } from "../types/student.js";
@@ -76,6 +80,7 @@ export class KnowledgeInjectionService {
     QuestionCategory,
     Promise<Awaited<ReturnType<StudentStrategyAssetService["listByCategory"]>>>
   >();
+  private activeLearningMemoryPromise: Promise<LearningActiveMemory | null> | null = null;
 
   async buildForCategory(
     category: QuestionCategory,
@@ -83,13 +88,14 @@ export class KnowledgeInjectionService {
       question?: string;
     }
   ): Promise<KnowledgeInjection | null> {
-    const [layer, memory, curatedExamples, studentSessions, studentRuleImpact, strategyAssets] = await Promise.all([
+    const [layer, memory, curatedExamples, studentSessions, studentRuleImpact, strategyAssets, activeLearningMemory] = await Promise.all([
       this.loadKnowledgeLayer(),
       this.loadKnowledgeMemory(),
       this.loadCuratedDataset(),
       this.loadStudentSessions(),
       this.loadStudentRuleImpact(),
-      this.loadStudentStrategyAssets(category)
+      this.loadStudentStrategyAssets(category),
+      this.loadActiveLearningMemory()
     ]);
     const insight = layer?.categories.find((entry) => entry.category === category);
     const memoryEntry = memory?.categories.find((entry) => entry.category === category);
@@ -121,6 +127,18 @@ export class KnowledgeInjectionService {
           .slice(0, 2)
           .map((entry) => entry.asset)
       : strategyAssets.slice(0, 2);
+    const activeLearningHints = (activeLearningMemory?.items ?? [])
+      .filter((item) => item.category === null || item.category === category)
+      .sort(
+        (left, right) =>
+          Number(right.priority === "high") - Number(left.priority === "high") ||
+          right.confidence - left.confidence
+      )
+      .slice(0, 2)
+      .map(
+        (item) =>
+          `Active learning policy: ${item.learned} This modifies ${item.modifies}. Conditions: ${item.conditions.join(", ") || "general use"}.`
+      );
     const coachingHints = uniqueStrings(
       [
         ...curatedExamples
@@ -129,7 +147,8 @@ export class KnowledgeInjectionService {
           .slice(0, 3)
           .flatMap((entry) => entry.coachingNotes),
         ...matchingStrategyAssets.map((asset) => `Adopted strategy asset: ${asset.learning.summary}`),
-        ...matchingStrategyAssets.map((asset) => `Strategy hint: ${asset.learning.promptHint}`)
+        ...matchingStrategyAssets.map((asset) => `Strategy hint: ${asset.learning.promptHint}`),
+        ...activeLearningHints
       ]
     ).slice(0, 8);
 
@@ -174,6 +193,7 @@ export class KnowledgeInjectionService {
     this.studentSessionsPromise = null;
     this.studentRuleImpactPromise = null;
     this.studentStrategyAssetsPromises.clear();
+    this.activeLearningMemoryPromise = null;
   }
 
   private async loadKnowledgeLayer() {
@@ -227,6 +247,14 @@ export class KnowledgeInjectionService {
     return this.studentStrategyAssetsPromises.get(category)!;
   }
 
+  private async loadActiveLearningMemory() {
+    if (!this.activeLearningMemoryPromise) {
+      this.activeLearningMemoryPromise = this.readActiveLearningMemory();
+    }
+
+    return this.activeLearningMemoryPromise;
+  }
+
   private async readCuratedDataset() {
     try {
       const raw = await readFile(env.STUDENT_CURATED_DATASET_FILE, "utf8");
@@ -245,6 +273,15 @@ export class KnowledgeInjectionService {
       historyFile: env.STUDENT_SESSION_HISTORY_FILE,
       databaseFile: env.PERSISTENCE_DB_FILE
     });
+  }
+
+  private async readActiveLearningMemory() {
+    try {
+      const raw = await readFile(env.LEARNING_ACTIVE_MEMORY_FILE, "utf8");
+      return learningActiveMemorySchema.parse(JSON.parse(raw));
+    } catch {
+      return null;
+    }
   }
 
   private buildStudentMemoryRules(

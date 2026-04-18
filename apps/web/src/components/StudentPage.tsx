@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import {
   analyzeStudentDraft,
   answerStudentQuestion,
+  fetchLearningGovernanceState,
   fetchPersistenceHealth,
   fetchStudentSession,
   fetchStudentSessions,
+  type LearningGovernanceState,
   type PersistenceHealthReport,
   type StudentAnswerPreview,
   type StudentProgressSummary,
@@ -23,6 +25,7 @@ export function StudentPage() {
   const [sessions, setSessions] = useState<StudentSession[]>([]);
   const [summary, setSummary] = useState<StudentProgressSummary | null>(null);
   const [currentSession, setCurrentSession] = useState<StudentSession | null>(null);
+  const [learningState, setLearningState] = useState<LearningGovernanceState | null>(null);
   const [persistenceHealth, setPersistenceHealth] = useState<PersistenceHealthReport | null>(null);
   const [answering, setAnswering] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -70,8 +73,13 @@ export function StudentPage() {
     setPersistenceHealth(health);
   }
 
+  async function refreshLearningState() {
+    const nextState = await fetchLearningGovernanceState();
+    setLearningState(nextState);
+  }
+
   useEffect(() => {
-    void Promise.all([refreshSessions(), refreshPersistenceHealth()]).catch((cause: unknown) => {
+    void Promise.all([refreshSessions(), refreshPersistenceHealth(), refreshLearningState()]).catch((cause: unknown) => {
       setError(cause instanceof Error ? cause.message : "Failed to load student history.");
     });
   }, []);
@@ -200,10 +208,12 @@ export function StudentPage() {
           displayedResearch={displayedResearch}
           displayedOrchestration={displayedOrchestration}
           displayedWorkflow={displayedWorkflow}
+          learningState={learningState}
           persistenceHealth={persistenceHealth}
           currentSession={currentSession}
           summary={summary}
           sessions={sessions}
+          onRefreshLearning={refreshLearningState}
           onRefreshPersistence={refreshPersistenceHealth}
           onSelectSession={(session) => {
             setCurrentSession(session);

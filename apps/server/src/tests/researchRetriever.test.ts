@@ -66,6 +66,37 @@ test("research retriever ranking prefers official current-status pages over gene
   assert.ok(!ranked.some((candidate) => candidate.url.includes("stackoverflow.com")));
 });
 
+test("research retriever keeps official governance pages for current CEO queries", async () => {
+  const retriever = new ResearchRetriever({
+    searchService: {
+      async search() {
+        return [];
+      }
+    }
+  });
+
+  const ranked = await retriever.searchAll(
+    buildPlan({
+      queries: ["openai current ceo official"],
+      requiredTerms: ["openai", "ceo", "current"],
+      factFocusTerms: ["ceo", "leadership", "current"],
+      entityTerms: ["openai", "ceo"]
+    }),
+    [
+      {
+        title: "OpenAI Our Structure",
+        url: "https://openai.com/our-structure/",
+        snippet: "Official OpenAI structure and governance page.",
+        retrievalChannel: "live",
+        retrievalOrigin: "known_endpoint",
+        retrievalEngine: "known_endpoint"
+      }
+    ]
+  );
+
+  assert.equal(ranked[0]?.url, "https://openai.com/our-structure/");
+});
+
 test("research retriever keeps high-trust release pages when ranking temporal release freshness queries", async () => {
   const retriever = new ResearchRetriever({
     searchService: {

@@ -89,6 +89,8 @@ export class ResearchVerifierFreshnessService {
     const date = entry.effectiveDate;
     const sourceText = `${entry.source.title} ${entry.source.snippet} ${entry.source.excerpt} ${entry.source.url}`;
     const path = getPathname(entry.source.url);
+    const canonicalCurrentStatusPath = matchesCurrentStatusPath(path);
+    const persistentCurrentStatusPath = matchesPersistentCurrentStatusPath(path);
 
     if (intent === "release_freshness") {
       const releaseLike =
@@ -105,17 +107,22 @@ export class ResearchVerifierFreshnessService {
         /\bcurrent\b|\bas of\b|\bstatus\b|\bleadership\b|\bteam\b|\bpricing\b|\bavailability\b|\bversion\b/i.test(
           sourceText
         ) ||
-        /\/status/i.test(path) ||
-        /\/team/i.test(path) ||
-        /\/leadership/i.test(path) ||
-        /\/pricing/i.test(path) ||
-        /\/availability/i.test(path);
+        canonicalCurrentStatusPath;
+      const undatedCanonicalCurrentStatusSource =
+        entry.trustScore >= 55 &&
+        (canonicalCurrentStatusPath || entry.source.retrievalOrigin === "known_endpoint");
+      const persistentCurrentStatusSource =
+        entry.trustScore >= 55 && persistentCurrentStatusPath;
       if (!currentLike) {
         return false;
       }
 
       if (!date) {
-        return entry.trustScore >= 55;
+        return undatedCanonicalCurrentStatusSource;
+      }
+
+      if (persistentCurrentStatusSource) {
+        return true;
       }
     }
 
@@ -195,4 +202,20 @@ export class ResearchVerifierFreshnessService {
 
     return hitStats.specificHits > 0 || hitStats.totalHits >= 2 || allowKnownEndpointIdentityOnly;
   }
+}
+
+function matchesCurrentStatusPath(path: string) {
+  return (
+    /\/status/i.test(path) ||
+    /\/team/i.test(path) ||
+    /\/leadership/i.test(path) ||
+    /\/pricing/i.test(path) ||
+    /\/availability/i.test(path) ||
+    /\/about/i.test(path) ||
+    /\/our-structure/i.test(path)
+  );
+}
+
+function matchesPersistentCurrentStatusPath(path: string) {
+  return /\/about/i.test(path) || /\/our-structure/i.test(path);
 }

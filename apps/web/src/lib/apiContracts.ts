@@ -95,6 +95,30 @@ export type {
 } from "../../../server/src/types/benchmark.js";
 
 export type {
+  LearningHotspotKind,
+  LearningHotspotSeverity,
+  LearningSignalSource,
+  LearningPolicyTarget,
+  LearningPolicyState,
+  LearningMemoryState,
+  LearningValidationMode,
+  LearningImprovementWeights,
+  LearningImprovementComponent,
+  LearningImprovementScore,
+  LearningPolicyScope,
+  LearningValidationMetrics,
+  LearningHotspot,
+  LearningPolicyItem,
+  LearningLifecycleSummary,
+  LearningActiveMemoryItem,
+  LearningActiveMemory,
+  LearningValidationSummary,
+  LearningConstitution,
+  LearningGovernanceReport,
+  LearningGovernanceState
+} from "../../../server/src/types/learning.js";
+
+export type {
   PersistenceStatus,
   PersistenceProjectionStatus,
   PersistenceFileStat,
