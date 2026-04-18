@@ -110,6 +110,10 @@ export class ArenaRoundAssemblyService {
       orchestration: args.orchestration,
       router: args.router,
       research: finalizedResearch,
+      redTeam: args.redTeamOutput,
+      judge: args.judgeOutput,
+      synthesizer: args.synthesizerResult.output,
+      localStudent,
       extraEpisodicItems: [
         ...args.redTeamOutput.shared_risks,
         ...args.redTeamOutput.hidden_assumptions,
@@ -132,10 +136,15 @@ export class ArenaRoundAssemblyService {
       respondentATrace: args.respondentAResult.trace,
       respondentBTrace: args.respondentBResult.trace,
       redTeam: args.redTeamOutput,
+      redTeamTrace: args.redTeamTrace,
       refineA: args.refineAResult.output,
+      refineATrace: args.refineAResult.trace,
       refineB: args.refineBResult.output,
+      refineBTrace: args.refineBResult.trace,
       judge: args.judgeOutput,
+      judgeTrace: args.judgeResult.trace,
       synthesizer: args.synthesizerResult.output,
+      synthesizerTrace: args.synthesizerResult.trace,
       localStudent,
       localStudentTrace: args.localStudentResult.trace
     });

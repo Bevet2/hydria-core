@@ -170,13 +170,36 @@ test("hydria core memory service builds an arena snapshot without knowledge inje
       route: "not_needed",
       used: false
     }),
+    redTeam: {
+      shared_risks: ["Rollback plan is underspecified."],
+      failure_scenarios: ["Migration pauses halfway through cutover."],
+      hidden_assumptions: ["Assumes stable schema."],
+      winner_so_far: "A"
+    } as never,
+    judge: {
+      winner: "A",
+      reasoning: "A handled sequencing and rollback better."
+    } as never,
+    synthesizer: {
+      why_this_answer: "It combined sequencing, rollback, and checkpoint discipline.",
+      improvements_added: ["Added rollback checkpoints."],
+      based_on_winner: "A"
+    } as never,
+    localStudent: {
+      student_summary: "Prefer phased rollout with rollback safety.",
+      learning_notes: ["Carry rollback checkpoints into future migration answers."]
+    } as never,
     extraEpisodicItems: ["Prefer phased rollout checkpoints."]
   });
 
   assert.equal(snapshot.category, "architecture_design");
   assert.equal(snapshot.retrieval.strategyId, "arena:dual_refine");
   assert.equal(snapshot.retrieval.researchIntent, null);
+  assert.ok(snapshot.core.some((item) => /arena round outcome/i.test(item.title)));
+  assert.ok(snapshot.core.some((item) => /local learning summary/i.test(item.title)));
   assert.ok(snapshot.core.some((item) => /arena orchestration/i.test(item.title)));
+  assert.ok(snapshot.semantic.some((item) => /rollback checkpoints/i.test(item.content)));
   assert.ok(snapshot.episodic.some((item) => /phased rollout checkpoints/i.test(item.content)));
+  assert.ok(snapshot.summary.includes("winner A"));
   assert.ok(snapshot.summary.includes("dual_refine"));
 });

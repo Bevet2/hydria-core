@@ -158,26 +158,46 @@ test("hydria core workflow service builds an arena round workflow with synthesis
       attacks_on_a: ["Weak rollback plan."],
       attacks_on_b: ["Migration order unclear."],
       shared_risks: ["Data consistency risk."],
-      hidden_assumptions: ["Assumes stable schema."]
+      hidden_assumptions: ["Assumes stable schema."],
+      potentially_false_claims: ["Claims zero downtime without proof."],
+      winner_so_far: "A",
+      factual_risk_level: 70,
+      reasoning_risk_level: 55
     } as never,
+    redTeamTrace: buildTrace("Red team trace"),
     refineA: {
       improved_answer: "Improved A",
       fixes_applied: ["Added rollback sequence."]
     } as never,
+    refineATrace: buildTrace("Refine A trace"),
     refineB: {
       improved_answer: "Improved B",
       fixes_applied: ["Clarified migration phases."]
     } as never,
+    refineBTrace: buildTrace("Refine B trace"),
     judge: {
+      initial_scores: {
+        A: { overall: 70 },
+        B: { overall: 68 }
+      },
+      scores: {
+        A: { overall: 82 },
+        B: { overall: 76 }
+      },
       winner: "A",
       reasoning: "A is more pragmatic."
     } as never,
+    judgeTrace: buildTrace("Judge trace"),
     synthesizer: {
       final_answer: "Synthesized final answer",
+      why_this_answer: "It keeps the pragmatic sequencing while preserving rollback safety.",
       improvements_added: ["Combined sequencing with rollback plan."],
       based_on_winner: "A"
     } as never,
+    synthesizerTrace: buildTrace("Synthesizer trace"),
     localStudent: {
+      student_answer: "Prefer phased migration with rollback checkpoints.",
+      student_summary: "The round favored a pragmatic migration path with safety rails.",
       learning_notes: ["Prefer phased cutovers with explicit rollback points."]
     } as never,
     localStudentTrace: buildTrace("Local student trace")
@@ -185,7 +205,11 @@ test("hydria core workflow service builds an arena round workflow with synthesis
 
   assert.equal(run.scope, "arena_round");
   assert.equal(run.status, "completed");
+  assert.ok(run.messages.some((message) => message.role === "research_retriever"));
+  assert.ok(run.messages.some((message) => message.role === "local_student" && message.kind === "answer"));
   assert.ok(run.messages.some((message) => message.role === "synthesizer"));
   assert.ok(run.tasks.some((task) => task.kind === "synthesize_answer"));
+  assert.ok(run.tasks.some((task) => task.kind === "refine_answer" && task.notes.some((note) => /A:/.test(note))));
+  assert.ok(run.handoffs.some((handoff) => handoff.to === "research_retriever"));
   assert.ok(run.handoffs.some((handoff) => handoff.to === "history_store"));
 });

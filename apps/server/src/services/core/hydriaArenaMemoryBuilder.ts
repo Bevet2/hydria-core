@@ -1,15 +1,19 @@
 import { randomUUID } from "node:crypto";
 import type {
+  JudgeOutput,
   OrchestrationPolicyDetails,
   QuestionCategory,
   RefineRouterDecisionDetails,
-  ResearchToolLog
+  ResearchToolLog,
+  RedTeamOutput,
+  SynthesizerOutput
 } from "../../types/arena.js";
 import {
   hydriaMemorySnapshotSchema,
   type HydriaMemorySnapshot
 } from "../../types/core.js";
 import type { KnowledgeInjection } from "../../types/knowledge.js";
+import type { LocalStudentOutput } from "../../types/localModel.js";
 import {
   buildItem,
   buildRetrieval,
@@ -24,6 +28,10 @@ export type HydriaArenaMemorySnapshotArgs = {
   orchestration: OrchestrationPolicyDetails;
   router: RefineRouterDecisionDetails;
   research: ResearchToolLog;
+  redTeam: RedTeamOutput;
+  judge: JudgeOutput;
+  synthesizer: SynthesizerOutput;
+  localStudent: LocalStudentOutput;
   extraEpisodicItems?: string[];
 };
 
@@ -32,6 +40,18 @@ export function buildArenaMemorySnapshot(
 ): HydriaMemorySnapshot {
   const { knowledge, orchestration, router, research } = args;
   const strategyId = `arena:${router.globalStrategy}`;
+  const orchestrationReasoning = orchestration.reasoning ?? [];
+  const orchestrationTargetOutcomes = orchestration.targetOutcomes ?? [];
+  const orchestrationPrioritySignals = orchestration.prioritySignals ?? [];
+  const routerReasoning = router.reasoning ?? [];
+  const estimatedValueA = router.estimatedValue?.A ?? "medium";
+  const estimatedValueB = router.estimatedValue?.B ?? "medium";
+  const redTeamSharedRisks = args.redTeam.shared_risks ?? [];
+  const redTeamFailureScenarios = args.redTeam.failure_scenarios ?? [];
+  const redTeamHiddenAssumptions = args.redTeam.hidden_assumptions ?? [];
+  const localStudentNotes = args.localStudent.learning_notes ?? [];
+  const synthImprovements = args.synthesizer.improvements_added ?? [];
+  const researchSummary = research.summary ?? [];
 
   const core = [
     buildItem({
@@ -43,17 +63,39 @@ export function buildArenaMemorySnapshot(
     }),
     buildItem({
       layer: "core",
-      priority: "medium",
+      priority: "high",
       title: "Arena router strategy",
-      content: `${router.reasoning.join(" ")} A=${router.estimatedValue.A} B=${router.estimatedValue.B}.`,
+      content: [
+        ...routerReasoning.slice(0, 2),
+        `A=${estimatedValueA}.`,
+        `B=${estimatedValueB}.`,
+        `Refine A=${router.shouldRefineA}.`,
+        `Refine B=${router.shouldRefineB}.`
+      ].join(" "),
       tags: ["router", router.globalStrategy]
     }),
     buildItem({
       layer: "core",
       priority: "medium",
       title: "Research posture",
-      content: research.decision.reasoning,
+      content: research.decision.shouldUse
+        ? `${research.decision.reasoning} Intent ${research.queryPlan.intent}.`
+        : "Research stayed off because the planner did not expect enough external-value gain.",
       tags: ["research", research.queryPlan.intent]
+    }),
+    buildItem({
+      layer: "core",
+      priority: "high",
+      title: "Arena round outcome",
+      content: `Winner ${args.judge.winner}. Red team winner-so-far ${args.redTeam.winner_so_far}. Synth target ${args.synthesizer.based_on_winner}.`,
+      tags: ["outcome"]
+    }),
+    buildItem({
+      layer: "core",
+      priority: "medium",
+      title: "Local learning summary",
+      content: args.localStudent.student_summary,
+      tags: ["learning", "local_student"]
     }),
     ...(knowledge
       ? [
@@ -69,10 +111,14 @@ export function buildArenaMemorySnapshot(
   ].slice(0, 6);
 
   const episodic = uniqueStrings([
-    ...orchestration.targetOutcomes,
-    ...orchestration.prioritySignals,
-    ...router.reasoning,
-    ...(args.extraEpisodicItems ?? [])
+    args.localStudent.student_summary,
+    ...(args.extraEpisodicItems ?? []),
+    ...orchestrationTargetOutcomes,
+    ...orchestrationPrioritySignals,
+    ...routerReasoning,
+    ...redTeamSharedRisks,
+    ...redTeamFailureScenarios,
+    ...redTeamHiddenAssumptions
   ])
     .slice(0, 8)
     .map((entry, index) =>
@@ -92,7 +138,9 @@ export function buildArenaMemorySnapshot(
     ...(knowledge?.studentMemoryRules.map(
       (rule) => `${rule.failureType}: ${rule.rule} Conditions: ${rule.conditions.join(", ") || "general"}`
     ) ?? []),
-    ...orchestration.reasoning
+    ...orchestrationReasoning,
+    ...localStudentNotes,
+    ...synthImprovements.map((entry) => `Synthesis pattern: ${entry}`)
   ])
     .slice(0, 10)
     .map((entry, index) =>
@@ -110,7 +158,9 @@ export function buildArenaMemorySnapshot(
     ...(knowledge?.bestRoundReferences.map(
       (reference) => `Reference ${reference.roundId}: ${reference.note}`
     ) ?? []),
-    ...research.summary
+    ...researchSummary,
+    `Judge reasoning: ${args.judge.reasoning}`,
+    `Synthesis rationale: ${args.synthesizer.why_this_answer}`
   ])
     .slice(0, 8)
     .map((entry, index) =>
@@ -124,7 +174,7 @@ export function buildArenaMemorySnapshot(
     );
 
   const summary = compactText(
-    `Hydria arena memory loaded ${core.length} core items, router ${router.globalStrategy}, and research intent ${research.queryPlan.intent} for ${args.category}.`,
+    `Hydria arena memory captured winner ${args.judge.winner}, router ${router.globalStrategy}, and research intent ${research.decision.shouldUse ? research.queryPlan.intent : "off"} for ${args.category}.`,
     320
   );
 
