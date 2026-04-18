@@ -113,6 +113,7 @@ test("hydria core workflow service builds a student preview workflow with resear
 
   assert.equal(run.scope, "student_preview");
   assert.equal(run.status, "completed");
+  assert.equal(run.degradationReasons.length, 0);
   assert.equal(run.tasks.length, 4);
   assert.ok(run.messages.some((message) => message.role === "research_planner"));
   assert.ok(run.handoffs.some((handoff) => handoff.to === "research_planner"));
@@ -205,6 +206,7 @@ test("hydria core workflow service builds an arena round workflow with synthesis
 
   assert.equal(run.scope, "arena_round");
   assert.equal(run.status, "completed");
+  assert.equal(run.degradationReasons.length, 0);
   assert.ok(run.messages.some((message) => message.role === "research_retriever"));
   assert.ok(run.messages.some((message) => message.role === "local_student" && message.kind === "answer"));
   assert.ok(run.messages.some((message) => message.role === "synthesizer"));
@@ -212,4 +214,104 @@ test("hydria core workflow service builds an arena round workflow with synthesis
   assert.ok(run.tasks.some((task) => task.kind === "refine_answer" && task.notes.some((note) => /A:/.test(note))));
   assert.ok(run.handoffs.some((handoff) => handoff.to === "research_retriever"));
   assert.ok(run.handoffs.some((handoff) => handoff.to === "history_store"));
+});
+
+test("hydria core workflow service marks arena rounds partial only when a critical role falls back or research fails", () => {
+  const service = new HydriaCoreWorkflowService();
+  const run = service.buildArenaRoundRun({
+    roundId: "33333333-3333-4333-8333-333333333333",
+    question: "Design a migration plan with rollback safety.",
+    category: "architecture_design",
+    createdAt: "2026-04-18T10:06:00.000Z",
+    durationMs: 2000,
+    models: {
+      respondentA: "qwen/qwen3.6-plus",
+      respondentB: "anthropic/claude-sonnet-4.6",
+      redTeam: "openai/gpt-5.4-mini",
+      judge: "openai/gpt-5.4-mini",
+      synthesizer: "qwen/qwen3.6-plus"
+    },
+    knowledge: null,
+    orchestration: {
+      focus: "tradeoffs",
+      refinePolicy: "dual",
+      researchPolicy: "targeted",
+      reasoning: ["The round should compare two rollout plans."]
+    } as never,
+    router: {
+      globalStrategy: "dual_refine",
+      shouldRefineA: true,
+      shouldRefineB: true,
+      estimatedValue: {
+        A: "high",
+        B: "medium"
+      },
+      reasoning: ["Both sides still have improvement headroom."]
+    } as never,
+    research: buildResearchLog({
+      route: "failed"
+    }),
+    respondentA: { answer: "Answer A" } as never,
+    respondentB: { answer: "Answer B" } as never,
+    respondentATrace: buildTrace("Respondent A trace"),
+    respondentBTrace: buildTrace("Respondent B trace"),
+    redTeam: {
+      attacks_on_a: ["Rollback too vague."],
+      attacks_on_b: ["Sequence is unsafe."],
+      shared_risks: ["Data consistency risk."],
+      hidden_assumptions: ["Assumes traffic can pause."],
+      potentially_false_claims: [],
+      winner_so_far: "tie",
+      factual_risk_level: 40,
+      reasoning_risk_level: 65
+    } as never,
+    redTeamTrace: buildTrace("Red team trace"),
+    refineA: {
+      improved_answer: "Improved A",
+      fixes_applied: ["Added rollback gates."]
+    } as never,
+    refineATrace: {
+      ...buildTrace("Refine A fallback trace"),
+      outcome: "fallback_success"
+    },
+    refineB: {
+      improved_answer: "Improved B",
+      fixes_applied: ["Clarified sequencing."]
+    } as never,
+    refineBTrace: buildTrace("Refine B trace"),
+    judge: {
+      initial_scores: {
+        A: { overall: 70 },
+        B: { overall: 68 }
+      },
+      scores: {
+        A: { overall: 79 },
+        B: { overall: 75 }
+      },
+      winner: "A",
+      reasoning: "A is still more pragmatic."
+    } as never,
+    judgeTrace: buildTrace("Judge trace"),
+    synthesizer: {
+      final_answer: "Synthesized final answer",
+      why_this_answer: "It preserved the safer rollback path.",
+      improvements_added: ["Rollback gates."],
+      based_on_winner: "A"
+    } as never,
+    synthesizerTrace: buildTrace("Synthesizer trace"),
+    localStudent: {
+      student_answer: "Prefer explicit rollback gates.",
+      student_summary: "The round kept the safer path despite degraded refinement.",
+      learning_notes: ["Keep rollback gates explicit."]
+    } as never,
+    localStudentTrace: buildTrace("Local student trace")
+  });
+
+  assert.equal(run.status, "partial");
+  assert.ok(run.degradationReasons.some((reason) => reason.code === "research_failed"));
+  assert.ok(
+    run.degradationReasons.some(
+      (reason) => reason.code === "critical_role_fallback" && reason.role === "teacher"
+    )
+  );
 });

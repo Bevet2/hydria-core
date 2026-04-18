@@ -57,6 +57,10 @@ export function HistoryPanel({
                 </span>
               </div>
               <div className="history-meta">
+                <span>Hydria status: {round.workflow.status}</span>
+                <span>Degradations: {round.workflow.degradationReasons.length}</span>
+              </div>
+              <div className="history-meta">
                 <span>
                   Initial/refined avg: {round.metrics.scoreAverages.initial}/
                   {round.metrics.scoreAverages.refined}
@@ -73,6 +77,17 @@ export function HistoryPanel({
                 <span className={`status-badge status-badge--${getDecisionTone(round.refineDecision.global)}`}>
                   worth it {round.refineDecision.global}
                 </span>
+                <span
+                  className={`status-badge status-badge--${
+                    round.workflow.status === "completed"
+                      ? "success"
+                      : round.workflow.status === "failed"
+                        ? "error"
+                        : "fallback"
+                  }`}
+                >
+                  hydria {round.workflow.status}
+                </span>
                 {hasFallback(round) ? (
                   <span className="status-badge status-badge--fallback">fallback</span>
                 ) : (
@@ -85,6 +100,9 @@ export function HistoryPanel({
                   B {formatVerdict(round.verdicts.refineB)}
                 </span>
               </div>
+              {round.workflow.degradationReasons.length > 0 ? (
+                <p className="muted">{round.workflow.degradationReasons[0]?.summary}</p>
+              ) : null}
             </button>
           ))}
         </div>

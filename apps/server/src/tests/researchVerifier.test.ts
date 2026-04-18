@@ -166,3 +166,33 @@ test("research verifier impact accounting marks visible source uptake as positiv
   assert.equal(finalized.impact.netImpact, "positive");
   assert.ok(finalized.impact.sourceBackedClaimsCount >= 1);
 });
+
+test("research verifier truncates oversized decision reasoning before returning the log", () => {
+  const verifier = new ResearchVerifier();
+  const longReasoning = `Research plan: ${"freshness-aware grounding ".repeat(30)}`;
+  const decision = buildDecision();
+  decision.plan = {
+    ...decision.plan!,
+    reasoning: longReasoning
+  };
+
+  const log = verifier.buildLog({
+    decision,
+    args: buildArgs(),
+    searchResults: buildSearchResults(),
+    sources: [buildFreshSource("2026-04-10T00:00:00.000Z")],
+    startedAt: Date.now() - 50
+  });
+
+  assert.ok(log.decision.reasoning.length <= 400);
+  assert.match(log.decision.reasoning, /\[truncated\]$/);
+
+  const failureLog = verifier.buildFailureLog({
+    decision,
+    startedAt: Date.now() - 50,
+    error: new Error("fixture failure")
+  });
+
+  assert.ok(failureLog.decision.reasoning.length <= 400);
+  assert.match(failureLog.decision.reasoning, /\[truncated\]$/);
+});

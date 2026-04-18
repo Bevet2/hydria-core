@@ -336,6 +336,7 @@ function buildLegacyArenaWorkflowRun(args: {
     messages: [],
     handoffs: [],
     tasks: [],
+    degradationReasons: [],
     outcome: "Legacy arena round loaded before Hydria workflow metadata was recorded."
   };
 }

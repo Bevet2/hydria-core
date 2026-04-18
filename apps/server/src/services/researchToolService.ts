@@ -4,6 +4,7 @@ import type {
 } from "../types/arena.js";
 import { logger } from "../utils/logger.js";
 import {
+  sanitizeResearchDecisionReasoning,
   type ResearchDecision,
   type ResearchDecisionArgs,
 } from "./research/common.js";
@@ -42,7 +43,9 @@ function buildEmptyResearchLog(decision: ResearchDecision): ResearchToolLog {
       expectedCostMs: 0,
       triggerSignals: decision.triggerSignals,
       targetClaims: decision.targetClaims,
-      reasoning: decision.reasons[0] ?? "Research not needed for this round."
+      reasoning: sanitizeResearchDecisionReasoning(
+        decision.reasons[0] ?? "Research not needed for this round."
+      )
     },
     queryPlan: {
       intent: "fact_check",

@@ -24,6 +24,11 @@ import {
   researchTaskStatus,
   uniqueStrings
 } from "./hydriaWorkflowShared.js";
+import {
+  buildCriticalTraceDegradation,
+  buildResearchFailureDegradation,
+  finalizeWorkflowStatusAndDegradation
+} from "./hydriaWorkflowDegradation.js";
 
 export type HydriaArenaRoundWorkflowArgs = {
   roundId: string;
@@ -107,21 +112,6 @@ function overallDelta(judge: JudgeOutput, slot: "A" | "B") {
   return judge.scores[slot].overall - judge.initial_scores[slot].overall;
 }
 
-function buildArenaWorkflowStatus(args: {
-  research: ResearchToolLog;
-  traces: ExecutionTrace[];
-}) {
-  if (args.research.route === "failed") {
-    return "partial" as const;
-  }
-
-  return args.traces.some((trace) =>
-    ["fallback_success", "static_fallback", "failure"].includes(trace.outcome)
-  )
-    ? ("partial" as const)
-    : ("completed" as const);
-}
-
 export function buildArenaRoundWorkflowRun(
   args: HydriaArenaRoundWorkflowArgs
 ): HydriaWorkflowRun {
@@ -135,6 +125,43 @@ export function buildArenaRoundWorkflowRun(
   const redTeamPotentiallyFalseClaims = args.redTeam.potentially_false_claims ?? [];
   const localStudentNotes = args.localStudent.learning_notes ?? [];
   const synthImprovements = args.synthesizer.improvements_added ?? [];
+  const statusAndDegradation = finalizeWorkflowStatusAndDegradation({
+    degradations: [
+      buildResearchFailureDegradation(args.research),
+      buildCriticalTraceDegradation({
+        role: "respondent",
+        trace: args.respondentATrace
+      }),
+      buildCriticalTraceDegradation({
+        role: "respondent",
+        trace: args.respondentBTrace
+      }),
+      buildCriticalTraceDegradation({
+        role: "red_team",
+        trace: args.redTeamTrace
+      }),
+      buildCriticalTraceDegradation({
+        role: "teacher",
+        trace: args.refineATrace
+      }),
+      buildCriticalTraceDegradation({
+        role: "teacher",
+        trace: args.refineBTrace
+      }),
+      buildCriticalTraceDegradation({
+        role: "judge",
+        trace: args.judgeTrace
+      }),
+      buildCriticalTraceDegradation({
+        role: "synthesizer",
+        trace: args.synthesizerTrace
+      }),
+      buildCriticalTraceDegradation({
+        role: "local_student",
+        trace: args.localStudentTrace
+      })
+    ]
+  });
 
   const messages = [
     buildMessage({
@@ -548,19 +575,7 @@ export function buildArenaRoundWorkflowRun(
   return hydriaWorkflowRunSchema.parse({
     runId: args.roundId,
     scope: "arena_round",
-    status: buildArenaWorkflowStatus({
-      research: args.research,
-      traces: [
-        args.respondentATrace,
-        args.respondentBTrace,
-        args.redTeamTrace,
-        args.refineATrace,
-        args.refineBTrace,
-        args.judgeTrace,
-        args.synthesizerTrace,
-        args.localStudentTrace
-      ]
-    }),
+    status: statusAndDegradation.status,
     question: args.question,
     category: args.category,
     startedAt: args.createdAt,
@@ -568,6 +583,7 @@ export function buildArenaRoundWorkflowRun(
     messages,
     handoffs,
     tasks,
+    degradationReasons: statusAndDegradation.degradationReasons,
     outcome: `Arena round completed with winner ${args.judge.winner}, synth target ${args.synthesizer.based_on_winner}, and local learning summary captured.`
   });
 }

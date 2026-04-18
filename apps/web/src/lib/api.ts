@@ -1,6 +1,7 @@
 import type {
   AppHealth,
   ArenaModels,
+  ArenaQualityAnalyticsReport,
   ArenaRound,
   BenchmarkRun,
   BenchmarkRunListItem,
@@ -50,6 +51,10 @@ export async function fetchHistory() {
 
 export async function fetchArenaRound(roundId: string) {
   return request<ArenaRound>(`/api/arena/history/${roundId}`);
+}
+
+export async function fetchArenaQualityReport() {
+  return request<ArenaQualityAnalyticsReport>("/api/arena/quality");
 }
 
 export async function fetchAppHealth() {

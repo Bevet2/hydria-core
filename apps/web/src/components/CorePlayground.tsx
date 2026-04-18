@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   fetchAppHealth,
+  fetchArenaQualityReport,
   fetchArenaRound,
   fetchHistory,
   fetchLocalHealth,
@@ -9,6 +10,7 @@ import {
   testLocalModel,
   type AppHealth,
   type ArenaModels,
+  type ArenaQualityAnalyticsReport,
   type ArenaRound,
   type LocalModelHealth,
   type LocalModelTestResponse,
@@ -36,6 +38,7 @@ export function CorePlayground() {
   const [error, setError] = useState<string | null>(null);
   const [rounds, setRounds] = useState<ArenaRound[]>([]);
   const [currentRound, setCurrentRound] = useState<ArenaRound | null>(null);
+  const [qualityReport, setQualityReport] = useState<ArenaQualityAnalyticsReport | null>(null);
   const [appHealth, setAppHealth] = useState<AppHealth | null>(null);
   const [localHealth, setLocalHealth] = useState<LocalModelHealth | null>(null);
   const [persistenceHealth, setPersistenceHealth] = useState<PersistenceHealthReport | null>(null);
@@ -48,8 +51,9 @@ export function CorePlayground() {
   }
 
   async function refreshHistory(preferredRoundId?: string | null) {
-    const history = await fetchHistory();
+    const [history, quality] = await Promise.all([fetchHistory(), fetchArenaQualityReport()]);
     setRounds(history.rounds);
+    setQualityReport(quality);
     const targetRoundId = preferredRoundId ?? requestedRoundId;
 
     if (targetRoundId) {
@@ -151,6 +155,7 @@ export function CorePlayground() {
         <CorePlaygroundSidebar
           round={currentRound}
           rounds={rounds}
+          qualityReport={qualityReport}
           localHealth={localHealth}
           persistenceHealth={persistenceHealth}
           lastLocalTest={lastLocalTest}

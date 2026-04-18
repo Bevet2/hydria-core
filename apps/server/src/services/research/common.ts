@@ -132,6 +132,9 @@ export const RESEARCH_MODE_COST_MS: Record<ResearchDecisionMode, number> = {
   verify_factual_subpart: 2100
 };
 
+export const RESEARCH_DECISION_REASONING_MAX_LENGTH = 400;
+const TRUNCATION_SUFFIX = " [truncated]";
+
 export type SearchCandidate = {
   title: string;
   url: string;
@@ -184,6 +187,20 @@ export type ResearchDecision = {
 
 export function normalizeSpace(value: string) {
   return value.replace(/\s+/g, " ").trim();
+}
+
+export function truncateWithSuffix(value: string, maxLength: number, suffix = TRUNCATION_SUFFIX) {
+  const normalized = normalizeSpace(value);
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  const availableLength = Math.max(1, maxLength - suffix.length);
+  return `${normalized.slice(0, availableLength).trimEnd()}${suffix}`;
+}
+
+export function sanitizeResearchDecisionReasoning(value: string) {
+  return truncateWithSuffix(value, RESEARCH_DECISION_REASONING_MAX_LENGTH);
 }
 
 export function splitSentences(value: string) {

@@ -186,6 +186,7 @@ const defaultHydriaWorkflowRun = {
   messages: [],
   handoffs: [],
   tasks: [],
+  degradationReasons: [],
   outcome: "Legacy session loaded before Hydria workflow metadata was recorded."
 };
 

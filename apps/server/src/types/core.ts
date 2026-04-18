@@ -40,6 +40,18 @@ export const hydriaWorkflowScopeSchema = z.enum([
 
 export const hydriaWorkflowStatusSchema = z.enum(["completed", "partial", "failed"]);
 
+export const hydriaWorkflowDegradationCodeSchema = z.enum([
+  "research_failed",
+  "critical_role_fallback",
+  "critical_role_failure"
+]);
+
+export const hydriaWorkflowDegradationImpactSchema = z.enum([
+  "grounding_gap",
+  "quality_degraded",
+  "step_missing"
+]);
+
 export const hydriaActorRoleSchema = z.enum([
   "orchestrator",
   "knowledge_memory",
@@ -125,6 +137,13 @@ export const hydriaWorkflowTaskSchema = z.object({
   notes: z.array(z.string().min(1).max(240)).max(8).default([])
 });
 
+export const hydriaWorkflowDegradationReasonSchema = z.object({
+  code: hydriaWorkflowDegradationCodeSchema,
+  impact: hydriaWorkflowDegradationImpactSchema,
+  role: hydriaActorRoleSchema.nullable().default(null),
+  summary: z.string().min(1).max(180)
+});
+
 export const hydriaWorkflowRunSchema = z.object({
   runId: z.string().uuid(),
   scope: hydriaWorkflowScopeSchema,
@@ -136,6 +155,7 @@ export const hydriaWorkflowRunSchema = z.object({
   messages: z.array(hydriaWorkflowMessageSchema).max(24),
   handoffs: z.array(hydriaWorkflowHandoffSchema).max(16),
   tasks: z.array(hydriaWorkflowTaskSchema).max(12),
+  degradationReasons: z.array(hydriaWorkflowDegradationReasonSchema).max(6).default([]),
   outcome: z.string().min(1).max(320)
 });
 
@@ -177,6 +197,8 @@ export const hydriaMemorySnapshotSchema = z.object({
 
 export type HydriaWorkflowScope = z.infer<typeof hydriaWorkflowScopeSchema>;
 export type HydriaWorkflowStatus = z.infer<typeof hydriaWorkflowStatusSchema>;
+export type HydriaWorkflowDegradationCode = z.infer<typeof hydriaWorkflowDegradationCodeSchema>;
+export type HydriaWorkflowDegradationImpact = z.infer<typeof hydriaWorkflowDegradationImpactSchema>;
 export type HydriaActorRole = z.infer<typeof hydriaActorRoleSchema>;
 export type HydriaMessageKind = z.infer<typeof hydriaMessageKindSchema>;
 export type HydriaTaskKind = z.infer<typeof hydriaTaskKindSchema>;
@@ -184,6 +206,9 @@ export type HydriaTaskStatus = z.infer<typeof hydriaTaskStatusSchema>;
 export type HydriaWorkflowMessage = z.infer<typeof hydriaWorkflowMessageSchema>;
 export type HydriaWorkflowHandoff = z.infer<typeof hydriaWorkflowHandoffSchema>;
 export type HydriaWorkflowTask = z.infer<typeof hydriaWorkflowTaskSchema>;
+export type HydriaWorkflowDegradationReason = z.infer<
+  typeof hydriaWorkflowDegradationReasonSchema
+>;
 export type HydriaWorkflowRun = z.infer<typeof hydriaWorkflowRunSchema>;
 export type HydriaMemoryLayer = z.infer<typeof hydriaMemoryLayerSchema>;
 export type HydriaMemoryPriority = z.infer<typeof hydriaMemoryPrioritySchema>;

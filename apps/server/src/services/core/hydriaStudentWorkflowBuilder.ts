@@ -21,6 +21,11 @@ import {
   researchTaskStatus,
   uniqueStrings
 } from "./hydriaWorkflowShared.js";
+import {
+  buildCriticalTraceDegradation,
+  buildResearchFailureDegradation,
+  finalizeWorkflowStatusAndDegradation
+} from "./hydriaWorkflowDegradation.js";
 
 export type HydriaStudentPreviewWorkflowArgs = {
   previewId: string;
@@ -40,6 +45,16 @@ export type HydriaStudentPreviewWorkflowArgs = {
 export function buildStudentPreviewWorkflowRun(
   args: HydriaStudentPreviewWorkflowArgs
 ): HydriaWorkflowRun {
+  const statusAndDegradation = finalizeWorkflowStatusAndDegradation({
+    degradations: [
+      buildResearchFailureDegradation(args.research),
+      buildCriticalTraceDegradation({
+        role: "student",
+        trace: args.trace
+      })
+    ]
+  });
+
   const messages = [
     buildMessage({
       role: "orchestrator",
@@ -186,7 +201,7 @@ export function buildStudentPreviewWorkflowRun(
   return hydriaWorkflowRunSchema.parse({
     runId: args.previewId,
     scope: "student_preview",
-    status: args.research.route === "failed" ? "partial" : "completed",
+    status: statusAndDegradation.status,
     question: args.question,
     category: args.category,
     startedAt: args.startedAt,
@@ -194,6 +209,7 @@ export function buildStudentPreviewWorkflowRun(
     messages,
     handoffs,
     tasks,
+    degradationReasons: statusAndDegradation.degradationReasons,
     outcome: args.toolApplied
       ? "Preview completed with student-plus-tool grounding."
       : "Preview completed on the student draft path."
@@ -223,6 +239,16 @@ export type HydriaStudentSessionWorkflowArgs = {
 export function buildStudentSessionWorkflowRun(
   args: HydriaStudentSessionWorkflowArgs
 ): HydriaWorkflowRun {
+  const statusAndDegradation = finalizeWorkflowStatusAndDegradation({
+    degradations: [
+      buildResearchFailureDegradation(args.research),
+      buildCriticalTraceDegradation({
+        role: "student",
+        trace: args.studentTrace
+      })
+    ]
+  });
+
   const messages = [
     buildMessage({
       role: "orchestrator",
@@ -455,7 +481,7 @@ export function buildStudentSessionWorkflowRun(
   return hydriaWorkflowRunSchema.parse({
     runId: args.sessionId,
     scope: "student_session",
-    status: args.research.route === "failed" ? "partial" : "completed",
+    status: statusAndDegradation.status,
     question: args.question,
     category: args.category,
     startedAt: args.createdAt,
@@ -463,6 +489,7 @@ export function buildStudentSessionWorkflowRun(
     messages,
     handoffs,
     tasks,
+    degradationReasons: statusAndDegradation.degradationReasons,
     outcome: `Session completed with judge verdict ${args.judge.verdict} and toolApplied=${args.toolApplied}.`
   });
 }

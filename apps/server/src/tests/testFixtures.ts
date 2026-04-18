@@ -361,6 +361,7 @@ export function buildWorkflowRun(
     messages: [],
     handoffs: [],
     tasks: [],
+    degradationReasons: [],
     outcome: "Fixture workflow completed."
   };
 }

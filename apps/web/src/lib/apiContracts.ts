@@ -1,4 +1,15 @@
 export type {
+  ArenaQualitySummary,
+  ArenaQualityRecentStatus,
+  ArenaQualityDegradationReasonStat,
+  ArenaQualityRoleStat,
+  ArenaQualityWinnerDistribution,
+  ArenaQualityImpactCohort,
+  ArenaQualityImpact,
+  ArenaQualityAnalyticsReport,
+} from "../../../server/src/types/analytics.js";
+
+export type {
   ModelSelection as ArenaModels,
   QuestionCategory,
   RefineRouterStrategy,
@@ -37,6 +48,8 @@ export type {
 export type {
   HydriaWorkflowScope,
   HydriaWorkflowStatus,
+  HydriaWorkflowDegradationCode,
+  HydriaWorkflowDegradationImpact,
   HydriaActorRole,
   HydriaMessageKind,
   HydriaTaskKind,
@@ -44,6 +57,7 @@ export type {
   HydriaWorkflowMessage,
   HydriaWorkflowHandoff,
   HydriaWorkflowTask,
+  HydriaWorkflowDegradationReason,
   HydriaWorkflowRun,
   HydriaMemoryItem,
   HydriaMemorySnapshot

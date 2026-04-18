@@ -107,6 +107,17 @@ export function PipelinePanel({ round }: PipelinePanelProps) {
         <div className="panel__header">
           <h2>Current Round</h2>
           <div className="step-card__badges">
+            <span
+              className={`status-badge status-badge--${
+                round.workflow.status === "completed"
+                  ? "success"
+                  : round.workflow.status === "failed"
+                    ? "error"
+                    : "fallback"
+              }`}
+            >
+              {round.workflow.status}
+            </span>
             <span className="status-badge status-badge--success">
               winner {round.outputs.judge.winner}
             </span>
@@ -211,6 +222,19 @@ export function PipelinePanel({ round }: PipelinePanelProps) {
             {round.metrics.routing.refineSkipRate}%
           </span>
         </div>
+        {round.workflow.degradationReasons.length > 0 ? (
+          <>
+            <h4>Hydria degradation</h4>
+            <ul className="bullet-list">
+              {round.workflow.degradationReasons.map((reason, index) => (
+                <li key={`${round.roundId}-degradation-${index}`}>
+                  {reason.summary} ({reason.code}
+                  {reason.role ? ` / ${reason.role}` : ""})
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
       </section>
 
       <RefineRouterPanel round={round} />

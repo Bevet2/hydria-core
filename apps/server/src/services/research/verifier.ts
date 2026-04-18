@@ -5,6 +5,7 @@ import type {
 import {
   extractTerms,
   normalizeSpace,
+  sanitizeResearchDecisionReasoning,
   splitSentences,
   type ResearchDecision,
   type ResearchDecisionArgs,
@@ -89,7 +90,9 @@ export class ResearchVerifier {
         expectedCostMs: decision.expectedCostMs,
         triggerSignals: decision.triggerSignals,
         targetClaims: decision.targetClaims,
-        reasoning: decision.plan?.reasoning ?? decision.reasons[0] ?? "Research triggered."
+        reasoning: sanitizeResearchDecisionReasoning(
+          decision.plan?.reasoning ?? decision.reasons[0] ?? "Research triggered."
+        )
       },
       queryPlan: {
         intent: decision.plan?.intent ?? "fact_check",
@@ -156,7 +159,9 @@ export class ResearchVerifier {
         expectedCostMs: decision.expectedCostMs,
         triggerSignals: decision.triggerSignals,
         targetClaims: decision.targetClaims,
-        reasoning: decision.plan?.reasoning ?? decision.reasons[0] ?? "Research failed."
+        reasoning: sanitizeResearchDecisionReasoning(
+          decision.plan?.reasoning ?? decision.reasons[0] ?? "Research failed."
+        )
       },
       queryPlan: {
         intent: decision.plan?.intent ?? "fact_check",

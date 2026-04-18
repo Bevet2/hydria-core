@@ -1,4 +1,5 @@
 import type {
+  HydriaWorkflowDegradationReason,
   HydriaTaskStatus,
   HydriaWorkflowHandoff,
   HydriaWorkflowMessage,
@@ -33,6 +34,37 @@ function formatDuration(startedAt: string, completedAt: string | null) {
   }
 
   return `${Math.round(completed - started)} ms`;
+}
+
+function formatDegradationImpact(impact: HydriaWorkflowDegradationReason["impact"]) {
+  if (impact === "step_missing") {
+    return "error";
+  }
+  if (impact === "quality_degraded") {
+    return "fallback";
+  }
+  return "neutral";
+}
+
+function WorkflowDegradationCard({
+  degradation
+}: {
+  degradation: HydriaWorkflowDegradationReason;
+}) {
+  return (
+    <article className="workflow-link">
+      <div className="memory-item__header">
+        <strong>{degradation.summary}</strong>
+        <span className={`status-badge status-badge--${formatDegradationImpact(degradation.impact)}`}>
+          {degradation.impact}
+        </span>
+      </div>
+      <div className="meta-row">
+        <span>Code: {degradation.code}</span>
+        <span>Role: {degradation.role ?? "n/a"}</span>
+      </div>
+    </article>
+  );
 }
 
 function WorkflowTaskCard({ task }: { task: HydriaWorkflowTask }) {
@@ -148,10 +180,28 @@ export function HydriaWorkflowPanel({
           <strong>{workflow.messages.length}</strong>
         </div>
         <div className="overview-item">
+          <span>Degradations</span>
+          <strong>{workflow.degradationReasons.length}</strong>
+        </div>
+        <div className="overview-item">
           <span>Started</span>
           <strong>{new Date(workflow.startedAt).toLocaleString()}</strong>
         </div>
       </div>
+
+      <h3>Degradation</h3>
+      {workflow.degradationReasons.length === 0 ? (
+        <p className="muted">No Hydria degradation reasons were recorded for this run.</p>
+      ) : (
+        <div className="workflow-link-list">
+          {workflow.degradationReasons.map((degradation, index) => (
+            <WorkflowDegradationCard
+              key={`${workflow.runId}-degradation-${index}`}
+              degradation={degradation}
+            />
+          ))}
+        </div>
+      )}
 
       <h3>Tasks</h3>
       <div className="workflow-task-grid">
