@@ -1,273 +1,353 @@
-# Hydria Arena
+# Hydria Core
 
-Hydria Arena is a pragmatic V1 arena that combines:
+Hydria Core is a decision, evaluation, and learning engine for LLM workflows.
 
-- a multi-LLM round over OpenRouter
-- a dedicated local student model with its weights on `F:\`
-- local JSON storage for rounds and feedback
-- a codebase that is small enough to run now and modular enough to extend later
+It is not an agent OS and it does not directly execute arbitrary system actions. The core:
 
-The goal is not to simulate a full agent operating system. This V1 focuses on one clean loop:
+- routes requests between general response, research, tools, skills, and specialized agents
+- runs arena-style comparisons and a local student learning loop
+- stores rounds, sessions, governance state, skills, tools, and agents in SQLite
+- promotes, guards, demotes, or rejects learned behaviors under governance
+- exposes observability and learning reports through the API and the web UI
 
-1. Respondent A answers.
-2. Respondent B answers.
-3. Red Team attacks both.
-4. Judge scores both.
-5. Synthesizer produces the final answer.
-6. The local student model observes the round and emits learning notes.
+Hydria OS or any external executor is responsible for real execution. Hydria Core stays the brain.
 
-## Official baseline
+## What Exists In The Repo
 
-Hydria Core now has an official frozen baseline for all future comparisons:
+The current codebase already includes:
 
-- label: `Hydria Core Official Baseline`
-- run id: `5626878c-70e3-4848-9409-1e8870581852`
-- benchmark snapshot: [storage/benchmarks/official-baseline.json](/F:/hydria-arena/storage/benchmarks/official-baseline.json)
-- default baseline models:
-  - `respondentA = openai/gpt-5.4-mini`
-  - `respondentB = openai/gpt-5.4-mini`
-  - `redTeam = openai/gpt-5.4-mini`
-  - `judge = openai/gpt-5.4-mini`
-  - `synthesizer = openai/gpt-5.4-mini`
+- `arena` orchestration with respondents, red team, judge, synthesizer, refine routing, research, and local student observation
+- `student lab` with preview, analyze, impact tracking, knowledge injection, and governed learning
+- a `truth / research` stack with planning, acquisition, extraction, verification, replay, and temporal freshness handling
+- a `tool-first` router for live, external, calculable, repo, and file-oriented tasks
+- a `skill system` for reusable validated procedures
+- a `tool candidate system` for detecting missing capabilities and proposing governed tool manifests
+- a `specialized agent system` that groups validated skills into domain-specific agent recommendations
+- a `learning loop` that turns observations into hotspots, hypotheses, policies, active memory, and regression monitoring
+- SQLite persistence with JSON projections and self-healing derived artifacts
+- a React playground for arena, benchmark, student, persistence, workflow, and learning inspection
 
-This mono-model baseline is the official reference because it is currently more stable, faster, and stronger than the multi-model setup. Multi-model experiments are paused until tool integration is in place.
+## Core Principles
 
-## Why this local model
+- Hydria Core is decision-first, not execution-first.
+- Learning is governed, local, observable, and reversible.
+- Skills, tools, and specialized agents are recommendations and contracts, not hidden side effects.
+- Live or current questions must route to tools or explicit failure, not improvised answers.
+- New capabilities must pass through validation, watchlists, and rollback paths.
 
-Hydria Arena V1 uses:
-
-- runtime model: `qwen2.5:3b` through Ollama
-- upstream open-weight base for future training work: `Qwen/Qwen2.5-3B-Instruct`
-
-Why this choice:
-
-- small enough for a realistic local setup
-- strong enough for observation, light synthesis, and JSON-shaped outputs
-- multilingual, including French
-- easy to serve locally with a simple HTTP endpoint
-- reasonable future candidate for LoRA / SFT using the upstream Hugging Face weights
-
-Runtime choice details:
-
-- local serving is done through a dedicated Ollama endpoint on `http://127.0.0.1:11435`
-- weights are stored in `F:\hydria-arena\models\local\ollama-store`
-- future fine-tuning should target the upstream model weights, not the Ollama runtime package
-
-Reference links:
-
-- Qwen2.5-3B-Instruct: https://huggingface.co/Qwen/Qwen2.5-3B-Instruct
-- Ollama: https://ollama.com/
-- Ollama API usage: https://docs.ollama.com/api/usage
-
-## Architecture
+## High-Level Architecture
 
 ```text
-F:\hydria-arena
-├─ apps
-│  ├─ server
-│  │  ├─ src
-│  │  │  ├─ index.ts
-│  │  │  ├─ prompts
-│  │  │  ├─ routes
-│  │  │  ├─ services
-│  │  │  ├─ storage
-│  │  │  ├─ types
-│  │  │  └─ utils
-│  │  ├─ package.json
-│  │  └─ tsconfig.json
-│  └─ web
-│     ├─ src
-│     │  ├─ components
-│     │  ├─ lib
-│     │  └─ styles
-│     ├─ package.json
-│     └─ vite.config.ts
-├─ models
-│  └─ local
-│     ├─ config
-│     ├─ ollama-store
-│     └─ README.md
-├─ scripts
-│  ├─ dev.ps1
-│  ├─ setup-local-model.ps1
-│  └─ sync-openrouter-key.ps1
-├─ storage
-│  └─ history
-│     └─ history.json
-├─ .env.example
-├─ package.json
-├─ tsconfig.base.json
-└─ README.md
+user request
+  -> tool routing
+  -> skill routing
+  -> specialized agent routing
+  -> research / policy / planning when needed
+  -> arena or student execution flow
+  -> trace + persistence
+  -> learning governance
+  -> active memory / guarded policies / regression monitoring
 ```
 
-## Project roles
+Repo layout:
 
-### Backend
+```text
+.
+|- apps
+|  |- server
+|  |  |- src
+|  |  |  |- data
+|  |  |  |- prompts
+|  |  |  |- routes
+|  |  |  |- scripts
+|  |  |  |- services
+|  |  |  |  |- agents
+|  |  |  |  |- arena
+|  |  |  |  |- core
+|  |  |  |  |- research
+|  |  |  |  |- skills
+|  |  |  |  |- storage
+|  |  |  |  |- student
+|  |  |  |  `- tools
+|  |  |  |- tests
+|  |  |  |- types
+|  |  |  `- utils
+|  |  `- package.json
+|  `- web
+|     |- src
+|     |  |- components
+|     |  |- lib
+|     |  `- styles
+|     `- package.json
+|- docs
+|  `- architecture
+|- models
+|- scripts
+|- storage
+|- start.cmd
+`- README.md
+```
 
-- Express + TypeScript
-- OpenRouter client service
-- local Ollama client service
-- arena runner orchestration
-- Zod validation on requests and structured outputs
-- JSON repair fallback when a model drifts outside strict JSON
-- local history store in JSON
+## Main Subsystems
 
-### Frontend
+### Arena
 
-- React + Vite + TypeScript
-- one main screen
-- model selectors
-- round detail view
-- local model panel
-- history panel
+The arena runs a structured round:
 
-### Storage
+1. respondent A
+2. respondent B
+3. red team critique
+4. refine routing
+5. judge scoring
+6. synthesizer answer
+7. local student observation
+8. persistence, workflow trace, memory snapshot, quality analytics
 
-- `F:\hydria-arena\storage\history\history.json`
-- `F:\hydria-arena\storage\datasets\student-rounds.jsonl`
+The arena also records:
 
-The JSONL dataset is append-only and stores normalized round packages for future student training work. No training is launched in the current codebase.
+- Hydria workflow status: `completed` or `partial`
+- degradation reasons
+- tool routing and agent routing decisions
+- respondent failure causes and rescued rounds
 
-## Arena flow
+### Student Lab
 
-### Step 1
+The student flow has two modes:
 
-Respondent A and Respondent B receive the same question and return strict JSON.
+- `answer -> analyze`
+- `run` in one shot
 
-### Step 2
+It stores:
 
-Red Team receives the question and both responses, then attacks weak points and selects a leader.
+- preview and final draft
+- research / tool usage
+- teacher, red team, and judge feedback
+- rule, strategy, and tool impact
+- workflow and memory snapshots
 
-### Step 3
+### Research / Truth Engine
 
-Judge scores A and B across clarity, relevance, robustness, hallucination risk, and overall quality.
+The research stack is split into explicit layers:
 
-### Step 4
+- decision policy
+- planner
+- acquisition
+- extractor
+- verifier
+- impact accounting
 
-Synthesizer builds the final answer from the best answer plus the valid critiques.
+It supports:
 
-### Step 5
+- temporal queries
+- replay / record evaluation
+- freshness checks
+- official source preference
+- live / current / latest handling
 
-The local student model receives the round package and returns:
+### Tool Routing
 
-- a simpler student answer
-- a compact summary
-- learning notes for future imitation or supervised training
+Hydria now treats tools as a first-class routing layer, not only as optional fact-checking.
 
-## OpenRouter configuration
+The router distinguishes at least:
 
-This project is designed to reuse the existing OpenRouter key already present on `F:\`.
+- live data: weather, prices, sports, time
+- fresh data: latest version, latest announcement, this week
+- external lookup: websites, current executives, GitHub repos
+- calculation / conversion
+- repo / file analysis
+- action / execution requests
+- no-tool tasks: writing, reformulation, stable explanations
 
-The included script:
+### Skill System
 
-- reads the current Hydria config
-- extracts `OPENROUTER_API_KEY`
-- writes a local `.env` for this project
-- never prints the full key in the terminal
+A skill is a reusable validated procedure. Hydria can:
 
-Default source searched first:
+- extract `SkillCandidate` objects from repeated successful execution patterns
+- store governed `SkillDefinition` records in SQLite
+- route to matching skills before the normal planning path
+- monitor skill usage and confidence
 
-- `F:\hydria\backend\.env`
+Skills are procedural memory, not direct execution.
 
-## Installation
+### Tool Candidate System
+
+When Hydria repeatedly hits a missing capability, it can:
+
+- detect the gap
+- produce a `ToolCandidate`
+- materialize a governed `ToolManifest` and `ToolContract`
+- propose tests, permissions, risks, and activation policy
+- ask an external OS / executor to generate or validate the tool
+
+Hydria Core never activates high-risk tools automatically.
+
+### Specialized Agents
+
+Hydria can group validated skills into specialized agents.
+
+A specialized agent:
+
+- has a domain
+- binds required and optional skills
+- declares allowed and forbidden intents
+- has a local memory profile
+- has activation conditions, metrics, and safety constraints
+
+The core only recommends specialized agents. It does not execute them directly.
+
+### Learning Governance
+
+The learning loop closes the cycle:
+
+```text
+observation
+-> hotspot detection
+-> hypothesis / candidate generation
+-> replay / validation
+-> promotion / guard / rejection
+-> active memory update
+-> live monitoring
+-> rollback or archive if regressions appear
+```
+
+Governance currently manages:
+
+- research policies
+- strategies
+- rule-like learning items
+- tool candidates / manifests
+- specialized agents
+
+## Persistence Model
+
+SQLite is the source of truth.
+
+The repo also keeps JSON projections and derived artifacts for compatibility and inspection, but the major stores and trackers recover from SQLite when those files are missing or corrupted.
+
+Important persisted families include:
+
+- arena rounds
+- student sessions
+- skills
+- tool manifests
+- specialized agents
+- learning governance report
+- active learning memory
+
+Health endpoints expose persistence status and projection drift.
+
+## Quick Start
 
 ### Prerequisites
 
-- Windows with Node.js available on PATH
+- Windows
+- Node.js on `PATH`
 - `npm.cmd`
-- Ollama installed and available on PATH
+- Ollama on `PATH`
+- an OpenRouter API key if you want live arena runs
 
-### 1. Create the local `.env`
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\sync-openrouter-key.ps1
-```
-
-### 2. Install JavaScript dependencies
+### Install
 
 ```powershell
 npm.cmd install
 ```
 
-### 3. Start the dedicated local model endpoint and pull the model
+### Sync the OpenRouter key
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\setup-local-model.ps1
+npm.cmd run sync:openrouter
 ```
 
-This creates or updates:
+### Prepare the local model
 
-- `F:\hydria-arena\models\local\ollama-store`
-- `F:\hydria-arena\models\local\config\model.json`
+```powershell
+npm.cmd run setup:local-model
+```
 
-### 4. Start the app in development
+### Start development
+
+Fastest option:
+
+```powershell
+.\start.cmd
+```
+
+Equivalent commands:
 
 ```powershell
 npm.cmd run dev
 ```
 
-Or through the helper script:
+or
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\dev.ps1
+npm.cmd run dev:ps
 ```
 
-## Environment variables
+### Build
 
-Main variables in `.env`:
-
-- `OPENROUTER_API_KEY`
-- `OPENROUTER_BASE_URL`
-- `ARENA_RESPONDENT_A_MODEL`
-- `ARENA_RESPONDENT_B_MODEL`
-- `ARENA_REDTEAM_MODEL`
-- `ARENA_JUDGE_MODEL`
-- `ARENA_SYNTHESIZER_MODEL`
-- `LOCAL_MODEL_NAME`
-- `LOCAL_MODEL_BASE_URL`
-- `HISTORY_FILE`
-- `ROUND_DATASET_FILE`
-
-The default arena models are now aligned with the official mono-model baseline. If you want to test a non-baseline setup later, pass explicit models in the request instead of changing the frozen default reference.
-
-## API
-
-### `POST /api/arena/run`
-
-Body:
-
-```json
-{
-  "question": "What is the safest way to migrate a monolith to services?",
-  "models": {
-    "respondentA": "openai/gpt-5.4-mini",
-    "respondentB": "openai/gpt-5.4-mini",
-    "redTeam": "openai/gpt-5.4-mini",
-    "judge": "openai/gpt-5.4-mini",
-    "synthesizer": "openai/gpt-5.4-mini"
-  }
-}
+```powershell
+npm.cmd run build
 ```
 
-### `GET /api/arena/history`
+### Validate
 
-Returns the stored local history.
-
-### `GET /api/local-model/health`
-
-Returns whether the dedicated local Ollama endpoint is reachable and whether the selected model is installed.
-
-### `POST /api/local-model/test`
-
-Body:
-
-```json
-{
-  "prompt": "Explain Hydria Arena in one sentence."
-}
+```powershell
+npm.cmd run check
+npm.cmd run test
 ```
 
-## Example API commands
+## Useful Scripts
+
+Workspace-level scripts:
+
+- `npm.cmd run dev`
+- `npm.cmd run build`
+- `npm.cmd run check`
+- `npm.cmd run test`
+- `npm.cmd run learning:loop`
+- `npm.cmd run student:temporal-eval`
+- `npm.cmd run student:temporal-eval:record`
+- `npm.cmd run student:temporal-eval:replay`
+- `npm.cmd run tool:routing-eval`
+
+Server-only equivalents live in `apps/server/package.json`.
+
+## Main API Surface
+
+### Health
+
+- `GET /api/health`
+- `GET /api/health/persistence`
+
+### Arena
+
+- `POST /api/arena/run`
+- `GET /api/arena/quality`
+- `GET /api/arena/history`
+
+### Student
+
+- `GET /api/student/history`
+- `GET /api/student/history/:sessionId`
+- `POST /api/student/answer`
+- `POST /api/student/analyze`
+- `POST /api/student/run`
+
+### Benchmark
+
+- `GET /api/benchmark/...`
+
+### Learning
+
+- `GET /api/learning/report`
+
+### Local Model
+
+- `GET /api/local-model/health`
+- `POST /api/local-model/test`
+
+## Example Commands
 
 Health:
 
@@ -275,62 +355,72 @@ Health:
 Invoke-RestMethod -Method Get -Uri http://localhost:8080/api/health
 ```
 
-Local model:
+Arena quality:
 
 ```powershell
-Invoke-RestMethod -Method Get -Uri http://localhost:8080/api/local-model/health
+Invoke-RestMethod -Method Get -Uri http://localhost:8080/api/arena/quality
 ```
 
-Arena run:
+Learning report:
 
 ```powershell
-$body = @{
-  question = "Give me a pragmatic launch plan for a Node.js SaaS."
-  models = @{
-    respondentA = "openai/gpt-5.4-mini"
-    respondentB = "openai/gpt-5.4-mini"
-    redTeam = "openai/gpt-5.4-mini"
-    judge = "openai/gpt-5.4-mini"
-    synthesizer = "openai/gpt-5.4-mini"
-  }
-} | ConvertTo-Json -Depth 5
-
-Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/arena/run -ContentType "application/json" -Body $body
+Invoke-RestMethod -Method Get -Uri http://localhost:8080/api/learning/report
 ```
 
-## Frontend
+Student preview:
 
-The web UI exposes:
+```powershell
+$body = @{ question = "What is the latest stable TypeScript release?" } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/student/answer -ContentType "application/json" -Body $body
+```
 
-- a question form
-- editable model selectors with suggestions
-- respondent A and B outputs
-- red-team critiques
-- judge scores
-- final synthesis
-- local student output
-- local model status and test panel
-- round history with reopen support
+## Web UI
 
-## Limits of V1
+The frontend exposes:
 
-- no RAG
-- no persistent memory system beyond flat JSON storage
-- no auth
-- no SQL
-- no WebSocket layer
-- no hierarchical multi-agent planner
-- no training pipeline yet
-- local student is an observer, not a full participant in the arena
+- Hydria Core Playground
+- Benchmark Summary
+- Tool Benchmark
+- Student Lab
+- workflow and memory panels
+- trace panels
+- persistence health
+- arena quality analytics
+- learning governance report
 
-## Roadmap V2
+## Current Boundaries
 
-- integrate tools for retrieval, verification, and enrichment before revisiting multi-model
-- compare every future benchmark run against the frozen official baseline
-- let the local student compete directly in the arena
-- collect curated training examples from high-quality rounds
-- add lightweight round tagging and curriculum generation
-- add sub-arenas specialized by task type
-- add memory modules only where they improve results
-- add LoRA / SFT scripts using the upstream open-weight model
-- add domain-specialized local students
+Hydria Core does not:
+
+- execute shell commands on behalf of learned tools
+- directly browse or manipulate the local repo as an autonomous OS layer
+- auto-activate dangerous tools
+- bypass governance for skills, tools, or specialized agents
+
+That separation is intentional.
+
+## Documentation
+
+Architecture notes live in:
+
+- [docs/architecture/overview.md](docs/architecture/overview.md)
+- [docs/architecture/hydria-core.md](docs/architecture/hydria-core.md)
+- [docs/architecture/learning-loop.md](docs/architecture/learning-loop.md)
+
+## Practical Status
+
+Hydria Core is no longer just a simple arena prototype.
+
+It is now a governed experimentation and learning engine with:
+
+- explicit contracts
+- routeable tools
+- procedural skills
+- governed tool creation proposals
+- specialized agent recommendations
+- live regression monitoring
+- reversible learning
+
+The next improvements should keep following the same rule:
+
+learn locally, validate explicitly, activate carefully, and roll back when reality disagrees.
