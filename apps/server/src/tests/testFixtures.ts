@@ -11,6 +11,9 @@ import type {
   RespondentOutput,
   SynthesizerOutput
 } from "../types/arena.js";
+import { defaultToolRoutingDecision } from "../types/arena.js";
+import { defaultAgentRoutingDecision } from "../types/agents.js";
+import { defaultSkillRoutingDecision } from "../types/skills.js";
 import type { KnowledgeLayer } from "../types/knowledge.js";
 import type {
   HydriaMemorySnapshot,
@@ -45,6 +48,13 @@ export function buildExecutionTrace(note: string): ExecutionTrace {
     usedRetry: false,
     usedFallback: false,
     validationFailures: 0,
+    skillRouting: defaultSkillRoutingDecision,
+    skillUsed: false,
+    skillConfidence: null,
+    skillOutcome: "not_found",
+    agentRouting: defaultAgentRoutingDecision,
+    agentOutcome: "not_found",
+    fallbackUsed: false,
     outcome: "success",
     note
   };
@@ -220,6 +230,19 @@ export function buildResearchLog(
     considered: true,
     used: true,
     route: "used",
+    toolRouting: defaultToolRoutingDecision,
+    skillRouting: defaultSkillRoutingDecision,
+    skillUsed: false,
+    skillConfidence: null,
+    skillOutcome: "not_found",
+    agentRouting: defaultAgentRoutingDecision,
+    agentOutcome: "not_found",
+    fallbackUsed: false,
+    agentRecommendation: null,
+    toolGapDetected: false,
+    toolCandidateCreated: false,
+    toolCandidateId: null,
+    missingCapabilityReason: null,
     decision: {
       shouldUse: true,
       mode: "targeted_verify",

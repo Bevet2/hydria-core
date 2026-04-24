@@ -21,7 +21,10 @@ import { logger } from "../../utils/logger.js";
 import { parseModelCandidates } from "../../utils/modelCandidates.js";
 import { LocalModelService } from "../localModel.js";
 import { OpenRouterService } from "../openrouter.js";
-import type { ArenaLocalStudentStepResult } from "./arenaExecutionTypes.js";
+import {
+  buildNoSkillTraceFields,
+  type ArenaLocalStudentStepResult
+} from "./arenaExecutionTypes.js";
 
 export class ArenaLocalStudentExecutor {
   constructor(
@@ -65,6 +68,7 @@ export class ArenaLocalStudentExecutor {
           usedRetry: false,
           usedFallback: false,
           validationFailures: 0,
+          ...buildNoSkillTraceFields(),
           outcome: "disabled",
           note: "Local student observation disabled by configuration."
         },
@@ -93,6 +97,7 @@ export class ArenaLocalStudentExecutor {
           usedRetry: false,
           usedFallback: usedDegradedParse,
           validationFailures: result.validationIssues.length,
+          ...buildNoSkillTraceFields(),
           outcome: usedDegradedParse ? "fallback_success" : "success",
           note: usedDegradedParse
             ? "Dedicated local Ollama student returned degraded output; a repaired local observation was stored."
@@ -145,6 +150,7 @@ export class ArenaLocalStudentExecutor {
             usedRetry: false,
             usedFallback: true,
             validationFailures: 0,
+            ...buildNoSkillTraceFields(),
             outcome: "fallback_success",
             note: "Local student failed on Ollama; OpenRouter fallback produced validated JSON."
           },
@@ -178,6 +184,7 @@ export class ArenaLocalStudentExecutor {
         usedRetry: false,
         usedFallback: true,
         validationFailures: 0,
+        ...buildNoSkillTraceFields(),
         outcome: "static_fallback",
         note: "Local student failed on Ollama and all OpenRouter fallbacks; static fallback stored."
       },

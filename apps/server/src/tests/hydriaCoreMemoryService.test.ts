@@ -3,12 +3,28 @@ import assert from "node:assert/strict";
 import { HydriaCoreMemoryService } from "../services/core/hydriaCoreMemoryService.js";
 import { buildDefaultTemporalProfile } from "../services/research/temporal.js";
 import type { ResearchToolLog } from "../types/arena.js";
+import { defaultToolRoutingDecision } from "../types/arena.js";
+import { defaultAgentRoutingDecision } from "../types/agents.js";
+import { defaultSkillRoutingDecision } from "../types/skills.js";
 
 function buildResearchLog(overrides: Partial<ResearchToolLog> = {}): ResearchToolLog {
   return {
     considered: true,
     used: true,
     route: "used",
+    toolRouting: defaultToolRoutingDecision,
+    skillRouting: defaultSkillRoutingDecision,
+    skillUsed: false,
+    skillConfidence: null,
+    skillOutcome: "not_found",
+    agentRouting: defaultAgentRoutingDecision,
+    agentOutcome: "not_found",
+    fallbackUsed: false,
+    agentRecommendation: null,
+    toolGapDetected: false,
+    toolCandidateCreated: false,
+    toolCandidateId: null,
+    missingCapabilityReason: null,
     decision: {
       shouldUse: true,
       mode: "targeted_verify",

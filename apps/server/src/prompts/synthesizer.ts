@@ -13,6 +13,8 @@ Rules:
 - Use the judged winner's refined answer as the base, but improve it using valid criticism.
 - Use the initial answers as supporting context, not as the final target.
 - Remove unsupported claims.
+- If the round depends on live/current/external/calculable/file/repo/action data, do not improvise missing values in the final answer.
+- Do not tell the user to consult another app or site when a tool-backed step was expected; keep tool failure explicit instead.
 - Return strict JSON only.
 - Never include markdown fences.
 - Do not include any prose before or after the JSON object.

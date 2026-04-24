@@ -1,4 +1,5 @@
-import type { ModelSelection, QuestionCategory } from "../types/arena.js";
+import type { ModelSelection, QuestionCategory, ToolRoutingDecision } from "../types/arena.js";
+import type { SkillRoutingDecision } from "../types/skills.js";
 
 const respondentJsonSchema = `{
   "modelRole": "respondent",
@@ -42,6 +43,8 @@ Hard rules:
 - "confidence" must be an integer from 0 to 100.
 - If you are uncertain, say so inside "answer" and/or "assumptions" without breaking the schema.
 - Do not invent facts, citations, incidents, metrics, or implementation details that were not provided.
+- If the request depends on current/live/external/calculable/repo/file/action data, do not improvise a concrete result from memory.
+- If a tool-routed request is indicated in the prompt, do not tell the user to "check an app" or "consult a site"; instead make the dependency explicit and avoid inventing the answer.
 - Keep the answer concise but complete enough to be actionable.
 
 Output schema:
@@ -78,6 +81,8 @@ export function buildRespondentUserPrompt(args: {
   slot: "A" | "B";
   models: ModelSelection;
   category: QuestionCategory;
+  toolRouting?: ToolRoutingDecision | null;
+  skillRouting?: SkillRoutingDecision | null;
 }) {
   const roleHint =
     args.slot === "A"
@@ -105,6 +110,26 @@ Category style guidance:
 Category quality bar:
 - ${getCategoryQualityChecklist(args.category)}
 
+${args.toolRouting && args.toolRouting.toolType !== "none" ? `Tool routing guidance:
+- required: ${args.toolRouting.toolRequired}
+- recommended: ${args.toolRouting.toolRecommended}
+- tool type: ${args.toolRouting.toolType}
+- intent: ${args.toolRouting.intent}
+- fallback allowed: ${args.toolRouting.fallbackAllowed}
+- reason: ${args.toolRouting.reason}
+
+If tool routing says the request needs live/external/calculated data, do not answer with "use an app/site". Either keep the dependency explicit or defer to the later tool-backed stage without inventing the live result.
+` : ""}
+
+${args.skillRouting?.skillFound ? `Reusable skill guidance:
+- skill id: ${args.skillRouting.skillId}
+- confidence: ${Math.round(args.skillRouting.confidence * 100)}%
+- reason: ${args.skillRouting.reason}
+- recommended steps: ${args.skillRouting.recommendedSteps.join(" | ")}
+
+If this skill matches the request, follow its procedural shape in your reasoning, but do not pretend that the skill executed any external action by itself.
+` : ""}
+
 User question:
 ${args.question}
 
@@ -121,6 +146,8 @@ export function buildRespondentRepairUserPrompt(args: {
   category: QuestionCategory;
   previousResponse: string;
   validationIssues: string[];
+  toolRouting?: ToolRoutingDecision | null;
+  skillRouting?: SkillRoutingDecision | null;
 }) {
   return `Your previous respondent output was invalid for Hydria Core.
 
@@ -135,6 +162,22 @@ Category style guidance:
 
 User question:
 ${args.question}
+
+${args.toolRouting && args.toolRouting.toolType !== "none" ? `Tool routing guidance:
+- required: ${args.toolRouting.toolRequired}
+- recommended: ${args.toolRouting.toolRecommended}
+- tool type: ${args.toolRouting.toolType}
+- intent: ${args.toolRouting.intent}
+- fallback allowed: ${args.toolRouting.fallbackAllowed}
+- reason: ${args.toolRouting.reason}
+` : ""}
+
+${args.skillRouting?.skillFound ? `Reusable skill guidance:
+- skill id: ${args.skillRouting.skillId}
+- confidence: ${Math.round(args.skillRouting.confidence * 100)}%
+- reason: ${args.skillRouting.reason}
+- recommended steps: ${args.skillRouting.recommendedSteps.join(" | ")}
+` : ""}
 
 Validation issues to fix:
 ${args.validationIssues.map((issue) => `- ${issue}`).join("\n")}

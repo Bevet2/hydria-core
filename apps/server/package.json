@@ -14,7 +14,8 @@
     "student:strategy-discovery": "tsx src/scripts/runStudentStrategyDiscoveryLoop.ts",
     "student:temporal-eval": "tsx src/scripts/runStudentTemporalEval.ts",
     "student:temporal-eval:record": "tsx src/scripts/runStudentTemporalEval.ts --acquisition=record --cache=off",
-    "student:temporal-eval:replay": "tsx src/scripts/runStudentTemporalEval.ts --acquisition=replay --cache=off"
+    "student:temporal-eval:replay": "tsx src/scripts/runStudentTemporalEval.ts --acquisition=replay --cache=off",
+    "tool:routing-eval": "tsx src/scripts/runToolRoutingEval.ts"
   },
   "dependencies": {
     "cheerio": "^1.2.0",

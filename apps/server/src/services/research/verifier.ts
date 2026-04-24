@@ -2,6 +2,9 @@ import type {
   ResearchSource,
   ResearchToolLog
 } from "../../types/arena.js";
+import { defaultToolRoutingDecision } from "../../types/arena.js";
+import { defaultAgentRoutingDecision } from "../../types/agents.js";
+import { defaultSkillRoutingDecision } from "../../types/skills.js";
 import {
   extractTerms,
   normalizeSpace,
@@ -83,6 +86,22 @@ export class ResearchVerifier {
       considered: true,
       used,
       route: used ? "used" : "failed",
+      toolRouting: {
+        ...(decision.toolRouting ?? defaultToolRoutingDecision),
+        toolResultUsed: used
+      },
+      skillRouting: decision.skillRouting ?? defaultSkillRoutingDecision,
+      skillUsed: decision.skillRouting?.skillFound ?? false,
+      skillConfidence: decision.skillRouting?.skillFound ? decision.skillRouting.confidence : null,
+      skillOutcome: decision.skillRouting?.skillFound ? "recommended" : "not_found",
+      agentRouting: decision.agentRouting ?? defaultAgentRoutingDecision,
+      agentOutcome: decision.agentRouting?.agentFound ? "fallback_core" : "not_found",
+      fallbackUsed: decision.agentRouting?.fallbackToCore ?? false,
+      agentRecommendation: decision.agentRouting?.recommendation ?? null,
+      toolGapDetected: false,
+      toolCandidateCreated: false,
+      toolCandidateId: null,
+      missingCapabilityReason: null,
       decision: {
         shouldUse: true,
         mode: decision.plan?.mode ?? "off",
@@ -152,6 +171,22 @@ export class ResearchVerifier {
       considered: true,
       used: false,
       route: "failed",
+      toolRouting: {
+        ...(decision.toolRouting ?? defaultToolRoutingDecision),
+        toolResultUsed: false
+      },
+      skillRouting: decision.skillRouting ?? defaultSkillRoutingDecision,
+      skillUsed: decision.skillRouting?.skillFound ?? false,
+      skillConfidence: decision.skillRouting?.skillFound ? decision.skillRouting.confidence : null,
+      skillOutcome: decision.skillRouting?.skillFound ? "fallback" : "not_found",
+      agentRouting: decision.agentRouting ?? defaultAgentRoutingDecision,
+      agentOutcome: decision.agentRouting?.agentFound ? "fallback_core" : "not_found",
+      fallbackUsed: true,
+      agentRecommendation: decision.agentRouting?.recommendation ?? null,
+      toolGapDetected: false,
+      toolCandidateCreated: false,
+      toolCandidateId: null,
+      missingCapabilityReason: null,
       decision: {
         shouldUse: true,
         mode: decision.plan?.mode ?? "off",

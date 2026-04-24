@@ -1,6 +1,7 @@
 import type {
   OrchestrationPolicyDetails,
-  QuestionCategory
+  QuestionCategory,
+  ToolRoutingDecision
 } from "../../types/arena.js";
 import type { KnowledgeCategoryStrategy } from "../../types/knowledge.js";
 import type { ResearchDecisionArgs, SearchPlan } from "./common.js";
@@ -25,12 +26,17 @@ export class ResearchPlanner {
   buildPlan(
     args: ResearchDecisionArgs,
     strategy: KnowledgeCategoryStrategy | null,
-    orchestration: OrchestrationPolicyDetails | null
+    orchestration: OrchestrationPolicyDetails | null,
+    toolRouting: ToolRoutingDecision | null = null
   ): SearchPlan {
-    const temporalProfile = detectTemporalQuery(args.question);
+    const detectedTemporalProfile = detectTemporalQuery(args.question);
+    const temporalProfile = this.resolveTemporalProfile(detectedTemporalProfile, toolRouting);
     const combinedText = `${args.question} ${args.respondentA.answer} ${args.respondentB.answer} ${args.redTeam.potentially_false_claims.join(" ")}`;
     const signalHints = this.collectSignalHints(combinedText);
-    const preferredDomains = uniqueStrings(signalHints.flatMap((hint) => hint.domains));
+    const preferredDomains = uniqueStrings([
+      ...signalHints.flatMap((hint) => hint.domains),
+      ...this.getToolPreferredDomains(toolRouting)
+    ]);
     const signalTerms = uniqueStrings(signalHints.map((hint) => hint.canonical));
     const questionTerms = extractTerms(stripQuestionNoise(args.question)).slice(0, 6);
     const currentStatusRoleTerms =
@@ -112,6 +118,30 @@ export class ResearchPlanner {
     const orchestrationReasoning = orchestration
       ? `Orchestration focus ${orchestration.focus}; research policy ${orchestration.researchPolicy}; cost policy ${orchestration.costPolicy}.`
       : "No orchestration policy available.";
+    const toolReasoning = toolRouting?.toolType && toolRouting.toolType !== "none"
+      ? `Tool routing classified this request as ${toolRouting.toolType}/${toolRouting.intent} with confidence ${Math.round(toolRouting.confidence * 100)}%. ${toolRouting.reason}`
+      : "No explicit tool-routing override was applied.";
+
+    if (toolRouting?.toolRequired || toolRouting?.toolRecommended) {
+      const toolPlan = this.buildToolFirstPlan({
+        args,
+        category: args.category,
+        preferredDomains,
+        requiredTerms,
+        factFocusTerms,
+        entityTerms,
+        temporalProfile,
+        toolRouting,
+        orchestrationMode,
+        strategyReasoning,
+        orchestrationReasoning,
+        toolReasoning
+      });
+
+      if (toolPlan) {
+        return toolPlan;
+      }
+    }
 
     if (temporalProfile.isTemporal) {
       return {
@@ -129,7 +159,7 @@ export class ResearchPlanner {
         factFocusTerms,
         entityTerms,
         temporalProfile,
-        reasoning: `Temporal research requires a freshness-aware retrieval path for ${temporalProfile.queryType.replaceAll("_", " ")}. Anchor verification to ${describeTemporalWindow(temporalProfile) ?? temporalProfile.absoluteDateHint ?? "the current date"} and prefer dated primary sources. ${strategyReasoning} ${orchestrationReasoning}`.trim()
+        reasoning: `Temporal research requires a freshness-aware retrieval path for ${temporalProfile.queryType.replaceAll("_", " ")}. Anchor verification to ${describeTemporalWindow(temporalProfile) ?? temporalProfile.absoluteDateHint ?? "the current date"} and prefer dated primary sources. ${toolReasoning} ${strategyReasoning} ${orchestrationReasoning}`.trim()
       };
     }
 
@@ -149,7 +179,7 @@ export class ResearchPlanner {
           factFocusTerms,
           entityTerms,
           temporalProfile,
-          reasoning: `Technical explanation benefits from documentation-grade definitions and precise factual distinctions. ${strategyReasoning} ${orchestrationReasoning}`.trim()
+          reasoning: `Technical explanation benefits from documentation-grade definitions and precise factual distinctions. ${toolReasoning} ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
       case "debug_diagnostic":
         return {
@@ -166,7 +196,7 @@ export class ResearchPlanner {
           factFocusTerms,
           entityTerms,
           temporalProfile,
-          reasoning: `Debug diagnostics only benefit from grounding when the issue maps to concrete product behavior or documented errors. ${strategyReasoning} ${orchestrationReasoning}`.trim()
+          reasoning: `Debug diagnostics only benefit from grounding when the issue maps to concrete product behavior or documented errors. ${toolReasoning} ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
       case "mixed_reasoning":
         return {
@@ -183,7 +213,7 @@ export class ResearchPlanner {
           factFocusTerms,
           entityTerms,
           temporalProfile,
-          reasoning: `Mixed reasoning needs verification only for the factual subpart, not for the whole reasoning chain. ${strategyReasoning} ${orchestrationReasoning}`.trim()
+          reasoning: `Mixed reasoning needs verification only for the factual subpart, not for the whole reasoning chain. ${toolReasoning} ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
       case "incident_response":
         return {
@@ -200,7 +230,7 @@ export class ResearchPlanner {
           factFocusTerms,
           entityTerms,
           temporalProfile,
-          reasoning: `Incident response research should verify provider-, standard-, or policy-specific claims only. ${strategyReasoning} ${orchestrationReasoning}`.trim()
+          reasoning: `Incident response research should verify provider-, standard-, or policy-specific claims only. ${toolReasoning} ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
       case "architecture_design":
         return {
@@ -221,7 +251,7 @@ export class ResearchPlanner {
           factFocusTerms,
           entityTerms,
           temporalProfile,
-          reasoning: `Architecture research should verify hard constraints and concrete platform behaviors, not fetch generic design advice. ${strategyReasoning} ${orchestrationReasoning}`.trim()
+          reasoning: `Architecture research should verify hard constraints and concrete platform behaviors, not fetch generic design advice. ${toolReasoning} ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
       case "product_strategy":
         return {
@@ -238,7 +268,7 @@ export class ResearchPlanner {
           factFocusTerms,
           entityTerms,
           temporalProfile,
-          reasoning: `Product strategy research should only verify external claims, not replace strategic judgment. ${strategyReasoning} ${orchestrationReasoning}`.trim()
+          reasoning: `Product strategy research should only verify external claims, not replace strategic judgment. ${toolReasoning} ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
       case "operational_writing":
         return {
@@ -259,7 +289,7 @@ export class ResearchPlanner {
           factFocusTerms,
           entityTerms,
           temporalProfile,
-          reasoning: `Operational writing research should only validate required facts, chronology, or official wording. ${strategyReasoning} ${orchestrationReasoning}`.trim()
+          reasoning: `Operational writing research should only validate required facts, chronology, or official wording. ${toolReasoning} ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
       case "other":
       default:
@@ -277,8 +307,266 @@ export class ResearchPlanner {
           factFocusTerms,
           entityTerms,
           temporalProfile,
-          reasoning: `General research should stay focused on externally verifiable claims. ${strategyReasoning} ${orchestrationReasoning}`.trim()
+          reasoning: `General research should stay focused on externally verifiable claims. ${toolReasoning} ${strategyReasoning} ${orchestrationReasoning}`.trim()
         };
+    }
+  }
+
+  private resolveTemporalProfile(
+    detectedTemporalProfile: SearchPlan["temporalProfile"],
+    toolRouting: ToolRoutingDecision | null
+  ): SearchPlan["temporalProfile"] {
+    if (!toolRouting || toolRouting.toolType === "none") {
+      return detectedTemporalProfile;
+    }
+
+    if (detectedTemporalProfile.isTemporal) {
+      return detectedTemporalProfile;
+    }
+
+    switch (toolRouting.intent) {
+      case "current_weather":
+      case "current_price":
+      case "live_score":
+      case "currency_conversion":
+      case "current_status":
+        return {
+          ...detectedTemporalProfile,
+          isTemporal: true,
+          focus: "current",
+          queryType: "current_status",
+          recencyDays: 7,
+          absoluteDateHint: detectedTemporalProfile.absoluteDateHint,
+          queryDirectives: uniqueStrings([
+            ...detectedTemporalProfile.queryDirectives,
+            "Treat this request as a current-state lookup."
+          ]),
+          answerDirectives: uniqueStrings([
+            ...detectedTemporalProfile.answerDirectives,
+            "Do not answer from stale prior knowledge."
+          ])
+        } satisfies SearchPlan["temporalProfile"];
+      case "latest_release":
+        return {
+          ...detectedTemporalProfile,
+          isTemporal: true,
+          focus: "latest",
+          queryType: "release_freshness",
+          recencyDays: 365
+        } satisfies SearchPlan["temporalProfile"];
+      case "recent_updates": {
+        const focus: SearchPlan["temporalProfile"]["focus"] =
+          detectedTemporalProfile.focus === "none" ? "recent" : detectedTemporalProfile.focus;
+        return {
+          ...detectedTemporalProfile,
+          isTemporal: true,
+          focus,
+          queryType: "recent_updates",
+          recencyDays: detectedTemporalProfile.recencyDays ?? 30
+        } satisfies SearchPlan["temporalProfile"];
+      }
+      default:
+        return detectedTemporalProfile;
+    }
+  }
+
+  private getToolPreferredDomains(toolRouting: ToolRoutingDecision | null) {
+    if (!toolRouting) {
+      return [];
+    }
+
+    switch (toolRouting.toolType) {
+      case "weather":
+        return ["weather.com", "accuweather.com", "meteofrance.com"];
+      case "finance":
+        return ["coingecko.com", "coinmarketcap.com", "finance.yahoo.com"];
+      case "sports":
+        return ["espn.com", "flashscore.com"];
+      case "repo":
+        return ["github.com"];
+      case "web":
+        return ["github.com"];
+      default:
+        return [];
+    }
+  }
+
+  private buildToolFirstPlan(args: {
+    args: ResearchDecisionArgs;
+    category: QuestionCategory;
+    preferredDomains: string[];
+    requiredTerms: string[];
+    factFocusTerms: string[];
+    entityTerms: string[];
+    temporalProfile: SearchPlan["temporalProfile"];
+    toolRouting: ToolRoutingDecision;
+    orchestrationMode: SearchPlan["mode"];
+    strategyReasoning: string;
+    orchestrationReasoning: string;
+    toolReasoning: string;
+  }): SearchPlan | null {
+    const subject =
+      typeof args.toolRouting.extractedArgs?.subject === "string"
+        ? normalizeSpace(args.toolRouting.extractedArgs.subject)
+        : typeof args.toolRouting.extractedArgs?.repo === "string"
+          ? normalizeSpace(args.toolRouting.extractedArgs.repo)
+          : "";
+    const location =
+      typeof args.toolRouting.extractedArgs?.location === "string"
+        ? normalizeSpace(args.toolRouting.extractedArgs.location)
+        : "";
+    const asset =
+      typeof args.toolRouting.extractedArgs?.asset === "string"
+        ? normalizeSpace(args.toolRouting.extractedArgs.asset)
+        : "";
+    const amount =
+      typeof args.toolRouting.extractedArgs?.amount === "number"
+        ? String(args.toolRouting.extractedArgs.amount)
+        : "";
+    const from =
+      typeof args.toolRouting.extractedArgs?.from === "string"
+        ? normalizeSpace(args.toolRouting.extractedArgs.from)
+        : "";
+    const to =
+      typeof args.toolRouting.extractedArgs?.to === "string"
+        ? normalizeSpace(args.toolRouting.extractedArgs.to)
+        : "";
+    const baseReasoning = `${args.toolReasoning} ${args.strategyReasoning} ${args.orchestrationReasoning}`.trim();
+
+    switch (args.toolRouting.intent) {
+      case "current_weather":
+        return {
+          intent: "current_status",
+          mode: "targeted_verify",
+          queries: uniqueStrings([
+            normalizeSpace(`current weather ${location || args.args.question}`),
+            normalizeSpace(`${location || args.args.question} weather today`),
+            normalizeSpace(`${location || args.args.question} current conditions weather`)
+          ]).slice(0, 3),
+          requiredTerms: uniqueStrings([...args.requiredTerms, ...extractFocusTerms(location), "weather"]).slice(0, 8),
+          preferredDomains: args.preferredDomains,
+          factFocusTerms: uniqueStrings([...args.factFocusTerms, "weather", "temperature", "forecast"]).slice(0, 8),
+          entityTerms: uniqueStrings([...args.entityTerms, ...extractFocusTerms(location), "weather"]).slice(0, 8),
+          temporalProfile: args.temporalProfile,
+          reasoning: `Current weather must be treated as live current-state data. ${baseReasoning}`.trim()
+        };
+      case "current_price":
+        return {
+          intent: "current_status",
+          mode: "targeted_verify",
+          queries: uniqueStrings([
+            normalizeSpace(`${asset || args.args.question} price today`),
+            normalizeSpace(`${asset || args.args.question} current price`),
+            normalizeSpace(`${asset || args.args.question} price now`)
+          ]).slice(0, 3),
+          requiredTerms: uniqueStrings([...args.requiredTerms, ...extractFocusTerms(asset), "price"]).slice(0, 8),
+          preferredDomains: args.preferredDomains,
+          factFocusTerms: uniqueStrings([...args.factFocusTerms, "price", ...extractFocusTerms(asset)]).slice(0, 8),
+          entityTerms: uniqueStrings([...args.entityTerms, ...extractFocusTerms(asset)]).slice(0, 8),
+          temporalProfile: args.temporalProfile,
+          reasoning: `Current pricing is live finance data and must be verified against current sources. ${baseReasoning}`.trim()
+        };
+      case "live_score":
+      case "live_standings":
+        return {
+          intent: "current_status",
+          mode: "targeted_verify",
+          queries: uniqueStrings([
+            normalizeSpace(`${subject || args.args.question} ${args.toolRouting.intent === "live_standings" ? "standings" : "score"} today`),
+            normalizeSpace(`${subject || args.args.question} live ${args.toolRouting.intent === "live_standings" ? "standings" : "score"}`),
+            normalizeSpace(`${subject || args.args.question} current ${args.toolRouting.intent === "live_standings" ? "standings" : "score"}`)
+          ]).slice(0, 3),
+          requiredTerms: uniqueStrings([...args.requiredTerms, "score", ...extractFocusTerms(subject)]).slice(0, 8),
+          preferredDomains: args.preferredDomains,
+          factFocusTerms: uniqueStrings([...args.factFocusTerms, "score", "live"]).slice(0, 8),
+          entityTerms: uniqueStrings([...args.entityTerms, ...extractFocusTerms(subject)]).slice(0, 8),
+          temporalProfile: args.temporalProfile,
+          reasoning: `Live sports information should be routed through current-status retrieval. ${baseReasoning}`.trim()
+        };
+      case "github_repo_lookup":
+        return {
+          intent: "fact_check",
+          mode: args.orchestrationMode,
+          queries: uniqueStrings([
+            normalizeSpace(`${subject || args.args.question} GitHub repository`),
+            normalizeSpace(`${subject || args.args.question} github repo`),
+            normalizeSpace(`site:github.com ${subject || args.args.question}`)
+          ]).slice(0, 3),
+          requiredTerms: uniqueStrings([...args.requiredTerms, "github", ...extractFocusTerms(subject)]).slice(0, 8),
+          preferredDomains: uniqueStrings(["github.com", ...args.preferredDomains]).slice(0, 8),
+          factFocusTerms: uniqueStrings([...args.factFocusTerms, "github", "repository"]).slice(0, 8),
+          entityTerms: uniqueStrings([...args.entityTerms, ...extractFocusTerms(subject)]).slice(0, 8),
+          temporalProfile: args.temporalProfile,
+          reasoning: `GitHub repository lookup should search the canonical repository domain first. ${baseReasoning}`.trim()
+        };
+      case "external_lookup":
+      case "documentation_lookup":
+        return {
+          intent: "fact_check",
+          mode: args.orchestrationMode,
+          queries: uniqueStrings([
+            normalizeSpace(`${subject || args.args.question} official documentation`),
+            normalizeSpace(`${subject || args.args.question} official site`),
+            normalizeSpace(`${subject || args.args.question} reference`)
+          ]).slice(0, 3),
+          requiredTerms: uniqueStrings([...args.requiredTerms, ...extractFocusTerms(subject)]).slice(0, 8),
+          preferredDomains: args.preferredDomains,
+          factFocusTerms: uniqueStrings([...args.factFocusTerms, "official", "documentation"]).slice(0, 8),
+          entityTerms: uniqueStrings([...args.entityTerms, ...extractFocusTerms(subject)]).slice(0, 8),
+          temporalProfile: args.temporalProfile,
+          reasoning: `External lookup should search the canonical site or documentation first. ${baseReasoning}`.trim()
+        };
+      case "latest_release":
+        return {
+          intent: "release_freshness",
+          mode: "targeted_verify",
+          queries: uniqueStrings([
+            normalizeSpace(`${subject || args.args.question} latest version release notes`),
+            normalizeSpace(`${subject || args.args.question} latest release official`),
+            normalizeSpace(`${subject || args.args.question} changelog latest version`)
+          ]).slice(0, 3),
+          requiredTerms: uniqueStrings([...args.requiredTerms, ...extractFocusTerms(subject), "release", "version"]).slice(0, 8),
+          preferredDomains: args.preferredDomains,
+          factFocusTerms: uniqueStrings([...args.factFocusTerms, "release", "version", "latest"]).slice(0, 8),
+          entityTerms: uniqueStrings([...args.entityTerms, ...extractFocusTerms(subject)]).slice(0, 8),
+          temporalProfile: args.temporalProfile,
+          reasoning: `Latest release queries should prefer release notes, changelogs, and version pages. ${baseReasoning}`.trim()
+        };
+      case "current_status":
+        return {
+          intent: "current_status",
+          mode: "targeted_verify",
+          queries: this.buildCurrentStatusQueries(
+            subject || args.args.question,
+            this.buildTemporalAnchor(args.temporalProfile),
+            this.buildTemporalCategoryTerms(args.category),
+            args.preferredDomains
+          ),
+          requiredTerms: uniqueStrings([...args.requiredTerms, ...extractFocusTerms(subject)]).slice(0, 8),
+          preferredDomains: args.preferredDomains,
+          factFocusTerms: uniqueStrings([...args.factFocusTerms, "current", "status"]).slice(0, 8),
+          entityTerms: uniqueStrings([...args.entityTerms, ...extractFocusTerms(subject)]).slice(0, 8),
+          temporalProfile: args.temporalProfile,
+          reasoning: `Current external status should use a current-state lookup path. ${baseReasoning}`.trim()
+        };
+      case "currency_conversion":
+        return {
+          intent: "current_status",
+          mode: "targeted_verify",
+          queries: uniqueStrings([
+            normalizeSpace(`${amount} ${from} to ${to} exchange rate today`),
+            normalizeSpace(`${from} ${to} current exchange rate`),
+            normalizeSpace(`${amount} ${from} ${to} conversion today`)
+          ]).slice(0, 3),
+          requiredTerms: uniqueStrings([...args.requiredTerms, from, to, "exchange rate"]).slice(0, 8),
+          preferredDomains: uniqueStrings(["xe.com", "wise.com", "oanda.com", ...args.preferredDomains]).slice(0, 8),
+          factFocusTerms: uniqueStrings([...args.factFocusTerms, from, to, "exchange rate"]).slice(0, 8),
+          entityTerms: uniqueStrings([...args.entityTerms, from.toLowerCase(), to.toLowerCase()]).slice(0, 8),
+          temporalProfile: args.temporalProfile,
+          reasoning: `Currency conversion requires a current exchange-rate lookup when no local rate is available. ${baseReasoning}`.trim()
+        };
+      default:
+        return null;
     }
   }
 

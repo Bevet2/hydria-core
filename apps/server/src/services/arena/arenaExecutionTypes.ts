@@ -6,6 +6,8 @@ import type {
   RespondentOutput,
   SynthesizerOutput
 } from "../../types/arena.js";
+import type { AgentRoutingDecision } from "../../types/agents.js";
+import type { SkillRoutingDecision } from "../../types/skills.js";
 import type { LocalStudentOutput } from "../../types/localModel.js";
 import type {
   RespondentFailureClass,
@@ -70,7 +72,31 @@ export class RespondentStageError extends Error {
   }
 }
 
-export function buildOpenRouterTrace(model: string, note: string): ExecutionTrace {
+export function buildNoSkillTraceFields(
+  skillRouting: SkillRoutingDecision | null = null,
+  agentRouting: AgentRoutingDecision | null = null
+) {
+  return {
+    skillRouting,
+    skillUsed: skillRouting?.skillFound ?? false,
+    skillConfidence: skillRouting?.skillFound ? skillRouting.confidence : null,
+    skillOutcome: skillRouting?.skillFound ? "recommended" : "not_found",
+    agentRouting,
+    agentOutcome: agentRouting?.agentFound
+      ? agentRouting.fallbackToCore
+        ? "fallback_core"
+        : "recommended"
+      : "not_found",
+    fallbackUsed: agentRouting?.fallbackToCore ?? false
+  } as const;
+}
+
+export function buildOpenRouterTrace(
+  model: string,
+  note: string,
+  skillRouting: SkillRoutingDecision | null = null,
+  agentRouting: AgentRoutingDecision | null = null
+): ExecutionTrace {
   return {
     requestedProvider: "openrouter",
     requestedModel: model,
@@ -86,6 +112,7 @@ export function buildOpenRouterTrace(model: string, note: string): ExecutionTrac
     usedRetry: false,
     usedFallback: false,
     validationFailures: 0,
+    ...buildNoSkillTraceFields(skillRouting, agentRouting),
     outcome: "success",
     note
   };

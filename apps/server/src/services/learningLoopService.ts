@@ -1,4 +1,9 @@
 import type { LearningActiveMemory, LearningGovernanceReport, LearningValidationSummary } from "../types/learning.js";
+import { AgentCandidateDetectorService } from "./agents/agentCandidateDetectorService.js";
+import { AgentCandidateService } from "./agents/agentCandidateService.js";
+import { AgentRegistry } from "./agents/agentRegistry.js";
+import { SkillCandidateService } from "./skills/skillCandidateService.js";
+import { SkillRegistry } from "./skills/skillRegistry.js";
 import { HistoryStore } from "./historyStore.js";
 import { KnowledgeLayerService } from "./knowledgeLayerService.js";
 import { KnowledgeMemoryService } from "./knowledgeMemoryService.js";
@@ -7,6 +12,9 @@ import { StudentStrategyDiscoveryService } from "./studentStrategyDiscoveryServi
 import { StudentRuleImpactTrackerService } from "./studentRuleImpactTrackerService.js";
 import { StudentStrategyImpactTrackerService } from "./studentStrategyImpactTrackerService.js";
 import { StudentToolImpactTrackerService } from "./studentToolImpactTrackerService.js";
+import { ToolCandidateService } from "./tools/toolCandidateService.js";
+import { ToolGapDetectorService } from "./tools/toolGapDetectorService.js";
+import { ToolRegistry } from "./tools/toolRegistry.js";
 import { ArenaRespondentFailureStore } from "./arenaRespondentFailureStore.js";
 import { listPersistedStudentSessions } from "./storage/studentSessionPersistence.js";
 import { env } from "../utils/env.js";
@@ -30,9 +38,24 @@ type LearningLoopServiceOptions = {
   toolImpactTrackerService?: Pick<StudentToolImpactTrackerService, "buildAndPersist">;
   strategyDiscoveryService?: Pick<StudentStrategyDiscoveryService, "load">;
   respondentFailureStore?: Pick<ArenaRespondentFailureStore, "listEvents">;
+  skillRegistry?: Pick<SkillRegistry, "listSkills" | "registerSkill">;
+  skillCandidateService?: Pick<SkillCandidateService, "extractFromCorpus">;
+  agentRegistry?: Pick<AgentRegistry, "listAgents" | "saveAgent">;
+  agentCandidateDetectorService?: Pick<AgentCandidateDetectorService, "detect">;
+  agentCandidateService?: Pick<AgentCandidateService, "buildCandidates">;
+  toolRegistry?: Pick<ToolRegistry, "listTools" | "saveTool">;
+  toolGapDetectorService?: Pick<ToolGapDetectorService, "detect">;
+  toolCandidateService?: Pick<ToolCandidateService, "buildCandidates">;
   learningGovernanceService?: Pick<
     LearningGovernanceService,
-    "buildReport" | "buildActiveMemory" | "persistReport" | "persistActiveMemory" | "loadReport"
+    | "buildReport"
+    | "buildActiveMemory"
+    | "persistReport"
+    | "persistActiveMemory"
+    | "loadReport"
+    | "evaluateSkills"
+    | "evaluateAgents"
+    | "evaluateTools"
   >;
   temporalEvalService?: Pick<StudentTemporalEvalService, "run"> | null;
 };
@@ -47,9 +70,24 @@ export class LearningLoopService {
   private readonly toolImpactTrackerService: Pick<StudentToolImpactTrackerService, "buildAndPersist">;
   private readonly strategyDiscoveryService: Pick<StudentStrategyDiscoveryService, "load">;
   private readonly respondentFailureStore: Pick<ArenaRespondentFailureStore, "listEvents">;
+  private readonly skillRegistry: Pick<SkillRegistry, "listSkills" | "registerSkill">;
+  private readonly skillCandidateService: Pick<SkillCandidateService, "extractFromCorpus">;
+  private readonly agentRegistry: Pick<AgentRegistry, "listAgents" | "saveAgent">;
+  private readonly agentCandidateDetectorService: Pick<AgentCandidateDetectorService, "detect">;
+  private readonly agentCandidateService: Pick<AgentCandidateService, "buildCandidates">;
+  private readonly toolRegistry: Pick<ToolRegistry, "listTools" | "saveTool">;
+  private readonly toolGapDetectorService: Pick<ToolGapDetectorService, "detect">;
+  private readonly toolCandidateService: Pick<ToolCandidateService, "buildCandidates">;
   private readonly learningGovernanceService: Pick<
     LearningGovernanceService,
-    "buildReport" | "buildActiveMemory" | "persistReport" | "persistActiveMemory" | "loadReport"
+    | "buildReport"
+    | "buildActiveMemory"
+    | "persistReport"
+    | "persistActiveMemory"
+    | "loadReport"
+    | "evaluateSkills"
+    | "evaluateAgents"
+    | "evaluateTools"
   >;
   private readonly temporalEvalService: Pick<StudentTemporalEvalService, "run"> | null;
 
@@ -68,6 +106,15 @@ export class LearningLoopService {
       options.strategyDiscoveryService ?? new StudentStrategyDiscoveryService();
     this.respondentFailureStore =
       options.respondentFailureStore ?? new ArenaRespondentFailureStore();
+    this.skillRegistry = options.skillRegistry ?? new SkillRegistry();
+    this.skillCandidateService = options.skillCandidateService ?? new SkillCandidateService();
+    this.agentRegistry = options.agentRegistry ?? new AgentRegistry();
+    this.agentCandidateDetectorService =
+      options.agentCandidateDetectorService ?? new AgentCandidateDetectorService();
+    this.agentCandidateService = options.agentCandidateService ?? new AgentCandidateService();
+    this.toolRegistry = options.toolRegistry ?? new ToolRegistry();
+    this.toolGapDetectorService = options.toolGapDetectorService ?? new ToolGapDetectorService();
+    this.toolCandidateService = options.toolCandidateService ?? new ToolCandidateService();
     this.learningGovernanceService =
       options.learningGovernanceService ?? new LearningGovernanceService();
     this.temporalEvalService = options.temporalEvalService ?? null;
@@ -79,7 +126,7 @@ export class LearningLoopService {
   }> {
     const validationMode = args.validationMode ?? "none";
 
-    const [previousReport, rounds, respondentFailures, sessions, knowledgeLayer, ruleImpact, strategyImpact, toolImpact, strategyDiscovery] =
+    const [previousReport, rounds, respondentFailures, sessions, knowledgeLayer, ruleImpact, strategyImpact, toolImpact, strategyDiscovery, existingSkills, existingAgents, existingTools] =
       await Promise.all([
         this.learningGovernanceService.loadReport(),
         this.historyStore.listRounds(),
@@ -92,7 +139,10 @@ export class LearningLoopService {
         this.ruleImpactTrackerService.buildAndPersist(),
         this.strategyImpactTrackerService.buildAndPersist(),
         this.toolImpactTrackerService.buildAndPersist(),
-        this.strategyDiscoveryService.load()
+        this.strategyDiscoveryService.load(),
+        this.skillRegistry.listSkills(),
+        this.agentRegistry.listAgents(),
+        this.toolRegistry.listTools()
       ]);
 
     await this.knowledgeMemoryService.buildAndPersist(knowledgeLayer);
@@ -101,6 +151,49 @@ export class LearningLoopService {
       rounds,
       respondentFailures
     );
+    const skillCandidates = this.skillCandidateService.extractFromCorpus({
+      rounds,
+      sessions
+    });
+    const skillEvaluation = this.learningGovernanceService.evaluateSkills({
+      candidates: skillCandidates,
+      existingSkills,
+      rounds,
+      sessions
+    });
+    const agentDetections = this.agentCandidateDetectorService.detect({
+      skills: skillEvaluation.skills,
+      rounds,
+      sessions
+    });
+    const agentCandidates = this.agentCandidateService.buildCandidates({
+      detections: agentDetections,
+      skills: skillEvaluation.skills
+    });
+    const agentEvaluation = this.learningGovernanceService.evaluateAgents({
+      candidates: agentCandidates,
+      existingAgents,
+      skills: skillEvaluation.skills,
+      rounds,
+      sessions
+    });
+    const toolGaps = this.toolGapDetectorService.detect({
+      rounds,
+      sessions,
+      existingTools
+    });
+    const toolCandidates = this.toolCandidateService.buildCandidates(toolGaps);
+    const toolEvaluation = this.learningGovernanceService.evaluateTools({
+      candidates: toolCandidates,
+      existingTools,
+      rounds,
+      sessions
+    });
+    await Promise.all([
+      ...skillEvaluation.skills.map((skill) => this.skillRegistry.registerSkill(skill)),
+      ...agentEvaluation.agents.map((agent) => this.agentRegistry.saveAgent(agent)),
+      ...toolEvaluation.tools.map((tool) => this.toolRegistry.saveTool(tool))
+    ]);
     const report = this.learningGovernanceService.buildReport({
       rounds,
       sessions,
@@ -110,6 +203,17 @@ export class LearningLoopService {
       strategyImpact,
       toolImpact,
       strategyDiscovery,
+      skills: skillEvaluation.skills,
+      skillCandidates,
+      skillValidations: skillEvaluation.validations,
+      agents: agentEvaluation.agents,
+      agentCandidates,
+      agentValidations: agentEvaluation.validations,
+      tools: toolEvaluation.tools,
+      toolGaps,
+      toolCandidates,
+      toolValidations: toolEvaluation.validations,
+      toolRequests: toolEvaluation.requests,
       previousReport,
       validation
     });

@@ -88,6 +88,9 @@ Mandatory rules:
 - apply the Red Team criticism in a real way
 - do not merely restate the original answer
 - keep what is good and correct what is weak
+- when the request depends on live/current/external/calculable/file/repo/action data, do not improvise a concrete result
+- when a tool is available in the prompt, use it or state clearly that it failed or was unavailable
+- do not tell the user to consult another app or site if a tool route was already available in Hydria
 - stay concrete, structured, and useful
 - return strict valid JSON only
 - do not include any text before or after the JSON
@@ -173,6 +176,7 @@ ${JSON.stringify(
 ${args.research?.decision.shouldUse ? `EXTERNAL RESEARCH TOOL FINDINGS
 ${JSON.stringify(
     {
+      tool_routing: args.research.toolRouting,
       query: args.research.query,
       query_plan: {
         selected_query: args.research.queryPlan.selectedQuery,
@@ -208,6 +212,8 @@ Reminders:
 - if external research findings are present, use them to verify, tighten, or qualify factual claims
 - if external research findings are present, prefer sourced claims over unsupported generic claims
 - if external research findings are incomplete or mixed, keep uncertainty explicit instead of pretending certainty
+- if tool_routing.toolRequired is true and truth.no_reliable_source is true, explicitly say the required tool lookup failed or could not retrieve a reliable live result
+- if tool_routing.toolRequired is true and tool_routing.fallbackAllowed is false, do not redirect the user to an app/site instead of reporting the tool failure
 - if query_plan.temporal_profile.isTemporal is true, replace relative time words with the exact date or date window from temporal_profile
 - if query_plan.temporal_profile.isTemporal is true, do not claim something is current/latest/recent without the explicit as-of date or verified window
 - if query_plan.temporal_profile.isTemporal is true, do not answer the freshness-sensitive claim from general knowledge
@@ -286,6 +292,7 @@ ${JSON.stringify(
 ${args.research?.decision.shouldUse ? `EXTERNAL RESEARCH TOOL FINDINGS
 ${JSON.stringify(
     {
+      tool_routing: args.research.toolRouting,
       query: args.research.query,
       query_plan: {
         selected_query: args.research.queryPlan.selectedQuery,
@@ -327,6 +334,7 @@ Repair instructions:
 - preserve the memory rules that match the current failure pattern when they improve precision
 - if external research findings are present, preserve the sourced constraints or examples when they materially improve precision
 - if external research findings are present, do not invent details that are not supported by the sources
+- if tool_routing.toolRequired is true and truth.no_reliable_source is true, preserve the explicit statement that the required tool lookup failed or stayed unverified
 - if query_plan.temporal_profile.isTemporal is true, keep the explicit as-of date or date window in the repaired answer instead of reverting to vague relative wording
 - if query_plan.temporal_profile.isTemporal is true, do not repair the answer by filling freshness gaps with general knowledge
 - if verification.freshnessSatisfied is false for a temporal query, preserve the explicit statement that no sufficiently recent dated source was found

@@ -128,6 +128,21 @@ export class ResearchVerifierImpactService {
 
     return {
       ...args.log,
+      toolRouting: {
+        ...args.log.toolRouting,
+        toolResultUsed:
+          args.log.used &&
+          (refineChangedBecauseOfTool ||
+            args.log.toolRouting.toolType === "calculator" ||
+            args.log.toolRouting.toolType === "time")
+      },
+      skillUsed: args.log.skillRouting.skillFound,
+      skillConfidence: args.log.skillRouting.skillFound ? args.log.skillRouting.confidence : null,
+      skillOutcome: args.log.skillRouting.skillFound
+        ? refineChangedBecauseOfTool
+          ? "recommended"
+          : "fallback"
+        : "not_found",
       impact: {
         ...args.log.impact,
         refineChangedBecauseOfTool,

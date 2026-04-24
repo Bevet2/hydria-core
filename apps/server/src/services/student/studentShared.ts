@@ -1,11 +1,15 @@
 import { respondentOutputSchema, type ExecutionTrace, type RespondentOutput } from "../../types/arena.js";
+import type { AgentRoutingDecision } from "../../types/agents.js";
 import type { KnowledgeInjection } from "../../types/knowledge.js";
+import type { SkillRoutingDecision } from "../../types/skills.js";
 import type { StudentAnswer } from "../../types/student.js";
 
 export function toStudentTrace(args: {
   requestedModel: string;
   usedRetry: boolean;
   note: string;
+  skillRouting?: SkillRoutingDecision | null;
+  agentRouting?: AgentRoutingDecision | null;
 }): ExecutionTrace {
   return {
     requestedProvider: "ollama",
@@ -31,6 +35,17 @@ export function toStudentTrace(args: {
     usedRetry: args.usedRetry,
     usedFallback: false,
     validationFailures: args.usedRetry ? 1 : 0,
+    skillRouting: args.skillRouting ?? null,
+    skillUsed: args.skillRouting?.skillFound ?? false,
+    skillConfidence: args.skillRouting?.skillFound ? args.skillRouting.confidence : null,
+    skillOutcome: args.skillRouting?.skillFound ? "recommended" : "not_found",
+    agentRouting: args.agentRouting ?? null,
+    agentOutcome: args.agentRouting?.agentFound
+      ? args.agentRouting.fallbackToCore
+        ? "fallback_core"
+        : "recommended"
+      : "not_found",
+    fallbackUsed: args.agentRouting?.fallbackToCore ?? false,
     outcome: args.usedRetry ? "retry_success" : "success",
     note: args.note
   };

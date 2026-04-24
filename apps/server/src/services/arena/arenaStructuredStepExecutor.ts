@@ -46,6 +46,7 @@ import type {
   ArenaSynthesizerStepResult,
   StepResult
 } from "./arenaExecutionTypes.js";
+import { buildNoSkillTraceFields } from "./arenaExecutionTypes.js";
 
 type RouterDecision = Awaited<ReturnType<import("../refineRouter.js").RefineRouterService["decide"]>>;
 
@@ -145,6 +146,7 @@ export class ArenaStructuredStepExecutor {
         usedRetry: result.usedRetry,
         usedFallback: result.usedFallback,
         validationFailures: result.validationFailures,
+        ...buildNoSkillTraceFields(),
         outcome: result.usedFallback ? "fallback_success" : result.usedRetry ? "retry_success" : "success",
         note: result.usedFallback
           ? "Primary judge output failed validation; fallback OpenRouter model produced validated judge JSON."
@@ -249,6 +251,7 @@ export class ArenaStructuredStepExecutor {
         usedRetry: result.usedRetry,
         usedFallback: result.usedFallback,
         validationFailures: result.validationFailures,
+        ...buildNoSkillTraceFields(),
         outcome: result.usedFallback ? "fallback_success" : result.usedRetry ? "retry_success" : "success",
         note: result.usedFallback
           ? "Primary synthesizer output failed validation; fallback OpenRouter model produced validated synthesizer JSON."
@@ -354,6 +357,7 @@ export class ArenaStructuredStepExecutor {
           usedRetry: result.usedRetry,
           usedFallback: true,
           validationFailures: result.validationFailures,
+          ...buildNoSkillTraceFields(),
           outcome: "static_fallback",
           note: `All refiner attempts failed for the ${args.category} profile; the original answer was preserved.`
         },
@@ -372,6 +376,7 @@ export class ArenaStructuredStepExecutor {
         usedRetry: result.usedRetry,
         usedFallback: result.usedFallback,
         validationFailures: result.validationFailures,
+        ...buildNoSkillTraceFields(),
         outcome: result.usedFallback ? "fallback_success" : result.usedRetry ? "retry_success" : "success",
         note: result.usedFallback
           ? `Primary refiner failed; fallback OpenRouter model produced validated JSON for the ${args.category} profile.`
@@ -408,6 +413,7 @@ export class ArenaStructuredStepExecutor {
         usedRetry: false,
         usedFallback: false,
         validationFailures: 0,
+        ...buildNoSkillTraceFields(),
         outcome: "skipped",
         note: `Refine ${slot} skipped by router because the expected value was too low for the ${category} profile.`
       },

@@ -11,9 +11,11 @@ import type {
   ResearchToolLog,
   RedTeamOutput,
   RespondentOutput,
-  SynthesizerOutput
+  SynthesizerOutput,
+  ToolRoutingDecision
 } from "../types/arena.js";
 import type { KnowledgeInjection } from "../types/knowledge.js";
+import type { SkillRoutingDecision } from "../types/skills.js";
 import {
   localModelHealthSchema,
   localModelTestResponseSchema,
@@ -699,6 +701,8 @@ export class LocalModelService {
     strategy: StudentResponseStrategy;
     knowledge?: KnowledgeInjection | null;
     research?: ResearchToolLog | null;
+    toolRouting?: ToolRoutingDecision | null;
+    skillRouting?: SkillRoutingDecision | null;
   }) {
     let previousResponse = "";
     let validationIssues: string[] = [];
@@ -735,7 +739,9 @@ export class LocalModelService {
         previousResponse: previousResponse || "(empty response)",
         validationIssues,
         knowledge: args.knowledge,
-        research: args.research
+        research: args.research,
+        toolRouting: args.toolRouting,
+        skillRouting: args.skillRouting
       }),
       studentDirectSystemPrompt
     );
@@ -759,6 +765,8 @@ export class LocalModelService {
     strategy: StudentResponseStrategy;
     knowledge?: KnowledgeInjection | null;
     research?: ResearchToolLog | null;
+    toolRouting?: ToolRoutingDecision | null;
+    skillRouting?: SkillRoutingDecision | null;
   }): Promise<StudentAnswer> {
     const result = await this.answerQuestionDetailed(args);
     return result.output;

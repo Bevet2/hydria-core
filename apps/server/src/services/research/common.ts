@@ -9,9 +9,12 @@ import type {
   ResearchSourceRetrievalOrigin,
   ResearchTemporalProfile,
   RedTeamOutput,
-  RespondentOutput
+  RespondentOutput,
+  ToolRoutingDecision
 } from "../../types/arena.js";
+import type { AgentRoutingDecision } from "../../types/agents.js";
 import type { KnowledgeCategoryStrategy } from "../../types/knowledge.js";
+import type { SkillRoutingDecision } from "../../types/skills.js";
 import type { StudentResponseStrategy } from "../../types/student.js";
 
 export const USER_AGENT =
@@ -183,6 +186,9 @@ export type ResearchDecision = {
   expectedCostMs: number;
   knowledgeStrategy: KnowledgeCategoryStrategy | null;
   plan: SearchPlan | null;
+  toolRouting?: ToolRoutingDecision | null;
+  skillRouting?: SkillRoutingDecision | null;
+  agentRouting?: AgentRoutingDecision | null;
 };
 
 export function normalizeSpace(value: string) {

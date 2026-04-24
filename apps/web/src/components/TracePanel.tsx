@@ -108,6 +108,12 @@ export function TracePanel({ round }: TracePanelProps) {
           </strong>
         </div>
         <div className="overview-item">
+          <span>Tool routing</span>
+          <strong>
+            {round.research.toolRouting.toolType} / {round.research.toolRouting.intent}
+          </strong>
+        </div>
+        <div className="overview-item">
           <span>Respondent outcomes</span>
           <strong>
             P {respondentPrimarySuccesses} · R {respondentRetrySuccesses} · F{" "}
@@ -131,6 +137,15 @@ export function TracePanel({ round }: TracePanelProps) {
       {round.research.considered ? (
         <div className="trace-notes">
           <h3>Research Tool</h3>
+          <p className="muted">
+            Routing:{" "}
+            {round.research.toolRouting.toolRequired
+              ? "required"
+              : round.research.toolRouting.toolRecommended
+                ? "recommended"
+                : "not needed"}{" "}
+            / {round.research.toolRouting.toolType} / {round.research.toolRouting.intent}
+          </p>
           <p className="muted">
             {round.research.query ? `Query: ${round.research.query}` : "No query issued."}
           </p>

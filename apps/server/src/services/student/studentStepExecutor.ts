@@ -31,6 +31,7 @@ import { env, defaultArenaModels } from "../../utils/env.js";
 import { parseStructuredOutput } from "../../utils/jsonRepair.js";
 import { parseRefinerOutput } from "../../utils/refineOutput.js";
 import { executeOpenRouterStructuredStep } from "../arena/openRouterStructuredStep.js";
+import { buildNoSkillTraceFields } from "../arena/arenaExecutionTypes.js";
 import { OpenRouterService } from "../openrouter.js";
 
 export type StudentStepResult<T> = {
@@ -55,6 +56,7 @@ function buildOpenRouterTrace(model: string, note: string): ExecutionTrace {
     usedRetry: false,
     usedFallback: false,
     validationFailures: 0,
+    ...buildNoSkillTraceFields(),
     outcome: "success",
     note
   };
@@ -202,6 +204,7 @@ export class StudentStepExecutor {
           usedRetry: result.usedRetry,
           usedFallback: true,
           validationFailures: result.validationFailures,
+          ...buildNoSkillTraceFields(),
           outcome: "static_fallback",
           note: `Teacher failed to refine the student answer for ${args.category}; the original student answer was preserved.`
         },
@@ -220,6 +223,7 @@ export class StudentStepExecutor {
         usedRetry: result.usedRetry,
         usedFallback: result.usedFallback,
         validationFailures: result.validationFailures,
+        ...buildNoSkillTraceFields(),
         outcome: result.usedFallback ? "fallback_success" : result.usedRetry ? "retry_success" : "success",
         note: result.usedFallback
           ? `Teacher fallback model produced the corrected answer for ${args.category}.`

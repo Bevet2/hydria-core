@@ -3,6 +3,17 @@ import {
   hydriaMemorySnapshotSchema,
   hydriaWorkflowRunSchema
 } from "./core.js";
+import {
+  agentOutcomeSchema,
+  agentRoutingDecisionSchema,
+  agentRoutingRecommendationSchema,
+  defaultAgentRoutingDecision
+} from "./agents.js";
+import {
+  defaultSkillRoutingDecision,
+  skillExecutionOutcomeSchema,
+  skillRoutingDecisionSchema
+} from "./skills.js";
 
 const boundedScoreSchema = z.coerce.number().min(0).max(100);
 const refineConfidenceSchema = z.coerce.number().int().min(0).max(10);
@@ -73,6 +84,18 @@ export const orchestrationCostPolicySchema = z.enum([
   "quality_first"
 ]);
 export const researchRouteSchema = z.enum(["not_needed", "used", "failed"]);
+export const toolRoutingToolTypeSchema = z.enum([
+  "research",
+  "weather",
+  "finance",
+  "sports",
+  "calculator",
+  "repo",
+  "file",
+  "time",
+  "web",
+  "none"
+]);
 export const researchDecisionModeSchema = z.enum([
   "off",
   "targeted_verify",
@@ -245,6 +268,13 @@ export const executionTraceSchema = z.object({
   usedRetry: z.boolean().default(false),
   usedFallback: z.boolean(),
   validationFailures: z.number().int().nonnegative().max(6).default(0),
+  skillRouting: skillRoutingDecisionSchema.nullable().default(null),
+  skillUsed: z.boolean().default(false),
+  skillConfidence: z.number().min(0).max(1).nullable().default(null),
+  skillOutcome: skillExecutionOutcomeSchema.default("not_found"),
+  agentRouting: agentRoutingDecisionSchema.nullable().default(null),
+  agentOutcome: agentOutcomeSchema.default("not_found"),
+  fallbackUsed: z.boolean().default(false),
   outcome: traceOutcomeSchema,
   note: z.string().min(1).max(1000)
 });
@@ -455,10 +485,55 @@ export const researchImpactSchema = z.object({
   netImpact: researchNetImpactSchema
 });
 
+export const defaultToolRoutingDecision = {
+  considered: true,
+  toolRequired: false,
+  toolRecommended: false,
+  toolType: "none",
+  intent: "none",
+  confidence: 0,
+  fallbackAllowed: true,
+  reason: "No external or executable tool is required for this request.",
+  extractedArgs: {},
+  toolResultUsed: false
+} as const;
+
+export const toolRoutingDecisionSchema = z.object({
+  considered: z.boolean().default(true),
+  toolRequired: z.boolean().default(false),
+  toolRecommended: z.boolean().default(false),
+  toolType: toolRoutingToolTypeSchema.default("none"),
+  intent: z.string().trim().min(1).max(80).default("none"),
+  confidence: z.number().min(0).max(1).default(0),
+  fallbackAllowed: z.boolean().default(true),
+  reason: z.string().trim().min(1).max(240).default(defaultToolRoutingDecision.reason),
+  extractedArgs: z.record(z.string(), z.unknown()).default({}),
+  toolResultUsed: z.boolean().default(false)
+});
+
 export const researchToolLogSchema = z.object({
   considered: z.boolean(),
   used: z.boolean(),
   route: researchRouteSchema,
+  toolRouting: toolRoutingDecisionSchema
+    .default(defaultToolRoutingDecision)
+    .catch(defaultToolRoutingDecision),
+  skillRouting: skillRoutingDecisionSchema
+    .default(defaultSkillRoutingDecision)
+    .catch(defaultSkillRoutingDecision),
+  skillUsed: z.boolean().default(false),
+  skillConfidence: z.number().min(0).max(1).nullable().default(null),
+  skillOutcome: skillExecutionOutcomeSchema.default("not_found"),
+  agentRouting: agentRoutingDecisionSchema
+    .default(defaultAgentRoutingDecision)
+    .catch(defaultAgentRoutingDecision),
+  agentOutcome: agentOutcomeSchema.default("not_found"),
+  fallbackUsed: z.boolean().default(false),
+  agentRecommendation: agentRoutingRecommendationSchema.nullable().default(null),
+  toolGapDetected: z.boolean().default(false),
+  toolCandidateCreated: z.boolean().default(false),
+  toolCandidateId: z.string().min(1).max(160).nullable().default(null),
+  missingCapabilityReason: z.string().min(1).max(320).nullable().default(null),
   decision: researchDecisionDetailsSchema,
   queryPlan: researchQueryPlanSchema,
   query: z.string().nullable(),
@@ -592,6 +667,7 @@ export type OrchestrationFocus = z.infer<typeof orchestrationFocusSchema>;
 export type OrchestrationRefinePolicy = z.infer<typeof orchestrationRefinePolicySchema>;
 export type OrchestrationResearchPolicy = z.infer<typeof orchestrationResearchPolicySchema>;
 export type OrchestrationCostPolicy = z.infer<typeof orchestrationCostPolicySchema>;
+export type ToolRoutingToolType = z.infer<typeof toolRoutingToolTypeSchema>;
 export type ResearchDecisionMode = z.infer<typeof researchDecisionModeSchema>;
 export type ResearchTemporalFocus = z.infer<typeof researchTemporalFocusSchema>;
 export type ResearchTemporalQueryType = z.infer<typeof researchTemporalQueryTypeSchema>;
@@ -623,6 +699,7 @@ export type ResearchDecisionDetails = z.infer<typeof researchDecisionDetailsSche
 export type ResearchTemporalProfile = z.infer<typeof researchTemporalProfileSchema>;
 export type ResearchQueryPlan = z.infer<typeof researchQueryPlanSchema>;
 export type ResearchImpact = z.infer<typeof researchImpactSchema>;
+export type ToolRoutingDecision = z.infer<typeof toolRoutingDecisionSchema>;
 export type ResearchToolLog = z.infer<typeof researchToolLogSchema>;
 export type ArenaMetrics = z.infer<typeof arenaMetricsSchema>;
 export type ArenaVerdicts = z.infer<typeof arenaVerdictsSchema>;

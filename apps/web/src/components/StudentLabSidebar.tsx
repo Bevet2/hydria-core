@@ -85,6 +85,14 @@ export function StudentLabSidebar(props: {
             <strong>{props.displayedResearch?.route ?? "not run"}</strong>
           </div>
           <div className="overview-item">
+            <span>Tool route</span>
+            <strong>
+              {props.displayedResearch
+                ? `${props.displayedResearch.toolRouting.toolType} / ${props.displayedResearch.toolRouting.intent}`
+                : "n/a"}
+            </strong>
+          </div>
+          <div className="overview-item">
             <span>Research mode</span>
             <strong>{props.displayedResearch?.decision.mode ?? "n/a"}</strong>
           </div>
@@ -186,6 +194,16 @@ export function StudentLabSidebar(props: {
           <>
             <h4>Tool reasoning</h4>
             <p>{props.displayedResearch.decision.reasoning}</p>
+            <p>
+              Routing:{" "}
+              {props.displayedResearch.toolRouting.toolRequired
+                ? "required"
+                : props.displayedResearch.toolRouting.toolRecommended
+                  ? "recommended"
+                  : "not needed"}{" "}
+              / {props.displayedResearch.toolRouting.toolType} /{" "}
+              {props.displayedResearch.toolRouting.intent}
+            </p>
             {props.currentSession ? (
               <>
                 <h4>Truth engine impact</h4>

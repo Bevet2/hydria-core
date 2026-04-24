@@ -10,7 +10,9 @@ export const HYDRIA_LEARNING_CONSTITUTION: LearningConstitution = learningConsti
     "research_policy",
     "respondent_policy",
     "local_student_policy",
-    "memory_rule"
+    "memory_rule",
+    "skill",
+    "specialized_agent"
   ],
   protectedBehaviors: [
     "Do not promote global behavior changes without replay or benchmark validation.",
@@ -28,12 +30,15 @@ export const HYDRIA_LEARNING_CONSTITUTION: LearningConstitution = learningConsti
   activationBoundaries: {
     maxActivePolicies: 18,
     maxActiveGlobalPolicies: 6,
+    maxActiveSkills: 12,
+    maxActiveAgents: 6,
     restrictedGlobalTargets: [
       "tool_policy",
       "research_policy",
       "respondent_policy",
       "local_student_policy",
-      "memory_rule"
+      "memory_rule",
+      "specialized_agent"
     ]
   },
   demotionCriteria: {

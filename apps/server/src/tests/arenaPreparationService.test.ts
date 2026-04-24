@@ -2,6 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { ArenaPreparationService } from "../services/arena/arenaPreparationService.js";
 import type { ArenaRunRequest, RedTeamOutput, RespondentOutput } from "../types/arena.js";
+import { defaultToolRoutingDecision } from "../types/arena.js";
+import { defaultAgentRoutingDecision } from "../types/agents.js";
+import { defaultSkillRoutingDecision } from "../types/skills.js";
 
 function buildRespondent(answer: string): RespondentOutput {
   return {
@@ -84,6 +87,19 @@ test("arena preparation chains red team, orchestration, router, knowledge, and r
           considered: true,
           used: false,
           route: "not_needed",
+          toolRouting: defaultToolRoutingDecision,
+          skillRouting: defaultSkillRoutingDecision,
+          skillUsed: false,
+          skillConfidence: null,
+          skillOutcome: "not_found",
+          agentRouting: defaultAgentRoutingDecision,
+          agentOutcome: "not_found",
+          fallbackUsed: false,
+          agentRecommendation: null,
+          toolGapDetected: false,
+          toolCandidateCreated: false,
+          toolCandidateId: null,
+          missingCapabilityReason: null,
           decision: {
             shouldUse: false,
             mode: "off",

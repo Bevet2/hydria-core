@@ -5,9 +5,11 @@ import type {
   ResearchToolLog,
   RedTeamOutput,
   RespondentOutput,
-  SynthesizerOutput
+  SynthesizerOutput,
+  ToolRoutingDecision
 } from "../types/arena.js";
 import type { KnowledgeInjection } from "../types/knowledge.js";
+import type { SkillRoutingDecision } from "../types/skills.js";
 import type { StudentResponseStrategy } from "../types/student.js";
 
 export const localStudentSystemPrompt = `You are the local student model of Hydria Arena.
@@ -38,6 +40,9 @@ Rules:
 - Be explicit about assumptions and uncertainty.
 - Use external research findings only when they are present in the prompt.
 - Do not invent unsupported facts.
+- When a request depends on live/current/external/calculable/file/repo/action data, do not improvise.
+- If a required tool is indicated, use the provided tool findings or say clearly that the tool failed or was unavailable.
+- Do not tell the user to consult another app or site when a tool route was already available.
 - Return strict JSON only.
 - Never include markdown fences.
 
@@ -93,6 +98,8 @@ export function buildStudentAnswerPrompt(args: {
   strategy: StudentResponseStrategy;
   knowledge?: KnowledgeInjection | null;
   research?: ResearchToolLog | null;
+  toolRouting?: ToolRoutingDecision | null;
+  skillRouting?: SkillRoutingDecision | null;
 }) {
   return `Answer the user question as the Hydria local student.
 
@@ -141,6 +148,7 @@ ${JSON.stringify(
 ${args.research?.decision.shouldUse ? `Truth engine findings:
 ${JSON.stringify(
     {
+      tool_routing: args.research.toolRouting,
       query_plan: {
         selected_query: args.research.queryPlan.selectedQuery,
         temporal_profile: args.research.queryPlan.temporalProfile
@@ -162,6 +170,14 @@ ${JSON.stringify(
   )}
 ` : ""}
 
+${!args.research?.decision.shouldUse && args.toolRouting && args.toolRouting.toolType !== "none" ? `Tool routing decision:
+${JSON.stringify(args.toolRouting, null, 2)}
+` : ""}
+
+${args.skillRouting?.skillFound ? `Reusable skill recommendation:
+${JSON.stringify(args.skillRouting, null, 2)}
+` : ""}
+
 Answering rules:
 - keep the answer compact and clear
 - follow the selected student strategy exactly
@@ -176,6 +192,9 @@ Answering rules:
 - if truth.uncertain_claims is non-empty, mark those points as uncertain instead of asserting them
 - if truth.conflicting_info is non-empty, briefly say that reliable sources conflict on that point
 - if truth.no_reliable_source is true, do not restate the uncertain claim as a fact; explicitly say the claim could not be verified from reliable sources
+- if tool_routing.toolRequired is true and truth.no_reliable_source is true, explicitly say the required tool lookup failed, was unavailable, or could not retrieve the current data
+- if tool_routing.toolRequired is true and tool_routing.fallbackAllowed is false, do not tell the user to consult another app/site; keep the failure explicit instead
+- if a reusable skill recommendation is present, follow its procedural shape when it fits the question, but do not pretend that the skill itself executed an external action
 - when an uncertain claim is central to the question, prefer "I cannot verify X from reliable sources" over "X is true but uncertain"
 - if query_plan.temporal_profile.isTemporal is true, replace relative time words like latest/current/recent/this week with the exact date or date window from temporal_profile
 - if query_plan.temporal_profile.isTemporal is true, do not claim freshness without saying the as-of date or exact window used for verification
@@ -198,13 +217,17 @@ export function buildStudentAnswerRepairPrompt(args: {
   validationIssues: string[];
   knowledge?: KnowledgeInjection | null;
   research?: ResearchToolLog | null;
+  toolRouting?: ToolRoutingDecision | null;
+  skillRouting?: SkillRoutingDecision | null;
 }) {
   return `${buildStudentAnswerPrompt({
     question: args.question,
     category: args.category,
     strategy: args.strategy,
     knowledge: args.knowledge,
-    research: args.research
+    research: args.research,
+    toolRouting: args.toolRouting,
+    skillRouting: args.skillRouting
   })}
 
 Your previous student answer was invalid.

@@ -1,6 +1,13 @@
 import { z } from "zod";
+import { agentStateSchema, agentValidationResultSchema } from "./agents.js";
 import { questionCategorySchema } from "./arena.js";
 import { hydriaActorRoleSchema } from "./core.js";
+import { skillStateSchema, skillValidationResultSchema } from "./skills.js";
+import {
+  toolCreationRequestSchema,
+  toolStateSchema,
+  toolValidationResultSchema
+} from "./tools.js";
 import {
   studentRuleImpactContextSignalSchema,
   studentRulePromptLengthSchema,
@@ -45,7 +52,9 @@ export const learningPolicyTargetSchema = z.enum([
   "research_policy",
   "respondent_policy",
   "local_student_policy",
-  "memory_rule"
+  "memory_rule",
+  "skill",
+  "specialized_agent"
 ]);
 
 export const learningPolicyStateSchema = z.enum([
@@ -229,6 +238,8 @@ export const learningConstitutionSchema = z.object({
   activationBoundaries: z.object({
     maxActivePolicies: z.number().int().min(1).max(128),
     maxActiveGlobalPolicies: z.number().int().min(1).max(64),
+    maxActiveSkills: z.number().int().min(1).max(64),
+    maxActiveAgents: z.number().int().min(1).max(32),
     restrictedGlobalTargets: z.array(learningPolicyTargetSchema).max(12)
   }),
   demotionCriteria: z.object({
@@ -261,6 +272,87 @@ export const learningGovernanceReportSchema = z.object({
   score: learningImprovementScoreSchema,
   hotspots: z.array(learningHotspotSchema).max(48),
   policies: z.array(learningPolicyItemSchema).max(96),
+  skills: z.object({
+    candidateCount: z.number().int().nonnegative(),
+    activeCount: z.number().int().nonnegative(),
+    guardedCount: z.number().int().nonnegative(),
+    rejectedCount: z.number().int().nonnegative(),
+    archivedCount: z.number().int().nonnegative(),
+    validations: z.array(skillValidationResultSchema).max(96),
+    stateDistribution: z.object({
+      active: z.number().int().nonnegative(),
+      guarded: z.number().int().nonnegative(),
+      rejected: z.number().int().nonnegative(),
+      archived: z.number().int().nonnegative()
+    }),
+    topActive: z.array(
+      z.object({
+        skillId: z.string().min(1).max(160),
+        intent: z.string().min(1).max(80),
+        state: skillStateSchema,
+        confidenceScore: z.number().min(0).max(1),
+        usageCount: z.number().int().nonnegative(),
+        summary: z.string().min(1).max(240)
+      })
+    ).max(8)
+  }),
+  tools: z.object({
+    gapCount: z.number().int().nonnegative(),
+    candidateCount: z.number().int().nonnegative(),
+    generatedCount: z.number().int().nonnegative(),
+    testedCount: z.number().int().nonnegative(),
+    guardedCount: z.number().int().nonnegative(),
+    activeCount: z.number().int().nonnegative(),
+    deprecatedCount: z.number().int().nonnegative(),
+    rejectedCount: z.number().int().nonnegative(),
+    validations: z.array(toolValidationResultSchema).max(96),
+    activationRequests: z.array(toolCreationRequestSchema).max(48),
+    stateDistribution: z.object({
+      generated: z.number().int().nonnegative(),
+      tested: z.number().int().nonnegative(),
+      guarded: z.number().int().nonnegative(),
+      active: z.number().int().nonnegative(),
+      deprecated: z.number().int().nonnegative(),
+      rejected: z.number().int().nonnegative()
+    }),
+    topActive: z.array(
+      z.object({
+        toolId: z.string().min(1).max(160),
+        intent: z.string().min(1).max(120),
+        state: toolStateSchema,
+        confidenceScore: z.number().min(0).max(1),
+        riskLevel: z.enum(["low", "medium", "high"]),
+        summary: z.string().min(1).max(240)
+      })
+    ).max(8)
+  }),
+  agents: z.object({
+    candidateCount: z.number().int().nonnegative(),
+    validatingCount: z.number().int().nonnegative(),
+    guardedCount: z.number().int().nonnegative(),
+    activeCount: z.number().int().nonnegative(),
+    deprecatedCount: z.number().int().nonnegative(),
+    rejectedCount: z.number().int().nonnegative(),
+    validations: z.array(agentValidationResultSchema).max(96),
+    stateDistribution: z.object({
+      candidate: z.number().int().nonnegative(),
+      validating: z.number().int().nonnegative(),
+      guarded: z.number().int().nonnegative(),
+      active: z.number().int().nonnegative(),
+      deprecated: z.number().int().nonnegative(),
+      rejected: z.number().int().nonnegative()
+    }),
+    topActive: z.array(
+      z.object({
+        agentId: z.string().min(1).max(160),
+        domain: z.string().min(1).max(80),
+        state: agentStateSchema,
+        confidenceScore: z.number().min(0).max(1),
+        usageCount: z.number().int().nonnegative(),
+        summary: z.string().min(1).max(240)
+      })
+    ).max(8)
+  }),
   liveMonitoring: z.object({
     windowStart: z.string().datetime().nullable(),
     monitoredPolicies: z.number().int().nonnegative(),

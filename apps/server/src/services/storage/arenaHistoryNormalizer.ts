@@ -26,6 +26,7 @@ import {
   hydriaWorkflowRunSchema
 } from "../../types/core.js";
 import { env } from "../../utils/env.js";
+import { buildNoSkillTraceFields } from "../arena/arenaExecutionTypes.js";
 import { buildLegacyOrchestrationPolicy } from "../orchestrationPolicy.js";
 import { buildDefaultTemporalProfile } from "../research/temporal.js";
 import { buildLegacyRouterDecision } from "../refineRouter.js";
@@ -383,6 +384,7 @@ function buildLegacyTrace(
       usedRetry: false,
       usedFallback: false,
       validationFailures: 0,
+      ...buildNoSkillTraceFields(),
       outcome: "legacy",
       note: "Legacy round backfilled after execution trace was introduced."
     },
@@ -401,6 +403,7 @@ function buildLegacyTrace(
       usedRetry: false,
       usedFallback: false,
       validationFailures: 0,
+      ...buildNoSkillTraceFields(),
       outcome: "legacy",
       note: "Legacy round backfilled after execution trace was introduced."
     },
@@ -419,6 +422,7 @@ function buildLegacyTrace(
       usedRetry: false,
       usedFallback: false,
       validationFailures: 0,
+      ...buildNoSkillTraceFields(),
       outcome: "legacy",
       note: "Legacy round backfilled after execution trace was introduced."
     },
@@ -437,6 +441,7 @@ function buildLegacyTrace(
       usedRetry: false,
       usedFallback: true,
       validationFailures: 0,
+      ...buildNoSkillTraceFields(),
       outcome: "legacy",
       note: "Legacy round backfilled after refine trace was introduced."
     },
@@ -455,6 +460,7 @@ function buildLegacyTrace(
       usedRetry: false,
       usedFallback: true,
       validationFailures: 0,
+      ...buildNoSkillTraceFields(),
       outcome: "legacy",
       note: "Legacy round backfilled after refine trace was introduced."
     },
@@ -473,6 +479,7 @@ function buildLegacyTrace(
       usedRetry: false,
       usedFallback: false,
       validationFailures: 0,
+      ...buildNoSkillTraceFields(),
       outcome: "legacy",
       note: "Legacy round backfilled after execution trace was introduced."
     },
@@ -491,6 +498,7 @@ function buildLegacyTrace(
       usedRetry: false,
       usedFallback: false,
       validationFailures: 0,
+      ...buildNoSkillTraceFields(),
       outcome: "legacy",
       note: "Legacy round backfilled after execution trace was introduced."
     },
@@ -513,6 +521,7 @@ function buildLegacyTrace(
         studentAnswer.startsWith("Local student unavailable") ||
         studentAnswer.startsWith("Local student disabled"),
       validationFailures: 0,
+      ...buildNoSkillTraceFields(),
       outcome: studentAnswer.startsWith("Local student disabled")
         ? "disabled"
         : studentAnswer.startsWith("Local student unavailable")

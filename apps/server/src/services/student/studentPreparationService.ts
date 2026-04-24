@@ -13,6 +13,9 @@ import type { LocalModelService } from "../localModel.js";
 import type { OrchestrationPolicyService } from "../orchestrationPolicy.js";
 import type { ResearchToolService } from "../researchToolService.js";
 import type { StudentStrategySelectorService } from "../studentStrategySelector.js";
+import { AgentRoutingService } from "../agents/agentRoutingService.js";
+import { SkillRoutingService } from "../skills/skillRoutingService.js";
+import { ToolRoutingService } from "../tools/toolRoutingService.js";
 import type { StudentStepExecutor } from "./studentStepExecutor.js";
 import {
   buildKnowledgeWithoutStudentMemory,
@@ -45,6 +48,10 @@ export type StudentAnalysisPreparation = {
 };
 
 export class StudentPreparationService {
+  private readonly toolRoutingService = new ToolRoutingService();
+  private readonly skillRoutingService = new SkillRoutingService();
+  private readonly agentRoutingService = new AgentRoutingService();
+
   constructor(
     private readonly localModelService: Pick<LocalModelService, "answerQuestionDetailed">,
     private readonly orchestrationPolicyService: Pick<OrchestrationPolicyService, "planRound">,
@@ -65,6 +72,18 @@ export class StudentPreparationService {
       category,
       knowledge
     });
+    const toolRouting = this.toolRoutingService.route({ question, category });
+    const skillRouting = await this.skillRoutingService.route({
+      question,
+      category,
+      toolRouting
+    });
+    const agentRouting = await this.agentRoutingService.route({
+      question,
+      category,
+      toolRouting,
+      skillRouting
+    });
     const baselineStrategy = await this.studentStrategySelectorService.select({
       question,
       category,
@@ -73,22 +92,28 @@ export class StudentPreparationService {
     const baselineDraftResult =
       knowledge && knowledge.studentMemoryRules.length > 0
         ? await this.localModelService.answerQuestionDetailed({
-            question,
-            category,
-            strategy: baselineStrategy,
-            knowledge: baselineKnowledge
-          })
+          question,
+          category,
+          strategy: baselineStrategy,
+          knowledge: baselineKnowledge,
+          toolRouting,
+          skillRouting
+        })
         : null;
     const rawDraftResult = await this.localModelService.answerQuestionDetailed({
       question,
       category,
       strategy,
-      knowledge
+      knowledge,
+      toolRouting,
+      skillRouting
     });
     const rawDraftTrace = toStudentTrace({
       requestedModel: env.LOCAL_MODEL_NAME,
       usedRetry: rawDraftResult.usedRetry,
-      note: "Local student produced the initial standalone answer."
+      note: "Local student produced the initial standalone answer.",
+      skillRouting,
+      agentRouting
     });
     const prepared = await this.prepareResearchAwareDraft({
       question,
@@ -193,7 +218,9 @@ export class StudentPreparationService {
           category: args.category,
           strategy: args.strategy,
           knowledge: args.knowledge,
-          research
+          research,
+          toolRouting: research.toolRouting,
+          skillRouting: research.skillRouting
         });
         finalStudentAnswer = groundedResult.output;
         finalStudentTrace = toStudentTrace({
@@ -201,7 +228,9 @@ export class StudentPreparationService {
           usedRetry: groundedResult.usedRetry,
           note: research.truth.no_reliable_source
             ? "Local student produced the answer after truth-engine abstention guidance."
-            : "Local student produced the answer after tool-guided factual grounding."
+            : "Local student produced the answer after tool-guided factual grounding.",
+          skillRouting: research.skillRouting,
+          agentRouting: research.agentRouting
         });
       }
     }

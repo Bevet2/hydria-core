@@ -23,7 +23,11 @@ import {
   parseRespondentOutput
 } from "../../utils/respondentOutput.js";
 import { OpenRouterService } from "../openrouter.js";
+import { AgentRoutingService } from "../agents/agentRoutingService.js";
+import { SkillRoutingService } from "../skills/skillRoutingService.js";
+import { ToolRoutingService } from "../tools/toolRoutingService.js";
 import {
+  buildNoSkillTraceFields,
   type RespondentExecutionResult,
   RespondentExecutionError,
   type RespondentSlot,
@@ -55,6 +59,10 @@ function shouldReplaceFailureClass(
 }
 
 export class ArenaRespondentExecutor {
+  private readonly toolRoutingService = new ToolRoutingService();
+  private readonly skillRoutingService = new SkillRoutingService();
+  private readonly agentRoutingService = new AgentRoutingService();
+
   constructor(private readonly openRouterService: OpenRouterService) {}
 
   async runRespondents(args: {
@@ -177,11 +185,28 @@ export class ArenaRespondentExecutor {
     let lastFailureStage: RespondentFailureStage | null = null;
     let lastFailureMessage: string | null = null;
 
+    const toolRouting = this.toolRoutingService.route({
+      question: args.question,
+      category: args.category
+    });
+    const skillRouting = await this.skillRoutingService.route({
+      question: args.question,
+      category: args.category,
+      toolRouting
+    });
+    const agentRouting = await this.agentRoutingService.route({
+      question: args.question,
+      category: args.category,
+      toolRouting,
+      skillRouting
+    });
     const basePrompt = buildRespondentUserPrompt({
       question: args.question,
       slot: args.slot,
       models: args.models,
-      category: args.category
+      category: args.category,
+      toolRouting,
+      skillRouting
     });
 
     const tryParse = (raw: string) =>
@@ -219,6 +244,7 @@ export class ArenaRespondentExecutor {
           usedRetry: false,
           usedFallback: false,
           validationFailures: 0,
+          ...buildNoSkillTraceFields(skillRouting, agentRouting),
           outcome: "success",
           note: "Primary respondent produced validated respondent JSON."
         },
@@ -259,7 +285,9 @@ export class ArenaRespondentExecutor {
             models: args.models,
             category: args.category,
             previousResponse: lastRawResponse || "(empty response)",
-            validationIssues: this.getRespondentValidationIssues(lastError)
+            validationIssues: this.getRespondentValidationIssues(lastError),
+            toolRouting,
+            skillRouting
           }),
           maxTokens: 700,
           temperature: 0
@@ -270,19 +298,20 @@ export class ArenaRespondentExecutor {
         return {
           parsed,
           raw: response.content,
-          trace: {
-            requestedProvider: "openrouter",
-            requestedModel: args.model,
-            attempts,
-            finalProvider: "openrouter",
-            finalModel: args.model,
-            usedRetry: true,
-            usedFallback: false,
-            validationFailures,
-            outcome: "retry_success",
-            note:
-              "Primary respondent output failed validation; repair retry produced validated respondent JSON."
-          },
+        trace: {
+          requestedProvider: "openrouter",
+          requestedModel: args.model,
+          attempts,
+          finalProvider: "openrouter",
+          finalModel: args.model,
+          usedRetry: true,
+          usedFallback: false,
+          validationFailures,
+          ...buildNoSkillTraceFields(skillRouting, agentRouting),
+          outcome: "retry_success",
+          note:
+            "Primary respondent output failed validation; repair retry produced validated respondent JSON."
+        },
           latencyMs: Math.round(performance.now() - startedAt)
         };
       } catch (error) {
@@ -322,7 +351,9 @@ export class ArenaRespondentExecutor {
             models: args.models,
             category: args.category,
             previousResponse: lastRawResponse || "(empty response)",
-            validationIssues: this.getRespondentValidationIssues(lastError)
+            validationIssues: this.getRespondentValidationIssues(lastError),
+            toolRouting,
+            skillRouting
           }),
           maxTokens: 700,
           temperature: 0
@@ -339,19 +370,20 @@ export class ArenaRespondentExecutor {
         return {
           parsed,
           raw: response.content,
-          trace: {
-            requestedProvider: "openrouter",
-            requestedModel: args.model,
-            attempts,
-            finalProvider: "openrouter",
-            finalModel: model,
-            usedRetry: env.RESPONDENT_REPAIR_RETRY_ENABLED,
-            usedFallback: true,
-            validationFailures,
-            outcome: "fallback_success",
-            note:
-              "Primary respondent and repair retry failed validation; fallback model produced validated respondent JSON."
-          },
+        trace: {
+          requestedProvider: "openrouter",
+          requestedModel: args.model,
+          attempts,
+          finalProvider: "openrouter",
+          finalModel: model,
+          usedRetry: env.RESPONDENT_REPAIR_RETRY_ENABLED,
+          usedFallback: true,
+          validationFailures,
+          ...buildNoSkillTraceFields(skillRouting, agentRouting),
+          outcome: "fallback_success",
+          note:
+            "Primary respondent and repair retry failed validation; fallback model produced validated respondent JSON."
+        },
           latencyMs: Math.round(performance.now() - startedAt)
         };
       } catch (error) {
@@ -387,6 +419,7 @@ export class ArenaRespondentExecutor {
       usedRetry: attempts.some((attempt) => attempt.mode === "repair_retry"),
       usedFallback: attempts.some((attempt) => attempt.mode === "fallback"),
       validationFailures,
+      ...buildNoSkillTraceFields(skillRouting, agentRouting),
       outcome: "failure",
       note:
         `All respondent attempts failed; no validated respondent JSON could be produced. Failure class=${failureClass}; stage=${failureStage}; detail=${truncate(failureMessage, 160)}.`
@@ -432,6 +465,7 @@ export class ArenaRespondentExecutor {
         usedRetry: false,
         usedFallback: false,
         validationFailures: 0,
+        ...buildNoSkillTraceFields(),
         outcome: "failure",
         note:
           "Respondent failed before a structured execution trace could be captured. Failure class=unknown; stage=unknown; detail=No structured trace."

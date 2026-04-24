@@ -2,6 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { StudentPreparationService } from "../services/student/studentPreparationService.js";
 import type { ExecutionTrace, ResearchToolLog, RedTeamOutput } from "../types/arena.js";
+import { defaultToolRoutingDecision } from "../types/arena.js";
+import { defaultAgentRoutingDecision } from "../types/agents.js";
+import { defaultSkillRoutingDecision } from "../types/skills.js";
 import type { StudentAnswer, StudentResponseStrategy } from "../types/student.js";
 import { buildDefaultTemporalProfile } from "../services/research/temporal.js";
 
@@ -49,6 +52,19 @@ function buildResearchLog(overrides: Partial<ResearchToolLog> = {}): ResearchToo
     considered: true,
     used: false,
     route: "not_needed",
+    toolRouting: defaultToolRoutingDecision,
+    skillRouting: defaultSkillRoutingDecision,
+    skillUsed: false,
+    skillConfidence: null,
+    skillOutcome: "not_found",
+    agentRouting: defaultAgentRoutingDecision,
+    agentOutcome: "not_found",
+    fallbackUsed: false,
+    agentRecommendation: null,
+    toolGapDetected: false,
+    toolCandidateCreated: false,
+    toolCandidateId: null,
+    missingCapabilityReason: null,
     decision: {
       shouldUse: false,
       mode: "off",
@@ -175,6 +191,13 @@ test("student preparation reuses existing orchestration and research without rec
     usedRetry: false,
     usedFallback: false,
     validationFailures: 0,
+    skillRouting: defaultSkillRoutingDecision,
+    skillUsed: false,
+    skillConfidence: null,
+    skillOutcome: "not_found",
+    agentRouting: defaultAgentRoutingDecision,
+    agentOutcome: "not_found",
+    fallbackUsed: false,
     outcome: "success",
     note: "Existing preview"
   };

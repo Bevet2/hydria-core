@@ -18,6 +18,27 @@ import {
   type LearningValidationSummary
 } from "../types/learning.js";
 import type { KnowledgeLayer } from "../types/knowledge.js";
+import type {
+  AgentCandidate,
+  AgentState,
+  AgentValidationResult,
+  SpecializedAgentDefinition
+} from "../types/agents.js";
+import { specializedAgentDefinitionSchema } from "../types/agents.js";
+import type {
+  SkillCandidate,
+  SkillDefinition,
+  SkillValidationResult
+} from "../types/skills.js";
+import { skillDefinitionSchema } from "../types/skills.js";
+import type {
+  ToolCandidate,
+  ToolCreationRequest,
+  ToolGapSignal,
+  ToolManifest,
+  ToolValidationResult
+} from "../types/tools.js";
+import { toolManifestSchema } from "../types/tools.js";
 import type { StudentSession } from "../types/student.js";
 import { env } from "../utils/env.js";
 import {
@@ -40,6 +61,17 @@ type BuildGovernanceArgs = {
   strategyImpact: StudentStrategyImpactFile | null;
   toolImpact: StudentToolImpactFile | null;
   strategyDiscovery: StrategyDiscoveryFile | null;
+  skills?: SkillDefinition[];
+  skillCandidates?: SkillCandidate[];
+  skillValidations?: SkillValidationResult[];
+  agents?: SpecializedAgentDefinition[];
+  agentCandidates?: AgentCandidate[];
+  agentValidations?: AgentValidationResult[];
+  tools?: ToolManifest[];
+  toolGaps?: ToolGapSignal[];
+  toolCandidates?: ToolCandidate[];
+  toolValidations?: ToolValidationResult[];
+  toolRequests?: ToolCreationRequest[];
   previousReport?: LearningGovernanceReport | null;
   validation?: LearningValidationSummary;
 };
@@ -63,6 +95,18 @@ function average(values: number[]) {
   }
 
   return Number((values.reduce((sum, value) => sum + value, 0) / values.length).toFixed(1));
+}
+
+function averageJudgeDeltaFromRound(round: ArenaRound) {
+  const winner = round.outputs.judge.winner;
+  if (winner === "tie") {
+    return round.metrics.refineGain.global;
+  }
+
+  return (
+    round.outputs.judge.scores[winner].overall -
+    round.outputs.judge.initial_scores[winner].overall
+  );
 }
 
 function percentage(matches: number, total: number) {
@@ -178,6 +222,23 @@ function buildPolicyId(target: LearningPolicyTarget, targetId: string, scope: Le
   return `${base.slice(0, 120 - hash.length - 2).trimEnd()}::${hash}`;
 }
 
+function buildSkillId(candidate: SkillCandidate) {
+  return [
+    "skill",
+    candidate.intent,
+    candidate.scope.category ?? "global",
+    candidate.scope.toolType ?? "none"
+  ].join("::");
+}
+
+function skillMatchesCandidate(skill: SkillDefinition, candidate: SkillCandidate) {
+  return (
+    skill.intent === candidate.intent &&
+    skill.scope.category === candidate.scope.category &&
+    skill.scope.toolType === candidate.scope.toolType
+  );
+}
+
 export class LearningGovernanceService {
   private readonly scoreService = new LearningImprovementScoreService();
   private readonly hotspotService = new LearningHotspotService();
@@ -207,7 +268,10 @@ export class LearningGovernanceService {
       ruleImpact: args.ruleImpact,
       strategyImpact: args.strategyImpact,
       toolImpact: args.toolImpact,
-      strategyDiscovery: args.strategyDiscovery
+      strategyDiscovery: args.strategyDiscovery,
+      skills: args.skills ?? [],
+      agents: args.agents ?? [],
+      tools: args.tools ?? []
     });
     const boundedPolicies = this.applyActivationBoundaries(
       draftPolicies,
@@ -250,6 +314,23 @@ export class LearningGovernanceService {
       score,
       hotspots,
       policies,
+      skills: this.buildSkillsSummary({
+        candidates: args.skillCandidates ?? [],
+        skills: args.skills ?? [],
+        validations: args.skillValidations ?? []
+      }),
+      agents: this.buildAgentsSummary({
+        candidates: args.agentCandidates ?? [],
+        agents: args.agents ?? [],
+        validations: args.agentValidations ?? []
+      }),
+      tools: this.buildToolsSummary({
+        gaps: args.toolGaps ?? [],
+        candidates: args.toolCandidates ?? [],
+        tools: args.tools ?? [],
+        validations: args.toolValidations ?? [],
+        activationRequests: args.toolRequests ?? []
+      }),
       liveMonitoring,
       lifecycle,
       validation: args.validation ?? { mode: "none", summary: {} }
@@ -325,12 +406,576 @@ export class LearningGovernanceService {
     }
   }
 
+  evaluateSkills(args: {
+    candidates: SkillCandidate[];
+    existingSkills: SkillDefinition[];
+    rounds: ArenaRound[];
+    sessions: StudentSession[];
+  }) {
+    const byId = new Map(args.existingSkills.map((skill) => [skill.id, skill]));
+    const touched = new Set<string>();
+    const validations: SkillValidationResult[] = [];
+
+    for (const candidate of args.candidates) {
+      const current =
+        args.existingSkills.find((skill) => skillMatchesCandidate(skill, candidate)) ?? null;
+      const skillId = current?.id ?? buildSkillId(candidate);
+      const live = this.collectSkillLiveMetrics(skillId, args.rounds, args.sessions);
+      const confidenceScore = clamp(
+        candidate.confidenceScore * 0.5 +
+          candidate.usefulnessScore / 100 * 0.25 +
+          candidate.generalizationScore / 100 * 0.25 -
+          candidate.riskScore / 100 * 0.15,
+        0,
+        1
+      );
+      let state: SkillDefinition["state"] =
+        candidate.repeatable &&
+        candidate.usefulnessScore >= 68 &&
+        candidate.riskScore <= 35 &&
+        candidate.generalizationScore >= 65 &&
+        confidenceScore >= HYDRIA_LEARNING_CONSTITUTION.promotionCriteria.minConfidence
+          ? "active"
+          : candidate.repeatable &&
+              candidate.usefulnessScore >= 52 &&
+              candidate.riskScore <= 55
+            ? "guarded"
+            : "rejected";
+      let reason =
+        state === "active"
+          ? "Candidate cleared usefulness, risk, and generalization thresholds."
+          : state === "guarded"
+            ? "Candidate looks reusable but still needs tighter live confirmation."
+            : "Candidate stayed too risky, too narrow, or too weak to activate.";
+      let rollbackRecommended = false;
+
+      if (
+        current?.state === "active" &&
+        live.observations >= HYDRIA_LEARNING_CONSTITUTION.promotionCriteria.minObservations &&
+        live.averageJudgeDelta !== null &&
+        live.averageJudgeDelta < HYDRIA_LEARNING_CONSTITUTION.demotionCriteria.minAverageJudgeDelta
+      ) {
+        state = "guarded";
+        rollbackRecommended = true;
+        reason =
+          "Live rounds routed through this skill regressed relative to the promotion bar, so the skill was guarded.";
+      } else if (
+        current?.state === "guarded" &&
+        live.observations >= HYDRIA_LEARNING_CONSTITUTION.promotionCriteria.minObservations &&
+        live.averageJudgeDelta !== null &&
+        live.averageJudgeDelta < 0
+      ) {
+        state = "archived";
+        rollbackRecommended = true;
+        reason =
+          "Guarded skill kept regressing in live use, so it was archived.";
+      }
+
+      const skill: SkillDefinition = skillDefinitionSchema.parse({
+        id: skillId,
+        name: candidate.name,
+        intent: candidate.intent,
+        description: candidate.description,
+        inputs: candidate.inputs,
+        outputs: candidate.outputs,
+        requiredTools: candidate.requiredTools,
+        steps: candidate.steps,
+        preconditions: candidate.preconditions,
+        successCriteria: candidate.successCriteria,
+        failureModes: candidate.failureModes,
+        safetyConstraints: candidate.safetyConstraints,
+        examples: candidate.examples,
+        confidenceScore: Number(confidenceScore.toFixed(3)),
+        usageCount: current?.usageCount ?? 0,
+        lastUsedAt: current?.lastUsedAt ?? null,
+        createdAt: current?.createdAt ?? candidate.createdAt,
+        version: current?.version ?? "hydria-skill-v1",
+        state,
+        scope: candidate.scope,
+        validation: {
+          usefulnessScore: candidate.usefulnessScore,
+          riskScore: candidate.riskScore,
+          generalizationScore: candidate.generalizationScore,
+          confidenceScore: Number(confidenceScore.toFixed(3)),
+          observedJudgeDelta:
+            live.observations > 0 ? live.averageJudgeDelta : candidate.observedJudgeDelta,
+          observedSuccessRate:
+            live.observations > 0 ? live.successRate : candidate.observedSuccessRate
+        }
+      });
+
+      byId.set(skill.id, skill);
+      touched.add(skill.id);
+      validations.push({
+        candidateId: candidate.candidateId,
+        skillId,
+        usefulnessScore: candidate.usefulnessScore,
+        riskScore: candidate.riskScore,
+        generalizationScore: candidate.generalizationScore,
+        confidenceScore: Number(confidenceScore.toFixed(3)),
+        state,
+        accepted: state === "active" || state === "guarded",
+        rollbackRecommended,
+        reason
+      });
+    }
+
+    for (const existing of args.existingSkills) {
+      if (touched.has(existing.id)) {
+        continue;
+      }
+
+      const live = this.collectSkillLiveMetrics(existing.id, args.rounds, args.sessions);
+      if (
+        existing.state === "active" &&
+        live.observations >= HYDRIA_LEARNING_CONSTITUTION.promotionCriteria.minObservations &&
+        live.averageJudgeDelta !== null &&
+        live.averageJudgeDelta < HYDRIA_LEARNING_CONSTITUTION.demotionCriteria.minAverageJudgeDelta
+      ) {
+        byId.set(existing.id, {
+          ...existing,
+          state: "guarded"
+        });
+        validations.push({
+          candidateId: `existing::${existing.id}`,
+          skillId: existing.id,
+          usefulnessScore: existing.validation.usefulnessScore,
+          riskScore: existing.validation.riskScore,
+          generalizationScore: existing.validation.generalizationScore,
+          confidenceScore: existing.confidenceScore,
+          state: "guarded",
+          accepted: true,
+          rollbackRecommended: true,
+          reason:
+            "Existing active skill regressed in live use and was moved to guarded."
+        });
+      }
+    }
+
+    const skills = [...byId.values()];
+    const activeSkills = skills
+      .filter((skill) => skill.state === "active")
+      .sort(
+        (left, right) =>
+          right.confidenceScore - left.confidenceScore ||
+          right.validation.usefulnessScore - left.validation.usefulnessScore
+      );
+    const maxActiveSkills = HYDRIA_LEARNING_CONSTITUTION.activationBoundaries.maxActiveSkills;
+    for (const skill of activeSkills.slice(maxActiveSkills)) {
+      byId.set(skill.id, {
+        ...skill,
+        state: "guarded"
+      });
+      validations.push({
+        candidateId: `boundary::${skill.id}`,
+        skillId: skill.id,
+        usefulnessScore: skill.validation.usefulnessScore,
+        riskScore: skill.validation.riskScore,
+        generalizationScore: skill.validation.generalizationScore,
+        confidenceScore: skill.confidenceScore,
+        state: "guarded",
+        accepted: true,
+        rollbackRecommended: false,
+        reason:
+          "Skill was demoted to guarded to stay within the active-skill budget."
+      });
+    }
+
+    return {
+      skills: [...byId.values()].sort(
+        (left, right) =>
+          Number(right.state === "active") - Number(left.state === "active") ||
+          right.confidenceScore - left.confidenceScore ||
+          right.usageCount - left.usageCount
+      ),
+      validations
+    };
+  }
+
+  evaluateTools(args: {
+    candidates: ToolCandidate[];
+    existingTools: ToolManifest[];
+    rounds: ArenaRound[];
+    sessions: StudentSession[];
+  }) {
+    const byId = new Map(args.existingTools.map((tool) => [tool.id, tool]));
+    const validations: ToolValidationResult[] = [];
+    const requests: ToolCreationRequest[] = [];
+
+    for (const candidate of args.candidates) {
+      const current =
+        args.existingTools.find((tool) => tool.intent === candidate.manifest.intent) ?? null;
+      const usefulnessScore = clamp(candidate.gapSignal.frequency * 18 + 30, 0, 100);
+      const reliabilityScore = clamp(
+        candidate.contract.proposedTests.length * 18 +
+          candidate.manifest.benchmarkCases.length * 10,
+        0,
+        100
+      );
+      const safetyScore =
+        candidate.manifest.riskLevel === "low"
+          ? 90
+          : candidate.manifest.riskLevel === "medium"
+            ? 65
+            : 35;
+      const adoptionScore = clamp(candidate.gapSignal.frequency * 20, 0, 100);
+      const regressionRiskScore = clamp(
+        100 -
+          safetyScore +
+          (candidate.gapSignal.gapType === "weak_tool"
+            ? 20
+            : candidate.gapSignal.gapType === "repeated_failure"
+              ? 15
+              : 0),
+        0,
+        100
+      );
+
+      let state: ToolManifest["state"];
+      let requestedAction: ToolCreationRequest["requestedAction"] | null = null;
+      let accepted = false;
+      let reason = "";
+
+      if (current?.state === "active" && regressionRiskScore >= 70) {
+        state = "guarded";
+        requestedAction = "sandbox_validate";
+        accepted = true;
+        reason = "Active tool showed too much regression risk and was moved to guarded.";
+      } else if (current?.state === "guarded" && regressionRiskScore >= 80) {
+        state = "deprecated";
+        requestedAction = null;
+        accepted = false;
+        reason = "Guarded tool kept looking too risky and was deprecated.";
+      } else if (candidate.manifest.riskLevel === "high") {
+        state = current?.state === "tested" ? "guarded" : "generated";
+        requestedAction = current?.state === "generated" ? "run_tests" : "generate_adapter";
+        accepted = false;
+        reason = "High-risk tools cannot be activated automatically and stay under governed review.";
+      } else if (
+        current?.state === "tested" &&
+        usefulnessScore >= 70 &&
+        reliabilityScore >= 70 &&
+        safetyScore >= 60 &&
+        adoptionScore >= 40 &&
+        regressionRiskScore <= 45
+      ) {
+        state = "active";
+        requestedAction = "activate";
+        accepted = true;
+        reason = "Tool passed the promotion bar and can be activated by the executor.";
+      } else if (
+        current?.state === "generated" &&
+        candidate.contract.proposedTests.length > 0 &&
+        usefulnessScore >= 55 &&
+        reliabilityScore >= 55
+      ) {
+        state = "tested";
+        requestedAction = "run_tests";
+        accepted = true;
+        reason = "Tool manifest is complete enough to move into governed test execution.";
+      } else if (usefulnessScore >= 45 && reliabilityScore >= 45) {
+        state = current?.state === "proposed" || current?.state === "generated" ? "generated" : "guarded";
+        requestedAction = state === "generated" ? "generate_adapter" : "sandbox_validate";
+        accepted = true;
+        reason = "Tool candidate is useful enough to keep under governed validation.";
+      } else {
+        state = current?.state === "active" ? "deprecated" : "rejected";
+        requestedAction = null;
+        accepted = false;
+        reason = "Tool candidate stayed too weak or too risky to justify activation.";
+      }
+
+      const validation: ToolValidationResult = {
+        toolCandidateId: candidate.candidateId,
+        manifestId: current?.id ?? candidate.manifest.id,
+        usefulnessScore: Number(usefulnessScore.toFixed(1)),
+        reliabilityScore: Number(reliabilityScore.toFixed(1)),
+        safetyScore: Number(safetyScore.toFixed(1)),
+        adoptionScore: Number(adoptionScore.toFixed(1)),
+        regressionRiskScore: Number(regressionRiskScore.toFixed(1)),
+        state,
+        accepted,
+        requestedAction,
+        reason
+      };
+
+      const manifest = toolManifestSchema.parse({
+        ...(current ?? candidate.manifest),
+        ...candidate.manifest,
+        id: current?.id ?? candidate.manifest.id,
+        candidateId: candidate.candidateId,
+        confidenceScore: Number(
+          clamp(
+            candidate.confidenceScore * 0.5 +
+              usefulnessScore / 100 * 0.2 +
+              reliabilityScore / 100 * 0.15 +
+              safetyScore / 100 * 0.15,
+            0,
+            1
+          ).toFixed(3)
+        ),
+        state,
+        updatedAt: new Date().toISOString(),
+        toolContract: candidate.contract,
+        activationPolicy: candidate.activationPolicy,
+        validation
+      });
+
+      byId.set(manifest.id, manifest);
+      validations.push(validation);
+
+      if (requestedAction) {
+        requests.push({
+          type: "tool_creation_request",
+          toolCandidateId: candidate.candidateId,
+          manifest,
+          requestedAction,
+          reason
+        });
+      }
+    }
+
+    return {
+      tools: [...byId.values()].sort(
+        (left, right) =>
+          Number(right.state === "active") - Number(left.state === "active") ||
+          right.confidenceScore - left.confidenceScore
+      ),
+      validations,
+      requests
+    };
+  }
+
+  evaluateAgents(args: {
+    candidates: AgentCandidate[];
+    existingAgents: SpecializedAgentDefinition[];
+    skills: SkillDefinition[];
+    rounds: ArenaRound[];
+    sessions: StudentSession[];
+  }) {
+    const byId = new Map(args.existingAgents.map((agent) => [agent.id, agent]));
+    const validations: AgentValidationResult[] = [];
+
+    for (const candidate of args.candidates) {
+      const current =
+        args.existingAgents.find((agent) => agent.domain === candidate.definition.domain) ?? null;
+      const requiredSkills = candidate.definition.requiredSkills
+        .map((binding) => args.skills.find((skill) => skill.id === binding.skillId) ?? null)
+        .filter((skill): skill is SkillDefinition => Boolean(skill));
+      const activeRequiredSkills = requiredSkills.filter((skill) => skill.state === "active");
+      const rejectedRequiredSkill = requiredSkills.find((skill) => skill.state === "rejected") ?? null;
+      const guardedRequiredSkill = requiredSkills.find((skill) => skill.state === "guarded") ?? null;
+      const live = this.collectAgentLiveMetrics(
+        current?.id ?? candidate.definition.id,
+        args.rounds,
+        args.sessions
+      );
+      const strongSingleSkill =
+        activeRequiredSkills.length === 1 &&
+        activeRequiredSkills[0]!.confidenceScore >= 0.9 &&
+        (activeRequiredSkills[0]!.validation.observedJudgeDelta ?? 0) >= 4 &&
+        live.observations >= 2;
+      const minSkillsSatisfied =
+        activeRequiredSkills.length >= 2 ||
+        (!candidate.definition.activationPolicy.requireAtLeastTwoActiveSkills && activeRequiredSkills.length >= 1) ||
+        strongSingleSkill;
+      const intentsTooBroad =
+        candidate.definition.allowedIntents.length > 6 ||
+        candidate.definition.allowedIntents.includes("none");
+      const specializationScore = clamp(
+        candidate.specializationScore * 0.55 +
+          activeRequiredSkills.length * 12 +
+          clamp(candidate.definition.allowedIntents.length / 6, 0, 1) * 15,
+        0,
+        100
+      );
+      const stabilityScore = clamp(
+        candidate.stabilityScore * 0.6 +
+          clamp((live.averageJudgeDelta ?? 0) / 6, 0, 1) * 20 +
+          clamp((live.successRatePct ?? 0) / 100, 0, 1) * 20,
+        0,
+        100
+      );
+      const riskScore = clamp(
+        candidate.riskScore * 0.6 +
+          Number(rejectedRequiredSkill !== null) * 28 +
+          Number(guardedRequiredSkill !== null) * 12 +
+          Number(intentsTooBroad) * 22 +
+          (live.regressionRiskScore ?? 0) * 0.18,
+        0,
+        100
+      );
+
+      let state: AgentState;
+      let reason = "";
+      let rollbackRecommended = false;
+
+      if (intentsTooBroad) {
+        state = "rejected";
+        reason = "Agent candidate was rejected because its allowed intent perimeter is too broad.";
+      } else if (rejectedRequiredSkill) {
+        state = current?.state === "active" ? "guarded" : "rejected";
+        rollbackRecommended = current?.state === "active";
+        reason =
+          "A key supporting skill is rejected, so the specialized agent cannot stay fully promoted.";
+      } else if (
+        current?.state === "active" &&
+        (live.regressionRiskScore ?? 0) >= 65
+      ) {
+        state = "guarded";
+        rollbackRecommended = true;
+        reason = "Active specialized agent regressed in live monitoring and was moved to guarded.";
+      } else if (
+        minSkillsSatisfied &&
+        candidate.confidenceScore >= candidate.definition.activationPolicy.minConfidence &&
+        specializationScore >= 70 &&
+        stabilityScore >= 68 &&
+        riskScore <= 42 &&
+        (live.averageJudgeDelta ?? candidate.definition.evaluationMetrics.targetJudgeDeltaLift) >=
+          candidate.definition.activationPolicy.minBenchmarkLift
+      ) {
+        state = "active";
+        reason = "Specialized agent met the promotion bar with stable supporting skills and domain lift.";
+      } else if (
+        minSkillsSatisfied &&
+        candidate.confidenceScore >= 0.68 &&
+        specializationScore >= 58 &&
+        riskScore <= 58
+      ) {
+        state = "guarded";
+        reason = "Specialized agent is promising but still needs narrower or more stable live confirmation.";
+      } else {
+        state = "validating";
+        reason = "Specialized agent remains in validation while the domain evidence is still sparse.";
+      }
+
+      const definition = specializedAgentDefinitionSchema.parse({
+        ...(current ?? candidate.definition),
+        ...candidate.definition,
+        id: current?.id ?? candidate.definition.id,
+        confidenceScore: Number(
+          clamp(
+            candidate.confidenceScore * 0.45 +
+              specializationScore / 100 * 0.2 +
+              stabilityScore / 100 * 0.2 +
+              (1 - riskScore / 100) * 0.15,
+            0,
+            1
+          ).toFixed(3)
+        ),
+        state,
+        updatedAt: new Date().toISOString(),
+        performance: {
+          agentId: current?.id ?? candidate.definition.id,
+          observations: live.observations,
+          averageJudgeDelta: live.averageJudgeDelta,
+          successRatePct: live.successRatePct,
+          failureRatePct: live.failureRatePct,
+          activationPrecisionPct: live.activationPrecisionPct,
+          regressionRiskScore: Number(riskScore.toFixed(1)),
+          lastEvaluatedAt: new Date().toISOString(),
+          summary: reason
+        }
+      });
+
+      byId.set(definition.id, definition);
+      validations.push({
+        agentCandidateId: candidate.candidateId,
+        agentId: definition.id,
+        specializationScore: Number(specializationScore.toFixed(1)),
+        stabilityScore: Number(stabilityScore.toFixed(1)),
+        riskScore: Number(riskScore.toFixed(1)),
+        state,
+        accepted: state === "active" || state === "guarded" || state === "validating",
+        rollbackRecommended,
+        reason
+      });
+    }
+
+    for (const existing of args.existingAgents) {
+      const requiredSkills = existing.requiredSkills
+        .map((binding) => args.skills.find((skill) => skill.id === binding.skillId) ?? null)
+        .filter((skill): skill is SkillDefinition => Boolean(skill));
+      const rejectedKeySkill = requiredSkills.find(
+        (skill, index) => existing.requiredSkills[index]?.isKeySkill && skill.state === "rejected"
+      );
+      if (!rejectedKeySkill || !["active", "guarded"].includes(existing.state)) {
+        continue;
+      }
+
+      byId.set(existing.id, {
+        ...existing,
+        state: "guarded",
+        updatedAt: new Date().toISOString(),
+        performance: {
+          agentId: existing.id,
+          observations: existing.performance?.observations ?? 0,
+          averageJudgeDelta: existing.performance?.averageJudgeDelta ?? null,
+          successRatePct: existing.performance?.successRatePct ?? null,
+          failureRatePct: existing.performance?.failureRatePct ?? null,
+          activationPrecisionPct: existing.performance?.activationPrecisionPct ?? null,
+          regressionRiskScore: 72,
+          lastEvaluatedAt: new Date().toISOString(),
+          summary: "A key supporting skill was rejected, so the agent was guarded."
+        }
+      });
+      validations.push({
+        agentCandidateId: `existing::${existing.id}`,
+        agentId: existing.id,
+        specializationScore: 0,
+        stabilityScore: 0,
+        riskScore: 72,
+        state: "guarded",
+        accepted: true,
+        rollbackRecommended: true,
+        reason: "A key supporting skill was rejected, so the agent was moved to guarded."
+      });
+    }
+
+    const agents = [...byId.values()].sort(
+      (left, right) =>
+        Number(right.state === "active") - Number(left.state === "active") ||
+        right.confidenceScore - left.confidenceScore
+    );
+    const activeAgents = agents.filter((agent) => agent.state === "active");
+    for (const agent of activeAgents.slice(HYDRIA_LEARNING_CONSTITUTION.activationBoundaries.maxActiveAgents)) {
+      byId.set(agent.id, {
+        ...agent,
+        state: "guarded",
+        updatedAt: new Date().toISOString()
+      });
+      validations.push({
+        agentCandidateId: `boundary::${agent.id}`,
+        agentId: agent.id,
+        specializationScore: 0,
+        stabilityScore: 0,
+        riskScore: 40,
+        state: "guarded",
+        accepted: true,
+        rollbackRecommended: false,
+        reason: "Specialized agent was moved to guarded to stay within the active agent budget."
+      });
+    }
+
+    return {
+      agents: [...byId.values()].sort(
+        (left, right) =>
+          Number(right.state === "active") - Number(left.state === "active") ||
+          right.confidenceScore - left.confidenceScore
+      ),
+      validations
+    };
+  }
+
   private buildPolicies(args: {
     hotspots: LearningHotspot[];
     ruleImpact: StudentRuleImpactFile | null;
     strategyImpact: StudentStrategyImpactFile | null;
     toolImpact: StudentToolImpactFile | null;
     strategyDiscovery: StrategyDiscoveryFile | null;
+    skills: SkillDefinition[];
+    agents: SpecializedAgentDefinition[];
+    tools: ToolManifest[];
   }): LearningPolicyItem[] {
     const policies: LearningPolicyItem[] = [];
     const hotspotIdsByTarget = new Map<string, string[]>();
@@ -457,6 +1102,18 @@ export class LearningGovernanceService {
 
     for (const adoption of args.strategyDiscovery?.adoptions ?? []) {
       policies.push(this.buildDiscoveryPolicy(adoption));
+    }
+
+    for (const skill of args.skills) {
+      policies.push(this.buildSkillPolicy(skill));
+    }
+
+    for (const agent of args.agents) {
+      policies.push(this.buildAgentPolicy(agent));
+    }
+
+    for (const tool of args.tools) {
+      policies.push(this.buildToolManifestPolicy(tool));
     }
 
     if (args.toolImpact) {
@@ -753,6 +1410,415 @@ export class LearningGovernanceService {
     });
   }
 
+  private buildSkillsSummary(args: {
+    candidates: SkillCandidate[];
+    skills: SkillDefinition[];
+    validations: SkillValidationResult[];
+  }) {
+    const stateDistribution = {
+      active: args.skills.filter((skill) => skill.state === "active").length,
+      guarded: args.skills.filter((skill) => skill.state === "guarded").length,
+      rejected: args.skills.filter((skill) => skill.state === "rejected").length,
+      archived: args.skills.filter((skill) => skill.state === "archived").length
+    };
+
+    return {
+      candidateCount: args.candidates.length,
+      activeCount: stateDistribution.active,
+      guardedCount: stateDistribution.guarded,
+      rejectedCount: stateDistribution.rejected,
+      archivedCount: stateDistribution.archived,
+      validations: args.validations.slice(0, 96),
+      stateDistribution,
+      topActive: [...args.skills]
+        .filter((skill) => skill.state === "active")
+        .sort(
+          (left, right) =>
+            right.confidenceScore - left.confidenceScore ||
+            right.usageCount - left.usageCount
+        )
+        .slice(0, 8)
+        .map((skill) => ({
+          skillId: skill.id,
+          intent: skill.intent,
+          state: skill.state,
+          confidenceScore: skill.confidenceScore,
+          usageCount: skill.usageCount,
+          summary: skill.description
+      }))
+    };
+  }
+
+  private buildAgentsSummary(args: {
+    candidates: AgentCandidate[];
+    agents: SpecializedAgentDefinition[];
+    validations: AgentValidationResult[];
+  }) {
+    const stateDistribution = {
+      candidate: args.agents.filter((agent) => agent.state === "candidate").length,
+      validating: args.agents.filter((agent) => agent.state === "validating").length,
+      guarded: args.agents.filter((agent) => agent.state === "guarded").length,
+      active: args.agents.filter((agent) => agent.state === "active").length,
+      deprecated: args.agents.filter((agent) => agent.state === "deprecated").length,
+      rejected: args.agents.filter((agent) => agent.state === "rejected").length
+    };
+
+    return {
+      candidateCount: args.candidates.length,
+      validatingCount: stateDistribution.validating,
+      guardedCount: stateDistribution.guarded,
+      activeCount: stateDistribution.active,
+      deprecatedCount: stateDistribution.deprecated,
+      rejectedCount: stateDistribution.rejected,
+      validations: args.validations.slice(0, 96),
+      stateDistribution,
+      topActive: [...args.agents]
+        .filter((agent) => agent.state === "active")
+        .sort((left, right) => right.confidenceScore - left.confidenceScore || right.usageCount - left.usageCount)
+        .slice(0, 8)
+        .map((agent) => ({
+          agentId: agent.id,
+          domain: agent.domain,
+          state: agent.state,
+          confidenceScore: agent.confidenceScore,
+          usageCount: agent.usageCount,
+          summary: agent.description
+        }))
+    };
+  }
+
+  private buildToolsSummary(args: {
+    gaps: ToolGapSignal[];
+    candidates: ToolCandidate[];
+    tools: ToolManifest[];
+    validations: ToolValidationResult[];
+    activationRequests: ToolCreationRequest[];
+  }) {
+    const stateDistribution = {
+      generated: args.tools.filter((tool) => tool.state === "generated").length,
+      tested: args.tools.filter((tool) => tool.state === "tested").length,
+      guarded: args.tools.filter((tool) => tool.state === "guarded").length,
+      active: args.tools.filter((tool) => tool.state === "active").length,
+      deprecated: args.tools.filter((tool) => tool.state === "deprecated").length,
+      rejected: args.tools.filter((tool) => tool.state === "rejected").length
+    };
+
+    return {
+      gapCount: args.gaps.length,
+      candidateCount: args.candidates.length,
+      generatedCount: stateDistribution.generated,
+      testedCount: stateDistribution.tested,
+      guardedCount: stateDistribution.guarded,
+      activeCount: stateDistribution.active,
+      deprecatedCount: stateDistribution.deprecated,
+      rejectedCount: stateDistribution.rejected,
+      validations: args.validations.slice(0, 96),
+      activationRequests: args.activationRequests.slice(0, 48),
+      stateDistribution,
+      topActive: [...args.tools]
+        .filter((tool) => tool.state === "active")
+        .sort((left, right) => right.confidenceScore - left.confidenceScore)
+        .slice(0, 8)
+        .map((tool) => ({
+          toolId: tool.id,
+          intent: tool.intent,
+          state: tool.state,
+          confidenceScore: tool.confidenceScore,
+          riskLevel: tool.riskLevel,
+          summary: tool.description
+        }))
+    };
+  }
+
+  private buildSkillPolicy(skill: SkillDefinition): LearningPolicyItem {
+    const state =
+      skill.state === "active"
+        ? "active"
+        : skill.state === "guarded"
+          ? "guarded"
+          : skill.state === "archived"
+            ? "archived"
+            : "rejected";
+    const scope = buildScope({
+      category: skill.scope.category
+    });
+
+    return {
+      policyId: buildPolicyId("skill", skill.id, scope),
+      target: "skill",
+      targetId: skill.id,
+      state,
+      decision: stateToDecision(state),
+      decisionReason:
+        state === "active"
+          ? "Procedural skill is active and eligible for recommendation."
+          : state === "guarded"
+            ? "Procedural skill is available but still under watch."
+            : state === "archived"
+              ? "Procedural skill was archived after sustained weakness or rollback."
+              : "Procedural skill was rejected and is not eligible for recommendation.",
+      memoryState: stateToMemoryState(state),
+      scope,
+      learned: skill.description,
+      modifies: "procedural skill recommendation and reuse hints",
+      conditions: [
+        skill.intent,
+        ...(skill.scope.taskPattern ? [skill.scope.taskPattern] : []),
+        ...skill.preconditions
+      ].slice(0, 8),
+      rollbackTriggers: [
+        "Live rounds routed through the skill regress below the promotion bar.",
+        "The skill causes unsafe over-generalization or stale tool use.",
+        "A narrower or more stable skill supersedes this one."
+      ],
+      confidence: skill.confidenceScore,
+      stability: clamp(1 - skill.validation.riskScore / 100, 0, 1),
+      sourceHotspotIds: [],
+      rationale: `Skill ${skill.name} is tracked as ${skill.state} with confidence ${Math.round(skill.confidenceScore * 100)}%.`,
+      validation: {
+        observations: Math.max(skill.usageCount, 1),
+        successRate: skill.validation.observedSuccessRate,
+        positiveImpactRate: skill.validation.observedSuccessRate,
+        averageJudgeDelta: skill.validation.observedJudgeDelta,
+        averageGainGlobal: skill.validation.observedJudgeDelta,
+        noReliableSourceRate: null,
+        noOpRate: null,
+        recencyWeight: clamp(skill.usageCount / 8, 0, 1),
+        stabilityWeight: clamp(1 - skill.validation.riskScore / 100, 0, 1)
+      },
+      weights: {
+        impactWeight: clamp(skill.validation.usefulnessScore / 100, 0, 1),
+        confidenceWeight: skill.confidenceScore,
+        stabilityWeight: clamp(1 - skill.validation.riskScore / 100, 0, 1),
+        recencyWeight: clamp(skill.usageCount / 8, 0, 1)
+      }
+    };
+  }
+
+  private buildAgentPolicy(agent: SpecializedAgentDefinition): LearningPolicyItem {
+    const state =
+      agent.state === "active"
+        ? "active"
+        : agent.state === "guarded"
+          ? "guarded"
+          : agent.state === "deprecated"
+            ? "archived"
+            : agent.state === "rejected"
+              ? "rejected"
+              : "validating";
+    const scope = buildScope({
+      category: agent.primaryCategory
+    });
+
+    return {
+      policyId: buildPolicyId("specialized_agent", agent.id, scope),
+      target: "specialized_agent",
+      targetId: agent.id,
+      state,
+      decision: stateToDecision(state),
+      decisionReason:
+        state === "active"
+          ? "Specialized agent is active and eligible for routed recommendation."
+          : state === "guarded"
+            ? "Specialized agent remains available but under domain and regression watch."
+            : state === "archived"
+              ? "Specialized agent was deprecated after weak or risky live behavior."
+              : state === "rejected"
+                ? "Specialized agent was rejected by governance."
+                : "Specialized agent is still validating against the core baseline.",
+      memoryState: stateToMemoryState(state),
+      scope,
+      learned: agent.description,
+      modifies: "specialized agent routing recommendation and domain-local memory posture",
+      conditions: [
+        agent.domain,
+        ...agent.allowedIntents,
+        ...agent.activationConditions
+      ].slice(0, 8),
+      rollbackTriggers: [
+        "A key required skill regresses or becomes rejected.",
+        "Off-domain activations increase beyond the allowed precision budget.",
+        "Live judge delta falls below the domain promotion bar."
+      ],
+      confidence: agent.confidenceScore,
+      stability: clamp(1 - ((agent.performance?.regressionRiskScore ?? 35) / 100), 0, 1),
+      sourceHotspotIds: [],
+      rationale: `Specialized agent ${agent.name} is ${agent.state} for the ${agent.domain} domain at ${Math.round(agent.confidenceScore * 100)}% confidence.`,
+      validation: {
+        observations: agent.performance?.observations ?? Math.max(agent.usageCount, 1),
+        successRate: agent.performance?.successRatePct ?? null,
+        positiveImpactRate: agent.performance?.activationPrecisionPct ?? null,
+        averageJudgeDelta: agent.performance?.averageJudgeDelta ?? null,
+        averageGainGlobal: agent.performance?.averageJudgeDelta ?? null,
+        noReliableSourceRate: null,
+        noOpRate: agent.performance?.failureRatePct ?? null,
+        recencyWeight: clamp(agent.usageCount / 6, 0, 1),
+        stabilityWeight: clamp(1 - ((agent.performance?.regressionRiskScore ?? 35) / 100), 0, 1)
+      },
+      weights: {
+        impactWeight: clamp(Math.max(agent.performance?.averageJudgeDelta ?? 0, 0) / 6, 0, 1),
+        confidenceWeight: agent.confidenceScore,
+        stabilityWeight: clamp(1 - ((agent.performance?.regressionRiskScore ?? 35) / 100), 0, 1),
+        recencyWeight: clamp(agent.usageCount / 6, 0, 1)
+      }
+    };
+  }
+
+  private buildToolManifestPolicy(tool: ToolManifest): LearningPolicyItem {
+    const state =
+      tool.state === "active"
+        ? "active"
+        : tool.state === "guarded"
+          ? "guarded"
+          : tool.state === "deprecated"
+            ? "archived"
+            : tool.state === "rejected"
+              ? "rejected"
+              : "validating";
+
+    const riskWeight =
+      tool.riskLevel === "low" ? 0.2 : tool.riskLevel === "medium" ? 0.45 : 0.7;
+
+    return {
+      policyId: buildPolicyId("tool_policy", tool.id, buildScope()),
+      target: "tool_policy",
+      targetId: tool.id,
+      state,
+      decision: stateToDecision(state),
+      decisionReason:
+        state === "active"
+          ? "Governed tool manifest is active and can be requested from Hydria OS."
+          : state === "guarded"
+            ? "Governed tool manifest is available but still under safety or regression watch."
+            : state === "validating"
+              ? "Governed tool manifest exists but still needs OS-side generation or testing."
+              : state === "archived"
+                ? "Governed tool manifest was deprecated after weak or risky live behavior."
+                : "Governed tool manifest was rejected by governance.",
+      memoryState: stateToMemoryState(state),
+      scope: buildScope(),
+      learned: tool.description,
+      modifies: "tool capability surface and routing escalation toward Hydria OS",
+      conditions: [tool.intent, tool.allowedExecutionContext, ...tool.requiredPermissions].slice(0, 8),
+      rollbackTriggers: [
+        "Regression risk rises above the activation policy budget.",
+        "Safety score drops below the required threshold.",
+        "Executor-side tests fail or become unstable."
+      ],
+      confidence: tool.confidenceScore,
+      stability: clamp(1 - riskWeight, 0, 1),
+      sourceHotspotIds: [],
+      rationale: `Tool manifest ${tool.name} is ${tool.state} with ${tool.riskLevel} risk and ${Math.round(tool.confidenceScore * 100)}% confidence.`,
+      validation: {
+        observations: Math.max(tool.validation?.adoptionScore ?? 0, 1),
+        successRate: tool.validation?.reliabilityScore ?? null,
+        positiveImpactRate: tool.validation?.usefulnessScore ?? null,
+        averageJudgeDelta: null,
+        averageGainGlobal: null,
+        noReliableSourceRate: null,
+        noOpRate: null,
+        recencyWeight: 1,
+        stabilityWeight: clamp(1 - riskWeight, 0, 1)
+      },
+      weights: {
+        impactWeight: clamp((tool.validation?.usefulnessScore ?? 0) / 100, 0, 1),
+        confidenceWeight: tool.confidenceScore,
+        stabilityWeight: clamp(1 - riskWeight, 0, 1),
+        recencyWeight: 1
+      }
+    };
+  }
+
+  private collectAgentLiveMetrics(
+    agentId: string,
+    rounds: ArenaRound[],
+    sessions: StudentSession[]
+  ) {
+    const deltas: number[] = [];
+    let observations = 0;
+    let successes = 0;
+    let failures = 0;
+    let preciseActivations = 0;
+
+    for (const round of rounds) {
+      if (round.research.agentRouting.agentId !== agentId) {
+        continue;
+      }
+
+      observations += 1;
+      const delta = averageJudgeDeltaFromRound(round);
+      deltas.push(delta);
+      successes += Number(delta > 0);
+      failures += Number(delta <= 0 || round.workflow.status === "partial");
+      preciseActivations += Number(round.research.agentRouting.agentFound);
+    }
+
+    for (const session of sessions) {
+      if (session.research.agentRouting.agentId !== agentId) {
+        continue;
+      }
+
+      observations += 1;
+      deltas.push(session.progression.deltaOverall);
+      successes += Number(session.progression.deltaOverall > 0);
+      failures += Number(session.progression.deltaOverall <= 0);
+      preciseActivations += Number(session.research.agentRouting.agentFound);
+    }
+
+    const failureRatePct = percentage(failures, observations);
+
+    return {
+      observations,
+      averageJudgeDelta: average(deltas),
+      successRatePct: percentage(successes, observations),
+      failureRatePct,
+      activationPrecisionPct: percentage(preciseActivations, observations),
+      regressionRiskScore: clamp(
+        (Math.max(-(average(deltas) ?? 0), 0) / 6) * 50 +
+          ((failureRatePct ?? 0) / 100) * 50,
+        0,
+        100
+      )
+    };
+  }
+
+  private collectSkillLiveMetrics(
+    skillId: string,
+    rounds: ArenaRound[],
+    sessions: StudentSession[]
+  ) {
+    const deltas: number[] = [];
+    let successes = 0;
+    let observations = 0;
+
+    for (const round of rounds) {
+      if (round.research.skillRouting.skillId !== skillId) {
+        continue;
+      }
+
+      observations += 1;
+      const delta = averageJudgeDeltaFromRound(round);
+      deltas.push(delta);
+      successes += Number(delta > 0 && round.workflow.status === "completed");
+    }
+
+    for (const session of sessions) {
+      if (session.research.skillRouting.skillId !== skillId) {
+        continue;
+      }
+
+      observations += 1;
+      deltas.push(session.progression.deltaOverall);
+      successes += Number(session.judge.verdict === "improved" || session.judge.verdict === "minor");
+    }
+
+    return {
+      observations,
+      averageJudgeDelta: average(deltas),
+      successRate: percentage(successes, observations)
+    };
+  }
+
   private collectLiveMetrics(
     policy: LearningPolicyItem,
     sessions: StudentSession[],
@@ -820,6 +1886,32 @@ export class LearningGovernanceService {
         );
         partialCount += Number(localReasons.length > 0);
         positiveCount += Number(localReasons.length === 0);
+      }
+    } else if (policy.target === "specialized_agent") {
+      for (const round of rounds) {
+        if (round.research.agentRouting.agentId !== policy.targetId) {
+          continue;
+        }
+
+        observations += 1;
+        const delta = averageJudgeDeltaFromRound(round);
+        judgeDeltas.push(delta);
+        gains.push(round.metrics.refineGain.global);
+        positiveCount += Number(delta > 0);
+        noOpCount += Number(Math.abs(delta) < 1);
+        partialCount += Number(round.workflow.status === "partial");
+      }
+
+      for (const session of sessions) {
+        if (session.research.agentRouting.agentId !== policy.targetId) {
+          continue;
+        }
+
+        observations += 1;
+        judgeDeltas.push(session.progression.deltaOverall);
+        gains.push(session.progression.deltaOverall);
+        positiveCount += Number(session.progression.deltaOverall > 0);
+        noOpCount += Number(Math.abs(session.progression.deltaOverall) < 1);
       }
     }
 
