@@ -8,10 +8,16 @@ import type {
   ArenaRunRequest,
   ExecutionAttempt,
   ExecutionTrace,
-  QuestionCategory
+  QuestionCategory,
+  RespondentOutput
 } from "../../types/arena.js";
+import type {
+  RespondentFailureClass,
+  RespondentFailureStage
+} from "../../types/analytics.js";
 import { env } from "../../utils/env.js";
 import { logger } from "../../utils/logger.js";
+import { parseModelCandidates } from "../../utils/modelCandidates.js";
 import {
   RespondentValidationError,
   parseRespondentOutput
@@ -24,6 +30,29 @@ import {
   RespondentStageError,
   type RespondentStepSnapshot
 } from "./arenaExecutionTypes.js";
+
+function normalizeWhitespace(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function truncate(value: string, max: number) {
+  if (value.length <= max) {
+    return value;
+  }
+
+  return `${value.slice(0, Math.max(0, max - 14)).trimEnd()} [truncated]`;
+}
+
+function shouldReplaceFailureClass(
+  current: RespondentFailureClass | null,
+  next: RespondentFailureClass
+) {
+  if (current === null || current === "unknown") {
+    return true;
+  }
+
+  return next !== "unknown";
+}
 
 export class ArenaRespondentExecutor {
   constructor(private readonly openRouterService: OpenRouterService) {}
@@ -73,22 +102,58 @@ export class ArenaRespondentExecutor {
         ? respondentBSettled.reason
         : null;
 
+    const salvagedA =
+      respondentAResult ??
+      (respondentAError
+        ? this.tryBuildStaticFallback(
+            args.question,
+            args.category,
+            respondentAError,
+            respondentBResult !== null
+          )
+        : null);
+    const salvagedB =
+      respondentBResult ??
+      (respondentBError
+        ? this.tryBuildStaticFallback(
+            args.question,
+            args.category,
+            respondentBError,
+            respondentAResult !== null
+          )
+        : null);
+
+    if (salvagedA && salvagedB) {
+      return {
+        respondentAResult: salvagedA,
+        respondentBResult: salvagedB
+      };
+    }
+
     throw new RespondentStageError(
       args.category,
-      respondentAResult
+      salvagedA
         ? {
             slot: "A",
-            output: respondentAResult.parsed,
-            trace: respondentAResult.trace,
-            durationMs: respondentAResult.latencyMs
+            output: salvagedA.parsed,
+            trace: salvagedA.trace,
+            durationMs: salvagedA.latencyMs,
+            rawResponse: salvagedA.raw,
+            failureClass: null,
+            failureStage: null,
+            failureMessage: null
           }
         : respondentAError?.snapshot ?? this.buildMissingRespondentSnapshot("A", args.models.respondentA),
-      respondentBResult
+      salvagedB
         ? {
             slot: "B",
-            output: respondentBResult.parsed,
-            trace: respondentBResult.trace,
-            durationMs: respondentBResult.latencyMs
+            output: salvagedB.parsed,
+            trace: salvagedB.trace,
+            durationMs: salvagedB.latencyMs,
+            rawResponse: salvagedB.raw,
+            failureClass: null,
+            failureStage: null,
+            failureMessage: null
           }
         : respondentBError?.snapshot ?? this.buildMissingRespondentSnapshot("B", args.models.respondentB)
     );
@@ -108,6 +173,9 @@ export class ArenaRespondentExecutor {
     let validationFailures = 0;
     let lastError: unknown = null;
     let lastRawResponse = "";
+    let lastFailureClass: RespondentFailureClass | null = null;
+    let lastFailureStage: RespondentFailureStage | null = null;
+    let lastFailureMessage: string | null = null;
 
     const basePrompt = buildRespondentUserPrompt({
       question: args.question,
@@ -158,12 +226,19 @@ export class ArenaRespondentExecutor {
       };
     } catch (error) {
       lastError = error;
+      const failureClass = this.classifyFailure(error);
+      if (shouldReplaceFailureClass(lastFailureClass, failureClass)) {
+        lastFailureClass = failureClass;
+        lastFailureStage = "primary";
+        lastFailureMessage = this.toFailureMessage(error);
+      }
       if (this.isRespondentValidationFailure(error)) {
         validationFailures += 1;
       }
       logger.warn("Primary respondent attempt failed", {
         slot: args.slot,
         model: args.model,
+        failureClass: lastFailureClass,
         error: String(error)
       });
     }
@@ -212,6 +287,12 @@ export class ArenaRespondentExecutor {
         };
       } catch (error) {
         lastError = error;
+        const failureClass = this.classifyFailure(error);
+        if (shouldReplaceFailureClass(lastFailureClass, failureClass)) {
+          lastFailureClass = failureClass;
+          lastFailureStage = "repair_retry";
+          lastFailureMessage = this.toFailureMessage(error);
+        }
         if (this.isRespondentValidationFailure(error)) {
           validationFailures += 1;
         }
@@ -219,6 +300,7 @@ export class ArenaRespondentExecutor {
           slot: args.slot,
           model: args.model,
           nextModel: fallbackModels[0] ?? null,
+          failureClass: lastFailureClass,
           error: String(error)
         });
       }
@@ -274,6 +356,12 @@ export class ArenaRespondentExecutor {
         };
       } catch (error) {
         lastError = error;
+        const failureClass = this.classifyFailure(error);
+        if (shouldReplaceFailureClass(lastFailureClass, failureClass)) {
+          lastFailureClass = failureClass;
+          lastFailureStage = "fallback";
+          lastFailureMessage = this.toFailureMessage(error);
+        }
         if (this.isRespondentValidationFailure(error)) {
           validationFailures += 1;
         }
@@ -281,11 +369,15 @@ export class ArenaRespondentExecutor {
           slot: args.slot,
           primaryModel: args.model,
           fallbackModel: model,
+          failureClass: lastFailureClass,
           error: String(error)
         });
       }
     }
 
+    const failureClass = lastFailureClass ?? "unknown";
+    const failureStage = lastFailureStage ?? "unknown";
+    const failureMessage = lastFailureMessage ?? "Respondent attempts exhausted without a validated output.";
     const finalTrace: ExecutionTrace = {
       requestedProvider: "openrouter",
       requestedModel: args.model,
@@ -297,7 +389,7 @@ export class ArenaRespondentExecutor {
       validationFailures,
       outcome: "failure",
       note:
-        "All respondent attempts failed; no validated respondent JSON could be produced."
+        `All respondent attempts failed; no validated respondent JSON could be produced. Failure class=${failureClass}; stage=${failureStage}; detail=${truncate(failureMessage, 160)}.`
     };
 
     throw new RespondentExecutionError(
@@ -305,14 +397,18 @@ export class ArenaRespondentExecutor {
         slot: args.slot,
         output: null,
         trace: finalTrace,
-        durationMs: Math.round(performance.now() - startedAt)
+        durationMs: Math.round(performance.now() - startedAt),
+        rawResponse: lastRawResponse || null,
+        failureClass,
+        failureStage,
+        failureMessage
       },
       lastError
     );
   }
 
   private resolveRespondentFallbackModels(primaryModel: string) {
-    return [env.RESPONDENT_FALLBACK_MODEL].filter(
+    return parseModelCandidates(env.RESPONDENT_FALLBACK_MODEL).filter(
       (candidate, index, list) =>
         candidate.trim().length > 0 &&
         candidate !== primaryModel &&
@@ -337,9 +433,14 @@ export class ArenaRespondentExecutor {
         usedFallback: false,
         validationFailures: 0,
         outcome: "failure",
-        note: "Respondent failed before a structured execution trace could be captured."
+        note:
+          "Respondent failed before a structured execution trace could be captured. Failure class=unknown; stage=unknown; detail=No structured trace."
       },
-      durationMs: 0
+      durationMs: 0,
+      rawResponse: null,
+      failureClass: "unknown",
+      failureStage: "unknown",
+      failureMessage: "No structured trace was captured."
     };
   }
 
@@ -358,4 +459,132 @@ export class ArenaRespondentExecutor {
 
     return [String(error)];
   }
+
+  private classifyFailure(error: unknown): RespondentFailureClass {
+    if (error instanceof RespondentValidationError) {
+      const message = error.message.toLowerCase();
+      if (message.includes("minimum respondent quality checks")) {
+        return "quality_gate";
+      }
+
+      return "structured_output";
+    }
+
+    if (error instanceof Error) {
+      const message = error.message.toLowerCase();
+      if (message.includes("timed out") || message.includes("timeout") || message.includes("aborted")) {
+        return "timeout";
+      }
+      if (message.includes("returned no content")) {
+        return "empty_response";
+      }
+      if (message.includes("openrouter returned")) {
+        return "provider_error";
+      }
+    }
+
+    return "unknown";
+  }
+
+  private toFailureMessage(error: unknown) {
+    if (error instanceof RespondentValidationError) {
+      return error.issues[0] ?? error.message;
+    }
+
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    return String(error);
+  }
+
+  private tryBuildStaticFallback(
+    question: string,
+    category: QuestionCategory,
+    error: RespondentExecutionError,
+    force = false
+  ): RespondentExecutionResult | null {
+    if (!force && !this.canStaticSalvage(error.snapshot)) {
+      return null;
+    }
+
+    const parsed = this.buildStaticFallbackOutput({
+      slot: error.snapshot.slot,
+      question,
+      category,
+      snapshot: error.snapshot
+    });
+    const failureClass = error.snapshot.failureClass ?? "unknown";
+    const failureStage = error.snapshot.failureStage ?? "unknown";
+    const failureMessage = error.snapshot.failureMessage ?? "Respondent failed before producing a valid structured draft.";
+
+    return {
+      parsed,
+      raw: error.snapshot.rawResponse ?? "",
+      trace: {
+        ...error.snapshot.trace,
+        finalProvider: "fallback",
+        usedFallback: true,
+        outcome: "static_fallback",
+        note:
+          `Respondent ${error.snapshot.slot} continued through a static structured fallback. ` +
+          `Failure class=${failureClass}; stage=${failureStage}; detail=${truncate(failureMessage, 160)}.`
+      },
+      latencyMs: error.snapshot.durationMs
+    };
+  }
+
+  private canStaticSalvage(snapshot: RespondentStepSnapshot) {
+    if (snapshot.rawResponse && normalizeWhitespace(snapshot.rawResponse).length >= 24) {
+      return true;
+    }
+
+    return snapshot.failureClass === "structured_output" || snapshot.failureClass === "quality_gate";
+  }
+
+  private buildStaticFallbackOutput(args: {
+    slot: RespondentSlot;
+    question: string;
+    category: QuestionCategory;
+    snapshot: RespondentStepSnapshot;
+  }): RespondentOutput {
+    const normalizedRaw = normalizeWhitespace(args.snapshot.rawResponse ?? "");
+    const answer = normalizedRaw.length >= 40
+      ? truncate(normalizedRaw, 1200)
+      : [
+          `Respondent ${args.slot} could not produce a reliable structured draft for this ${args.category.replaceAll("_", " ")} question.`,
+          "Treat this lane as low confidence and rely on critique, judging, and the other respondent before trusting specific claims."
+        ].join(" ");
+    const sentenceCandidates = answer
+      .split(/(?<=[.!?])\s+/)
+      .map((value) => normalizeWhitespace(value))
+      .filter((value) => value.length >= 12);
+    const keyPoints = sentenceCandidates.slice(0, 3);
+
+    while (keyPoints.length < 3) {
+      keyPoints.push(
+        [
+          "Use the other respondent as the primary draft when possible.",
+          "Require explicit judging before trusting concrete claims from this lane.",
+          `Original question anchor: ${truncate(args.question, 120)}`
+        ][keyPoints.length] ?? "Recovered through a low-confidence static fallback."
+      );
+    }
+
+    return {
+      modelRole: "respondent",
+      answer,
+      key_points: keyPoints.slice(0, 3),
+      assumptions: uniqueAssumptions([
+        "Recovered through a static structured fallback after respondent failure.",
+        args.snapshot.failureMessage ?? "Structured respondent output was unavailable.",
+        "Confidence is intentionally reduced; verify against the other lane and judge."
+      ]),
+      confidence: normalizedRaw.length >= 40 ? 34 : 18
+    };
+  }
+}
+
+function uniqueAssumptions(values: string[]) {
+  return [...new Set(values.map((value) => normalizeWhitespace(value)).filter(Boolean))].slice(0, 3);
 }

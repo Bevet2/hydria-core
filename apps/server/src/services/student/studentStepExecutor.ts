@@ -26,6 +26,7 @@ import {
   type StudentJudgeOutput
 } from "../../types/student.js";
 import { logger } from "../../utils/logger.js";
+import { parseModelCandidates } from "../../utils/modelCandidates.js";
 import { env, defaultArenaModels } from "../../utils/env.js";
 import { parseStructuredOutput } from "../../utils/jsonRepair.js";
 import { parseRefinerOutput } from "../../utils/refineOutput.js";
@@ -122,7 +123,7 @@ export class StudentStepExecutor {
       openRouterService: this.openRouterService,
       primaryModel: defaultArenaModels.respondentA,
       fallbackModels: this.filterFallbackModels([
-        env.ARENA_REFINE_FALLBACK_MODEL,
+        ...parseModelCandidates(env.ARENA_REFINE_FALLBACK_MODEL),
         defaultArenaModels.judge,
         defaultArenaModels.redTeam
       ], [defaultArenaModels.respondentA]),

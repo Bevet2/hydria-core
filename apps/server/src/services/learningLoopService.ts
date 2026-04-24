@@ -7,6 +7,7 @@ import { StudentStrategyDiscoveryService } from "./studentStrategyDiscoveryServi
 import { StudentRuleImpactTrackerService } from "./studentRuleImpactTrackerService.js";
 import { StudentStrategyImpactTrackerService } from "./studentStrategyImpactTrackerService.js";
 import { StudentToolImpactTrackerService } from "./studentToolImpactTrackerService.js";
+import { ArenaRespondentFailureStore } from "./arenaRespondentFailureStore.js";
 import { listPersistedStudentSessions } from "./storage/studentSessionPersistence.js";
 import { env } from "../utils/env.js";
 import type {
@@ -28,6 +29,7 @@ type LearningLoopServiceOptions = {
   strategyImpactTrackerService?: Pick<StudentStrategyImpactTrackerService, "buildAndPersist">;
   toolImpactTrackerService?: Pick<StudentToolImpactTrackerService, "buildAndPersist">;
   strategyDiscoveryService?: Pick<StudentStrategyDiscoveryService, "load">;
+  respondentFailureStore?: Pick<ArenaRespondentFailureStore, "listEvents">;
   learningGovernanceService?: Pick<
     LearningGovernanceService,
     "buildReport" | "buildActiveMemory" | "persistReport" | "persistActiveMemory" | "loadReport"
@@ -44,6 +46,7 @@ export class LearningLoopService {
   private readonly strategyImpactTrackerService: Pick<StudentStrategyImpactTrackerService, "buildAndPersist">;
   private readonly toolImpactTrackerService: Pick<StudentToolImpactTrackerService, "buildAndPersist">;
   private readonly strategyDiscoveryService: Pick<StudentStrategyDiscoveryService, "load">;
+  private readonly respondentFailureStore: Pick<ArenaRespondentFailureStore, "listEvents">;
   private readonly learningGovernanceService: Pick<
     LearningGovernanceService,
     "buildReport" | "buildActiveMemory" | "persistReport" | "persistActiveMemory" | "loadReport"
@@ -63,6 +66,8 @@ export class LearningLoopService {
       options.toolImpactTrackerService ?? new StudentToolImpactTrackerService();
     this.strategyDiscoveryService =
       options.strategyDiscoveryService ?? new StudentStrategyDiscoveryService();
+    this.respondentFailureStore =
+      options.respondentFailureStore ?? new ArenaRespondentFailureStore();
     this.learningGovernanceService =
       options.learningGovernanceService ?? new LearningGovernanceService();
     this.temporalEvalService = options.temporalEvalService ?? null;
@@ -74,10 +79,11 @@ export class LearningLoopService {
   }> {
     const validationMode = args.validationMode ?? "none";
 
-    const [previousReport, rounds, sessions, knowledgeLayer, ruleImpact, strategyImpact, toolImpact, strategyDiscovery] =
+    const [previousReport, rounds, respondentFailures, sessions, knowledgeLayer, ruleImpact, strategyImpact, toolImpact, strategyDiscovery] =
       await Promise.all([
         this.learningGovernanceService.loadReport(),
         this.historyStore.listRounds(),
+        this.respondentFailureStore.listEvents(),
         this.listStudentSessions({
           historyFile: env.STUDENT_SESSION_HISTORY_FILE,
           databaseFile: env.PERSISTENCE_DB_FILE
@@ -91,7 +97,10 @@ export class LearningLoopService {
 
     await this.knowledgeMemoryService.buildAndPersist(knowledgeLayer);
     const validation = await this.runValidation(validationMode, args.validationLimit ?? 8);
-    const arenaQuality = new (await import("./arenaQualityAnalyticsService.js")).ArenaQualityAnalyticsService().buildReport(rounds);
+    const arenaQuality = new (await import("./arenaQualityAnalyticsService.js")).ArenaQualityAnalyticsService().buildReport(
+      rounds,
+      respondentFailures
+    );
     const report = this.learningGovernanceService.buildReport({
       rounds,
       sessions,

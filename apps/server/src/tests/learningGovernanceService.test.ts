@@ -173,7 +173,7 @@ function buildDiscoveryFixture(): StrategyDiscoveryFile {
           promptLength: "short",
           signals: ["abstraction"]
         },
-        observations: 3,
+        observations: 4,
         winRate: 66,
         averageJudgeDelta: 4,
         averageGainGlobal: 4,
@@ -251,6 +251,15 @@ test("learning governance promotes, guards, and rejects policies using existing 
         /instead of explanatory_short/i.test(policy.learned)
     )
   );
+  assert.ok(
+    report.policies.some(
+      (policy) =>
+        policy.target === "research_policy" &&
+        policy.targetId === "targeted_grounding" &&
+        policy.state === "validating" &&
+        policy.decision === "keep_validating"
+    )
+  );
   assert.ok(activeMemory.items.some((item) => item.state === "active"));
 });
 
@@ -266,10 +275,11 @@ test("learning governance flags live false positives after promotion and moves a
     toolImpact: buildToolImpactFixture(),
     strategyDiscovery: buildDiscoveryFixture()
   });
-  const regressingSessions = [1, 2, 3].map((index) =>
+  const baseTime = Date.now() + 60_000;
+  const regressingSessions = [1, 2, 3, 4].map((index) =>
     buildStudentSessionFixture({
       sessionId: `77777777-7777-4777-8777-77777777777${index}`,
-      createdAt: `2026-04-19T10:0${index}:00.000Z`,
+      createdAt: new Date(baseTime + index * 1_000).toISOString(),
       strategyImpact: {
         ...buildStudentSessionFixture().strategyImpact,
         compared: true,
@@ -310,4 +320,75 @@ test("learning governance flags live false positives after promotion and moves a
   assert.equal(monitored?.status, "false_positive_risk");
   assert.equal(currentReport.liveMonitoring.falsePositiveAlerts >= 1, true);
   assert.equal(updatedPolicy?.state, "guarded");
+  assert.equal(updatedPolicy?.decision, "guard");
+});
+
+test("learning governance archives a policy that keeps regressing after it was already guarded", () => {
+  const service = new LearningGovernanceService();
+  const initialReport = service.buildReport({
+    rounds: [buildArenaRoundFixture()],
+    sessions: [buildStudentSessionFixture()],
+    knowledgeLayer: buildKnowledgeLayerFixture(),
+    arenaQuality: new ArenaQualityAnalyticsService().buildReport([buildArenaRoundFixture()]),
+    ruleImpact: buildRuleImpactFixture(),
+    strategyImpact: buildStrategyImpactFixture(),
+    toolImpact: buildToolImpactFixture(),
+    strategyDiscovery: buildDiscoveryFixture()
+  });
+  const guardedBaseTime = Date.now() + 120_000;
+  const regressingSessions = [1, 2, 3, 4].map((index) =>
+    buildStudentSessionFixture({
+      sessionId: `88888888-8888-4888-8888-88888888888${index}`,
+      createdAt: new Date(guardedBaseTime + index * 1_000).toISOString(),
+      strategyImpact: {
+        ...buildStudentSessionFixture().strategyImpact,
+        compared: true,
+        strategyId: "explanatory_compact_example",
+        metrics: {
+          judgeOverallDelta: -5,
+          gainGlobal: -4,
+          lengthDeltaWords: -12,
+          keyPointsDelta: -1,
+          assumptionsDelta: 0,
+          structureDelta: -2,
+          success: false
+        }
+      }
+    })
+  );
+  const guardedReport = service.buildReport({
+    rounds: [buildArenaRoundFixture()],
+    sessions: regressingSessions,
+    knowledgeLayer: buildKnowledgeLayerFixture(),
+    arenaQuality: new ArenaQualityAnalyticsService().buildReport([buildArenaRoundFixture()]),
+    ruleImpact: buildRuleImpactFixture(),
+    strategyImpact: buildStrategyImpactFixture(),
+    toolImpact: buildToolImpactFixture(),
+    strategyDiscovery: buildDiscoveryFixture(),
+    previousReport: initialReport
+  });
+  const archivedReport = service.buildReport({
+    rounds: [buildArenaRoundFixture()],
+    sessions: regressingSessions.map((session, index) => ({
+      ...session,
+      sessionId: `99999999-9999-4999-8999-99999999999${index}`,
+      createdAt: new Date(guardedBaseTime + 60_000 + index * 1_000).toISOString()
+    })),
+    knowledgeLayer: buildKnowledgeLayerFixture(),
+    arenaQuality: new ArenaQualityAnalyticsService().buildReport([buildArenaRoundFixture()]),
+    ruleImpact: buildRuleImpactFixture(),
+    strategyImpact: buildStrategyImpactFixture(),
+    toolImpact: buildToolImpactFixture(),
+    strategyDiscovery: buildDiscoveryFixture(),
+    previousReport: guardedReport
+  });
+  const archivedPolicy = archivedReport.policies.find(
+    (policy) =>
+      policy.target === "student_strategy" &&
+      policy.targetId === "explanatory_compact_example" &&
+      policy.scope.category === null
+  );
+
+  assert.equal(archivedPolicy?.state, "archived");
+  assert.equal(archivedPolicy?.decision, "archive");
 });

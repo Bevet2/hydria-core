@@ -1,6 +1,14 @@
 import type { ArenaRound } from "../types/arena.js";
 import { arenaQualityAnalyticsReportSchema, type ArenaQualityAnalyticsReport } from "../types/analytics.js";
 import type { HydriaActorRole, HydriaWorkflowDegradationReason } from "../types/core.js";
+import type {
+  ArenaRespondentFailureCauseStat,
+  ArenaRespondentFailureEvent,
+  RespondentFailureClass,
+  RespondentFailureStage,
+  RespondentFailureSource,
+  RespondentSlot
+} from "../types/analytics.js";
 
 const RECENT_WINDOW = 12;
 
@@ -22,6 +30,44 @@ function average(values: number[]) {
 
 function compareByCreatedAtDesc(left: ArenaRound, right: ArenaRound) {
   return new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+}
+
+function parseFailureClassFromTraceNote(note: string): RespondentFailureClass | null {
+  const match = note.match(/Failure class=([a-z_]+)/i);
+  if (!match) {
+    return null;
+  }
+
+  const value = (match[1] ?? "").toLowerCase();
+  switch (value) {
+    case "provider_error":
+    case "timeout":
+    case "empty_response":
+    case "structured_output":
+    case "quality_gate":
+    case "unknown":
+      return value;
+    default:
+      return null;
+  }
+}
+
+function parseFailureStageFromTraceNote(note: string): RespondentFailureStage | null {
+  const match = note.match(/stage=([a-z_]+)/i);
+  if (!match) {
+    return null;
+  }
+
+  const value = (match[1] ?? "").toLowerCase();
+  switch (value) {
+    case "primary":
+    case "repair_retry":
+    case "fallback":
+    case "unknown":
+      return value;
+    default:
+      return null;
+  }
 }
 
 function classifyPartialRound(round: ArenaRound): "classified" | "legacy" | null {
@@ -89,8 +135,22 @@ type RoleAccumulator = {
   groundingGapCount: number;
 };
 
+type RespondentFailureAccumulator = {
+  source: RespondentFailureSource;
+  slot: RespondentSlot | null;
+  failureClass: RespondentFailureClass;
+  failureStage: RespondentFailureStage;
+  count: number;
+  stageFailureCount: number;
+  rescuedCount: number;
+  latestSeenAt: string | null;
+};
+
 export class ArenaQualityAnalyticsService {
-  buildReport(rounds: ArenaRound[]): ArenaQualityAnalyticsReport {
+  buildReport(
+    rounds: ArenaRound[],
+    respondentFailures: ArenaRespondentFailureEvent[] = []
+  ): ArenaQualityAnalyticsReport {
     const sortedRounds = [...rounds].sort(compareByCreatedAtDesc);
     const completedRounds = sortedRounds.filter((round) => round.workflow.status === "completed");
     const partialRounds = sortedRounds.filter((round) => round.workflow.status === "partial");
@@ -104,6 +164,35 @@ export class ArenaQualityAnalyticsService {
     const recentRounds = sortedRounds.slice(0, RECENT_WINDOW);
     const reasonMap = new Map<string, ReasonAccumulator>();
     const roleMap = new Map<HydriaActorRole, RoleAccumulator>();
+    const respondentFailureMap = new Map<string, RespondentFailureAccumulator>();
+    let respondentStaticFallbackCount = 0;
+
+    const registerRespondentFailure = (args: {
+      source: RespondentFailureSource;
+      slot: RespondentSlot | null;
+      failureClass: RespondentFailureClass;
+      failureStage: RespondentFailureStage;
+      createdAt: string | null;
+    }) => {
+      const key = `${args.source}|${args.slot ?? "none"}|${args.failureClass}|${args.failureStage}`;
+      const current = respondentFailureMap.get(key) ?? {
+        source: args.source,
+        slot: args.slot,
+        failureClass: args.failureClass,
+        failureStage: args.failureStage,
+        count: 0,
+        stageFailureCount: 0,
+        rescuedCount: 0,
+        latestSeenAt: null
+      };
+      current.count += 1;
+      current.stageFailureCount += Number(args.source === "stage_failure");
+      current.rescuedCount += Number(args.source === "rescued_round");
+      if (args.createdAt && (!current.latestSeenAt || args.createdAt > current.latestSeenAt)) {
+        current.latestSeenAt = args.createdAt;
+      }
+      respondentFailureMap.set(key, current);
+    };
 
     for (const round of classifiedPartialRounds) {
       for (const reason of round.workflow.degradationReasons) {
@@ -140,6 +229,38 @@ export class ArenaQualityAnalyticsService {
       }
     }
 
+    for (const round of sortedRounds) {
+      const respondentTraces = [
+        { slot: "A" as const, trace: round.trace.respondentA },
+        { slot: "B" as const, trace: round.trace.respondentB }
+      ];
+      for (const respondentTrace of respondentTraces) {
+        if (respondentTrace.trace.outcome !== "static_fallback") {
+          continue;
+        }
+        respondentStaticFallbackCount += 1;
+        registerRespondentFailure({
+          source: "rescued_round",
+          slot: respondentTrace.slot,
+          failureClass:
+            parseFailureClassFromTraceNote(respondentTrace.trace.note) ?? "unknown",
+          failureStage:
+            parseFailureStageFromTraceNote(respondentTrace.trace.note) ?? "unknown",
+          createdAt: round.createdAt
+        });
+      }
+    }
+
+    for (const failure of respondentFailures) {
+      registerRespondentFailure({
+        source: "stage_failure",
+        slot: failure.slot,
+        failureClass: failure.failureClass,
+        failureStage: failure.failureStage,
+        createdAt: failure.createdAt
+      });
+    }
+
     const topDegradationReasons = [...reasonMap.entries()]
       .sort((left, right) => right[1].count - left[1].count || left[0].localeCompare(right[0]))
       .slice(0, 10)
@@ -168,6 +289,24 @@ export class ArenaQualityAnalyticsService {
         fallbackCount: value.fallbackCount,
         failureCount: value.failureCount,
         groundingGapCount: value.groundingGapCount
+      }));
+
+    const totalRespondentFailureSignals =
+      respondentFailures.length + respondentStaticFallbackCount;
+    const topRespondentFailureCauses: ArenaRespondentFailureCauseStat[] = [...respondentFailureMap.entries()]
+      .sort((left, right) => right[1].count - left[1].count || left[0].localeCompare(right[0]))
+      .slice(0, 10)
+      .map(([key, value]) => ({
+        key,
+        source: value.source,
+        slot: value.slot,
+        failureClass: value.failureClass,
+        failureStage: value.failureStage,
+        count: value.count,
+        percentage: roundPct(value.count, totalRespondentFailureSignals),
+        stageFailureCount: value.stageFailureCount,
+        rescuedCount: value.rescuedCount,
+        latestSeenAt: value.latestSeenAt
       }));
 
     const completedImpact = buildImpactCohort(completedRounds);
@@ -207,6 +346,16 @@ export class ArenaQualityAnalyticsService {
             ? roundPct(recentLegacyPartialRounds.length, recentRounds.length)
             : null,
         topDegradingRole: roleBreakdown[0]?.role ?? null,
+        respondentStageFailureCount: respondentFailures.length,
+        respondentStageFailureRatePct: roundPct(
+          respondentFailures.length,
+          sortedRounds.length + respondentFailures.length
+        ),
+        respondentStaticFallbackCount,
+        respondentStaticFallbackRatePct: roundPct(
+          respondentStaticFallbackCount,
+          Math.max(sortedRounds.length * 2, 1)
+        ),
         averageJudgeWinnerScoreCompleted: completedImpact.averageWinnerScore,
         averageJudgeWinnerScoreClassifiedPartial: classifiedPartialImpact.averageWinnerScore,
         averageJudgeWinnerScoreLegacyPartial: legacyPartialImpact.averageWinnerScore
@@ -219,6 +368,14 @@ export class ArenaQualityAnalyticsService {
       })),
       topDegradationReasons,
       roleBreakdown,
+      respondentReliability: {
+        stageFailures: respondentFailures.length,
+        rescuedStaticFallbacks: respondentStaticFallbackCount,
+        topFailureCauses: topRespondentFailureCauses,
+        recentFailures: [...respondentFailures]
+          .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+          .slice(0, 8)
+      },
       impact: {
         completed: completedImpact,
         classifiedPartial: classifiedPartialImpact,

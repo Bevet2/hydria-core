@@ -1,66 +1,89 @@
 # Hydria Core
 
-Hydria ne migre pas vers un framework multi-agent unique.  
-Le repo se dote d’un noyau d’interfaces internes, branché d’abord sur `student` et `research`.
+Hydria Core is the shared contract layer used by both the `arena` and `student` flows.
 
-## Inspirations traduites
+It is intentionally small:
+- workflow
+- messages
+- handoffs
+- tasks
+- memory snapshots
 
-- AutoGen
-  - `message`, `handoff`, `workflow`
-- CrewAI
-  - `task`, `owner`, `workflow scope`
-- Perplexica / Vane
-  - `ground_claims`, `research_planner`, `research_retriever`, `research_verifier`
-- MemGPT / Letta
-  - `memory snapshot` avec couches `core`, `episodic`, `semantic`, `archival`
-- LlamaIndex
-  - prochaine étape potentielle: loaders / chunking / indexing sur la couche documentaire
-- GraphRAG
-  - repoussé: pas encore nécessaire tant que retrieval et extraction restent le bottleneck
+The contract lives in `apps/server/src/types/core.ts` and is consumed through builders in `apps/server/src/services/core/`.
 
-## Contrats introduits
+## Core principles
 
-Fichier: [apps/server/src/types/core.ts](/F:/hydria-arena/apps/server/src/types/core.ts)
+- The core is a translation layer, not a decision engine.
+- Runtime services decide and execute.
+- Core builders normalize runtime data into one Hydria-native language.
+- Analytics and persistence read the Hydria contract instead of duplicating interpretation logic.
+
+## Main contracts
 
 - `HydriaWorkflowRun`
-  - trace structurée d’un run
+  - normalized trace of one run or session
 - `HydriaWorkflowMessage`
-  - message typé produit par un rôle
+  - typed message produced by a role
 - `HydriaWorkflowHandoff`
-  - transfert explicite entre rôles
+  - explicit transfer between roles
 - `HydriaWorkflowTask`
-  - unité de travail simple avec owner et status
+  - unit of work with owner and status
 - `HydriaMemorySnapshot`
-  - vue compacte de la mémoire injectée au run
+  - compact memory state injected or derived for a run
 
-## Intégration actuelle
+## Builders
 
-Le flux `student` expose déjà:
+- `apps/server/src/services/core/hydriaCoreWorkflowService.ts`
+- `apps/server/src/services/core/hydriaCoreMemoryService.ts`
+- `apps/server/src/services/core/hydriaArenaWorkflowBuilder.ts`
+- `apps/server/src/services/core/hydriaArenaMemoryBuilder.ts`
+- `apps/server/src/services/core/hydriaStudentWorkflowBuilder.ts`
+- `apps/server/src/services/core/hydriaStudentMemoryBuilder.ts`
 
-- `preview.memory`
+## Current scope
+
+The `student` flow exposes:
 - `preview.workflow`
-- `session.memory`
+- `preview.memory`
 - `session.workflow`
+- `session.memory`
 
-Le flux `arena` expose maintenant aussi:
-
-- `round.memory`
+The `arena` flow exposes:
 - `round.workflow`
+- `round.memory`
 
-Les adapters sont ici:
+## Degradation semantics
 
-- [hydriaCoreMemoryService.ts](/F:/hydria-arena/apps/server/src/services/core/hydriaCoreMemoryService.ts)
-- [hydriaCoreWorkflowService.ts](/F:/hydria-arena/apps/server/src/services/core/hydriaCoreWorkflowService.ts)
+Hydria uses stable workflow statuses:
+- `completed`
+- `partial`
+- `failed`
 
-Ils consomment les données réelles de:
+`partial` is not a vague label. It means the run stayed usable, but one or more important parts degraded:
+- critical role fallback
+- research failure
+- missing or degraded sub-step that did not invalidate the whole run
 
-- `KnowledgeInjectionService`
-- `StudentService`
-- `ResearchToolLog`
+Those reasons are represented in `workflow.degradationReasons`.
 
-## Migration incrémentale
+## What must stay out of the core
 
-1. Stabiliser `student`, `arena` et `research` sur ces contrats.
-2. Exposer `memory` et `workflow` dans l’UI avec une lecture simple, pas verbeuse.
-3. Ajouter une couche documentaire plus formelle si le besoin de loaders/index apparaît.
-4. Introduire un graphe d’entités seulement si les evals montrent un vrai manque de linking transverse.
+The following must not migrate into builders:
+- policy heuristics
+- benchmark scoring
+- persistence rules
+- promotion or demotion logic
+- product-facing decisions
+
+If a rule changes behavior, it belongs in:
+- `services/arena/*`
+- `services/student/*`
+- `services/research/*`
+- `services/learning*`
+
+and only the resulting trace belongs in Hydria Core.
+
+## Related docs
+
+- [System Overview](./overview.md)
+- [Learning Loop](./learning-loop.md)

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import {
   type ArenaRunRequest,
+  type QuestionCategory,
 } from "../types/arena.js";
 import { logger } from "../utils/logger.js";
 import { HistoryStore } from "./historyStore.js";
@@ -19,6 +20,11 @@ import { ResearchToolService } from "./researchToolService.js";
 import { RefineRouterService } from "./refineRouter.js";
 import { HydriaCoreMemoryService } from "./core/hydriaCoreMemoryService.js";
 import { HydriaCoreWorkflowService } from "./core/hydriaCoreWorkflowService.js";
+import { ArenaRespondentFailureStore } from "./arenaRespondentFailureStore.js";
+import {
+  type RespondentExecutionResult,
+  RespondentStageError
+} from "./arena/arenaExecutionTypes.js";
 
 export { RespondentStageError } from "./arena/arenaExecutionTypes.js";
 
@@ -29,6 +35,7 @@ export class ArenaRunner {
   private readonly stepExecutor: ArenaStepExecutor;
   private readonly preparationService: ArenaPreparationService;
   private readonly roundAssemblyService: ArenaRoundAssemblyService;
+  private readonly respondentFailureStore: ArenaRespondentFailureStore;
 
   constructor(
     private readonly openRouterService: OpenRouterService,
@@ -54,6 +61,7 @@ export class ArenaRunner {
       this.hydriaCoreMemoryService,
       this.hydriaCoreWorkflowService
     );
+    this.respondentFailureStore = new ArenaRespondentFailureStore();
   }
 
   async runRound(request: ArenaRunRequest) {
@@ -68,11 +76,27 @@ export class ArenaRunner {
       detectedCategory
     });
 
-    const { respondentAResult, respondentBResult } = await this.stepExecutor.runRespondents({
-      question: request.question,
-      models: request.models,
-      category: detectedCategory
-    });
+    let respondentAResult: RespondentExecutionResult;
+    let respondentBResult: RespondentExecutionResult;
+    try {
+      const respondentResults = await this.stepExecutor.runRespondents({
+        question: request.question,
+        models: request.models,
+        category: detectedCategory
+      });
+      respondentAResult = respondentResults.respondentAResult;
+      respondentBResult = respondentResults.respondentBResult;
+    } catch (error) {
+      if (error instanceof RespondentStageError) {
+        await this.recordRespondentStageFailure({
+          roundId,
+          createdAt,
+          category: detectedCategory,
+          error
+        });
+      }
+      throw error;
+    }
 
     const prepared = await this.preparationService.prepareRound({
       question: request.question,
@@ -208,5 +232,50 @@ export class ArenaRunner {
     });
 
     return round;
+  }
+
+  private async recordRespondentStageFailure(args: {
+    roundId: string;
+    createdAt: string;
+    category: QuestionCategory;
+    error: RespondentStageError;
+  }) {
+    const failedSnapshots = [args.error.respondentA, args.error.respondentB].filter(
+      (snapshot) => snapshot.output === null
+    );
+
+    await Promise.all(
+      failedSnapshots.map((snapshot) =>
+        this.respondentFailureStore.recordFailure({
+          roundId: args.roundId,
+          createdAt: args.createdAt,
+          category: args.category,
+          slot: snapshot.slot,
+          requestedModel: snapshot.trace.requestedModel,
+          finalModel: snapshot.trace.finalModel,
+          failureClass: snapshot.failureClass ?? "unknown",
+          failureStage: snapshot.failureStage ?? "unknown",
+          attemptsCount: snapshot.trace.attempts.length,
+          validationFailures: snapshot.trace.validationFailures,
+          usedRetry: snapshot.trace.usedRetry,
+          usedFallback: snapshot.trace.usedFallback,
+          failureMessage:
+            snapshot.failureMessage ??
+            "Respondent stage failed before a validated draft could be produced.",
+          note: snapshot.trace.note
+        })
+      )
+    );
+
+    logger.warn("Arena respondent stage failed before persistence", {
+      roundId: args.roundId,
+      category: args.category,
+      failureSlots: failedSnapshots.map((snapshot) => ({
+        slot: snapshot.slot,
+        failureClass: snapshot.failureClass ?? "unknown",
+        failureStage: snapshot.failureStage ?? "unknown",
+        attempts: snapshot.trace.attempts.length
+      }))
+    });
   }
 }

@@ -40,6 +40,7 @@ export function ArenaQualityPanel({ report }: ArenaQualityPanelProps) {
 
   const topReasons = report.topDegradationReasons.slice(0, 3);
   const topRoles = report.roleBreakdown.slice(0, 5);
+  const topRespondentFailureCauses = report.respondentReliability.topFailureCauses.slice(0, 4);
 
   return (
     <section className="panel">
@@ -67,6 +68,20 @@ export function ArenaQualityPanel({ report }: ArenaQualityPanelProps) {
         <div className="summary-card">
           <span>Top degrading role</span>
           <strong>{report.summary.topDegradingRole ?? "n/a"}</strong>
+        </div>
+        <div className="summary-card">
+          <span>Respondent stage failures</span>
+          <strong>
+            {report.summary.respondentStageFailureCount} /{" "}
+            {formatPct(report.summary.respondentStageFailureRatePct)}
+          </strong>
+        </div>
+        <div className="summary-card">
+          <span>Respondent static fallbacks</span>
+          <strong>
+            {report.summary.respondentStaticFallbackCount} /{" "}
+            {formatPct(report.summary.respondentStaticFallbackRatePct)}
+          </strong>
         </div>
         <div className="summary-card">
           <span>Judge winner score</span>
@@ -116,6 +131,30 @@ export function ArenaQualityPanel({ report }: ArenaQualityPanelProps) {
           <strong>{formatPct(report.summary.recentLegacyPartialRatePct)}</strong>
         </div>
       </div>
+
+      <h3>Respondent reliability</h3>
+      {topRespondentFailureCauses.length === 0 ? (
+        <p className="muted">No respondent failure signal has been recorded yet.</p>
+      ) : (
+        <div className="workflow-task-grid">
+          {topRespondentFailureCauses.map((cause) => (
+            <article key={cause.key} className="workflow-task">
+              <div className="memory-item__header">
+                <strong>{cause.failureClass}</strong>
+                <span className="pill">
+                  {cause.count} / {cause.percentage}%
+                </span>
+              </div>
+              <div className="meta-row">
+                <span>stage {cause.failureStage}</span>
+                <span>slot {cause.slot ?? "n/a"}</span>
+                <span>hard {cause.stageFailureCount}</span>
+                <span>rescued {cause.rescuedCount}</span>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
 
       <h3>Top degradation reasons</h3>
       {topReasons.length === 0 ? (

@@ -18,6 +18,7 @@ import {
 } from "../../types/localModel.js";
 import { env } from "../../utils/env.js";
 import { logger } from "../../utils/logger.js";
+import { parseModelCandidates } from "../../utils/modelCandidates.js";
 import { LocalModelService } from "../localModel.js";
 import { OpenRouterService } from "../openrouter.js";
 import type { ArenaLocalStudentStepResult } from "./arenaExecutionTypes.js";
@@ -186,7 +187,7 @@ export class ArenaLocalStudentExecutor {
 
   resolveLocalStudentFallbackModels(models: ArenaRunRequest["models"]) {
     return this.filterFallbackModels([
-      env.LOCAL_STUDENT_FALLBACK_MODEL,
+      ...parseModelCandidates(env.LOCAL_STUDENT_FALLBACK_MODEL),
       models.synthesizer,
       models.judge
     ]);

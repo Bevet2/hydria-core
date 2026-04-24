@@ -39,6 +39,36 @@ test("history store reloads rounds from sqlite even if the json projection is co
   }
 });
 
+test("history store no longer truncates arena rounds to 100 entries", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "hydria-history-unbounded-"));
+  let store: HistoryStore | null = null;
+  try {
+    const historyFile = join(tempRoot, "history.json");
+    const databaseFile = join(tempRoot, "hydria-state.sqlite");
+    const datasetFile = join(tempRoot, "rounds.jsonl");
+
+    store = new HistoryStore(historyFile, databaseFile, datasetFile);
+
+    for (let index = 0; index < 105; index += 1) {
+      await store.appendRound(
+        buildArenaRoundFixture({
+          roundId: `11111111-1111-4111-8111-${String(index).padStart(12, "0")}`,
+          createdAt: `2026-04-20T10:${String(Math.floor(index / 60)).padStart(2, "0")}:${String(index % 60).padStart(2, "0")}.000Z`
+        })
+      );
+    }
+
+    const rounds = await store.listRounds();
+    assert.equal(rounds.length, 105);
+
+    const projection = JSON.parse(await readFile(historyFile, "utf8")) as { rounds: unknown[] };
+    assert.equal(projection.rounds.length, 105);
+  } finally {
+    await store?.close?.();
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test("student session store reloads sessions from sqlite and rewrites the projection when missing", async () => {
   const tempRoot = await mkdtemp(join(tmpdir(), "hydria-student-sqlite-"));
   let writer: StudentSessionStore | null = null;

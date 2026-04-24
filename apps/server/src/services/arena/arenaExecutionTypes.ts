@@ -7,6 +7,10 @@ import type {
   SynthesizerOutput
 } from "../../types/arena.js";
 import type { LocalStudentOutput } from "../../types/localModel.js";
+import type {
+  RespondentFailureClass,
+  RespondentFailureStage
+} from "../../types/analytics.js";
 
 export type StepResult<T> = {
   output: T;
@@ -28,6 +32,10 @@ export type RespondentStepSnapshot = {
   output: RespondentOutput | null;
   trace: ExecutionTrace;
   durationMs: number;
+  rawResponse: string | null;
+  failureClass: RespondentFailureClass | null;
+  failureStage: RespondentFailureStage | null;
+  failureMessage: string | null;
 };
 
 export type ArenaJudgeStepResult = StepResult<JudgeOutput>;

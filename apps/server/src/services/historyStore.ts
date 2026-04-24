@@ -17,7 +17,8 @@ export class HistoryStore {
   constructor(
     private readonly filePath = env.HISTORY_FILE,
     databaseFile = env.PERSISTENCE_DB_FILE,
-    roundDatasetFile = env.ROUND_DATASET_FILE
+    roundDatasetFile = env.ROUND_DATASET_FILE,
+    private readonly historyProjectionLimit = env.HISTORY_PROJECTION_LIMIT
   ) {
     this.roundDatasetStore = new RoundDatasetStore(roundDatasetFile);
     this.database = new HydriaStateDatabase(databaseFile);
@@ -58,8 +59,7 @@ export class HistoryStore {
       await this.ensureReady();
       const parsedRound = arenaRoundSchema.parse(round);
       await this.database.appendArenaRound(parsedRound);
-      const rounds = (await this.database.listArenaRounds()).slice(0, 100);
-      await this.database.replaceArenaRounds(rounds);
+      const rounds = await this.database.listArenaRounds();
       await this.writeHistoryProjection(rounds);
       await this.roundDatasetStore.appendRound(parsedRound);
     });
@@ -90,7 +90,7 @@ export class HistoryStore {
 
   private async writeHistoryProjection(rounds: ArenaRound[]) {
     const payload = {
-      rounds
+      rounds: this.historyProjectionLimit > 0 ? rounds.slice(0, this.historyProjectionLimit) : rounds
     };
     await writeFile(this.filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
   }

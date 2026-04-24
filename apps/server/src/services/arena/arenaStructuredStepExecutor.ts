@@ -29,6 +29,7 @@ import {
   parseJudgeOutput
 } from "../../utils/judgeOutput.js";
 import { logger } from "../../utils/logger.js";
+import { parseModelCandidates } from "../../utils/modelCandidates.js";
 import {
   RefinerValidationError,
   parseRefinerOutput
@@ -432,7 +433,7 @@ export class ArenaStructuredStepExecutor {
     models: ArenaRunRequest["models"]
   ) {
     return this.filterFallbackModels(
-      [env.ARENA_REFINE_FALLBACK_MODEL, models.judge, models.redTeam],
+      [...parseModelCandidates(env.ARENA_REFINE_FALLBACK_MODEL), models.judge, models.redTeam],
       { exclude: [primaryModel] }
     );
   }
@@ -442,7 +443,7 @@ export class ArenaStructuredStepExecutor {
     models: ArenaRunRequest["models"]
   ) {
     return this.filterFallbackModels(
-      [env.ARENA_REFINE_FALLBACK_MODEL, models.redTeam, models.synthesizer],
+      [...parseModelCandidates(env.ARENA_REFINE_FALLBACK_MODEL), models.redTeam, models.synthesizer],
       { exclude: [primaryModel] }
     );
   }
@@ -452,7 +453,7 @@ export class ArenaStructuredStepExecutor {
     models: ArenaRunRequest["models"]
   ) {
     return this.filterFallbackModels(
-      [env.ARENA_REFINE_FALLBACK_MODEL, models.judge, models.redTeam],
+      [...parseModelCandidates(env.ARENA_REFINE_FALLBACK_MODEL), models.judge, models.redTeam],
       { exclude: [primaryModel] }
     );
   }

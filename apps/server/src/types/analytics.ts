@@ -8,6 +8,22 @@ import {
 
 const winnerSchema = z.enum(["A", "B", "tie"]);
 const arenaQualityPartialKindSchema = z.enum(["classified", "legacy"]);
+export const respondentFailureClassSchema = z.enum([
+  "provider_error",
+  "timeout",
+  "empty_response",
+  "structured_output",
+  "quality_gate",
+  "unknown"
+]);
+export const respondentFailureStageSchema = z.enum([
+  "primary",
+  "repair_retry",
+  "fallback",
+  "unknown"
+]);
+export const respondentFailureSourceSchema = z.enum(["stage_failure", "rescued_round"]);
+export const respondentSlotSchema = z.enum(["A", "B"]);
 
 export const arenaQualitySummarySchema = z.object({
   totalRounds: z.number().int().nonnegative(),
@@ -24,6 +40,10 @@ export const arenaQualitySummarySchema = z.object({
   recentClassifiedPartialRatePct: z.number().min(0).max(100).nullable(),
   recentLegacyPartialRatePct: z.number().min(0).max(100).nullable(),
   topDegradingRole: hydriaActorRoleSchema.nullable(),
+  respondentStageFailureCount: z.number().int().nonnegative(),
+  respondentStageFailureRatePct: z.number().min(0).max(100),
+  respondentStaticFallbackCount: z.number().int().nonnegative(),
+  respondentStaticFallbackRatePct: z.number().min(0).max(100),
   averageJudgeWinnerScoreCompleted: z.number().min(0).max(100).nullable(),
   averageJudgeWinnerScoreClassifiedPartial: z.number().min(0).max(100).nullable(),
   averageJudgeWinnerScoreLegacyPartial: z.number().min(0).max(100).nullable()
@@ -54,6 +74,49 @@ export const arenaQualityRoleStatSchema = z.object({
   groundingGapCount: z.number().int().nonnegative()
 });
 
+export const arenaRespondentFailureEventSchema = z.object({
+  eventId: z.string().uuid(),
+  roundId: z.string().uuid(),
+  createdAt: z.string().datetime(),
+  category: z.string().min(1).max(80),
+  slot: respondentSlotSchema,
+  requestedModel: z.string().min(1).max(160),
+  finalModel: z.string().min(1).max(160),
+  failureClass: respondentFailureClassSchema,
+  failureStage: respondentFailureStageSchema,
+  attemptsCount: z.number().int().nonnegative().max(6),
+  validationFailures: z.number().int().nonnegative().max(6),
+  usedRetry: z.boolean(),
+  usedFallback: z.boolean(),
+  failureMessage: z.string().min(1).max(240),
+  note: z.string().min(1).max(320)
+});
+
+export const arenaRespondentFailureLogSchema = z.object({
+  version: z.literal("hydria-respondent-failures-v1"),
+  events: z.array(arenaRespondentFailureEventSchema).max(500)
+});
+
+export const arenaRespondentFailureCauseStatSchema = z.object({
+  key: z.string().min(1).max(160),
+  source: respondentFailureSourceSchema,
+  slot: respondentSlotSchema.nullable(),
+  failureClass: respondentFailureClassSchema,
+  failureStage: respondentFailureStageSchema,
+  count: z.number().int().nonnegative(),
+  percentage: z.number().min(0).max(100),
+  stageFailureCount: z.number().int().nonnegative(),
+  rescuedCount: z.number().int().nonnegative(),
+  latestSeenAt: z.string().datetime().nullable()
+});
+
+export const arenaRespondentReliabilitySchema = z.object({
+  stageFailures: z.number().int().nonnegative(),
+  rescuedStaticFallbacks: z.number().int().nonnegative(),
+  topFailureCauses: z.array(arenaRespondentFailureCauseStatSchema).max(10),
+  recentFailures: z.array(arenaRespondentFailureEventSchema).max(8)
+});
+
 export const arenaQualityWinnerDistributionSchema = z.object({
   A: z.number().int().nonnegative(),
   B: z.number().int().nonnegative(),
@@ -82,6 +145,7 @@ export const arenaQualityAnalyticsReportSchema = z.object({
   recentStatuses: z.array(arenaQualityRecentStatusSchema).max(20),
   topDegradationReasons: z.array(arenaQualityDegradationReasonStatSchema).max(10),
   roleBreakdown: z.array(arenaQualityRoleStatSchema).max(12),
+  respondentReliability: arenaRespondentReliabilitySchema,
   impact: arenaQualityImpactSchema
 });
 
@@ -92,6 +156,16 @@ export type ArenaQualityDegradationReasonStat = z.infer<
   typeof arenaQualityDegradationReasonStatSchema
 >;
 export type ArenaQualityRoleStat = z.infer<typeof arenaQualityRoleStatSchema>;
+export type RespondentFailureClass = z.infer<typeof respondentFailureClassSchema>;
+export type RespondentFailureStage = z.infer<typeof respondentFailureStageSchema>;
+export type RespondentFailureSource = z.infer<typeof respondentFailureSourceSchema>;
+export type RespondentSlot = z.infer<typeof respondentSlotSchema>;
+export type ArenaRespondentFailureEvent = z.infer<typeof arenaRespondentFailureEventSchema>;
+export type ArenaRespondentFailureLog = z.infer<typeof arenaRespondentFailureLogSchema>;
+export type ArenaRespondentFailureCauseStat = z.infer<
+  typeof arenaRespondentFailureCauseStatSchema
+>;
+export type ArenaRespondentReliability = z.infer<typeof arenaRespondentReliabilitySchema>;
 export type ArenaQualityWinnerDistribution = z.infer<
   typeof arenaQualityWinnerDistributionSchema
 >;

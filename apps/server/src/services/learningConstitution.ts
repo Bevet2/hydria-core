@@ -8,6 +8,7 @@ export const HYDRIA_LEARNING_CONSTITUTION: LearningConstitution = learningConsti
     "student_strategy",
     "tool_policy",
     "research_policy",
+    "respondent_policy",
     "local_student_policy",
     "memory_rule"
   ],
@@ -18,16 +19,27 @@ export const HYDRIA_LEARNING_CONSTITUTION: LearningConstitution = learningConsti
     "Do not keep policies active when they create sustained regressions or excessive cost."
   ],
   promotionCriteria: {
-    minObservations: 3,
-    minConfidence: 0.7,
-    minStability: 0.55,
+    minObservations: 4,
+    minConfidence: 0.74,
+    minStability: 0.6,
     requireValidationForGlobalPromotion: true,
     allowedValidationModes: ["temporal_replay"]
   },
+  activationBoundaries: {
+    maxActivePolicies: 18,
+    maxActiveGlobalPolicies: 6,
+    restrictedGlobalTargets: [
+      "tool_policy",
+      "research_policy",
+      "respondent_policy",
+      "local_student_policy",
+      "memory_rule"
+    ]
+  },
   demotionCriteria: {
-    maxNoReliableSourceRate: 45,
-    minAverageJudgeDelta: 0.5,
-    maxNoOpRate: 45,
+    maxNoReliableSourceRate: 35,
+    minAverageJudgeDelta: 0.75,
+    maxNoOpRate: 35,
     regressionTriggerDelta: 3
   },
   lifecycle: {
@@ -41,6 +53,7 @@ export const HYDRIA_LEARNING_CONSTITUTION: LearningConstitution = learningConsti
     "Keep every active policy reversible and explicitly justified.",
     "Separate raw memory from active memory.",
     "Validation must be observable, replayable, and measurable.",
-    "If the gain is unclear, keep the policy in validating or guarded state."
+    "If the gain is unclear, keep the policy in validating or guarded state.",
+    "Do not activate broad research or provider policies globally on weak or sparse evidence."
   ]
 });

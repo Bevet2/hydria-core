@@ -173,6 +173,18 @@ export function BenchmarkPage({ mode = "core" }: BenchmarkPageProps) {
           </aside>
         </div>
       ) : null}
+
+      {!loading && !summary ? (
+        <section className="panel">
+          <div className="panel__header">
+            <h2>No Benchmark Summary Yet</h2>
+          </div>
+          <p className="muted">
+            Start a benchmark run to generate comparable gain, latency, routing, and fallback
+            analytics for this pack.
+          </p>
+        </section>
+      ) : null}
     </main>
   );
 }

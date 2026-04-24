@@ -43,6 +43,7 @@ export const learningPolicyTargetSchema = z.enum([
   "student_strategy",
   "tool_policy",
   "research_policy",
+  "respondent_policy",
   "local_student_policy",
   "memory_rule"
 ]);
@@ -54,6 +55,14 @@ export const learningPolicyStateSchema = z.enum([
   "guarded",
   "rejected",
   "archived"
+]);
+
+export const learningPolicyDecisionSchema = z.enum([
+  "promote",
+  "keep_validating",
+  "guard",
+  "reject",
+  "archive"
 ]);
 
 export const learningMemoryStateSchema = z.enum([
@@ -144,11 +153,14 @@ export const learningPolicyItemSchema = z.object({
   target: learningPolicyTargetSchema,
   targetId: z.string().min(1).max(160),
   state: learningPolicyStateSchema,
+  decision: learningPolicyDecisionSchema,
+  decisionReason: z.string().min(1).max(320),
   memoryState: learningMemoryStateSchema,
   scope: learningPolicyScopeSchema,
   learned: z.string().min(1).max(240),
   modifies: z.string().min(1).max(240),
   conditions: z.array(z.string().min(1).max(180)).max(8),
+  rollbackTriggers: z.array(z.string().min(1).max(180)).max(6),
   confidence: z.number().min(0).max(1),
   stability: z.number().min(0).max(1),
   sourceHotspotIds: z.array(z.string().min(1).max(120)).max(8),
@@ -213,6 +225,11 @@ export const learningConstitutionSchema = z.object({
     minStability: z.number().min(0).max(1),
     requireValidationForGlobalPromotion: z.boolean(),
     allowedValidationModes: z.array(learningValidationModeSchema).min(1).max(4)
+  }),
+  activationBoundaries: z.object({
+    maxActivePolicies: z.number().int().min(1).max(128),
+    maxActiveGlobalPolicies: z.number().int().min(1).max(64),
+    restrictedGlobalTargets: z.array(learningPolicyTargetSchema).max(12)
   }),
   demotionCriteria: z.object({
     maxNoReliableSourceRate: z.number().min(0).max(100),
@@ -329,6 +346,7 @@ export type LearningHotspotSeverity = z.infer<typeof learningHotspotSeveritySche
 export type LearningSignalSource = z.infer<typeof learningSignalSourceSchema>;
 export type LearningPolicyTarget = z.infer<typeof learningPolicyTargetSchema>;
 export type LearningPolicyState = z.infer<typeof learningPolicyStateSchema>;
+export type LearningPolicyDecision = z.infer<typeof learningPolicyDecisionSchema>;
 export type LearningMemoryState = z.infer<typeof learningMemoryStateSchema>;
 export type LearningValidationMode = z.infer<typeof learningValidationModeSchema>;
 export type LearningImprovementWeights = z.infer<typeof learningImprovementWeightsSchema>;

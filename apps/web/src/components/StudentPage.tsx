@@ -152,6 +152,25 @@ export function StudentPage() {
               </div>
             </div>
 
+            <div className="summary-grid">
+              <div className="summary-card">
+                <span>Stored sessions</span>
+                <strong>{summary?.totalSessions ?? sessions.length}</strong>
+              </div>
+              <div className="summary-card">
+                <span>Average score</span>
+                <strong>{summary ? `${summary.averageSessionScore}` : "n/a"}</strong>
+              </div>
+              <div className="summary-card">
+                <span>Learning alerts</span>
+                <strong>{learningState?.report?.liveMonitoring.falsePositiveAlerts ?? 0}</strong>
+              </div>
+              <div className="summary-card">
+                <span>Persistence</span>
+                <strong>{persistenceHealth?.status ?? "n/a"}</strong>
+              </div>
+            </div>
+
             <div className="field">
               <label htmlFor="student-question">Question</label>
               <textarea

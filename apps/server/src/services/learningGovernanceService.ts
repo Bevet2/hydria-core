@@ -10,6 +10,7 @@ import {
   type LearningGovernanceReport,
   type LearningHotspot,
   type LearningLiveMonitoringStatus,
+  type LearningPolicyDecision,
   type LearningPolicyItem,
   type LearningPolicyScope,
   type LearningPolicyState,
@@ -86,6 +87,55 @@ function buildScope(args: {
   };
 }
 
+function isGlobalScope(scope: LearningPolicyScope) {
+  return (
+    scope.category === null &&
+    scope.questionType === null &&
+    scope.promptLength === null &&
+    scope.signals.length === 0
+  );
+}
+
+function stateToDecision(state: LearningPolicyState): LearningPolicyDecision {
+  switch (state) {
+    case "active":
+      return "promote";
+    case "guarded":
+      return "guard";
+    case "rejected":
+      return "reject";
+    case "archived":
+      return "archive";
+    default:
+      return "keep_validating";
+  }
+}
+
+function buildRollbackTriggers(target: LearningPolicyTarget) {
+  const common = [
+    "Live judge delta falls below zero over the monitoring window.",
+    "Observed regression exceeds the configured regression trigger.",
+    "No-op rate exceeds the constitution guardrail."
+  ];
+
+  if (target === "research_policy" || target === "tool_policy") {
+    return [
+      ...common,
+      "No reliable source rate exceeds the constitution guardrail.",
+      "Research cost rises without a measurable live gain."
+    ].slice(0, 6);
+  }
+
+  if (target === "respondent_policy" || target === "local_student_policy") {
+    return [
+      ...common,
+      "Critical fallback frequency stays elevated in live rounds."
+    ].slice(0, 6);
+  }
+
+  return common;
+}
+
 function stateToMemoryState(state: LearningPolicyState) {
   switch (state) {
     case "active":
@@ -159,13 +209,21 @@ export class LearningGovernanceService {
       toolImpact: args.toolImpact,
       strategyDiscovery: args.strategyDiscovery
     });
+    const boundedPolicies = this.applyActivationBoundaries(
+      draftPolicies,
+      args.validation ?? { mode: "none", summary: {} }
+    );
     const rawMonitoringItems = this.buildLiveMonitoringItems({
-      policies: draftPolicies,
+      policies: boundedPolicies,
       previousReport: args.previousReport ?? null,
       rounds: args.rounds,
       sessions: args.sessions
     });
-    const policies = this.applyLiveMonitoring(draftPolicies, rawMonitoringItems);
+    const policies = this.applyLiveMonitoring(
+      boundedPolicies,
+      rawMonitoringItems,
+      args.previousReport ?? null
+    );
     const liveMonitoring = this.buildLiveMonitoringSummary(policies, rawMonitoringItems);
     const lifecycle = {
       rawObservations: args.rounds.length + args.sessions.length,
@@ -299,11 +357,19 @@ export class LearningGovernanceService {
         target: "student_rule",
         targetId: rule.ruleId,
         state,
+        decision: stateToDecision(state),
+        decisionReason:
+          state === "active"
+            ? "Rule met the current promotion bar and stays active."
+            : state === "rejected"
+              ? "Rule stayed empirically weak and is rejected from active learning."
+              : "Rule remains under watch because the evidence is mixed.",
         memoryState: stateToMemoryState(state),
         scope,
         learned: rule.rule,
         modifies: "student memory injection and answer-shaping hints",
         conditions: uniqueStrings([rule.failureType.replaceAll("_", " "), ...rule.contexts.flatMap((context) => context.signals)]).slice(0, 6),
+        rollbackTriggers: buildRollbackTriggers("student_rule"),
         confidence: rule.empiricalConfidence,
         stability: clamp(rule.observations / 6, 0, 1),
         sourceHotspotIds: hotspotIdsByTarget.get(key) ?? [],
@@ -346,6 +412,13 @@ export class LearningGovernanceService {
         target: "student_strategy",
         targetId: strategy.strategyId,
         state,
+        decision: stateToDecision(state),
+        decisionReason:
+          state === "active"
+            ? "Strategy is helping often enough to remain active."
+            : state === "rejected"
+              ? "Strategy stayed regressive or too weak to keep."
+              : "Strategy remains governed until it proves stable enough.",
         memoryState: stateToMemoryState(state),
         scope,
         learned:
@@ -354,6 +427,7 @@ export class LearningGovernanceService {
             : `Strategy ${strategy.strategyId} is not yet stable enough to stay broadly active.`,
         modifies: "student strategy selection and fallback posture",
         conditions: uniqueStrings(strategy.contexts.flatMap((context) => context.signals)).slice(0, 6),
+        rollbackTriggers: buildRollbackTriggers("student_strategy"),
         confidence: strategy.empiricalConfidence,
         stability: clamp(strategy.observations / 8, 0, 1),
         sourceHotspotIds: hotspotIdsByTarget.get(key) ?? [],
@@ -388,10 +462,12 @@ export class LearningGovernanceService {
     if (args.toolImpact) {
       const noReliableSourceRate = args.toolImpact.overall.used.noReliableSourceRate;
       const judgeDelta = args.toolImpact.overall.averageJudgeDeltaDelta;
+      const positiveImpactRate = args.toolImpact.overall.used.positiveImpactRate;
       const meetsPromotionBar =
         args.toolImpact.sourceStats.comparedSessions >=
-          HYDRIA_LEARNING_CONSTITUTION.promotionCriteria.minObservations &&
+          HYDRIA_LEARNING_CONSTITUTION.promotionCriteria.minObservations + 1 &&
         judgeDelta >= HYDRIA_LEARNING_CONSTITUTION.demotionCriteria.minAverageJudgeDelta &&
+        positiveImpactRate >= 55 &&
         noReliableSourceRate <=
           HYDRIA_LEARNING_CONSTITUTION.demotionCriteria.maxNoReliableSourceRate;
       const state: LearningPolicyState =
@@ -399,14 +475,24 @@ export class LearningGovernanceService {
           ? "guarded"
           : meetsPromotionBar
             ? "active"
-            : "hypothesis";
-      const scope = buildScope();
+            : "validating";
+      const scope = buildScope({
+        questionType: "factual",
+        signals: ["claims", "uncertainty"]
+      });
       const policyId = buildPolicyId("research_policy", "targeted_grounding", scope);
       policies.push({
         policyId,
         target: "research_policy",
         targetId: "targeted_grounding",
         state,
+        decision: stateToDecision(state),
+        decisionReason:
+          state === "active"
+            ? "Research policy met the stricter promotion bar for live factual grounding."
+            : state === "guarded"
+              ? "Research policy stays guarded because reliability is still too uneven."
+              : "Research policy remains validating until replay and live signals converge.",
         memoryState: stateToMemoryState(state),
         scope,
         learned:
@@ -421,8 +507,9 @@ export class LearningGovernanceService {
           "temporal freshness queries",
           "provider-specific facts"
         ],
+        rollbackTriggers: buildRollbackTriggers("research_policy"),
         confidence: clamp(
-          (Math.max(args.toolImpact.overall.used.positiveImpactRate, 0) / 100) * 0.6 +
+          (Math.max(positiveImpactRate, 0) / 100) * 0.6 +
             clamp(args.toolImpact.sourceStats.comparedSessions / 8, 0, 1) * 0.4,
           0,
           1
@@ -435,11 +522,13 @@ export class LearningGovernanceService {
         rationale:
           state === "active"
             ? `Average judge delta gain ${judgeDelta} with no-reliable-source rate ${noReliableSourceRate}%.`
-            : `Guard research because no-reliable-source rate is ${noReliableSourceRate}% over ${args.toolImpact.sourceStats.comparedSessions} compared session(s).`,
+            : state === "guarded"
+              ? `Guard research because no-reliable-source rate is ${noReliableSourceRate}% over ${args.toolImpact.sourceStats.comparedSessions} compared session(s).`
+              : `Validation continues because positive impact is ${positiveImpactRate}% and no-reliable-source rate is ${noReliableSourceRate}%.`,
         validation: {
           observations: args.toolImpact.sourceStats.comparedSessions,
           successRate: args.toolImpact.overall.used.successRate,
-          positiveImpactRate: args.toolImpact.overall.used.positiveImpactRate,
+          positiveImpactRate,
           averageJudgeDelta: judgeDelta,
           averageGainGlobal: args.toolImpact.overall.averageJudgeDeltaDelta,
           noReliableSourceRate,
@@ -464,6 +553,96 @@ export class LearningGovernanceService {
           right.validation.observations - left.validation.observations
       )
       .slice(0, 48);
+  }
+
+  private applyActivationBoundaries(
+    policies: LearningPolicyItem[],
+    validation: LearningValidationSummary
+  ) {
+    const restrictedTargets = new Set(
+      HYDRIA_LEARNING_CONSTITUTION.activationBoundaries.restrictedGlobalTargets
+    );
+    const adjusted = policies.map((policy) => {
+      if (policy.state !== "active") {
+        return policy;
+      }
+
+      const isRestrictedGlobal =
+        restrictedTargets.has(policy.target) && isGlobalScope(policy.scope);
+      const hasStrongEnoughEvidence =
+        policy.validation.observations >=
+          HYDRIA_LEARNING_CONSTITUTION.promotionCriteria.minObservations + 1 &&
+        policy.confidence >= HYDRIA_LEARNING_CONSTITUTION.promotionCriteria.minConfidence + 0.04 &&
+        policy.stability >= HYDRIA_LEARNING_CONSTITUTION.promotionCriteria.minStability;
+      const hasValidationEvidence =
+        validation.mode === "temporal_replay" &&
+        typeof validation.summary.queryTypeMatchRate === "number" &&
+        validation.summary.queryTypeMatchRate >= 70;
+
+      if (
+        isRestrictedGlobal &&
+        (!hasStrongEnoughEvidence ||
+          (HYDRIA_LEARNING_CONSTITUTION.promotionCriteria.requireValidationForGlobalPromotion &&
+            !hasValidationEvidence))
+      ) {
+        return {
+          ...policy,
+          state: "validating" as const,
+          decision: "keep_validating" as const,
+          decisionReason:
+            "Global activation is blocked until replay validation and stronger evidence both hold.",
+          memoryState: stateToMemoryState("validating"),
+          rationale: `${policy.rationale} Global activation boundary held this policy in validating state.`
+        };
+      }
+
+      return policy;
+    });
+
+    const activeGlobalPolicies = adjusted
+      .filter((policy) => policy.state === "active" && isGlobalScope(policy.scope))
+      .sort(
+        (left, right) =>
+          right.confidence - left.confidence ||
+          right.validation.observations - left.validation.observations
+      );
+    const allowedGlobalIds = new Set(
+      activeGlobalPolicies
+        .slice(0, HYDRIA_LEARNING_CONSTITUTION.activationBoundaries.maxActiveGlobalPolicies)
+        .map((policy) => policy.policyId)
+    );
+    const activePolicies = adjusted
+      .filter((policy) => policy.state === "active")
+      .sort(
+        (left, right) =>
+          right.confidence - left.confidence ||
+          right.validation.observations - left.validation.observations
+      );
+    const allowedActiveIds = new Set(
+      activePolicies
+        .slice(0, HYDRIA_LEARNING_CONSTITUTION.activationBoundaries.maxActivePolicies)
+        .map((policy) => policy.policyId)
+    );
+
+    return adjusted.map((policy) => {
+      const overflowedGlobal = isGlobalScope(policy.scope) && policy.state === "active" && !allowedGlobalIds.has(policy.policyId);
+      const overflowedActive = policy.state === "active" && !allowedActiveIds.has(policy.policyId);
+
+      if (!overflowedGlobal && !overflowedActive) {
+        return policy;
+      }
+
+      return {
+        ...policy,
+        state: "guarded" as const,
+        decision: "guard" as const,
+        decisionReason: overflowedGlobal
+          ? "Policy exceeded the active global-policy budget and was moved to guarded."
+          : "Policy exceeded the active-policy budget and was moved to guarded.",
+        memoryState: "risky" as const,
+        rationale: `${policy.rationale} Governance budget moved this policy to guarded state.`
+      };
+    });
   }
 
   private buildLiveMonitoringItems(args: {
@@ -664,9 +843,14 @@ export class LearningGovernanceService {
       policyId: string;
       status: LearningLiveMonitoringStatus;
       summary: string;
-    }>
+      observations: number;
+    }>,
+    previousReport: LearningGovernanceReport | null
   ) {
     const itemById = new Map(items.map((item) => [item.policyId, item]));
+    const previousPolicyById = new Map(
+      (previousReport?.policies ?? []).map((policy) => [policy.policyId, policy])
+    );
 
     return policies.map((policy) => {
       const monitoring = itemById.get(policy.policyId);
@@ -674,10 +858,31 @@ export class LearningGovernanceService {
         return policy;
       }
 
+      const previousState = previousPolicyById.get(policy.policyId)?.state ?? null;
+
+      if (
+        monitoring.observations >= HYDRIA_LEARNING_CONSTITUTION.promotionCriteria.minObservations &&
+        (monitoring.status === "false_positive_risk" || monitoring.status === "regressing") &&
+        previousState === "guarded"
+      ) {
+        return {
+          ...policy,
+          state: "archived" as const,
+          decision: "archive" as const,
+          decisionReason:
+            "Policy stayed regressive while already guarded, so it was archived for safety.",
+          memoryState: "archived" as const,
+          rationale: `${policy.rationale} Live monitoring escalation: ${monitoring.summary}`
+        };
+      }
+
       if (monitoring.status === "false_positive_risk" && policy.state === "active") {
         return {
           ...policy,
           state: "guarded" as const,
+          decision: "guard" as const,
+          decisionReason:
+            "Live monitoring found a false-positive learning signal, so the policy was demoted to guarded.",
           memoryState: "risky" as const,
           rationale: `${policy.rationale} Live monitoring alert: ${monitoring.summary}`
         };
@@ -814,6 +1019,13 @@ export class LearningGovernanceService {
       target: "student_strategy",
       targetId: adoption.candidateStrategyId,
       state,
+      decision: stateToDecision(state),
+      decisionReason:
+        state === "active"
+          ? "Discovery replacement validated strongly enough to be promoted."
+          : state === "validating"
+            ? "Discovery replacement is promising but still under validation."
+            : "Discovery replacement did not clear the current governance bar.",
       memoryState: stateToMemoryState(state),
       scope,
       learned: `Use ${adoption.candidateStrategyId} instead of ${adoption.baseStrategyId}.`,
@@ -823,6 +1035,7 @@ export class LearningGovernanceService {
         adoption.context.promptLength,
         ...adoption.context.signals
       ]).slice(0, 6),
+      rollbackTriggers: buildRollbackTriggers("student_strategy"),
       confidence: clamp(
         adoption.averageJudgeDelta / 8 * 0.4 +
           adoption.winRate / 100 * 0.3 +

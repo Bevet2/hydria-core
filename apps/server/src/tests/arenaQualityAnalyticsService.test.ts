@@ -108,30 +108,85 @@ test("arena quality analytics aggregates partial rounds, degradation reasons, ro
     }
   });
 
+  const rescuedRespondentRound = buildArenaRoundFixture({
+    roundId: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+    trace: {
+      ...buildArenaRoundFixture().trace,
+      respondentA: {
+        ...buildArenaRoundFixture().trace.respondentA,
+        outcome: "static_fallback",
+        note:
+          "Respondent A continued through a static structured fallback. Failure class=structured_output; stage=repair_retry; detail=invalid JSON."
+      }
+    },
+    workflow: {
+      ...buildArenaRoundFixture().workflow,
+      status: "partial",
+      degradationReasons: [
+        {
+          code: "critical_role_fallback",
+          impact: "quality_degraded",
+          role: "respondent",
+          summary: "respondent completed through a major fallback path."
+        }
+      ]
+    }
+  });
+
+  const respondentFailures = [
+    {
+      eventId: "f1f1f1f1-1111-4111-8111-111111111111",
+      roundId: "f2f2f2f2-2222-4222-8222-222222222222",
+      createdAt: "2026-04-18T11:00:00.000Z",
+      category: "architecture_design",
+      slot: "B" as const,
+      requestedModel: "model-b",
+      finalModel: "model-b",
+      failureClass: "provider_error" as const,
+      failureStage: "fallback" as const,
+      attemptsCount: 2,
+      validationFailures: 0,
+      usedRetry: true,
+      usedFallback: true,
+      failureMessage: "OpenRouter returned 503",
+      note: "All respondent attempts failed."
+    }
+  ];
+
   const report = service.buildReport([
     legacyPartialRound,
     partialResearchRound,
     completedRound,
-    partialTeacherRound
-  ]);
+    partialTeacherRound,
+    rescuedRespondentRound
+  ], respondentFailures);
 
-  assert.equal(report.summary.totalRounds, 4);
+  assert.equal(report.summary.totalRounds, 5);
   assert.equal(report.summary.completedRounds, 1);
-  assert.equal(report.summary.partialRounds, 3);
-  assert.equal(report.summary.classifiedPartialRounds, 2);
+  assert.equal(report.summary.partialRounds, 4);
+  assert.equal(report.summary.classifiedPartialRounds, 3);
   assert.equal(report.summary.legacyPartialRounds, 1);
-  assert.equal(report.summary.partialRatePct, 75);
-  assert.equal(report.summary.classifiedPartialRatePct, 50);
-  assert.equal(report.summary.legacyPartialRatePct, 25);
-  assert.equal(report.summary.topDegradingRole, "teacher");
-  assert.equal(report.topDegradationReasons.length, 2);
+  assert.equal(report.summary.partialRatePct, 80);
+  assert.equal(report.summary.classifiedPartialRatePct, 60);
+  assert.equal(report.summary.legacyPartialRatePct, 20);
+  assert.equal(report.summary.topDegradingRole, "respondent");
+  assert.equal(report.topDegradationReasons.length, 3);
   assert.equal(report.topDegradationReasons[0]?.count, 1);
-  assert.equal(report.roleBreakdown.length, 2);
-  assert.equal(report.roleBreakdown[0]?.role, "teacher");
+  assert.equal(report.roleBreakdown.length, 3);
+  assert.equal(report.roleBreakdown[0]?.role, "respondent");
   assert.equal(report.roleBreakdown[0]?.fallbackCount, 1);
-  assert.equal(report.roleBreakdown[1]?.groundingGapCount, 1);
+  assert.equal(report.roleBreakdown.some((role) => role.groundingGapCount === 1), true);
+  assert.equal(report.summary.respondentStageFailureCount, 1);
+  assert.equal(report.summary.respondentStaticFallbackCount, 1);
+  assert.equal(report.respondentReliability.topFailureCauses.length, 2);
+  assert.equal(
+    report.respondentReliability.topFailureCauses.some(
+      (cause) => cause.failureClass === "provider_error"
+    ),
+    true
+  );
   assert.equal(report.impact.completed.count, 1);
-  assert.equal(report.impact.classifiedPartial.count, 2);
+  assert.equal(report.impact.classifiedPartial.count, 3);
   assert.equal(report.impact.legacyPartial.count, 1);
   assert.equal(report.impact.completed.averageSynthesisImprovements, 2);
   assert.equal(report.impact.classifiedPartial.averageLocalLearningNotes, 1);

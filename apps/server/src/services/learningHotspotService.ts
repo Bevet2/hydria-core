@@ -155,6 +155,33 @@ export class LearningHotspotService {
       });
     }
 
+    for (const cause of args.arenaQuality.respondentReliability.topFailureCauses.slice(0, 4)) {
+      pushHotspot(hotspots, {
+        id: `respondent-failure:${cause.key}`,
+        kind: "workflow",
+        source: "arena_quality",
+        title: `Respondent failures cluster around ${cause.failureClass}`,
+        summary:
+          `${cause.count} respondent reliability signal(s) point to ${cause.failureClass} ` +
+          `during ${cause.failureStage.replaceAll("_", " ")}${cause.slot ? ` on slot ${cause.slot}` : ""}.`,
+        targetType: "respondent_policy",
+        targetId: cause.failureClass,
+        role: "respondent",
+        frequencyPct: cause.percentage,
+        severityScore: clamp(58 + cause.stageFailureCount * 10 + cause.rescuedCount * 4, 0, 95),
+        confidenceScore: clamp(45 + cause.count * 8, 0, 95),
+        observations: cause.count,
+        whyItMatters:
+          "Respondent failures pollute live collection quality and reduce trust in the downstream learning loop.",
+        suggestedAction:
+          cause.failureClass === "structured_output" || cause.failureClass === "quality_gate"
+            ? "Tighten respondent formatting guardrails and keep static salvage explicit."
+            : cause.failureClass === "provider_error" || cause.failureClass === "timeout"
+              ? "Strengthen provider fallback posture and isolate brittle models in arena live runs."
+              : "Instrument this failure class more aggressively before widening live collection."
+      });
+    }
+
     if (args.toolImpact) {
       if (args.toolImpact.overall.used.noReliableSourceRate >= 35) {
         pushHotspot(hotspots, {

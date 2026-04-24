@@ -18,6 +18,7 @@ import {
   OFFICIAL_BASELINE_SUMMARY
 } from "./data/officialBaseline.js";
 import { ArenaRunner } from "./services/arenaRunner.js";
+import { ArenaRespondentFailureStore } from "./services/arenaRespondentFailureStore.js";
 import { ArenaQualityAnalyticsService } from "./services/arenaQualityAnalyticsService.js";
 import { BenchmarkService } from "./services/benchmarkService.js";
 import { BenchmarkStore } from "./services/benchmarkStore.js";
@@ -44,6 +45,7 @@ const refineRouterService = new RefineRouterService();
 const researchToolService = new ResearchToolService();
 const persistenceHealthService = new PersistenceHealthService();
 const arenaQualityAnalyticsService = new ArenaQualityAnalyticsService();
+const arenaRespondentFailureStore = new ArenaRespondentFailureStore();
 const learningGovernanceService = new LearningGovernanceService();
 const studentService = new StudentService(
   localModelService,
@@ -111,7 +113,10 @@ app.get("/api/health", async (_request, response) => {
 app.use(
   "/api/arena",
   createArenaRouter(arenaRunner, async () =>
-    arenaQualityAnalyticsService.buildReport(await historyStore.listRounds())
+    arenaQualityAnalyticsService.buildReport(
+      await historyStore.listRounds(),
+      await arenaRespondentFailureStore.listEvents()
+    )
   )
 );
 app.use("/api/arena/history", createHistoryRouter(historyStore));

@@ -50,6 +50,7 @@ export function LearningGovernancePanel({ state, onRefresh }: LearningGovernance
   const promotedPolicies = activePolicies.slice(0, 4);
   const watchlistPolicies = guardedPolicies.slice(0, 3);
   const liveMonitoring = report.liveMonitoring;
+  const archivedPolicies = report.policies.filter((policy) => policy.state === "archived").slice(0, 3);
 
   return (
     <section className="panel">
@@ -94,6 +95,13 @@ export function LearningGovernancePanel({ state, onRefresh }: LearningGovernance
           <strong>
             {report.constitution.promotionCriteria.minObservations} obs /{" "}
             {formatConfidence(report.constitution.promotionCriteria.minConfidence)}
+          </strong>
+        </div>
+        <div className="summary-card">
+          <span>Active budgets</span>
+          <strong>
+            {report.constitution.activationBoundaries.maxActivePolicies} total /{" "}
+            {report.constitution.activationBoundaries.maxActiveGlobalPolicies} global
           </strong>
         </div>
         <div className="summary-card">
@@ -298,6 +306,10 @@ export function LearningGovernancePanel({ state, onRefresh }: LearningGovernance
                 <span>{policy.scope.category ?? "global"}</span>
                 <span>{policy.validation.observations} obs</span>
               </div>
+              <div className="meta-row">
+                <span>{policy.decision.replaceAll("_", " ")}</span>
+                <span>{policy.rollbackTriggers.length} rollback triggers</span>
+              </div>
             </article>
           ))}
         </div>
@@ -319,6 +331,31 @@ export function LearningGovernancePanel({ state, onRefresh }: LearningGovernance
                 <span>judge delta {policy.validation.averageJudgeDelta ?? "n/a"}</span>
                 <span>no-op {formatPct(policy.validation.noOpRate)}</span>
                 <span>nrs {formatPct(policy.validation.noReliableSourceRate)}</span>
+              </div>
+              <div className="meta-row">
+                <span>{policy.decision.replaceAll("_", " ")}</span>
+                <span>{policy.decisionReason}</span>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+
+      <h3>Archived after regression</h3>
+      {archivedPolicies.length === 0 ? (
+        <p className="muted">No policy has been archived yet.</p>
+      ) : (
+        <div className="workflow-task-grid">
+          {archivedPolicies.map((policy) => (
+            <article key={policy.policyId} className="workflow-task">
+              <div className="memory-item__header">
+                <strong>{policy.targetId}</strong>
+                <span className="pill">{policy.state}</span>
+              </div>
+              <p>{policy.decisionReason}</p>
+              <div className="meta-row">
+                <span>{policy.target.replaceAll("_", " ")}</span>
+                <span>{policy.validation.observations} obs</span>
               </div>
             </article>
           ))}
