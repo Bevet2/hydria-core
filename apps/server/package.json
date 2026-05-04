@@ -11,6 +11,7 @@
     "start": "node dist/index.js",
     "knowledge:refresh": "tsx src/scripts/refreshKnowledgeLayer.ts",
     "learning:loop": "tsx src/scripts/runLearningLoop.ts",
+    "student:training-pack": "tsx src/scripts/runPrepareLocalStudentTrainingPack.ts",
     "student:strategy-discovery": "tsx src/scripts/runStudentStrategyDiscoveryLoop.ts",
     "student:temporal-eval": "tsx src/scripts/runStudentTemporalEval.ts",
     "student:temporal-eval:record": "tsx src/scripts/runStudentTemporalEval.ts --acquisition=record --cache=off",
