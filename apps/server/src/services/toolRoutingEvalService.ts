@@ -27,6 +27,11 @@ export type ToolRoutingEvalReport = {
   items: ToolRoutingEvalItem[];
 };
 
+type RunToolRoutingEvalArgs = {
+  limit?: number;
+  cases?: ToolRoutingEvalCase[];
+};
+
 function evaluateCase(service: ToolRoutingService, entry: ToolRoutingEvalCase): ToolRoutingEvalItem {
   const observed = service.route({
     question: entry.question,
@@ -81,8 +86,10 @@ function evaluateCase(service: ToolRoutingService, entry: ToolRoutingEvalCase): 
 export class ToolRoutingEvalService {
   constructor(private readonly toolRoutingService = new ToolRoutingService()) {}
 
-  run(limit = TOOL_ROUTING_EVAL_PACK.length): ToolRoutingEvalReport {
-    const items = TOOL_ROUTING_EVAL_PACK.slice(0, Math.max(1, limit)).map((entry) =>
+  run(args: number | RunToolRoutingEvalArgs = TOOL_ROUTING_EVAL_PACK.length): ToolRoutingEvalReport {
+    const cases = typeof args === "number" ? TOOL_ROUTING_EVAL_PACK : args.cases ?? TOOL_ROUTING_EVAL_PACK;
+    const limit = typeof args === "number" ? args : args.limit ?? cases.length;
+    const items = cases.slice(0, Math.max(1, limit)).map((entry) =>
       evaluateCase(this.toolRoutingService, entry)
     );
     const passed = items.filter((item) => item.passed).length;

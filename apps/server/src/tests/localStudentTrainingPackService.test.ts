@@ -4,6 +4,7 @@ import {
   studentContrastiveExampleSchema,
   studentCuratedExampleSchema
 } from "../types/knowledge.js";
+import { studentAnswerSchema } from "../types/student.js";
 import { LocalStudentTrainingPackService } from "../services/training/localStudentTrainingPackService.js";
 import { buildStudentSessionFixture } from "./testFixtures.js";
 
@@ -72,6 +73,16 @@ test("training pack keeps strong curated and contrastive examples with meaningfu
   assert.equal(result.summary.sourceBreakdown.curated_round, 1);
   assert.equal(result.summary.sourceBreakdown.contrastive_round, 1);
   assert.ok(result.accepted.every((entry) => entry.weight >= 1));
+  assert.ok(
+    result.accepted.every((entry) =>
+      studentAnswerSchema.safeParse(JSON.parse(entry.targetAnswer)).success
+    )
+  );
+  assert.ok(
+    result.accepted.every(
+      (entry) => !entry.targetAnswer.includes('"strategy_id"') && !entry.targetAnswer.includes('"context"')
+    )
+  );
 });
 
 test("training pack keeps useful tool-safe student sessions", () => {
@@ -109,7 +120,60 @@ test("training pack keeps useful tool-safe student sessions", () => {
 
   assert.equal(result.accepted.length, 1);
   assert.equal(result.accepted[0]?.taskType, "tool_safe_answer");
+  assert.equal(JSON.parse(result.accepted[0]?.targetAnswer ?? "{}").modelRole, "student");
   assert.equal(result.summary.toolSafeExamples, 1);
+});
+
+test("training pack normalizes zero-confidence session targets", () => {
+  const service = new LocalStudentTrainingPackService({
+    sessionLoader: async () => []
+  });
+  const session = buildStudentSessionFixture({
+    student: {
+      ...buildStudentSessionFixture().student,
+      final: {
+        ...buildStudentSessionFixture().student.final,
+        answer:
+          "Use a phased migration plan with feature flags, canary traffic, explicit rollback triggers, and data reconciliation before expanding the rollout.",
+        confidence: 0
+      }
+    }
+  });
+
+  const result = service.buildFromData({
+    curatedExamples: [],
+    contrastiveExamples: [],
+    sessions: [session]
+  });
+
+  assert.equal(result.accepted.length, 1);
+  assert.equal(JSON.parse(result.accepted[0]?.targetAnswer ?? "{}").confidence, 68);
+});
+
+test("training pack keeps low confidence for unverifiable session targets", () => {
+  const service = new LocalStudentTrainingPackService({
+    sessionLoader: async () => []
+  });
+  const session = buildStudentSessionFixture({
+    student: {
+      ...buildStudentSessionFixture().student,
+      final: {
+        ...buildStudentSessionFixture().student.final,
+        answer:
+          "I cannot verify the current release from reliable sources. The answer depends on fresh external evidence, and the prompt does not provide a reliable dated source to confirm it.",
+        confidence: 0
+      }
+    }
+  });
+
+  const result = service.buildFromData({
+    curatedExamples: [],
+    contrastiveExamples: [],
+    sessions: [session]
+  });
+
+  assert.equal(result.accepted.length, 1);
+  assert.equal(JSON.parse(result.accepted[0]?.targetAnswer ?? "{}").confidence, 30);
 });
 
 test("training pack rejects weak student sessions instead of polluting the first LoRA pack", () => {

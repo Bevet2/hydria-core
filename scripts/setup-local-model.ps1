@@ -42,7 +42,7 @@ if (-not $OllamaHost) {
 
 if (-not $ModelsDir) {
   $modelsDirFromEnv = Get-EnvValue -Path $envPath -Name "OLLAMA_PROJECT_MODELS_DIR"
-  $ModelsDir = if ($modelsDirFromEnv) { $modelsDirFromEnv } else { "F:/hydria-arena/models/local/ollama-store" }
+  $ModelsDir = if ($modelsDirFromEnv) { $modelsDirFromEnv } else { (Join-Path $projectRoot "models\local\ollama-store") }
 }
 
 $baseUrl = if ($OllamaHost -match '^https?://') { $OllamaHost } else { "http://$OllamaHost" }
@@ -100,13 +100,27 @@ $payload = @{
 
 $test = Invoke-RestMethod -Method Post -Uri "$baseUrl/api/generate" -ContentType "application/json" -Body $payload
 
+$modelsDirForConfig = $ModelsDir
+try {
+  $resolvedProjectRoot = (Resolve-Path -LiteralPath $projectRoot).Path
+  $resolvedModelsDir = (Resolve-Path -LiteralPath $ModelsDir).Path
+  if ($resolvedModelsDir.StartsWith($resolvedProjectRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    $relativeModelsDir = $resolvedModelsDir.Substring($resolvedProjectRoot.Length).TrimStart('\', '/')
+    if ($relativeModelsDir) {
+      $modelsDirForConfig = $relativeModelsDir -replace '\\', '/'
+    }
+  }
+} catch {
+  $modelsDirForConfig = $ModelsDir
+}
+
 $config = @{
   provider = "ollama"
   runtimeModel = $Model
   upstreamModel = "Qwen/Qwen2.5-3B-Instruct"
   host = $OllamaHost
   baseUrl = $baseUrl
-  modelsDir = $ModelsDir
+  modelsDir = $modelsDirForConfig
   role = "local student model"
   lastSetupAt = (Get-Date).ToString("o")
   healthcheck = ($test.response | ForEach-Object { $_.ToString().Trim() })

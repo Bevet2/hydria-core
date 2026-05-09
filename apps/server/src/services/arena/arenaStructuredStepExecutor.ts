@@ -274,7 +274,7 @@ export class ArenaStructuredStepExecutor {
     research?: ResearchToolLog | null;
     knowledge?: KnowledgeInjection | null;
   }): Promise<ArenaRefinementStepResult> {
-    const maxTokens = args.category === "product_strategy" ? 560 : 900;
+    const maxTokens = args.category === "product_strategy" ? 760 : 900;
     const result = await executeOpenRouterStructuredStep({
       openRouterService: this.openRouterService,
       primaryModel: args.primaryModel,

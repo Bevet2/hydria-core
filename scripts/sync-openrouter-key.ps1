@@ -14,31 +14,51 @@ if (-not (Test-Path $envExample)) {
   throw ".env.example not found in $projectRoot"
 }
 
-$candidateSources = @(
-  "F:\hydria\backend\.env",
-  "F:\hydria\.env",
-  "F:\hydria-studio\backend\.env",
-  "F:\hydria-studio\.env"
-) | Where-Object { Test-Path $_ }
+$workspaceParent = Split-Path $projectRoot -Parent
+$candidateSources = @()
 
-if ($candidateSources.Count -eq 0) {
-  throw "No obvious Hydria .env source file found on F:."
+if ($env:HYDRIA_ENV_SOURCE) {
+  $candidateSources += $env:HYDRIA_ENV_SOURCE
 }
 
-$sourcePath = $null
-$openRouterKey = $null
+$candidateSources += @(
+  (Join-Path $projectRoot ".env"),
+  (Join-Path $workspaceParent "hydria\backend\.env"),
+  (Join-Path $workspaceParent "hydria\.env"),
+  (Join-Path $workspaceParent "hydria-studio\backend\.env"),
+  (Join-Path $workspaceParent "hydria-studio\.env")
+) | Where-Object { $_ }
 
-foreach ($candidate in $candidateSources) {
-  $line = Get-Content -Path $candidate | Where-Object { $_ -match '^OPENROUTER_API_KEY=' } | Select-Object -First 1
-  if ($line) {
-    $sourcePath = $candidate
-    $openRouterKey = $line.Substring("OPENROUTER_API_KEY=".Length)
-    break
+$candidateSources = $candidateSources |
+  Where-Object { Test-Path $_ } |
+  Select-Object -Unique
+
+$sourcePath = $null
+$openRouterKey = $env:OPENROUTER_API_KEY
+
+if ($openRouterKey) {
+  $sourcePath = "process env OPENROUTER_API_KEY"
+}
+
+if ($candidateSources.Count -eq 0) {
+  if (-not $openRouterKey) {
+    throw "No obvious Hydria .env source file found. Set OPENROUTER_API_KEY or HYDRIA_ENV_SOURCE, or place a sibling hydria/hydria-studio repo next to this repo."
   }
 }
 
 if (-not $openRouterKey) {
-  throw "OPENROUTER_API_KEY not found in candidate Hydria config files."
+  foreach ($candidate in $candidateSources) {
+    $line = Get-Content -Path $candidate | Where-Object { $_ -match '^OPENROUTER_API_KEY=' } | Select-Object -First 1
+    if ($line) {
+      $sourcePath = $candidate
+      $openRouterKey = $line.Substring("OPENROUTER_API_KEY=".Length)
+      break
+    }
+  }
+}
+
+if (-not $openRouterKey) {
+  throw "OPENROUTER_API_KEY not found in candidate config files. Set OPENROUTER_API_KEY directly or point HYDRIA_ENV_SOURCE to a valid .env file."
 }
 
 $templateLines = if (Test-Path $TargetEnv) {

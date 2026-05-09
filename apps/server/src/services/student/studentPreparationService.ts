@@ -6,7 +6,6 @@ import type {
   StudentAnswerPreview,
   StudentResponseStrategy
 } from "../../types/student.js";
-import { env } from "../../utils/env.js";
 import { classifyQuestion } from "../questionClassifier.js";
 import type { KnowledgeInjectionService } from "../knowledgeInjectionService.js";
 import type { LocalModelService } from "../localModel.js";
@@ -53,13 +52,19 @@ export class StudentPreparationService {
   private readonly agentRoutingService = new AgentRoutingService();
 
   constructor(
-    private readonly localModelService: Pick<LocalModelService, "answerQuestionDetailed">,
+    private readonly localModelService: Pick<LocalModelService, "answerQuestionDetailed"> & {
+      getConfiguredModelName?: () => string;
+    },
     private readonly orchestrationPolicyService: Pick<OrchestrationPolicyService, "planRound">,
     private readonly researchToolService: Pick<ResearchToolService, "maybeCollect">,
     private readonly knowledgeInjectionService: Pick<KnowledgeInjectionService, "buildForCategory">,
     private readonly studentStrategySelectorService: Pick<StudentStrategySelectorService, "select">,
     private readonly studentStepExecutor: Pick<StudentStepExecutor, "runStudentRedTeam">
   ) {}
+
+  private get localModelName() {
+    return this.localModelService.getConfiguredModelName?.() ?? "local-student";
+  }
 
   async preparePreview(question: string): Promise<StudentPreviewPreparation> {
     const startedAt = performance.now();
@@ -109,7 +114,7 @@ export class StudentPreparationService {
       skillRouting
     });
     const rawDraftTrace = toStudentTrace({
-      requestedModel: env.LOCAL_MODEL_NAME,
+      requestedModel: this.localModelName,
       usedRetry: rawDraftResult.usedRetry,
       note: "Local student produced the initial standalone answer.",
       skillRouting,
@@ -224,7 +229,7 @@ export class StudentPreparationService {
         });
         finalStudentAnswer = groundedResult.output;
         finalStudentTrace = toStudentTrace({
-          requestedModel: env.LOCAL_MODEL_NAME,
+          requestedModel: this.localModelName,
           usedRetry: groundedResult.usedRetry,
           note: research.truth.no_reliable_source
             ? "Local student produced the answer after truth-engine abstention guidance."

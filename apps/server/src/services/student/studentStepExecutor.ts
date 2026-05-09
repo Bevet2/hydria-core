@@ -29,7 +29,10 @@ import { logger } from "../../utils/logger.js";
 import { parseModelCandidates } from "../../utils/modelCandidates.js";
 import { env, defaultArenaModels } from "../../utils/env.js";
 import { parseStructuredOutput } from "../../utils/jsonRepair.js";
-import { parseRefinerOutput } from "../../utils/refineOutput.js";
+import {
+  RefinerValidationError,
+  parseRefinerOutput
+} from "../../utils/refineOutput.js";
 import { executeOpenRouterStructuredStep } from "../arena/openRouterStructuredStep.js";
 import { buildNoSkillTraceFields } from "../arena/arenaExecutionTypes.js";
 import { OpenRouterService } from "../openrouter.js";
@@ -159,10 +162,10 @@ export class StudentStepExecutor {
           category: args.category,
           originalResponse: args.student
         }),
-      maxTokens: args.category === "product_strategy" ? 560 : 900,
+      maxTokens: args.category === "product_strategy" ? 760 : 900,
       primaryTemperature: 0.15,
       countValidationFailure: () => true,
-      getValidationIssues: (error) => [error instanceof Error ? error.message : String(error)],
+      getValidationIssues: (error) => this.getRefineValidationIssues(error),
       onAttemptFailure: ({ model, primaryModel, nextModel, attempt, error, isLastAttempt, index }) =>
         logger.warn(
           isLastAttempt
@@ -279,5 +282,17 @@ export class StudentStepExecutor {
         !excluded.has(candidate) &&
         list.indexOf(candidate) === index
     );
+  }
+
+  private getRefineValidationIssues(error: unknown) {
+    if (error instanceof RefinerValidationError && error.issues.length > 0) {
+      return error.issues.slice(0, 6);
+    }
+
+    if (error instanceof Error) {
+      return [error.message];
+    }
+
+    return [String(error)];
   }
 }

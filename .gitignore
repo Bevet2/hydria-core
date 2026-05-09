@@ -3,9 +3,13 @@ dist
 coverage
 .env
 *.log
+*.py[cod]
+__pycache__/
+.codex-tools/
 apps/server/dist
 apps/web/dist
 apps/web/.vite
+apps/server/storage/
 storage/history/history.json
 storage/history/hydria-state-v1.sqlite
 storage/history/hydria-state-v1.sqlite-shm
@@ -16,5 +20,11 @@ storage/cache/
 storage/fixtures/
 storage/learning/
 storage/benchmarks/student-temporal-eval-v1.json
+storage/benchmarks/tool-routing-eval-v1.json
+storage/benchmarks/hydria-core-hidden-generalization-gate-v1.json
+storage/datasets/student-local-sft*.jsonl
+storage/datasets/student-local-sft*-summary*.json
+storage/training/
+outputs/
 models/local/ollama-store/
 !apps/server/src/storage/history.json

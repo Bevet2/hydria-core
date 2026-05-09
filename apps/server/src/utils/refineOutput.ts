@@ -305,7 +305,7 @@ function maximumAnswerLength(category: QuestionCategory) {
     case "product_strategy":
       return 3000;
     case "operational_writing":
-      return 2200;
+      return 3200;
     default:
       return Number.POSITIVE_INFINITY;
   }

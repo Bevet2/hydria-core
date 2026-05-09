@@ -29,7 +29,10 @@ import { ResearchVerifier } from "./research/verifier.js";
 import { AgentRoutingService } from "./agents/agentRoutingService.js";
 import { SkillRegistry } from "./skills/skillRegistry.js";
 import { SkillRoutingService } from "./skills/skillRoutingService.js";
-import { LocalToolExecutionService } from "./tools/localToolExecutionService.js";
+import {
+  LocalToolExecutionService,
+  type LocalToolExecutionResult
+} from "./tools/localToolExecutionService.js";
 import { ToolGapDetectorService } from "./tools/toolGapDetectorService.js";
 import { ToolRegistry } from "./tools/toolRegistry.js";
 import { ToolRoutingService } from "./tools/toolRoutingService.js";
@@ -49,7 +52,9 @@ type ResearchToolServiceOptions = {
   skillRoutingService?: Pick<SkillRoutingService, "route">;
   skillRegistry?: Pick<SkillRegistry, "incrementUsage">;
   agentRoutingService?: Pick<AgentRoutingService, "route">;
-  localToolExecutionService?: Pick<LocalToolExecutionService, "tryExecute">;
+  localToolExecutionService?: {
+    tryExecute(routing: ToolRoutingDecision): LocalToolExecutionResult | null | Promise<LocalToolExecutionResult | null>;
+  };
   planner?: Pick<ResearchPlanner, "buildPlan">;
 };
 
@@ -149,11 +154,16 @@ function buildToolDirectLog(args: {
   verifiedFacts: string[];
   summary: string[];
   resultLabel: string;
+  confidenceScore: number;
+  sources?: ResearchToolLog["sources"];
   appliedTo: { A: boolean; B: boolean };
 }): ResearchToolLog {
   const temporalProfile = args.decision.plan?.temporalProfile ?? buildDefaultTemporalProfile();
+  const sources = (args.sources ?? []).slice(0, 5);
   const fallbackIntent =
-    args.routing.toolType === "time" ? "current_status" : "fact_check";
+    args.routing.toolType === "time" || args.routing.toolType === "weather" || args.routing.toolType === "finance"
+      ? "current_status"
+      : "fact_check";
   return {
     considered: true,
     used: true,
@@ -198,22 +208,22 @@ function buildToolDirectLog(args: {
     query: `${args.routing.intent}: ${args.resultLabel}`,
     reasons: args.decision.reasons,
     summary: args.summary,
-    sources: [],
+    sources,
     verification: {
-      sourceCount: 0,
-      extractedSourceCount: 0,
-      corroboratedSignals: [],
+      sourceCount: sources.length,
+      extractedSourceCount: sources.length,
+      corroboratedSignals: sources.length > 0 ? args.verifiedFacts.slice(0, 3) : [],
       freshnessSatisfied: true,
       freshnessWindow: temporalProfile.isTemporal ? "current" : "none",
-      mostRecentSourceDate: null,
-      oldestAcceptedSourceDate: null,
+      mostRecentSourceDate: sources[0]?.effectiveDate ?? sources[0]?.modifiedAt ?? null,
+      oldestAcceptedSourceDate: sources.at(-1)?.effectiveDate ?? sources.at(-1)?.modifiedAt ?? null,
       staleSourcesRejectedCount: 0
     },
     truth: {
       verified_facts: args.verifiedFacts.slice(0, 8),
       uncertain_claims: [],
       conflicting_info: [],
-      confidence_score: 1,
+      confidence_score: args.confidenceScore,
       no_reliable_source: false
     },
     appliedTo: args.appliedTo,
@@ -241,6 +251,7 @@ function buildRequiredToolFailureLog(args: {
   reason: string;
 }): ResearchToolLog {
   const temporalProfile = args.decision.plan?.temporalProfile ?? buildDefaultTemporalProfile();
+  const missingRequiredInput = isMissingRequiredInputReason(args.reason);
 
   return {
     considered: true,
@@ -289,7 +300,7 @@ function buildRequiredToolFailureLog(args: {
       sourceCount: 0,
       extractedSourceCount: 0,
       corroboratedSignals: [],
-      freshnessSatisfied: !temporalProfile.isTemporal,
+      freshnessSatisfied: missingRequiredInput || !temporalProfile.isTemporal,
       freshnessWindow: temporalProfile.isTemporal ? "current" : "none",
       mostRecentSourceDate: null,
       oldestAcceptedSourceDate: null,
@@ -300,7 +311,7 @@ function buildRequiredToolFailureLog(args: {
       uncertain_claims: [args.reason].slice(0, 4),
       conflicting_info: [],
       confidence_score: 0,
-      no_reliable_source: true
+      no_reliable_source: !missingRequiredInput
     },
     appliedTo: {
       A: false,
@@ -312,11 +323,58 @@ function buildRequiredToolFailureLog(args: {
       correctedClaimsCount: 0,
       sourceBackedClaimsCount: 0,
       costSharePct: 0,
-      netImpact: "negative"
+      netImpact: missingRequiredInput ? "neutral" : "negative"
     },
     impactNotes: [args.reason],
     durationMs: 0
   };
+}
+
+function isMissingRequiredInputReason(reason: string) {
+  return /\b(?:missing|required input|which city|ask the user|clarify|manque|preciser|precise|ville|demande|not provided|no accessible|private|access|not available in this runtime|unavailable in this runtime)\b/i.test(
+    reason
+  );
+}
+
+function buildLocalToolFailureReason(routing: ToolRoutingDecision) {
+  const language = routing.extractedArgs?.language === "fr" ? "fr" : "en";
+
+  if (routing.toolType === "weather" && routing.intent === "current_weather") {
+    const location = typeof routing.extractedArgs?.location === "string"
+      ? routing.extractedArgs.location.trim()
+      : "";
+    if (!location) {
+      return language === "fr"
+        ? "Il manque la ville pour executer l'outil meteo. Demande a l'utilisateur quelle ville utiliser, ou utilise une ville seulement si elle est explicitement presente dans la question ou le contexte."
+          : "The city is missing for the weather tool. Ask the user which city to use, or use a city only when it is explicitly present in the question or context.";
+    }
+  }
+
+  if (routing.toolType === "calculator" && routing.intent === "arithmetic") {
+    return language === "fr"
+      ? "Il manque une expression de calcul complete. Demande a l'utilisateur de preciser le calcul a effectuer."
+      : "A complete arithmetic expression is missing. Ask the user to clarify the calculation.";
+  }
+
+  if (routing.toolType === "calculator" && routing.intent === "unit_conversion") {
+    return language === "fr"
+      ? "Il manque la valeur ou les unites pour executer la conversion. Demande a l'utilisateur de preciser la valeur, l'unite de depart et l'unite cible."
+      : "The value or units are missing for the conversion. Ask the user to clarify the value, source unit, and target unit.";
+  }
+
+  if (routing.toolType === "calculator" && routing.intent === "currency_conversion") {
+    return language === "fr"
+      ? "Il manque un montant, des devises, ou un taux explicite pour executer la conversion. N'invente pas de taux de change; demande la precision manquante."
+      : "The amount, currencies, or explicit rate are missing for the conversion. Do not invent an exchange rate; ask for the missing detail.";
+  }
+
+  if (routing.toolType === "finance" && routing.intent === "current_price") {
+    return language === "fr"
+      ? "Le prix actuel demande une source de marche en direct, mais l'outil finance n'a pas retourne de resultat structure. N'invente pas de prix; explique que le prix ne peut pas etre verifie maintenant."
+      : "The current price requires a live market source, but the finance tool did not return a structured result. Do not invent a price; say the price cannot be verified right now.";
+  }
+
+  return `Required local tool path ${routing.toolType}/${routing.intent} did not return a structured result, so the request cannot be answered safely without tool output.`;
 }
 
 export class ResearchToolService {
@@ -332,7 +390,9 @@ export class ResearchToolService {
   private readonly skillRoutingService: Pick<SkillRoutingService, "route">;
   private readonly skillRegistry: Pick<SkillRegistry, "incrementUsage">;
   private readonly agentRoutingService: Pick<AgentRoutingService, "route">;
-  private readonly localToolExecutionService: Pick<LocalToolExecutionService, "tryExecute">;
+  private readonly localToolExecutionService: {
+    tryExecute(routing: ToolRoutingDecision): LocalToolExecutionResult | null | Promise<LocalToolExecutionResult | null>;
+  };
   private readonly planner: Pick<ResearchPlanner, "buildPlan">;
 
   constructor(options: ResearchToolServiceOptions = {}) {
@@ -384,7 +444,7 @@ export class ResearchToolService {
       agentRouting
     );
 
-    const localToolResult = this.localToolExecutionService.tryExecute(toolRouting);
+    const localToolResult = await this.localToolExecutionService.tryExecute(toolRouting);
     if (localToolResult) {
       return this.attachToolGapMetadata(
         args.question,
@@ -396,11 +456,27 @@ export class ResearchToolService {
           agentRouting,
           verifiedFacts: localToolResult.verifiedFacts,
           summary: localToolResult.summary,
-        resultLabel: localToolResult.resultLabel,
-        appliedTo: {
-          A: args.shouldRefineA,
-          B: args.shouldRefineB
-        }
+          resultLabel: localToolResult.resultLabel,
+          confidenceScore: localToolResult.confidenceScore,
+          sources: localToolResult.sources,
+          appliedTo: {
+            A: args.shouldRefineA,
+            B: args.shouldRefineB
+          }
+        })
+      );
+    }
+
+    if (toolRouting.toolRequired && this.isDirectLocalTool(toolRouting)) {
+      return this.attachToolGapMetadata(
+        args.question,
+        toolRouting,
+        buildRequiredToolFailureLog({
+          decision,
+          routing: toolRouting,
+          skillRouting,
+          agentRouting,
+          reason: buildLocalToolFailureReason(toolRouting)
         })
       );
     }
@@ -499,6 +575,34 @@ export class ResearchToolService {
     }
 
     if (!toolRouting.toolRequired) {
+      if (toolRouting.toolRecommended && toolRouting.fallbackAllowed === false) {
+        return {
+          ...decision,
+          shouldUse: false,
+          reasons: [
+            toolRouting.reason,
+            ...(agentRouting.agentFound ? [agentRouting.reason] : []),
+            ...(skillRouting.skillFound ? [skillRouting.reason] : []),
+            "Tool recommendation is blocked because the required user-provided input or private data is missing.",
+            ...decision.reasons
+          ].slice(0, 6),
+          triggerSignals: [...new Set([
+            `tool_recommended_${toolRouting.toolType}`,
+            `tool_intent_${toolRouting.intent}`,
+            "missing_user_input",
+            ...(agentRouting.agentFound && agentRouting.agentId ? [`agent_${agentRouting.agentId}`] : []),
+            ...(skillRouting.skillFound && skillRouting.skillId ? [`skill_${skillRouting.skillId}`] : []),
+            ...decision.triggerSignals
+          ])].slice(0, 8),
+          expectedValue: "low",
+          expectedCostMs: 0,
+          plan: null,
+          toolRouting,
+          skillRouting,
+          agentRouting
+        };
+      }
+
       return {
         ...decision,
         reasons: [
@@ -572,8 +676,14 @@ export class ResearchToolService {
     return (
       (routing.toolType === "time" &&
         (routing.intent === "current_time" || routing.intent === "current_date")) ||
+      (routing.toolType === "weather" && routing.intent === "current_weather") ||
+      (routing.toolType === "finance" && routing.intent === "current_price") ||
+      (routing.toolType === "web" && routing.intent === "latest_release") ||
+      (routing.toolType === "repo" && routing.intent === "repo_analysis") ||
       (routing.toolType === "calculator" &&
-        (routing.intent === "arithmetic" || routing.intent === "unit_conversion"))
+        (routing.intent === "arithmetic" ||
+          routing.intent === "unit_conversion" ||
+          routing.intent === "currency_conversion"))
     );
   }
 

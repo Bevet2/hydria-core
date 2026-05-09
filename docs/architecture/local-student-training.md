@@ -153,6 +153,42 @@ Build the pack:
 npm.cmd run student:training-pack
 ```
 
+Freeze the governed baseline before training:
+
+```powershell
+npm.cmd run student:baseline -- --model-name=qwen2.5:7b
+```
+
+Check the local training environment and recommended recipe:
+
+```powershell
+npm.cmd run student:training-env
+```
+
+Prepare the first external LoRA request:
+
+```powershell
+npm.cmd run student:training-request -- --runtime-model-name=qwen2.5:7b --training-base-model=Qwen/Qwen2.5-7B-Instruct
+```
+
+Or let Hydria prepare the request from the machine profile:
+
+```powershell
+npm.cmd run student:training-request -- --auto
+```
+
+Register the candidate variant after serving it through Ollama or another executor:
+
+```powershell
+npm.cmd run student:variant-register -- --id=student-local-lora-v1 --served-model-name=qwen2.5:7b-student-local-lora-v1 --base-model-name=qwen2.5:7b
+```
+
+Compare the candidate against the frozen baseline and promote it only if the gain is real:
+
+```powershell
+npm.cmd run student:variant-ab -- --before-baseline=storage/training/student-local-base-baseline-v1.json --after-variant-id=student-local-lora-v1 --after-model-name=qwen2.5:7b-student-local-lora-v1 --promote-if-good
+```
+
 Recommended pre-train checks:
 
 ```powershell
@@ -165,9 +201,26 @@ npm.cmd run tool:routing-eval
 ## First Training Recommendation
 
 Start with:
-- target model: `Qwen/Qwen2.5-3B-Instruct`
+- frozen baseline variant: `student-local-base`
+- candidate variant: `student-local-lora-v1`
+- runtime baseline on this machine: `qwen2.5:7b`
+- training base model: `Qwen/Qwen2.5-7B-Instruct`
 - method: short `LoRA SFT`
 - epochs: `1`
+
+### Practical note for this Windows + 8 GB GPU machine
+
+The first recipe that actually passed end to end here is:
+- baseline variant: `student-local-base-1p5b`
+- runtime model: `qwen2.5:1.5b`
+- training base model: `Qwen/Qwen2.5-1.5B-Instruct`
+- execution recipe: `lora_full`
+- `gradient_checkpointing = true`
+- `per_device_train_batch_size = 1`
+- `gradient_accumulation_steps = 8`
+- `max_seq_length = 1024`
+
+The `4-bit QLoRA` path remains valuable in theory, but on this exact Windows setup it was less stable than the short full-LoRA path above.
 
 Do not start with:
 - full-model training
@@ -181,6 +234,7 @@ The local student is the safest and most measurable training target.
 Hydria should become better because:
 - the model improves its supervised behavior
 - the core remains governed and explicit
+- the candidate variant beats the frozen baseline on the same replay and live packs
 
 not because:
 - hidden model changes replace routing, safety, or governance logic

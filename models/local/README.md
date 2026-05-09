@@ -1,6 +1,6 @@
 # Local Model
 
-Hydria Arena V1 uses a dedicated Ollama endpoint on `http://127.0.0.1:11435` with its model store on `F:\hydria-arena\models\local\ollama-store`.
+Hydria Core uses a dedicated Ollama endpoint on `http://127.0.0.1:11435` with its model store in the project-local directory `models/local/ollama-store`.
 
 Selected runtime model:
 

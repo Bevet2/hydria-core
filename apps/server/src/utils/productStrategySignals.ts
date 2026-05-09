@@ -16,7 +16,13 @@ const goalPatterns = [
   /\bobjective\b/i,
   /\bgoal\b/i,
   /\bprimary objective\b/i,
-  /\btarget outcome\b/i
+  /\btarget outcome\b/i,
+  /\bbusiness outcome\b/i,
+  /\bprimary user\b/i,
+  /\btarget (?:user|segment|customer|persona|buyer|market)\b/i,
+  /\bfirst use case\b/i,
+  /\bone (?:narrow|clear|specific|concrete|focused)?\s*(?:wedge|use case)\b/i,
+  /\blaunch (?:the assistant|with|around)\b/i
 ];
 
 const sequencingPatterns = [

@@ -237,7 +237,7 @@ export class OrchestrationPolicyService {
       knowledgeInsight
     });
 
-    const refineBias = clamp(
+    const refineBias = Math.round(clamp(
       (refinePolicy === "aggressive" ? 8 : refinePolicy === "conservative" ? -8 : 0) +
         (costPolicy === "quality_first" ? 4 : costPolicy === "latency_guarded" ? -4 : 0) +
         (focus === "execution_clarity" || focus === "strategy_actionability" ? 3 : 0) +
@@ -246,8 +246,8 @@ export class OrchestrationPolicyService {
         memoryRefineBias,
       -20,
       20
-    );
-    const researchBias = clamp(
+    ));
+    const researchBias = Math.round(clamp(
       (researchPolicy === "targeted"
         ? 9
         : researchPolicy === "ground_if_needed"
@@ -262,7 +262,7 @@ export class OrchestrationPolicyService {
         memoryResearchBias,
       -20,
       20
-    );
+    ));
 
     const prioritySignals = uniqueStrings([
       averageFactualRisk >= 70 ? "high_factual_risk" : "",

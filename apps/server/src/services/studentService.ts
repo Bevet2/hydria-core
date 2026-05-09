@@ -15,7 +15,7 @@ import {
   type StudentStrategyProfile
 } from "../types/student.js";
 import { logger } from "../utils/logger.js";
-import { env, defaultArenaModels } from "../utils/env.js";
+import { defaultArenaModels } from "../utils/env.js";
 import { classifyQuestion } from "./questionClassifier.js";
 import { KnowledgeInjectionService } from "./knowledgeInjectionService.js";
 import { LocalModelService } from "./localModel.js";
@@ -85,6 +85,10 @@ export class StudentService {
       this.studentStrategySelectorService,
       toRespondentOutput
     );
+  }
+
+  private get localModelName() {
+    return this.localModelService.getConfiguredModelName?.() ?? "local-student";
   }
 
   async ensureReady() {
@@ -295,7 +299,7 @@ export class StudentService {
       question: args.question,
       category: args.category,
       models: {
-        studentLocalModel: env.LOCAL_MODEL_NAME,
+        studentLocalModel: this.localModelName,
         teacherModel: defaultArenaModels.respondentA,
         redTeamModel: defaultArenaModels.redTeam,
         judgeModel: defaultArenaModels.judge

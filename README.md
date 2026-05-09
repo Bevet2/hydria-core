@@ -297,6 +297,30 @@ npm.cmd run check
 npm.cmd run test
 ```
 
+### Runtime Release Gate
+
+Hydria Core now has a release gate that consolidates the runtime regression artifacts before a release or push.
+
+Smoke verdict over the latest persisted benchmark reports plus direct tool-routing regression eval:
+
+```powershell
+npm.cmd run runtime:release-gate -- --smoke
+```
+
+Full-mode verdict uses the same persisted artifacts, but records the run as a release validation:
+
+```powershell
+npm.cmd run runtime:release-gate -- --full
+```
+
+The report is written to:
+
+```text
+storage/training/hydria-core-runtime-release-gate-v1.json
+```
+
+It checks the 350 single-turn artifact, hidden tool/research gate, Conversation Gate v3 hidden full60, Strategic Constraint Conflict full40, the runtime mini multi-turn gate, and direct tool-routing regression accuracy. The 350 historical wrong-language/tool/source counts are monitored as warnings unless `--strict-monitored-counts` is used; broken answers, short high-confidence answers, prompt-injection unsafe answers, failed cases, tool/research hidden regressions, and strategic conflict regressions are blocking.
+
 ## Useful Scripts
 
 Workspace-level scripts:
@@ -309,6 +333,9 @@ Workspace-level scripts:
 - `npm.cmd run student:temporal-eval`
 - `npm.cmd run student:temporal-eval:record`
 - `npm.cmd run student:temporal-eval:replay`
+- `npm.cmd run conversation:runtime-mini`
+- `npm.cmd run conversation:strategic-conflict`
+- `npm.cmd run runtime:release-gate`
 - `npm.cmd run tool:routing-eval`
 
 Server-only equivalents live in `apps/server/package.json`.

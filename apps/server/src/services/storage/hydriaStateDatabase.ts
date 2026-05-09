@@ -18,6 +18,11 @@ import {
   type ToolState
 } from "../../types/tools.js";
 import { studentSessionSchema, type StudentSession } from "../../types/student.js";
+import {
+  localStudentModelVariantSchema,
+  type LocalStudentModelVariant,
+  type LocalStudentVariantState
+} from "../../types/training.js";
 import { env } from "../../utils/env.js";
 
 type PersistedPayloadRow = {
@@ -111,6 +116,22 @@ export class HydriaStateDatabase {
 
       CREATE INDEX IF NOT EXISTS idx_specialized_agents_confidence
         ON specialized_agents (confidence_score DESC);
+
+      CREATE TABLE IF NOT EXISTS local_model_variants (
+        variant_id TEXT PRIMARY KEY,
+        state TEXT NOT NULL,
+        confidence_score REAL NOT NULL,
+        served_model_name TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        payload TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_local_model_variants_state
+        ON local_model_variants (state);
+
+      CREATE INDEX IF NOT EXISTS idx_local_model_variants_confidence
+        ON local_model_variants (confidence_score DESC);
     `);
 
     this.db = db;
@@ -460,6 +481,79 @@ export class HydriaStateDatabase {
       updatedAt: new Date().toISOString()
     } satisfies SpecializedAgentDefinition;
     await this.upsertSpecializedAgent(updated);
+    return updated;
+  }
+
+  async listLocalModelVariants(states?: LocalStudentVariantState[]) {
+    await this.ensureReady();
+    const database = this.getDatabase();
+    const rows =
+      states && states.length > 0
+        ? (database
+            .prepare(
+              `SELECT payload FROM local_model_variants
+               WHERE state IN (${states.map(() => "?").join(",")})
+               ORDER BY confidence_score DESC, updated_at DESC`
+            )
+            .all(...states) as PersistedPayloadRow[])
+        : (database
+            .prepare(
+              "SELECT payload FROM local_model_variants ORDER BY confidence_score DESC, updated_at DESC"
+            )
+            .all() as PersistedPayloadRow[]);
+
+    return rows.map((row) => localStudentModelVariantSchema.parse(JSON.parse(row.payload)));
+  }
+
+  async getLocalModelVariant(variantId: string) {
+    await this.ensureReady();
+    const row = this.getDatabase()
+      .prepare("SELECT payload FROM local_model_variants WHERE variant_id = ?")
+      .get(variantId) as PersistedPayloadRow | undefined;
+    return row ? localStudentModelVariantSchema.parse(JSON.parse(row.payload)) : null;
+  }
+
+  async upsertLocalModelVariant(variant: LocalStudentModelVariant) {
+    await this.ensureReady();
+    const parsed = localStudentModelVariantSchema.parse(variant);
+    this.getDatabase()
+      .prepare(
+        `
+          INSERT OR REPLACE INTO local_model_variants (
+            variant_id,
+            state,
+            confidence_score,
+            served_model_name,
+            updated_at,
+            created_at,
+            payload
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `
+      )
+      .run(
+        parsed.id,
+        parsed.state,
+        parsed.confidenceScore,
+        parsed.servedModelName,
+        parsed.updatedAt,
+        parsed.createdAt,
+        JSON.stringify(parsed)
+      );
+  }
+
+  async updateLocalModelVariantState(variantId: string, state: LocalStudentVariantState) {
+    const current = await this.getLocalModelVariant(variantId);
+    if (!current) {
+      return null;
+    }
+
+    const updated = {
+      ...current,
+      state,
+      updatedAt: new Date().toISOString()
+    } satisfies LocalStudentModelVariant;
+    await this.upsertLocalModelVariant(updated);
     return updated;
   }
 

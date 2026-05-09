@@ -20,8 +20,15 @@ import {
   type LocalStudentTrainingTaskType,
   type LocalStudentTrainingTier
 } from "../../types/training.js";
-import type { StudentSession, StudentToolImpactLabel } from "../../types/student.js";
+import {
+  studentAnswerSchema,
+  type StudentAnswer,
+  type StudentSession,
+  type StudentToolImpactLabel
+} from "../../types/student.js";
 import { env, projectRoot } from "../../utils/env.js";
+import { LOCAL_STUDENT_FAILURE_RECOVERY_TRAINING_EXAMPLES } from "../../data/localStudentFailureRecoveryTrainingExamples.js";
+import { LOCAL_STUDENT_TOOL_BENCH_TRAINING_EXAMPLES } from "../../data/localStudentToolBenchTrainingExamples.js";
 import { KnowledgeLayerService } from "../knowledgeLayerService.js";
 import { listPersistedStudentSessions } from "../storage/studentSessionPersistence.js";
 import { localStudentTrainingConstitution } from "./localStudentTrainingConstitution.js";
@@ -30,6 +37,7 @@ type BuildTrainingPackData = {
   curatedExamples: StudentCuratedExample[];
   contrastiveExamples: StudentContrastiveExample[];
   sessions: StudentSession[];
+  syntheticExamples?: LocalStudentTrainingExample[];
 };
 
 type BuildTrainingPackResult = {
@@ -74,7 +82,9 @@ const defaultSummaryFile = resolve(
 const zeroSourceBreakdown = () => ({
   curated_round: 0,
   contrastive_round: 0,
-  student_session: 0
+  student_session: 0,
+  synthetic_tool_bench: 0,
+  synthetic_failure_recovery: 0
 });
 
 const zeroTaskBreakdown = () => ({
@@ -113,6 +123,276 @@ const zeroCategoryBreakdown = () => ({
 });
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+function normalizeSpace(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function truncateAtBoundary(value: string, maxChars: number) {
+  const normalized = normalizeSpace(value);
+  if (normalized.length <= maxChars) {
+    return normalized;
+  }
+
+  const candidate = normalized.slice(0, maxChars);
+  const sentenceBoundary = Math.max(
+    candidate.lastIndexOf("."),
+    candidate.lastIndexOf("!"),
+    candidate.lastIndexOf("?")
+  );
+  const cut = sentenceBoundary >= Math.floor(maxChars * 0.55) ? sentenceBoundary + 1 : maxChars;
+  return candidate.slice(0, cut).trim();
+}
+
+function splitAnswerItems(value: string) {
+  const bulletItems = value
+    .split(/\r?\n|;|\u2022/)
+    .map((entry) => entry.replace(/^[\s*-]+/, "").trim())
+    .filter((entry) => entry.length >= 8);
+
+  if (bulletItems.length > 1) {
+    return bulletItems;
+  }
+
+  return value
+    .split(/(?<=[.!?])\s+/)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length >= 8);
+}
+
+function toKeyPointLabel(value: string) {
+  const withoutMarkdown = value
+    .replace(/[`*_#>]/g, "")
+    .replace(/^\s*(?:\d+[.)]|[-*])\s*/, "")
+    .trim();
+  const prefix = withoutMarkdown.split(":")[0]?.trim() ?? withoutMarkdown;
+  const compact =
+    prefix.length <= 90 && prefix.split(/\s+/).length <= 9
+      ? prefix
+      : withoutMarkdown.split(/[,;.!?]|\s+\b(?:before|after|while|so that|because)\b\s+/i)[0]?.trim() ??
+        withoutMarkdown;
+  const words = compact
+    .replace(/\s+/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 8);
+  const label = words.join(" ").replace(/[.:;,!?]+$/, "").trim();
+  return label || truncateAtBoundary(withoutMarkdown, 72).replace(/[.:;,!?]+$/, "").trim();
+}
+
+function deriveKeyPoints(answerText: string) {
+  const items = splitAnswerItems(answerText)
+    .map(toKeyPointLabel)
+    .filter((entry) => entry.length >= 3)
+    .slice(0, 5);
+  const unique = [...new Set(items)];
+  return unique.length > 0 ? unique : [toKeyPointLabel(answerText)];
+}
+
+function deriveAssumptions(answerText: string) {
+  const assumptions = splitAnswerItems(answerText)
+    .filter((entry) => /\b(?:if|assuming|unless|depends|cannot verify|missing|unavailable)\b/i.test(entry))
+    .map((entry) => truncateAtBoundary(entry, 180))
+    .slice(0, 3);
+
+  return [...new Set(assumptions)];
+}
+
+function normalizeTargetConfidence(answerText: string, confidence: number) {
+  const rounded = Math.round(clamp(confidence, 0, 100));
+  if (rounded > 0) {
+    return rounded;
+  }
+
+  if (/\b(?:cannot|can't|could not)\s+(?:verify|confirm)\b|\bno reliable source\b|\bmissing\b|\bunavailable\b/i.test(answerText)) {
+    return 30;
+  }
+
+  return 68;
+}
+
+function stringifyStudentAnswer(answer: StudentAnswer) {
+  return JSON.stringify(studentAnswerSchema.parse(answer), null, 2);
+}
+
+function buildStudentAnswerTarget(answerText: string, confidence: number) {
+  const compactAnswer = truncateAtBoundary(answerText, 1600);
+  const targetConfidence = normalizeTargetConfidence(compactAnswer, confidence);
+  return stringifyStudentAnswer({
+    modelRole: "student",
+    answer: compactAnswer,
+    key_points: deriveKeyPoints(compactAnswer),
+    assumptions: deriveAssumptions(compactAnswer),
+    confidence: targetConfidence
+  });
+}
+
+function detectTrainingLanguage(question: string) {
+  return /\b(?:je|tu|vous|quel|quelle|pourquoi|comment|explique|donne|peux|est-ce|aujourd|meteo|temps|francais)\b|[\u00e0-\u00ff]/i.test(
+    question
+  )
+    ? "French (fr)"
+    : "English or unspecified";
+}
+
+function countQuestionWords(question: string) {
+  return question
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length;
+}
+
+function buildTrainingStrategy(
+  category: LocalStudentTrainingMetadata["category"],
+  taskType: LocalStudentTrainingTaskType,
+  question: string
+ ) {
+  const lowerQuestion = question.toLowerCase();
+  const factual =
+    taskType === "tool_safe_answer" ||
+    /\b(?:latest|current|today|weather|price|release|version|who is|convert)\b/i.test(
+      lowerQuestion
+    );
+  const explanatory = category === "technical_explanation";
+  const promptWordCount = countQuestionWords(question);
+
+  return {
+    strategy_id: factual
+      ? "factual_short"
+      : explanatory
+        ? "explanatory_short"
+        : "open_medium",
+    context: {
+      questionType: factual ? "factual" : explanatory ? "explanatory" : "open",
+      promptLength:
+        promptWordCount <= 12 ? "short" : promptWordCount <= 40 ? "medium" : "long",
+      promptWordCount,
+      signals: [
+        ...(factual ? ["uncertainty"] : []),
+        ...(explanatory ? ["abstraction"] : [])
+      ].slice(0, 3)
+    },
+    impact_status: factual ? "cautious" : "active",
+    activation_mode: factual ? "fallback" : "contextual",
+    impact_confidence: factual ? 0.5 : 0.7,
+    impact_reason:
+      "Training prompt includes strategy context so the model learns to use it without copying it.",
+    target_length_words: factual ? { min: 35, max: 80 } : { min: 60, max: 130 },
+    directives: [
+      "Answer the user's question directly.",
+      "Use the strategy as guidance only; do not copy this strategy object.",
+      "Return the StudentAnswer JSON schema exactly."
+    ],
+    avoidances: [
+      "Do not output strategy_id, context, impact_status, or activation_mode.",
+      "Do not include text outside the JSON object."
+    ],
+    influenced_by: {
+      signals: factual ? ["tool-safe factual answer"] : ["validated student answer"],
+      studentRuleIds: [],
+      memoryDomains: [],
+      winningPatterns: []
+    },
+    reasoning: [
+      "The training target is the runtime StudentAnswer schema.",
+      "The strategy block is context, not the output schema."
+    ]
+  };
+}
+
+function formatTrainingList(title: string, values: string[], maxItems = 4) {
+  const items = values
+    .map((entry) => truncateAtBoundary(entry, 220))
+    .filter(Boolean)
+    .slice(0, maxItems);
+
+  return items.length > 0 ? `${title}:\n${items.map((item) => `- ${item}`).join("\n")}` : "";
+}
+
+function formatTrainingStrategy(strategy: ReturnType<typeof buildTrainingStrategy>) {
+  return [
+    `Id: ${strategy.strategy_id}`,
+    `Status: ${strategy.impact_status}; mode: ${strategy.activation_mode}; confidence: ${strategy.impact_confidence}`,
+    `Target length: ${strategy.target_length_words.min}-${strategy.target_length_words.max} words`,
+    truncateAtBoundary(strategy.impact_reason, 220),
+    formatTrainingList("Directives", strategy.directives, 5),
+    formatTrainingList("Avoid", strategy.avoidances, 5),
+    "Use this guidance only; never copy these labels into the output."
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function buildRuntimeLikeTrainingPrompt(args: {
+  question: string;
+  category: LocalStudentTrainingMetadata["category"];
+  taskType: LocalStudentTrainingTaskType;
+  weakAnswer?: string;
+  truthSummary?: string | null;
+}) {
+  const strategy = buildTrainingStrategy(args.category, args.taskType, args.question);
+  return [
+    "Answer the user question as the Hydria local student.",
+    "",
+    "Question:",
+    args.question,
+    "",
+    "Detected answer language:",
+    detectTrainingLanguage(args.question),
+    "",
+    "Detected category:",
+    args.category,
+    "",
+    "Student strategy guidance:",
+    formatTrainingStrategy(strategy),
+    args.weakAnswer
+      ? ["", "Weak answer to improve:", truncateAtBoundary(args.weakAnswer, 1200)].join("\n")
+      : "",
+    args.truthSummary
+      ? ["", "Truth engine findings:", truncateAtBoundary(args.truthSummary, 1600)].join("\n")
+      : "",
+    "",
+    "Answering rules:",
+    "- return only one valid JSON object",
+    "- output the StudentAnswer schema only: modelRole, answer, key_points, assumptions, confidence",
+    "- do not output strategy metadata such as Id, Status, mode, directives, or avoidances",
+    "- answer in the same language as the user's question",
+    "- answer must contain the useful response body; key_points must be 2 to 5 short labels",
+    "- assumptions must be concise and must not repeat the answer",
+    "- use verified facts when provided, and do not invent current facts",
+    "- if the question asks for latest/current/today/live data and no verified facts are provided, say it cannot be verified from the prompt",
+    "- if no reliable source or required input is missing, say that plainly or ask one clarifying question",
+    "- do not use placeholder values such as \"...\", \"string\", \"todo\", or \"tbd\"",
+    "- do not use markdown bullets, bold markers, headings, code snippets, HTML, or XML inside JSON string values"
+  ]
+    .filter((part) => part !== "")
+    .join("\n");
+}
+
+function buildSessionTruthSummary(session: StudentSession) {
+  if (!session.research.used && !session.tooling.toolUsed) {
+    return null;
+  }
+
+  const truth = session.research.truth;
+  const verification = session.research.verification;
+  const toolRouting = session.research.toolRouting;
+
+  return [
+    `Tool: ${toolRouting.toolType}; intent: ${toolRouting.intent}; required: ${toolRouting.toolRequired ? "yes" : "no"}`,
+    `Tool result used: ${toolRouting.toolResultUsed ? "yes" : "no"}`,
+    `Freshness satisfied: ${verification.freshnessSatisfied ? "yes" : "no"}`,
+    `No reliable source: ${truth.no_reliable_source ? "yes" : "no"}`,
+    formatTrainingList("Verified facts", truth.verified_facts, 5),
+    formatTrainingList("Uncertain claims", truth.uncertain_claims, 4),
+    formatTrainingList("Conflicting info", truth.conflicting_info, 3),
+    formatTrainingList("Summary", session.research.summary, 3),
+    session.tooling.toolImpact ? `Tool impact: ${session.tooling.toolImpact}` : "",
+    session.tooling.toolReason ? `Tool reason: ${truncateAtBoundary(session.tooling.toolReason, 240)}` : ""
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
 
 export class LocalStudentTrainingPackService {
   private readonly sessionLoader: () => Promise<StudentSession[]>;
@@ -186,6 +466,10 @@ export class LocalStudentTrainingPackService {
       } else {
         rejected.push((decision as { rejected: LocalStudentTrainingRejectedExample }).rejected);
       }
+    }
+
+    for (const synthetic of data.syntheticExamples ?? []) {
+      acceptedRaw.push(synthetic);
     }
 
     const deduped = new Map<string, LocalStudentTrainingExample>();
@@ -275,7 +559,15 @@ export class LocalStudentTrainingPackService {
     }
 
     const sessions = await this.sessionLoader();
-    return { curatedExamples, contrastiveExamples, sessions };
+    return {
+      curatedExamples,
+      contrastiveExamples,
+      sessions,
+      syntheticExamples: [
+        ...LOCAL_STUDENT_TOOL_BENCH_TRAINING_EXAMPLES,
+        ...LOCAL_STUDENT_FAILURE_RECOVERY_TRAINING_EXAMPLES
+      ]
+    };
   }
 
   private async readJsonl<T>(filePath: string, schema: z.ZodType<T>) {
@@ -346,6 +638,7 @@ export class LocalStudentTrainingPackService {
     }
 
     const qualityTier = curated.selectionTier as LocalStudentTrainingTier;
+    const targetAnswer = buildStudentAnswerTarget(curated.targetAnswer, curated.selectionScore);
     const weight = clamp(
       (qualityTier === "gold" ? 1.35 : qualityTier === "silver" ? 1.18 : 0.96) +
         (curated.researchUsed ? 0.08 : 0) +
@@ -370,14 +663,18 @@ export class LocalStudentTrainingPackService {
           },
           {
             role: "user",
-            content: curated.prompt
+            content: buildRuntimeLikeTrainingPrompt({
+              question: curated.prompt,
+              category: curated.category,
+              taskType: "direct_answer"
+            })
           },
           {
             role: "assistant",
-            content: curated.targetAnswer
+            content: targetAnswer
           }
         ],
-        targetAnswer: curated.targetAnswer,
+        targetAnswer,
         metadata
       })
     };
@@ -466,6 +763,10 @@ export class LocalStudentTrainingPackService {
     }
 
     const qualityTier = contrastive.selectionTier as LocalStudentTrainingTier;
+    const targetAnswer = buildStudentAnswerTarget(
+      contrastive.targetAnswer,
+      Math.max(60, contrastive.selectionScore)
+    );
     const weight = clamp(
       1.12 +
         clamp(contrastive.improvedDelta / 40, 0, 0.45) +
@@ -491,21 +792,19 @@ export class LocalStudentTrainingPackService {
           },
           {
             role: "user",
-            content: [
-              `Question: ${contrastive.prompt}`,
-              "",
-              "Weak answer:",
-              contrastive.sourceAnswer,
-              "",
-              "Rewrite it into a stronger final answer."
-            ].join("\n")
+            content: buildRuntimeLikeTrainingPrompt({
+              question: contrastive.prompt,
+              category: contrastive.category,
+              taskType: "rewrite_answer",
+              weakAnswer: contrastive.sourceAnswer
+            })
           },
           {
             role: "assistant",
-            content: contrastive.targetAnswer
+            content: targetAnswer
           }
         ],
-        targetAnswer: contrastive.targetAnswer,
+        targetAnswer,
         metadata
       })
     };
@@ -581,8 +880,8 @@ export class LocalStudentTrainingPackService {
       };
     }
 
-    const targetAnswer = session.student.final.answer;
-    if (targetAnswer.length < localStudentTrainingConstitution.minDirectTargetChars) {
+    const targetAnswerText = session.student.final.answer;
+    if (targetAnswerText.length < localStudentTrainingConstitution.minDirectTargetChars) {
       return {
         rejected: this.buildRejected(
           `session::${session.sessionId}`,
@@ -595,7 +894,7 @@ export class LocalStudentTrainingPackService {
       };
     }
 
-    if (targetAnswer.length > localStudentTrainingConstitution.maxTargetChars) {
+    if (targetAnswerText.length > localStudentTrainingConstitution.maxTargetChars) {
       return {
         rejected: this.buildRejected(
           `session::${session.sessionId}`,
@@ -617,6 +916,10 @@ export class LocalStudentTrainingPackService {
           ? "silver"
           : "bronze";
     const toolBonus = this.toolBonus(session.tooling.toolImpact);
+    const targetAnswer = buildStudentAnswerTarget(
+      session.student.final.answer,
+      session.student.final.confidence
+    );
     const weight = clamp(
       1 +
         clamp(session.progression.deltaOverall / 25, 0, 0.35) +
@@ -649,7 +952,12 @@ export class LocalStudentTrainingPackService {
           },
           {
             role: "user",
-            content: session.question
+            content: buildRuntimeLikeTrainingPrompt({
+              question: session.question,
+              category: session.category,
+              taskType,
+              truthSummary: buildSessionTruthSummary(session)
+            })
           },
           {
             role: "assistant",
