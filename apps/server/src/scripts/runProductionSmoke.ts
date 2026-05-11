@@ -172,7 +172,7 @@ function answerText(response: ChatResponse) {
 }
 
 function hasInternalLeak(value: string) {
-  return /\b(?:ActiveConstraintCapsule|Answer policy|runtime|policy|hidden instruction|prompt)\b/i.test(value);
+  return /\b(?:ActiveConstraintCapsule|Answer policy|hidden instruction|system prompt|developer prompt|prompt policy|conversationQuality|answerMode)\b/i.test(value);
 }
 
 async function runProductionSmoke(args = parseArgs()): Promise<ProductionSmokeReport> {

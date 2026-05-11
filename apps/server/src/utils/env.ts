@@ -132,7 +132,7 @@ const envSchema = z.object({
   LOCAL_STUDENT_FALLBACK_MODEL: z.string().min(1).default("openai/gpt-5.4-mini"),
   LOCAL_MODEL_TIMEOUT_MS: z.coerce.number().int().min(1000).default(45000),
   STUDENT_CHAT_LOCAL_MODEL_NAME: z.string().default(""),
-  STUDENT_CHAT_LOCAL_TIMEOUT_MS: z.coerce.number().int().min(1000).default(22000),
+  STUDENT_CHAT_LOCAL_TIMEOUT_MS: z.coerce.number().int().min(1000).default(45000),
   LOCAL_MODEL_OBSERVER_ENABLED: z
     .string()
     .default("true")
