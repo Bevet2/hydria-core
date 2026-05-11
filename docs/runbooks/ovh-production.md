@@ -32,6 +32,7 @@ From any machine:
 ```bash
 curl -fsS https://app.hydria.click/api/health
 curl -fsS https://app.hydria.click/api/health/persistence
+curl -fsS https://app.hydria.click/api/models/capabilities
 ```
 
 From the VPS:
@@ -88,6 +89,19 @@ sudo docker compose --env-file .env.docker -f docker-compose.yml -f docker-compo
 ```
 
 Then run the health checks.
+
+## Model Capability Manifest
+
+Hydria exposes the planned multi-model routing catalog at:
+
+```bash
+curl -fsS https://app.hydria.click/api/models/capabilities
+curl -fsS https://app.hydria.click/api/models/select \
+  -H 'content-type: application/json' \
+  -d '{"purpose":"deep_reasoning","category":"mixed_reasoning","latencyPreference":"quality"}'
+```
+
+The manifest registers Qwen 14B/32B, DeepSeek-Coder-V2, Qwen-Coder, DeepSeek-R1-Distill-Qwen, Mistral/Mixtral, BGE-M3, BGE Reranker, Phi mini, and Qwen 3B as candidate model roles. These entries are routing contracts first; live execution still requires configuring the actual serving backend on OVH or a GPU provider.
 
 Before first production cutover to the dedicated schema:
 

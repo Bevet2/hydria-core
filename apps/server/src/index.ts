@@ -10,6 +10,7 @@ import { createChatRouter } from "./routes/chat.js";
 import { createHistoryRouter } from "./routes/history.js";
 import { createLearningRouter } from "./routes/learning.js";
 import { createLocalModelRouter } from "./routes/localModel.js";
+import { createModelsRouter } from "./routes/models.js";
 import { createStudentRouter } from "./routes/student.js";
 import {
   OFFICIAL_BASELINE_FROZEN_AT,
@@ -27,6 +28,7 @@ import { ChatRuntimeService } from "./services/chatRuntimeService.js";
 import { HistoryStore } from "./services/historyStore.js";
 import { LearningGovernanceService } from "./services/learningGovernanceService.js";
 import { LocalModelService } from "./services/localModel.js";
+import { ModelCapabilityService } from "./services/models/modelCapabilityService.js";
 import { OpenRouterService } from "./services/openrouter.js";
 import { OrchestrationPolicyService } from "./services/orchestrationPolicy.js";
 import { ResearchToolService } from "./services/researchToolService.js";
@@ -39,6 +41,7 @@ import { logger } from "./utils/logger.js";
 
 const historyStore = new HistoryStore();
 const localModelService = new LocalModelService();
+const modelCapabilityService = new ModelCapabilityService();
 const openRouterService = new OpenRouterService();
 const benchmarkStore = new BenchmarkStore();
 const studentSessionStore = new StudentSessionStore();
@@ -126,6 +129,7 @@ app.use("/api/arena/history", createHistoryRouter(historyStore));
 app.use("/api/benchmark", createBenchmarkRouter(benchmarkService));
 app.use("/api/chat", createChatRouter(chatRuntimeService));
 app.use("/api/local-model", createLocalModelRouter(localModelService));
+app.use("/api/models", createModelsRouter(modelCapabilityService));
 app.use("/api/learning", createLearningRouter(learningGovernanceService));
 app.use("/api/student", createStudentRouter(studentService));
 

@@ -23,6 +23,7 @@ The current codebase already includes:
 - a `skill system` for reusable validated procedures
 - a `tool candidate system` for detecting missing capabilities and proposing governed tool manifests
 - a `specialized agent system` that groups validated skills into domain-specific agent recommendations
+- a `model capability manifest` for routing Qwen, DeepSeek, Mistral/Mixtral, BGE, Phi, and Qwen-router roles
 - a `learning loop` that turns observations into hotspots, hypotheses, policies, active memory, and regression monitoring
 - SQLite persistence with JSON projections and self-healing derived artifacts
 - a React playground for arena, benchmark, student, persistence, workflow, and learning inspection
@@ -194,6 +195,26 @@ A specialized agent:
 - has activation conditions, metrics, and safety constraints
 
 The core only recommends specialized agents. It does not execute them directly.
+
+### Model Capability Manifest
+
+Hydria now has a declarative multi-model catalog and selection service. This is the routing contract for future execution backends; it does not replace the current v10-light runtime by itself.
+
+Registered roles:
+
+- Qwen 14B/32B Instruct: primary reasoning brain
+- DeepSeek-Coder-V2 and Qwen-Coder: code and repo diagnostics
+- DeepSeek-R1-Distill-Qwen: deep reasoning escalation
+- Mistral/Mixtral: writing, business, and stakeholder synthesis
+- BGE-M3 and BGE Reranker: memory retrieval and reranking
+- Phi mini and Qwen 3B: fast routing and extraction
+
+The API exposes:
+
+- `GET /api/models/capabilities`
+- `POST /api/models/select`
+
+Provider identifiers in the manifest are deployment targets. Configure the actual Ollama, vLLM, OpenRouter, or OpenAI-compatible serving names before enabling live execution.
 
 ### Learning Governance
 
@@ -507,6 +528,11 @@ Server-only equivalents live in `apps/server/package.json`.
 
 - `GET /api/local-model/health`
 - `POST /api/local-model/test`
+
+### Models
+
+- `GET /api/models/capabilities`
+- `POST /api/models/select`
 
 ## Example Commands
 
