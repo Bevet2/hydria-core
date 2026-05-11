@@ -1,16 +1,19 @@
 import type { ToolManifest, ToolState } from "../../types/tools.js";
 import { toolManifestSchema } from "../../types/tools.js";
-import { HydriaStateDatabase } from "../storage/hydriaStateDatabase.js";
+import {
+  createPersistenceAdapter,
+  type PersistenceAdapter
+} from "../storage/persistenceAdapter.js";
 
 type ToolRegistryOptions = {
-  database?: HydriaStateDatabase;
+  database?: PersistenceAdapter;
 };
 
 export class ToolRegistry {
-  private readonly database: HydriaStateDatabase;
+  private readonly database: PersistenceAdapter;
 
   constructor(options: ToolRegistryOptions = {}) {
-    this.database = options.database ?? new HydriaStateDatabase();
+    this.database = options.database ?? createPersistenceAdapter();
   }
 
   async registerCandidate(manifest: ToolManifest) {

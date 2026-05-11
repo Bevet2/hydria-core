@@ -1,16 +1,19 @@
 import type { AgentState, SpecializedAgentDefinition } from "../../types/agents.js";
 import { specializedAgentDefinitionSchema } from "../../types/agents.js";
-import { HydriaStateDatabase } from "../storage/hydriaStateDatabase.js";
+import {
+  createPersistenceAdapter,
+  type PersistenceAdapter
+} from "../storage/persistenceAdapter.js";
 
 type AgentRegistryOptions = {
-  database?: HydriaStateDatabase;
+  database?: PersistenceAdapter;
 };
 
 export class AgentRegistry {
-  private readonly database: HydriaStateDatabase;
+  private readonly database: PersistenceAdapter;
 
   constructor(options: AgentRegistryOptions = {}) {
-    this.database = options.database ?? new HydriaStateDatabase();
+    this.database = options.database ?? createPersistenceAdapter();
   }
 
   async registerAgentCandidate(agent: SpecializedAgentDefinition) {

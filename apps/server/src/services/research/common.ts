@@ -73,7 +73,15 @@ export const STOPWORDS = new Set([
   "responses",
   "question",
   "questions",
-  "together"
+  "together",
+  "explique",
+  "decris",
+  "definis",
+  "definition",
+  "phrase",
+  "phrases",
+  "simple",
+  "simples"
 ]);
 
 const FOCUS_STOPWORDS = new Set([
@@ -97,6 +105,27 @@ const FOCUS_STOPWORDS = new Set([
   "when",
   "where",
   "which",
+  "qui",
+  "quoi",
+  "quel",
+  "quelle",
+  "quels",
+  "quelles",
+  "est",
+  "sont",
+  "etait",
+  "tait",
+  "etre",
+  "pourquoi",
+  "comment",
+  "explique",
+  "decris",
+  "definis",
+  "definition",
+  "phrase",
+  "phrases",
+  "simple",
+  "simples",
   "current",
   "currently",
   "latest",
@@ -318,7 +347,10 @@ export function stripQuestionNoise(value: string) {
   return normalizeSpace(
     value
       .replace(/[?]/g, " ")
-      .replace(/\b(?:design|propose|write|explain|describe|how would you|what are|what is)\b/gi, " ")
+      .replace(
+        /\b(?:design|propose|write|explain|describe|how would you|what are|what is|who is|who was|who are|qui est|qui etait|qui était|qui sont)\b/gi,
+        " "
+      )
   );
 }
 

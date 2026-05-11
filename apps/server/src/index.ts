@@ -6,6 +6,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 import { ZodError } from "zod";
 import { createArenaRouter } from "./routes/arena.js";
 import { createBenchmarkRouter } from "./routes/benchmark.js";
+import { createChatRouter } from "./routes/chat.js";
 import { createHistoryRouter } from "./routes/history.js";
 import { createLearningRouter } from "./routes/learning.js";
 import { createLocalModelRouter } from "./routes/localModel.js";
@@ -22,6 +23,7 @@ import { ArenaRespondentFailureStore } from "./services/arenaRespondentFailureSt
 import { ArenaQualityAnalyticsService } from "./services/arenaQualityAnalyticsService.js";
 import { BenchmarkService } from "./services/benchmarkService.js";
 import { BenchmarkStore } from "./services/benchmarkStore.js";
+import { ChatRuntimeService } from "./services/chatRuntimeService.js";
 import { HistoryStore } from "./services/historyStore.js";
 import { LearningGovernanceService } from "./services/learningGovernanceService.js";
 import { LocalModelService } from "./services/localModel.js";
@@ -54,6 +56,7 @@ const studentService = new StudentService(
   researchToolService,
   studentSessionStore
 );
+const chatRuntimeService = new ChatRuntimeService(studentService);
 const arenaRunner = new ArenaRunner(
   openRouterService,
   localModelService,
@@ -121,6 +124,7 @@ app.use(
 );
 app.use("/api/arena/history", createHistoryRouter(historyStore));
 app.use("/api/benchmark", createBenchmarkRouter(benchmarkService));
+app.use("/api/chat", createChatRouter(chatRuntimeService));
 app.use("/api/local-model", createLocalModelRouter(localModelService));
 app.use("/api/learning", createLearningRouter(learningGovernanceService));
 app.use("/api/student", createStudentRouter(studentService));
@@ -147,7 +151,7 @@ if (hasBuiltWebApp) {
         <body>
           <h1>Hydria Core Playground</h1>
           <p>The API server is running, but the web build is not available yet.</p>
-          <p>Run <code>npm.cmd run build</code> to serve the built UI on this port, or start the Vite dev server with <code>npm.cmd run dev</code>.</p>
+          <p>Run <code>npm run build</code> to serve the built UI on this port, or start the Vite dev server with <code>npm run dev</code>.</p>
         </body>
       </html>
     `);

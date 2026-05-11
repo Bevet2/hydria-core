@@ -64,6 +64,15 @@ export const OFFICIAL_DOMAIN_PATTERNS = [
   /(^|\.)nist\.gov$/i
 ];
 
+export const REFERENCE_DOMAIN_PATTERNS = [
+  /(^|\.)wikipedia\.org$/i,
+  /(^|\.)wikidata\.org$/i,
+  /(^|\.)britannica\.com$/i,
+  /(^|\.)larousse\.fr$/i,
+  /(^|\.)universalis\.fr$/i,
+  /(^|\.)worldhistory\.org$/i
+];
+
 export const COMMUNITY_PATH_PATTERNS = [
   /\/blog\//i,
   /\/community\//i,
@@ -156,6 +165,12 @@ export function getSearchDomainTrustScore(args: {
     return 38;
   }
 
+  if (REFERENCE_DOMAIN_PATTERNS.some((pattern) => pattern.test(domain))) {
+    return intent === "current_status" || intent === "recent_updates" || intent === "release_freshness"
+      ? 12
+      : 32;
+  }
+
   if (
     domain.includes("docs.") ||
     domain.includes("developer.") ||
@@ -167,7 +182,11 @@ export function getSearchDomainTrustScore(args: {
   return COMMUNITY_PATH_PATTERNS.some((pattern) => pattern.test(path)) ? -8 : 0;
 }
 
-export function getSourceTrustScore(url: string, preferredDomains: string[]) {
+export function getSourceTrustScore(
+  url: string,
+  preferredDomains: string[],
+  intent: ResearchIntent = "fact_check"
+) {
   const domain = getHostname(url);
   const path = getPathname(url);
 
@@ -188,6 +207,12 @@ export function getSourceTrustScore(url: string, preferredDomains: string[]) {
 
   if (OFFICIAL_DOMAIN_PATTERNS.some((pattern) => pattern.test(domain))) {
     return COMMUNITY_PATH_PATTERNS.some((pattern) => pattern.test(path)) ? 20 : 38;
+  }
+
+  if (REFERENCE_DOMAIN_PATTERNS.some((pattern) => pattern.test(domain))) {
+    return intent === "current_status" || intent === "recent_updates" || intent === "release_freshness"
+      ? 12
+      : 32;
   }
 
   if (

@@ -5,10 +5,13 @@ import type {
   SkillState
 } from "../../types/skills.js";
 import { skillDefinitionSchema } from "../../types/skills.js";
-import { HydriaStateDatabase } from "../storage/hydriaStateDatabase.js";
+import {
+  createPersistenceAdapter,
+  type PersistenceAdapter
+} from "../storage/persistenceAdapter.js";
 
 type SkillRegistryOptions = {
-  database?: HydriaStateDatabase;
+  database?: PersistenceAdapter;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -41,10 +44,10 @@ function overlapScore(left: string[], right: string[]) {
 }
 
 export class SkillRegistry {
-  private readonly database: HydriaStateDatabase;
+  private readonly database: PersistenceAdapter;
 
   constructor(options: SkillRegistryOptions = {}) {
-    this.database = options.database ?? new HydriaStateDatabase();
+    this.database = options.database ?? createPersistenceAdapter();
   }
 
   async registerSkill(skill: SkillDefinition) {

@@ -20,6 +20,7 @@ import {
   type ConversationQualityGateResult
 } from "../services/context/conversationQualityGate.js";
 import { formatStrategicTradeoffPolicyForPrompt } from "../services/context/constraintConflictResolver.js";
+import { formatStrategicCoherencePolicyForPrompt } from "../services/context/strategicCoherencePolicy.js";
 import {
   buildActiveConstraintCapsule,
   createInitialState,
@@ -285,6 +286,7 @@ function buildAnswerPolicyRequirements(args: {
 }) {
   const capsule = args.activeConstraintCapsule;
   const strategicTradeoffPolicy = args.answerPolicy.strategicTradeoffPolicy;
+  const strategicCoherencePolicy = args.answerPolicy.strategicCoherencePolicy;
   const anchors = (capsule.blockingConstraints.length > 0 ? capsule.blockingConstraints : capsule.topConstraints).slice(
     0,
     3
@@ -312,6 +314,9 @@ function buildAnswerPolicyRequirements(args: {
           strategicTradeoffPolicy.hasConflict
             ? `- Arbitrage strategique obligatoire: dominante=${strategicTradeoffPolicy.dominantConstraint}; differee/refusee=${strategicTradeoffPolicy.deferredOrSacrificedConstraint}; compromis=${strategicTradeoffPolicy.acceptedTradeoff}.`
             : "",
+          strategicCoherencePolicy.requiresRevisionCondition && strategicCoherencePolicy.revisionTrigger
+            ? `- Condition de revision obligatoire: ${strategicCoherencePolicy.revisionTrigger}.`
+            : "",
           "- ContextRecallBudget: integre naturellement au plus 3 rappels courts: 1 contrainte forte, 1 detail recent, 1 decision ou hypothese active, puis recommande. Ne transforme pas ces rappels en liste.",
           "- Reponds en francais, 65 a 115 mots, sans titre ni markdown."
         ]
@@ -336,6 +341,9 @@ function buildAnswerPolicyRequirements(args: {
           strategicTradeoffPolicy.hasConflict
             ? `- Strategic arbitration required: dominant=${strategicTradeoffPolicy.dominantConstraint}; deferred/rejected=${strategicTradeoffPolicy.deferredOrSacrificedConstraint}; tradeoff=${strategicTradeoffPolicy.acceptedTradeoff}.`
             : "",
+          strategicCoherencePolicy.requiresRevisionCondition && strategicCoherencePolicy.revisionTrigger
+            ? `- Required revision condition: ${strategicCoherencePolicy.revisionTrigger}.`
+            : "",
           "- ContextRecallBudget: naturally include at most 3 short recalls: 1 strong constraint, 1 recent detail, 1 active decision or hypothesis, then recommend. Do not turn those recalls into a list.",
           "- Answer in English, 65 to 115 words, with no heading or markdown."
         ];
@@ -354,6 +362,7 @@ function buildDecisionCommitmentPatch(args: {
 
   const capsule = args.activeConstraintCapsule;
   const strategicTradeoffPolicy = args.answerPolicy.strategicTradeoffPolicy;
+  const strategicCoherencePolicy = args.answerPolicy.strategicCoherencePolicy;
   const anchors = (capsule.blockingConstraints.length > 0 ? capsule.blockingConstraints : capsule.topConstraints).slice(
     0,
     3
@@ -393,6 +402,9 @@ function buildDecisionCommitmentPatch(args: {
       strategicTradeoffPolicy.hasConflict
         ? `- Obligatoire: arbitre le conflit: dominante=${strategicTradeoffPolicy.dominantConstraint}; option differee/refusee=${strategicTradeoffPolicy.deferredOrSacrificedConstraint}; compromis=${strategicTradeoffPolicy.acceptedTradeoff}.`
         : "",
+      strategicCoherencePolicy.requiresRevisionCondition && strategicCoherencePolicy.revisionTrigger
+        ? `- Obligatoire: donne une condition de revision concrete: ${strategicCoherencePolicy.revisionTrigger}.`
+        : "",
       "- Si le sujet est un compromis nuance, choisis une option par defaut puis donne les conditions de bascule.",
       "- Interdit: reponse generique, principes abstraits seuls, ou reprise de la reponse precedente sans adaptation."
     ].join("\n");
@@ -405,6 +417,9 @@ function buildDecisionCommitmentPatch(args: {
     `- If context changed, the decision must account for: ${changedLine}.`,
     strategicTradeoffPolicy.hasConflict
       ? `- Required: arbitrate the conflict: dominant=${strategicTradeoffPolicy.dominantConstraint}; deferred/rejected=${strategicTradeoffPolicy.deferredOrSacrificedConstraint}; tradeoff=${strategicTradeoffPolicy.acceptedTradeoff}.`
+      : "",
+    strategicCoherencePolicy.requiresRevisionCondition && strategicCoherencePolicy.revisionTrigger
+      ? `- Required: give a concrete revision condition: ${strategicCoherencePolicy.revisionTrigger}.`
       : "",
     "- If this is a nuanced tradeoff, choose a default option first, then state switch conditions.",
     "- Forbidden: generic answer, abstract principles only, or repeating the previous answer without adaptation."
@@ -424,6 +439,9 @@ function buildConversationPrompt(args: {
   const activeConstraintCapsule = formatActiveConstraintCapsuleForPrompt(args.activeConstraintCapsule);
   const strategicTradeoffPolicy = args.answerPolicy.strategicTradeoffPolicy.hasConflict
     ? formatStrategicTradeoffPolicyForPrompt(args.answerPolicy.strategicTradeoffPolicy)
+    : "";
+  const strategicCoherencePolicy = args.answerPolicy.strategicCoherencePolicy.hasStrategicCoherenceRequirement
+    ? formatStrategicCoherencePolicyForPrompt(args.answerPolicy.strategicCoherencePolicy)
     : "";
   const requiredContext = args.answerPolicy.requiredContextItems.length
     ? args.answerPolicy.requiredContextItems.map((item) => `- ${item}`).join("\n")
@@ -463,6 +481,8 @@ function buildConversationPrompt(args: {
       activeConstraintCapsule,
       strategicTradeoffPolicy ? "StrategicTradeoffPolicy:" : "",
       strategicTradeoffPolicy,
+      strategicCoherencePolicy ? "StrategicCoherencePolicy:" : "",
+      strategicCoherencePolicy,
       "Answer policy:",
       `answerMode: ${args.answerPolicy.answerMode}`,
       `guidance: ${args.answerPolicy.guidance}`,
@@ -495,6 +515,8 @@ function buildConversationPrompt(args: {
     activeConstraintCapsule,
     strategicTradeoffPolicy ? "StrategicTradeoffPolicy:" : "",
     strategicTradeoffPolicy,
+    strategicCoherencePolicy ? "StrategicCoherencePolicy:" : "",
+    strategicCoherencePolicy,
     "Answer policy:",
     `answerMode: ${args.answerPolicy.answerMode}`,
     `guidance: ${args.answerPolicy.guidance}`,
@@ -1004,6 +1026,7 @@ function buildStrategicTradeoffLead(args: {
   if (!policy.hasConflict) {
     return "";
   }
+  const coherence = args.answerPolicy.strategicCoherencePolicy;
 
   const dominant = policy.dominantConstraint ?? (args.language === "fr" ? "la contrainte dominante" : "the dominant constraint");
   const deferred =
@@ -1013,17 +1036,23 @@ function buildStrategicTradeoffLead(args: {
     policy.acceptedTradeoff ?? (args.language === "fr" ? "un compromis borne" : "a bounded tradeoff");
   const move =
     policy.recommendedMove ?? (args.language === "fr" ? "trancher explicitement" : "choose explicitly");
+  const revision =
+    coherence.requiresRevisionCondition && coherence.revisionTrigger
+      ? args.language === "fr"
+        ? `Condition de revision: ${coherence.revisionTrigger}.`
+        : `Revision condition: ${coherence.revisionTrigger}.`
+      : "";
 
   if (args.language === "fr") {
     return trimWords(
-      `J'arbitre le conflit: ${dominant} prime, donc je differe ou refuse ${deferred}. Compromis accepte: ${tradeoff}. Prochain pas: ${move}.`,
-      58
+      `J'arbitre le conflit: ${dominant} prime, donc je differe ou refuse ${deferred}. Compromis accepte: ${tradeoff}. Prochain pas: ${move}. ${revision}`,
+      72
     );
   }
 
   return trimWords(
-    `I would arbitrate the conflict: ${dominant} dominates, so I defer or reject ${deferred}. Accepted tradeoff: ${tradeoff}. Next step: ${move}.`,
-    58
+    `I would arbitrate the conflict: ${dominant} dominates, so I defer or reject ${deferred}. Accepted tradeoff: ${tradeoff}. Next step: ${move}. ${revision}`,
+    72
   );
 }
 
@@ -1140,12 +1169,16 @@ function shouldApplyDecisionCommitmentPatch(quality: ConversationQualityGateResu
     "prompt_policy_leakage",
     "ignored_added_constraint",
     "ignored_context_change",
+    "active_constraint_contradicted",
     "unnecessary_abstention",
     "ignored_existing_decision",
     "repeated_previous_answer",
+    "current_user_message_echo",
     "missing_bounded_decision_under_pressure",
     "context_injection_not_rejected",
-    "stakeholder_conflict_not_resolved"
+    "stakeholder_conflict_not_resolved",
+    "missing_strategic_revision_condition",
+    "over_rigid_strategic_answer"
   ]);
   if (quality.issues.some((issue) => constraintEvidenceIssues.has(issue))) {
     return true;
@@ -1250,13 +1283,16 @@ function applyDecisionCommitmentPatch(args: {
       [
         "ignored_added_constraint",
         "ignored_context_change",
+        "active_constraint_contradicted",
         "missing_recommendation_when_requested",
           "generic_answer",
           "instruction_echo_final_request",
           "prompt_policy_leakage",
           "unnecessary_abstention",
         "ignored_existing_decision",
-        "strategic_conflict_not_resolved"
+        "strategic_conflict_not_resolved",
+        "missing_strategic_revision_condition",
+        "over_rigid_strategic_answer"
       ].includes(issue)
     )
   );
@@ -1289,11 +1325,15 @@ function applyDecisionCommitmentPatch(args: {
         [
           "generic_answer",
           "repeated_previous_answer",
+          "current_user_message_echo",
           "missing_recommendation_when_requested",
           "missing_bounded_decision_under_pressure",
           "context_injection_not_rejected",
           "stakeholder_conflict_not_resolved",
-          "strategic_conflict_not_resolved"
+          "strategic_conflict_not_resolved",
+          "active_constraint_contradicted",
+          "missing_strategic_revision_condition",
+          "over_rigid_strategic_answer"
         ].includes(issue)
       ) &&
         wordCount(answer) < 55)
@@ -1358,10 +1398,14 @@ function shouldRepairConversationQuality(args: {
     "wrong_language_expected_en",
     "missing_bounded_decision_under_pressure",
     "instruction_echo_final_request",
+    "current_user_message_echo",
     "prompt_policy_leakage",
     "context_injection_not_rejected",
     "stakeholder_conflict_not_resolved",
     "strategic_conflict_not_resolved",
+    "active_constraint_contradicted",
+    "missing_strategic_revision_condition",
+    "over_rigid_strategic_answer",
     "ignored_existing_decision"
   ]);
   if (args.quality.issues.some((issue) => severeIssues.has(issue))) {
@@ -1444,6 +1488,13 @@ function buildRuntimeConversationRepair(args: {
     domain: args.testCase.domain,
     currentUser: args.currentUser
   });
+  const revisionCondition =
+    args.answerPolicy.strategicCoherencePolicy.requiresRevisionCondition &&
+    args.answerPolicy.strategicCoherencePolicy.revisionTrigger
+      ? language === "fr"
+        ? `Condition de revision: ${args.answerPolicy.strategicCoherencePolicy.revisionTrigger}.`
+        : `Revision condition: ${args.answerPolicy.strategicCoherencePolicy.revisionTrigger}.`
+      : "";
 
   const answer =
     language === "fr"
@@ -1451,13 +1502,13 @@ function buildRuntimeConversationRepair(args: {
           prefix,
           `Sur ce tour, je vais ${move}; je ne repars pas de zero sur: ${currentTurn}.`,
           tail.tradeoff,
-          `Direction pratique: ${direction || `continuer avec ${constraints}`}. ${tail.nextStep} Risque a surveiller: ${contradictions}.`
+          `Direction pratique: ${direction || `continuer avec ${constraints}`}. ${tail.nextStep} ${revisionCondition} Risque a surveiller: ${contradictions}.`
         ].join(" ")
       : [
           prefix,
           `On this turn, I would ${move}; I am not restarting from: ${currentTurn}.`,
           tail.tradeoff,
-          `Practical direction: ${direction || `continue with ${constraints}`}. ${tail.nextStep} Risk to watch: ${contradictions}.`
+          `Practical direction: ${direction || `continue with ${constraints}`}. ${tail.nextStep} ${revisionCondition} Risk to watch: ${contradictions}.`
         ].join(" ");
   const boundedAnswer = trimWords(answer, 170);
   const output = {

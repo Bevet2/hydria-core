@@ -121,7 +121,7 @@ const studentAnswerJsonSchema = {
 const ABSTENTION_PATTERN =
   /\b(?:cannot|can't|could not)\s+(?:verify|confirm)\b|\bno reliable source\b/i;
 const FRENCH_QUESTION_PATTERN =
-  /\b(?:je|tu|vous|il|elle|nous|un|une|des|le|la|les|et|quel|quelle|quels|quelles|pourquoi|comment|explique|donne|peux|peut|est-ce|aujourd|meteo|temps|francais|cree|creer|ecris|redige|checklist)\b|[\u00e0\u00e2\u00e7\u00e9\u00e8\u00ea\u00eb\u00ee\u00ef\u00f4\u00f9\u00fb\u00fc\u00ff\u0153]/i;
+  /\b(?:je|tu|vous|il|elle|nous|un|une|des|le|la|les|et|qui|quoi|quel|quelle|quels|quelles|pourquoi|comment|explique|donne|peux|peut|est-ce|aujourd|meteo|temps|francais|cree|creer|ecris|redige|checklist)\b|[\u00e0\u00e2\u00e7\u00e9\u00e8\u00ea\u00eb\u00ee\u00ef\u00f4\u00f9\u00fb\u00fc\u00ff\u0153]/i;
 const FRENCH_ANSWER_PATTERN =
   /\b(?:je|tu|vous|il|elle|nous|un|une|des|le|la|les|ce|cet|cette|ces|pour|avec|dans|sur|est|sont|peut|peux|doit|voici|parce|question|ville|information|meteo)\b|[\u00e0\u00e2\u00e7\u00e9\u00e8\u00ea\u00eb\u00ee\u00ef\u00f4\u00f9\u00fb\u00fc\u00ff\u0153]/i;
 const ENGLISH_ANSWER_PATTERN =
@@ -696,7 +696,8 @@ function usesVerifiedSignals(answer: string, research: ResearchToolLog) {
 
 function buildTruthAnchoredFallback(
   currentAnswer: StudentAnswer,
-  research: ResearchToolLog | null
+  research: ResearchToolLog | null,
+  question = ""
 ): StudentAnswer | null {
   if (!research) {
     return null;
@@ -714,15 +715,26 @@ function buildTruthAnchoredFallback(
   const deterministicToolResult =
     research.toolRouting.toolResultUsed &&
     ["weather", "finance", "calculator", "time", "web"].includes(research.toolRouting.toolType);
+  const identityLookupResearch = isIdentityLookupResearch(research);
+  const definitionResearch = research.queryPlan.intent === "definition";
   const currentText = normalizeText(currentAnswer.answer);
   const alreadyGrounded =
     !ABSTENTION_PATTERN.test(currentText) && usesVerifiedSignals(currentAnswer.answer, research);
-  if (alreadyGrounded && !deterministicToolResult) {
+  if (alreadyGrounded && !deterministicToolResult && !identityLookupResearch && !definitionResearch) {
     return null;
   }
 
   const anchor = buildResearchAnchor(research);
-  const verifiedFacts = research.truth.verified_facts.slice(0, 3);
+  const language = expectsFrenchAnswer(question) ? "fr" : researchLanguage(research);
+  const candidateFacts = (definitionResearch
+    ? selectDefinitionFactsForLanguage(research, language)
+    : selectVerifiedFactsForLanguage(research.truth.verified_facts, language)
+  )
+    .map(cleanVerifiedFactForAnswer)
+    .map((fact) => (definitionResearch ? simplifyDefinitionFact(fact) : fact))
+    .filter(Boolean);
+  const verifiedFacts = (definitionResearch ? uniqueDefinitionFacts(candidateFacts) : candidateFacts)
+    .slice(0, identityLookupResearch ? 2 : 3);
   const verificationDate =
     research.verification.mostRecentSourceDate ??
     research.sources[0]?.effectiveDate ??
@@ -730,7 +742,7 @@ function buildTruthAnchoredFallback(
     null;
   const verificationAnchor = verificationDate ? verificationDate.slice(0, 10) : anchor;
   const verificationNote = anchor
-    ? researchLanguage(research) === "fr"
+    ? language === "fr"
       ? ` Verifie le ${verificationAnchor}.`
       : ` Verified for ${anchor}.`
     : "";
@@ -746,6 +758,142 @@ function buildTruthAnchoredFallback(
       Math.max(0, Math.min(100, Math.round(research.truth.confidence_score * 100)))
     )
   });
+}
+
+function isIdentityLookupResearch(research: ResearchToolLog) {
+  return (
+    research.queryPlan.intent === "fact_check" &&
+    /\b(?:identity lookup|biography encyclopedia|historical reference)\b/i.test(
+      `${research.decision.reasoning} ${research.queryPlan.queries.join(" ")}`
+    )
+  );
+}
+
+function selectVerifiedFactsForLanguage(facts: string[], language: "fr" | "en") {
+  if (language !== "fr") {
+    return facts;
+  }
+
+  const frenchFacts = facts.filter((fact) => hasLikelyFrenchText(fact));
+  return frenchFacts.length > 0 ? frenchFacts : facts;
+}
+
+function selectDefinitionFactsForLanguage(research: ResearchToolLog, language: "fr" | "en") {
+  const candidates = [
+    ...research.sources.map((source) => source.excerpt),
+    ...research.summary,
+    ...research.truth.verified_facts
+  ];
+  const definitionLike = candidates
+    .map(cleanVerifiedFactForAnswer)
+    .filter((fact) => {
+      const normalized = normalizeText(fact);
+      return (
+        /\b(?:is|process|by which|convert|transform|definition|system)\b/.test(normalized) ||
+        /\b(?:est|processus|permet|convertit|trans forme|transforme|definition|definit)\b/.test(normalized)
+      );
+    })
+    .sort((left, right) => definitionFactScore(right, language) - definitionFactScore(left, language));
+
+  const languagePreferred =
+    language === "fr"
+      ? definitionLike.filter((fact) => hasLikelyFrenchText(fact))
+      : definitionLike.filter((fact) => hasLikelyEnglishText(fact));
+  const selected = (languagePreferred.length > 0 ? languagePreferred : definitionLike).slice(0, 3);
+  return selected.length > 0 ? selected : selectVerifiedFactsForLanguage(research.truth.verified_facts, language);
+}
+
+function definitionFactScore(fact: string, language: "fr" | "en") {
+  const normalized = normalizeText(fact);
+  let score = 0;
+  if (language === "fr" ? hasLikelyFrenchText(fact) : hasLikelyEnglishText(fact)) {
+    score += 20;
+  }
+  if (/\b(?:process|processus|by which|par lequel|convert|transform|transforme|lumiere|light|energy|energie|chemical|chimique)\b/.test(normalized)) {
+    score += 30;
+  }
+  if (/\b(?:plants?|plantes?|algae|algues|cyanobacteria|cyanobacteries|carbon dioxide|dioxyde|co2|glucose|sucres?|sugars?)\b/.test(normalized)) {
+    score += 20;
+  }
+  if (/\b(?:rubp|milliards|evolution|apparus|apparue|endosymbiose|ga)\b/.test(normalized)) {
+    score -= 25;
+  }
+  return score;
+}
+
+function simplifyDefinitionFact(fact: string) {
+  const sentences = fact
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length >= 24);
+  const preferred =
+    sentences.find((sentence) => /\b(?:est|is)\b/i.test(sentence)) ??
+    sentences.find((sentence) =>
+      /\b(?:processus|process|permet|by which|convert|transform|transforme)\b/i.test(sentence)
+    ) ??
+    sentences[0] ??
+    fact;
+
+  const cleaned = preferred
+    .replace(/^[a-z0-9 ._-]+:\s*\d{4}-\d{2}-\d{2}:\s*/i, "")
+    .replace(/^[\p{L}\p{N} ._-]{3,80}\.\s+(?=(?:\p{Lu}|processus|definition|biological))/u, "")
+    .trim();
+  if (!cleaned) {
+    return "";
+  }
+  return /[.!?]$/.test(cleaned) ? cleaned : `${cleaned}.`;
+}
+
+function uniqueDefinitionFacts(facts: string[]) {
+  const output: string[] = [];
+  const seen = new Set<string>();
+  for (const fact of facts) {
+    if (!isUsefulDefinitionFact(fact)) {
+      continue;
+    }
+    const normalized = normalizeText(fact).replace(/[^a-z0-9]+/g, " ").trim();
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    if (output.some((existing) => {
+      const normalizedExisting = normalizeText(existing).replace(/[^a-z0-9]+/g, " ").trim();
+      return normalizedExisting.includes(normalized) || normalized.includes(normalizedExisting);
+    })) {
+      continue;
+    }
+    seen.add(normalized);
+    output.push(fact);
+  }
+  return output.length > 0 ? output : facts;
+}
+
+function isUsefulDefinitionFact(fact: string) {
+  const normalized = normalizeText(fact);
+  if (/^[a-z]/.test(fact.trim()) && !/\b(?:est|is|permet|convert|transform|transforme|utilise|uses)\b/.test(normalized)) {
+    return false;
+  }
+  if (/\b(?:milliards|evolution|apparus|apparue|endosymbiose|ga)\b/.test(normalized)) {
+    return false;
+  }
+  return true;
+}
+
+function cleanVerifiedFactForAnswer(fact: string) {
+  let cleaned = fact
+    .replace(/\[[^\]]+\]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  cleaned = cleaned
+    .replace(/^.{0,180}\b(?:Wikipedia|Wikipédia|Britannica|encyclopedia|Encyclopedia)\b\s*/i, "")
+    .replace(/^[a-z0-9 ._-]{2,80}\s+reference\s+/i, "")
+    .replace(/^[a-z][a-z0-9 ._-]{1,80}\s+(?=[A-ZÀ-Ü])/u, "")
+    .replace(/^Pour les articles homonymes, voir [^.]+\.?\s*/i, "")
+    .replace(/\.\.+/g, ".")
+    .replace(/\s+\./g, ".")
+    .trim();
+
+  return cleaned || fact;
 }
 
 function researchLanguage(research: ResearchToolLog) {
@@ -895,7 +1043,7 @@ function applyResearchGuardrails(
     buildNoResearchCurrentDataFallback(args) ??
     buildMissingInputClarification(args.currentAnswer, args.research) ??
     buildNoReliableSourceFallback(args.currentAnswer, args.research) ??
-    buildTruthAnchoredFallback(args.currentAnswer, args.research) ??
+    buildTruthAnchoredFallback(args.currentAnswer, args.research, args.question) ??
     args.currentAnswer
   );
 }

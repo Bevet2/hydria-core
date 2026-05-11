@@ -113,6 +113,13 @@ export class ResearchExtractor {
       return null;
     }
 
+    if (contentType.includes("application/json")) {
+      const jsonExtract = this.tryExtractJsonDocument(fetched.body);
+      if (jsonExtract) {
+        return jsonExtract;
+      }
+    }
+
     if (this.isFeedLikeDocument(fetched.contentType, fetched.body)) {
       return this.tryExtractFeedDocument(result, fetched.body, plan);
     }
@@ -159,6 +166,35 @@ export class ResearchExtractor {
       excerpt,
       ...metadata
     };
+  }
+
+  private tryExtractJsonDocument(body: string): ExtractedPage | null {
+    try {
+      const payload = JSON.parse(body) as {
+        extract?: unknown;
+        description?: unknown;
+        title?: unknown;
+        timestamp?: unknown;
+      };
+      const excerpt = normalizeSpace(
+        [payload.title, payload.description, payload.extract]
+          .filter((value) => typeof value === "string" && value.trim().length > 0)
+          .join(". ")
+      );
+      if (!excerpt || this.isRejectedExtraction(excerpt)) {
+        return null;
+      }
+      const timestamp = typeof payload.timestamp === "string" ? payload.timestamp : null;
+      return {
+        excerpt,
+        publishedAt: null,
+        modifiedAt: timestamp,
+        effectiveDate: timestamp,
+        dateSource: timestamp ? "jsonld" : "unknown"
+      };
+    } catch {
+      return null;
+    }
   }
 
   private tryExtractFeedDocument(

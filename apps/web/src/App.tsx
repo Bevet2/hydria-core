@@ -1,4 +1,5 @@
 import { BenchmarkPage } from "./components/BenchmarkPage";
+import { ChatPage } from "./components/ChatPage";
 import { CorePlayground } from "./components/CorePlayground";
 import { StudentPage } from "./components/StudentPage";
 
@@ -15,6 +16,10 @@ export default function App() {
 
   if (pathname === "/student") {
     return <StudentPage />;
+  }
+
+  if (pathname === "/chat") {
+    return <ChatPage />;
   }
 
   return <CorePlayground />;

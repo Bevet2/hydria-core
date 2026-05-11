@@ -1,5 +1,5 @@
 type AppNavProps = {
-  current: "playground" | "benchmark" | "tool-benchmark" | "student";
+  current: "playground" | "benchmark" | "tool-benchmark" | "student" | "chat";
 };
 
 export function AppNav({ current }: AppNavProps) {
@@ -28,6 +28,12 @@ export function AppNav({ current }: AppNavProps) {
         className={`app-nav__link ${current === "student" ? "app-nav__link--active" : ""}`}
       >
         Student Lab
+      </a>
+      <a
+        href="/chat"
+        className={`app-nav__link ${current === "chat" ? "app-nav__link--active" : ""}`}
+      >
+        Chat
       </a>
     </nav>
   );

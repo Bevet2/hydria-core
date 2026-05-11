@@ -13,6 +13,10 @@ import {
   resolveStrategicConstraintConflict,
   type StrategicTradeoffPolicy
 } from "./constraintConflictResolver.js";
+import {
+  buildStrategicCoherencePolicy,
+  type StrategicCoherencePolicy
+} from "./strategicCoherencePolicy.js";
 
 export type MultiTurnAnswerMode = "clarify" | "revise" | "recommend" | "continue" | "abstain";
 
@@ -37,6 +41,7 @@ export type MultiTurnAnswerPolicyResult = {
   clarification: ClarificationPolicyResult;
   activeConstraintCapsule: ActiveConstraintCapsule;
   strategicTradeoffPolicy: StrategicTradeoffPolicy;
+  strategicCoherencePolicy: StrategicCoherencePolicy;
 };
 
 const CHANGE_PATTERN =
@@ -95,7 +100,11 @@ function canTreatToolBlockerAsConversationRecall(input: MultiTurnAnswerPolicyInp
   );
 }
 
-function buildRequiredContextItems(capsule: ActiveConstraintCapsule, strategicTradeoffPolicy: StrategicTradeoffPolicy) {
+function buildRequiredContextItems(
+  capsule: ActiveConstraintCapsule,
+  strategicTradeoffPolicy: StrategicTradeoffPolicy,
+  strategicCoherencePolicy: StrategicCoherencePolicy
+) {
   return [
     capsule.userGoal ? `goal: ${capsule.userGoal}` : "",
     ...capsule.topConstraints.map((item) => `active constraint: ${item}`),
@@ -112,11 +121,21 @@ function buildRequiredContextItems(capsule: ActiveConstraintCapsule, strategicTr
       : "",
     strategicTradeoffPolicy.hasConflict && strategicTradeoffPolicy.acceptedTradeoff
       ? `accepted tradeoff: ${strategicTradeoffPolicy.acceptedTradeoff}`
+      : "",
+    strategicCoherencePolicy.revisionTrigger
+      ? `revision condition: ${strategicCoherencePolicy.revisionTrigger}`
+      : "",
+    strategicCoherencePolicy.flexibilityGuardrail
+      ? `flexibility guardrail: ${strategicCoherencePolicy.flexibilityGuardrail}`
       : ""
   ].filter(Boolean);
 }
 
-function buildForbiddenBehaviors(mode: MultiTurnAnswerMode, strategicTradeoffPolicy: StrategicTradeoffPolicy) {
+function buildForbiddenBehaviors(
+  mode: MultiTurnAnswerMode,
+  strategicTradeoffPolicy: StrategicTradeoffPolicy,
+  strategicCoherencePolicy: StrategicCoherencePolicy
+) {
   return [
     "do not restart from scratch",
     "do not ignore added constraints",
@@ -127,7 +146,10 @@ function buildForbiddenBehaviors(mode: MultiTurnAnswerMode, strategicTradeoffPol
     mode === "recommend" ? "do not hedge forever; make a recommendation" : "",
     mode === "revise" ? "do not hide the context update" : "",
     strategicTradeoffPolicy.hasConflict ? "do not present conflicting options as equivalent" : "",
-    strategicTradeoffPolicy.hasConflict ? "do not omit which constraint dominates" : ""
+    strategicTradeoffPolicy.hasConflict ? "do not omit which constraint dominates" : "",
+    strategicCoherencePolicy.requiresRevisionCondition
+      ? "do not make a strategic choice sound permanent; include the revision condition"
+      : ""
   ].filter(Boolean);
 }
 
@@ -146,6 +168,12 @@ function buildGuidance(args: {
     capsule,
     currentUserMessage: args.input.newUserMessage,
     category: args.input.category
+  });
+  const strategicCoherencePolicy = buildStrategicCoherencePolicy({
+    capsule,
+    currentUserMessage: args.input.newUserMessage,
+    category: args.input.category,
+    strategicTradeoffPolicy
   });
   const language = state.language === "fr" ? "fr" : "en";
   const activeAnchors = compactPolicyList(
@@ -184,6 +212,12 @@ function buildGuidance(args: {
         : "",
       strategicTradeoffPolicy.hasConflict
         ? "Arbitre explicitement: contrainte dominante, contrainte differee ou refusee, compromis accepte, prochain pas."
+        : "",
+      strategicCoherencePolicy.hasStrategicCoherenceRequirement
+        ? `StrategicCoherencePatch: ${strategicCoherencePolicy.guidance}`
+        : "",
+      strategicCoherencePolicy.requiresRevisionCondition && strategicCoherencePolicy.revisionTrigger
+        ? `Condition de revision obligatoire: ${strategicCoherencePolicy.revisionTrigger}.`
         : "",
       "Utilise explicitement les valeurs de topConstraints et blockingConstraints quand elles existent; ne les mentionne pas seulement, relie-les a la decision.",
       "ContextRecallBudget: rappelle naturellement au plus trois elements avant de recommander: une contrainte forte, un detail recent, et une decision ou hypothese active. Ne liste pas ces labels.",
@@ -231,6 +265,12 @@ function buildGuidance(args: {
     strategicTradeoffPolicy.hasConflict
       ? "Arbitrate explicitly: dominant constraint, deferred or rejected constraint, accepted tradeoff, next step."
       : "",
+    strategicCoherencePolicy.hasStrategicCoherenceRequirement
+      ? `StrategicCoherencePatch: ${strategicCoherencePolicy.guidance}`
+      : "",
+    strategicCoherencePolicy.requiresRevisionCondition && strategicCoherencePolicy.revisionTrigger
+      ? `Required revision condition: ${strategicCoherencePolicy.revisionTrigger}.`
+      : "",
     "Explicitly use the values in topConstraints and blockingConstraints when present; do not merely mention them, connect them to the decision.",
     "ContextRecallBudget: naturally recall at most three elements before recommending: one strong constraint, one recent detail, and one active decision or hypothesis. Do not list those labels.",
     "If recommendedDirection is present, use it as the starting point but do not copy it verbatim; turn it into a concrete domain-specific decision.",
@@ -269,6 +309,12 @@ export function decideMultiTurnAnswerPolicy(
     currentUserMessage: input.newUserMessage,
     category: input.category
   });
+  const strategicCoherencePolicy = buildStrategicCoherencePolicy({
+    capsule: activeConstraintCapsule,
+    currentUserMessage: input.newUserMessage,
+    category: input.category,
+    strategicTradeoffPolicy
+  });
   const shouldReviseAssumptions = hasChangedContext(input);
   const shouldMakeRecommendation =
     strategicTradeoffPolicy.hasConflict ||
@@ -302,12 +348,17 @@ export function decideMultiTurnAnswerPolicy(
     shouldReviseAssumptions,
     shouldMakeRecommendation: answerMode === "recommend",
     answerMode,
-    requiredContextItems: buildRequiredContextItems(activeConstraintCapsule, strategicTradeoffPolicy),
-    forbiddenBehaviors: buildForbiddenBehaviors(answerMode, strategicTradeoffPolicy),
+    requiredContextItems: buildRequiredContextItems(
+      activeConstraintCapsule,
+      strategicTradeoffPolicy,
+      strategicCoherencePolicy
+    ),
+    forbiddenBehaviors: buildForbiddenBehaviors(answerMode, strategicTradeoffPolicy, strategicCoherencePolicy),
     guidance: "",
     clarification,
     activeConstraintCapsule,
-    strategicTradeoffPolicy
+    strategicTradeoffPolicy,
+    strategicCoherencePolicy
   } satisfies MultiTurnAnswerPolicyResult;
 
   return {

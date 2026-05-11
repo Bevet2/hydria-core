@@ -4,6 +4,10 @@ import {
   STRATEGIC_CONSTRAINT_CONFLICT_EVAL_PACK,
   STRATEGIC_CONSTRAINT_CONFLICT_GATE_ID
 } from "../data/strategicConstraintConflictEvalPack.js";
+import {
+  STRATEGIC_COHERENCE_FINE_EVAL_PACK,
+  STRATEGIC_COHERENCE_FINE_GATE_ID
+} from "../data/strategicCoherenceFineEvalPack.js";
 import { analyzeConversationQuality } from "../services/context/conversationQualityGate.js";
 import {
   buildActiveConstraintCapsule,
@@ -47,6 +51,25 @@ test("strategic constraint conflict pack is balanced across domains and language
     assert.ok(item.keyChallenges.includes("accepted_tradeoff"));
     assert.equal(item.shouldAdaptContext, true);
     assert.equal(item.shouldReviseAssumptions, true);
+    assert.equal(item.shouldAskClarification, false);
+  }
+});
+
+test("strategic coherence fine pack targets revision conditions and false equivalence", () => {
+  assert.equal(STRATEGIC_COHERENCE_FINE_GATE_ID, "hydria-strategic-coherence-fine-gate-v1");
+  assert.equal(STRATEGIC_COHERENCE_FINE_EVAL_PACK.length, 20);
+
+  const ids = new Set(STRATEGIC_COHERENCE_FINE_EVAL_PACK.map((item) => item.id));
+  assert.equal(ids.size, STRATEGIC_COHERENCE_FINE_EVAL_PACK.length);
+
+  const languages = new Set(STRATEGIC_COHERENCE_FINE_EVAL_PACK.map((item) => item.language));
+  assert.deepEqual([...languages].sort(), ["en", "fr"]);
+
+  for (const item of STRATEGIC_COHERENCE_FINE_EVAL_PACK) {
+    assert.equal(item.difficulty, "adversarial");
+    assert.ok(item.keyChallenges.includes("fine_strategic_coherence"));
+    assert.ok(item.keyChallenges.includes("revision_condition_required"));
+    assert.ok(item.keyChallenges.includes("false_equivalence_rejection"));
     assert.equal(item.shouldAskClarification, false);
   }
 });
@@ -144,7 +167,15 @@ test("multi-turn answer policy exposes strategic tradeoff guidance", () => {
   assert.equal(policy.strategicTradeoffPolicy.hasConflict, true);
   assert.match(policy.guidance, /StrategicTradeoffPatch/);
   assert.ok(policy.requiredContextItems.some((item) => /dominant constraint/i.test(item)));
+  assert.ok(policy.requiredContextItems.some((item) => /revision condition/i.test(item)));
   assert.ok(policy.forbiddenBehaviors.includes("do not omit which constraint dominates"));
+  assert.ok(
+    policy.forbiddenBehaviors.includes(
+      "do not make a strategic choice sound permanent; include the revision condition"
+    )
+  );
+  assert.equal(policy.strategicCoherencePolicy.requiresRevisionCondition, true);
+  assert.match(policy.strategicCoherencePolicy.revisionTrigger ?? "", /signal|budget|funded|load|capacity|team/i);
 });
 
 test("multi-turn answer policy does not abstain on context-setting turns with a false tool blocker", () => {
@@ -203,6 +234,61 @@ test("conversation quality gate rejects unresolved strategic conflict", () => {
   assert.equal(result.recommendedAction, "revise");
 });
 
+test("conversation quality gate rejects recommendation that contradicts active environment constraint", () => {
+  const state = stateFromMessages([
+    "Bonjour, on doit choisir entre AWS et on-prem.",
+    "Finalement contrainte on-prem stricte."
+  ]);
+  const currentUserMessage = "Tu recommandes quoi ?";
+  const capsule = buildActiveConstraintCapsule(state, currentUserMessage);
+  const policy = decideMultiTurnAnswerPolicy({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    newUserMessage: currentUserMessage,
+    category: "architecture_design",
+    toolRouting: null
+  });
+  const result = analyzeConversationQuality({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    policy,
+    newUserMessage: currentUserMessage,
+    answer:
+      "Je recommande AWS. Cette decision est basee sur la contrainte environment: on-prem, mais le cloud reste preferable.",
+    toolRouting: null
+  });
+
+  assert.ok(result.issues.includes("active_constraint_contradicted"));
+  assert.equal(result.recommendedAction, "revise");
+});
+
+test("conversation quality gate rejects current user message echo", () => {
+  const state = stateFromMessages([
+    "Bonjour, on doit choisir entre AWS et on-prem.",
+    "Finalement contrainte on-prem stricte."
+  ]);
+  const currentUserMessage = "Tu recommandes quoi ?";
+  const capsule = buildActiveConstraintCapsule(state, currentUserMessage);
+  const policy = decideMultiTurnAnswerPolicy({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    newUserMessage: currentUserMessage,
+    category: "architecture_design",
+    toolRouting: null
+  });
+  const result = analyzeConversationQuality({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    policy,
+    newUserMessage: currentUserMessage,
+    answer: currentUserMessage,
+    toolRouting: null
+  });
+
+  assert.ok(result.issues.includes("current_user_message_echo"));
+  assert.equal(result.recommendedAction, "revise");
+});
+
 test("conversation quality gate accepts explicit strategic arbitration", () => {
   const state = stateFromMessages([
     "I am taking over a billing platform.",
@@ -228,4 +314,91 @@ test("conversation quality gate accepts explicit strategic arbitration", () => {
   });
 
   assert.equal(result.issues.includes("strategic_conflict_not_resolved"), false);
+});
+
+test("conversation quality gate rejects strategic arbitration without revision condition", () => {
+  const state = stateFromMessages([
+    "New constraint: budget capped at 500 euros per month and team reduced.",
+    "Correction: expected scale is now 10M users.",
+    "A sponsor still asks for a broad horizontal platform."
+  ]);
+  const currentUserMessage = "Recommend a direction: dominant constraint, deferred option, tradeoff, next test.";
+  const capsule = buildActiveConstraintCapsule(state, currentUserMessage);
+  const policy = decideMultiTurnAnswerPolicy({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    newUserMessage: currentUserMessage,
+    category: "product_strategy",
+    toolRouting: null
+  });
+  const result = analyzeConversationQuality({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    policy,
+    newUserMessage: currentUserMessage,
+    answer:
+      "I recommend the frugal slice because budget capped at 500 euros dominates the broad platform request. Reject broad horizontal expansion; the accepted tradeoff is proving value with the current team before widening scope.",
+    toolRouting: null
+  });
+
+  assert.equal(policy.strategicCoherencePolicy.requiresRevisionCondition, true);
+  assert.ok(result.issues.includes("missing_strategic_revision_condition"));
+  assert.equal(result.recommendedAction, "revise");
+});
+
+test("conversation quality gate rejects over-rigid strategic answer", () => {
+  const state = stateFromMessages([
+    "New constraint: budget capped at 500 euros per month and team reduced.",
+    "Correction: expected scale is now 10M users.",
+    "A sponsor still asks for a broad horizontal platform."
+  ]);
+  const currentUserMessage = "Recommend a direction: dominant constraint, deferred option, tradeoff, next test.";
+  const capsule = buildActiveConstraintCapsule(state, currentUserMessage);
+  const policy = decideMultiTurnAnswerPolicy({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    newUserMessage: currentUserMessage,
+    category: "product_strategy",
+    toolRouting: null
+  });
+  const result = analyzeConversationQuality({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    policy,
+    newUserMessage: currentUserMessage,
+    answer:
+      "I will never change this direction: budget capped at 500 euros dominates, so reject the broad horizontal platform. The accepted tradeoff is a smaller reversible slice with the reduced team.",
+    toolRouting: null
+  });
+
+  assert.ok(result.issues.includes("over_rigid_strategic_answer"));
+});
+
+test("conversation quality gate accepts firm default with revision condition", () => {
+  const state = stateFromMessages([
+    "New constraint: budget capped at 500 euros per month and team reduced.",
+    "Correction: expected scale is now 10M users.",
+    "A sponsor still asks for a broad horizontal platform."
+  ]);
+  const currentUserMessage = "Recommend a direction: dominant constraint, deferred option, tradeoff, next test.";
+  const capsule = buildActiveConstraintCapsule(state, currentUserMessage);
+  const policy = decideMultiTurnAnswerPolicy({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    newUserMessage: currentUserMessage,
+    category: "product_strategy",
+    toolRouting: null
+  });
+  const result = analyzeConversationQuality({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    policy,
+    newUserMessage: currentUserMessage,
+    answer:
+      "I recommend the frugal slice because budget capped at 500 euros dominates the broad horizontal platform request. Defer platform expansion; the accepted tradeoff is proving value with the reduced team. Revise only if the signal proves value and recurring budget is funded.",
+    toolRouting: null
+  });
+
+  assert.equal(result.issues.includes("missing_strategic_revision_condition"), false);
+  assert.equal(result.issues.includes("over_rigid_strategic_answer"), false);
 });

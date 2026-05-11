@@ -39,6 +39,13 @@ type StoredStudentPreview = {
   storedAtMs: number;
 };
 
+export type StudentAnswerOnlyOptions = {
+  routingQuestion?: string;
+  researchQuestion?: string;
+  knowledgeMode?: "auto" | "skip";
+  researchMode?: "auto" | "skip";
+};
+
 const STUDENT_PREVIEW_TTL_MS = 30 * 60 * 1000;
 const MAX_STORED_STUDENT_PREVIEWS = 200;
 
@@ -107,8 +114,11 @@ export class StudentService {
     return this.studentSessionStore.getSession(sessionId);
   }
 
-  async answerOnly(question: string): Promise<StudentAnswerPreview> {
-    const prepared = await this.preparationService.preparePreview(question);
+  async answerOnly(
+    question: string,
+    options: StudentAnswerOnlyOptions = {}
+  ): Promise<StudentAnswerPreview> {
+    const prepared = await this.preparationService.preparePreview(question, options);
     const previewId = randomUUID();
     const memory = this.hydriaCoreMemoryService.buildStudentSnapshot({
       question,

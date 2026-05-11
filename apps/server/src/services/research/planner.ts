@@ -93,6 +93,8 @@ export class ResearchPlanner {
       signalTerms[0] ?? literalTokens[0] ?? questionTerms[0] ?? baseQuestion
     );
     const factFocusQuery = factFocusTerms.map((term) => formatQueryTerm(term)).join(" ");
+    const identityLookup = this.isIdentityLookup(args.question);
+    const identitySubject = identityLookup ? this.buildIdentitySubject(args.question) : null;
 
     const withDomains = (query: string, focusSuffix: string) =>
       preferredDomains.length > 0
@@ -160,6 +162,35 @@ export class ResearchPlanner {
         entityTerms,
         temporalProfile,
         reasoning: `Temporal research requires a freshness-aware retrieval path for ${temporalProfile.queryType.replaceAll("_", " ")}. Anchor verification to ${describeTemporalWindow(temporalProfile) ?? temporalProfile.absoluteDateHint ?? "the current date"} and prefer dated primary sources. ${toolReasoning} ${strategyReasoning} ${orchestrationReasoning}`.trim()
+      };
+    }
+
+    if (identityLookup && identitySubject) {
+      const identityTerms = uniqueStrings([
+        ...extractTerms(identitySubject),
+        ...extractFocusTerms(identitySubject)
+      ]).slice(0, 6);
+      const identityQueries = this.isLikelyFrenchQuestion(args.question)
+        ? [
+            `${identitySubject} biographie encyclopedie`,
+            `${identitySubject} site:fr.wikipedia.org`,
+            `${identitySubject} biography encyclopedia`
+          ]
+        : [
+            `${identitySubject} biography encyclopedia`,
+            `${identitySubject} historical reference`,
+            identitySubject
+          ];
+      return {
+        intent: "fact_check",
+        mode: orchestrationMode,
+        queries: uniqueStrings(identityQueries).slice(0, 3),
+        requiredTerms: uniqueStrings([...identityTerms, ...requiredTerms]).slice(0, 8),
+        preferredDomains,
+        factFocusTerms: uniqueStrings([...identityTerms, ...factFocusTerms]).slice(0, 5),
+        entityTerms: uniqueStrings([...identityTerms, ...entityTerms]).slice(0, 8),
+        temporalProfile,
+        reasoning: `Identity lookup research should verify the subject before answering. ${toolReasoning} ${strategyReasoning} ${orchestrationReasoning}`.trim()
       };
     }
 
@@ -803,6 +834,55 @@ export class ResearchPlanner {
       ...args.factFocusTerms.flatMap((term) => extractFocusTerms(term)),
       ...extractFocusTerms(args.question)
     ]).slice(0, 8);
+  }
+
+  private isIdentityLookup(question: string) {
+    if (/\b(?:biography of|biography|biographie(?:\s+(?:de|d['’]))?|life of|vie de|parcours de|career of)\b/i.test(question)) {
+      return true;
+    }
+    return /\b(?:who is|who was|who are|qui est|qui etait|qui était|qui sont)\b/i.test(question);
+  }
+
+  private isLikelyFrenchQuestion(question: string) {
+    return /\b(?:qui|quoi|quel|quelle|quels|quelles|pourquoi|comment|est-ce|tu|vous|je|nous)\b|[\u00e0\u00e2\u00e7\u00e9\u00e8\u00ea\u00eb\u00ee\u00ef\u00f4\u00f9\u00fb\u00fc\u00ff\u0153]/i.test(
+      question
+    );
+  }
+
+  private buildIdentitySubject(question: string) {
+    const stripped = normalizeSpace(
+      question
+        .replace(/\b(?:biography of|biography|biographie(?:\s+(?:de|d['’]))?|life of|vie de|parcours de|career of)\b/gi, " ")
+        .replace(/[?]/g, " ")
+        .replace(/\b(?:who is|who was|who are|qui est|qui etait|qui était|qui sont)\b/gi, " ")
+        .replace(/\b(?:please|svp|s'il te plait|s'il vous plait|explique|explain|raconte|tell me about)\b/gi, " ")
+        .replace(/\b(?:donne moi|donne-moi|give me|details?|en dire plus|dire plus|more about|sa|son|ses|his|her|their|its)\b/gi, " ")
+    );
+    const normalizedOrdinal = this.normalizeTrailingOrdinalNumber(stripped);
+    return normalizedOrdinal.length >= 2 ? normalizedOrdinal : null;
+  }
+
+  private normalizeTrailingOrdinalNumber(value: string) {
+    return value.replace(/\b([1-9]|[12][0-9]|30)\b$/i, (match) => this.toRomanNumeral(Number(match)));
+  }
+
+  private toRomanNumeral(value: number) {
+    const numerals: Array<[number, string]> = [
+      [10, "x"],
+      [9, "ix"],
+      [5, "v"],
+      [4, "iv"],
+      [1, "i"]
+    ];
+    let remaining = value;
+    let output = "";
+    for (const [amount, symbol] of numerals) {
+      while (remaining >= amount) {
+        output += symbol;
+        remaining -= amount;
+      }
+    }
+    return output;
   }
 
   private extractCurrentStatusRoleTerms(question: string) {

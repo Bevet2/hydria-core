@@ -82,3 +82,39 @@ test("known endpoint service surfaces OpenAI governance pages for current CEO qu
     candidates.some((candidate) => candidate.url === "https://openai.com/our-structure/")
   );
 });
+
+test("known endpoint service seeds canonical Wikipedia pages for identity lookups", () => {
+  const service = new ResearchKnownEndpointService();
+  const candidates = service.getCandidates({
+    intent: "fact_check",
+    mode: "fact_check_only",
+    queries: ["louis ix biographie encyclopedie"],
+    requiredTerms: ["louis"],
+    preferredDomains: [],
+    factFocusTerms: ["louis"],
+    entityTerms: ["louis"],
+    temporalProfile: buildDefaultTemporalProfile(),
+    reasoning: "Identity lookup research should verify the subject before answering."
+  });
+
+  assert.ok(candidates.some((candidate) => candidate.url === "https://fr.wikipedia.org/wiki/Louis_IX"));
+});
+
+test("known endpoint service seeds encyclopedia pages for stable definitions", () => {
+  const service = new ResearchKnownEndpointService();
+  const candidates = service.getCandidates({
+    intent: "definition",
+    mode: "fact_check_only",
+    queries: ["photosynthese official documentation reference"],
+    requiredTerms: ["photosynthese"],
+    preferredDomains: [],
+    factFocusTerms: ["photosynthese"],
+    entityTerms: ["photosynthese"],
+    temporalProfile: buildDefaultTemporalProfile(),
+    reasoning: "Definition research should verify the subject before answering."
+  });
+
+  assert.ok(
+    candidates.some((candidate) => candidate.url === "https://fr.wikipedia.org/wiki/Photosynthese")
+  );
+});

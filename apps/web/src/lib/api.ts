@@ -7,6 +7,8 @@ import type {
   BenchmarkRun,
   BenchmarkRunListItem,
   BenchmarkSummaryResponse,
+  ChatMessageResponse,
+  ChatResetResponse,
   LocalModelHealth,
   LocalModelTestResponse,
   PersistenceHealthReport,
@@ -78,6 +80,23 @@ export async function testLocalModel(prompt: string) {
   return request<LocalModelTestResponse>("/api/local-model/test", {
     method: "POST",
     body: JSON.stringify({ prompt })
+  });
+}
+
+export async function sendChatMessage(message: string, sessionId?: string) {
+  return request<ChatMessageResponse>("/api/chat/message", {
+    method: "POST",
+    body: JSON.stringify({
+      message,
+      ...(sessionId ? { sessionId } : {})
+    })
+  });
+}
+
+export async function resetChatSession(sessionId: string) {
+  return request<ChatResetResponse>("/api/chat/reset", {
+    method: "POST",
+    body: JSON.stringify({ sessionId })
   });
 }
 

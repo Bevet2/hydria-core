@@ -69,7 +69,8 @@ export class ResearchAcquisitionService {
   }
 
   async collect(plan: SearchPlan): Promise<ResearchAcquisitionResult> {
-    const cachedSources = this.sourceCacheEnabled
+    const cacheAllowed = this.sourceCacheEnabled && !this.isIdentityLookupPlan(plan);
+    const cachedSources = cacheAllowed
       ? await this.sourceCacheService.getFreshSources(plan, 3)
       : [];
     const cachedUrls = new Set(cachedSources.map((source) => source.url));
@@ -86,7 +87,7 @@ export class ResearchAcquisitionService {
     );
     const sources = this.mergeSources([...cachedSources, ...extractedSources]);
 
-    if (this.sourceCacheEnabled) {
+    if (cacheAllowed) {
       await this.sourceCacheService.rememberSources(plan, extractedSources);
     }
 
@@ -97,6 +98,15 @@ export class ResearchAcquisitionService {
       extractedSources,
       sources
     };
+  }
+
+  private isIdentityLookupPlan(plan: SearchPlan) {
+    return (
+      plan.intent === "fact_check" &&
+      /\b(?:identity lookup|biography encyclopedia|historical reference)\b/i.test(
+        `${plan.reasoning} ${plan.queries.join(" ")}`
+      )
+    );
   }
 
   private prioritizeExtractionCandidates(

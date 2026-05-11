@@ -94,14 +94,46 @@ export class ResearchDecisionPolicyService {
     const combinedText = `${args.question} ${args.respondentA.answer} ${args.respondentB.answer} ${args.redTeam.potentially_false_claims.join(" ")}`.toLowerCase();
     const questionText = args.question.toLowerCase();
     const temporalProfile = detectTemporalQuery(args.question);
+    const identityLookupCue = matchesAny(questionText, [
+      /\bbiography of\b/i,
+      /\bbiography\b/i,
+      /\bbiographie(?:\s+(?:de|d['’]))?\b/i,
+      /\blife of\b/i,
+      /\bvie de\b/i,
+      /\bwho is\b/i,
+      /\bwho was\b/i,
+      /\bwho are\b/i,
+      /\bqui est\b/i,
+      /\bqui etait\b/i,
+      /\bqui Ã©tait\b/i,
+      /\bqui était\b/i,
+      /\bqui sont\b/i
+    ]);
     const factualCue = matchesAny(questionText, [
+      /\bbiography of\b/i,
+      /\bbiography\b/i,
+      /\bbiographie(?:\s+(?:de|d['’]))?\b/i,
+      /\blife of\b/i,
+      /\bvie de\b/i,
+      /\bwho is\b/i,
+      /\bwho was\b/i,
+      /\bqui est\b/i,
+      /\bqui etait\b/i,
+      /\bqui était\b/i,
       /\bwhat is\b/i,
       /\bwhat are\b/i,
       /\bhow does\b/i,
       /\bhow do\b/i,
       /\bexplain\b/i,
+      /\bexplique\b/i,
+      /\bqu[' ]?est[- ]?ce que\b/i,
+      /\bc[' ]?est quoi\b/i,
+      /\bd[eÃ©]finis\b/i,
+      /\bd[eÃ©]finition\b/i,
       /\bdifference between\b/i,
       /\bwhy does\b/i,
+      /\bpourquoi\b/i,
+      /\bcomment fonctionne\b/i,
       /\bhow would you debug\b/i
     ]);
     const temporalOrOfficialCue =
@@ -285,6 +317,7 @@ export class ResearchDecisionPolicyService {
 
     if (falseClaimCount > 0) addSignal("potentially_false_claims");
     if (temporalProfile.isTemporal) addSignal(`temporal_${temporalProfile.focus}`);
+    if (identityLookupCue) addSignal("identity_lookup");
     if (temporalProfile.queryType !== "none") {
       addSignal(`temporal_query_${temporalProfile.queryType}`);
     }
@@ -366,6 +399,11 @@ export class ResearchDecisionPolicyService {
         "The question and Red Team output jointly indicate that external verification could reduce hallucination risk."
       );
     }
+    if (identityLookupCue) {
+      addReason(
+        "The question asks to identify a person or entity, which is externally checkable and should use lightweight factual verification."
+      );
+    }
     if (orchestration) {
       addReason(
         `Orchestration selected ${orchestration.focus} with research policy ${orchestration.researchPolicy} and cost policy ${orchestration.costPolicy}.`
@@ -384,6 +422,7 @@ export class ResearchDecisionPolicyService {
       debugDocCue,
       explicitMetricCue,
       factualCue,
+      identityLookupCue,
       temporalOrOfficialCue,
       verificationNeed,
       temporalProfile,
@@ -476,6 +515,7 @@ export class ResearchDecisionPolicyService {
     debugDocCue: boolean;
     explicitMetricCue: boolean;
     factualCue: boolean;
+    identityLookupCue: boolean;
     temporalOrOfficialCue: boolean;
     verificationNeed: boolean;
     temporalProfile: ReturnType<typeof detectTemporalQuery>;
@@ -496,6 +536,7 @@ export class ResearchDecisionPolicyService {
       args.studentOpenLike &&
       args.falseClaimCount === 0 &&
       !args.verificationNeed &&
+      !args.identityLookupCue &&
       !args.providerSpecific &&
       !args.regulatoryOrStandardCue &&
       !args.hardConstraintCue
@@ -505,6 +546,7 @@ export class ResearchDecisionPolicyService {
 
     if (
       args.orchestration?.researchPolicy === "off" &&
+      !args.identityLookupCue &&
       !(
         args.falseClaimCount >= 2 &&
         args.highFactualRisk &&
@@ -518,9 +560,17 @@ export class ResearchDecisionPolicyService {
       args.orchestration?.costPolicy === "latency_guarded" &&
       args.falseClaimCount === 0 &&
       !args.verificationNeed &&
+      !args.identityLookupCue &&
       args.baseNeedScore < 50
     ) {
       return false;
+    }
+
+    if (
+      args.identityLookupCue &&
+      (args.falseClaimCount >= 1 || args.elevatedFactualRisk || args.category === "other")
+    ) {
+      return true;
     }
 
     if (

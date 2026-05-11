@@ -316,3 +316,156 @@ test("student preparation grounds the preview when research should be applied", 
   assert.match(result.previewTrace.note, /tool-guided factual grounding/i);
   assert.equal(localCalls, 2);
 });
+
+test("student preparation separates contextual answer prompt from routing and research question", async () => {
+  const contextualQuestion =
+    "Prior turns:\nUser: qui est louis 9\nAssistant: reponse precedente incorrecte\nCurrent user message:\ntu voulais dire saint louis";
+  const routingQuestion = "qui est saint louis";
+  const seen = {
+    localQuestions: [] as string[],
+    knowledgeQuestion: "",
+    strategyQuestions: [] as string[],
+    redTeamQuestion: "",
+    researchQuestion: ""
+  };
+
+  const service = new StudentPreparationService(
+    {
+      async answerQuestionDetailed(args) {
+        seen.localQuestions.push(args.question);
+        return {
+          output: buildAnswer("Contextual answer"),
+          durationMs: 1,
+          raw: "{\"answer\":\"Contextual answer\"}",
+          usedRetry: false,
+          parseMode: "strict",
+          degraded: false,
+          validationIssues: []
+        };
+      }
+    },
+    {
+      async planRound() {
+        return {
+          focus: "factual_grounding",
+          researchPolicy: "targeted",
+          costPolicy: "balanced",
+          researchBias: 0
+        } as never;
+      }
+    },
+    {
+      async maybeCollect(args) {
+        seen.researchQuestion = args.question;
+        return buildResearchLog();
+      }
+    },
+    {
+      async buildForCategory(_category, args = {}) {
+        seen.knowledgeQuestion = args.question ?? "";
+        return null;
+      }
+    },
+    {
+      async select(args) {
+        seen.strategyQuestions.push(args.question);
+        return buildStrategy();
+      }
+    },
+    {
+      async runStudentRedTeam(question) {
+        seen.redTeamQuestion = question;
+        return {
+          output: buildRedTeam(),
+          trace: {} as never,
+          durationMs: 1
+        };
+      }
+    }
+  );
+
+  await service.preparePreview(contextualQuestion, {
+    routingQuestion,
+    researchQuestion: routingQuestion
+  });
+
+  assert.deepEqual(seen.localQuestions, [contextualQuestion]);
+  assert.equal(seen.knowledgeQuestion, routingQuestion);
+  assert.deepEqual(seen.strategyQuestions, [routingQuestion, routingQuestion]);
+  assert.equal(seen.redTeamQuestion, routingQuestion);
+  assert.equal(seen.researchQuestion, routingQuestion);
+});
+
+test("student preparation can skip knowledge and research for direct chat turns", async () => {
+  let localCalls = 0;
+  let knowledgeCalls = 0;
+  let planCalls = 0;
+  let researchCalls = 0;
+  let redTeamCalls = 0;
+
+  const service = new StudentPreparationService(
+    {
+      async answerQuestionDetailed() {
+        localCalls += 1;
+        return {
+          output: buildAnswer("Tu t'appelles Marc."),
+          durationMs: 1,
+          raw: "{\"answer\":\"Tu t'appelles Marc.\"}",
+          usedRetry: false,
+          parseMode: "strict",
+          degraded: false,
+          validationIssues: []
+        };
+      }
+    },
+    {
+      async planRound() {
+        planCalls += 1;
+        throw new Error("should not plan");
+      }
+    },
+    {
+      async maybeCollect() {
+        researchCalls += 1;
+        throw new Error("should not research");
+      }
+    },
+    {
+      async buildForCategory() {
+        knowledgeCalls += 1;
+        throw new Error("should not load knowledge");
+      }
+    },
+    {
+      async select() {
+        return buildStrategy();
+      }
+    },
+    {
+      async runStudentRedTeam() {
+        redTeamCalls += 1;
+        throw new Error("should not red-team");
+      }
+    }
+  );
+
+  const result = await service.preparePreview("Comment je m'appelle ?", {
+    routingQuestion: "Comment je m'appelle ?",
+    researchQuestion: "Comment je m'appelle ?",
+    knowledgeMode: "skip",
+    researchMode: "skip"
+  });
+
+  assert.equal(result.knowledge, null);
+  assert.equal(result.rawDraft.answer, "Tu t'appelles Marc.");
+  assert.equal(result.previewDraft.answer, "Tu t'appelles Marc.");
+  assert.equal(result.toolApplied, false);
+  assert.equal(result.research.used, false);
+  assert.equal(result.research.decision.mode, "off");
+  assert.equal(result.orchestration.researchPolicy, "off");
+  assert.equal(localCalls, 1);
+  assert.equal(knowledgeCalls, 0);
+  assert.equal(planCalls, 0);
+  assert.equal(researchCalls, 0);
+  assert.equal(redTeamCalls, 0);
+});

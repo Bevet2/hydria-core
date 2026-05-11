@@ -36,14 +36,14 @@ export const localStudentTrainingConstitution = {
       "Use the available evidence, ask for the missing input, or state that the live data could not be retrieved."
     ].join("\n"),
   recommendedPreTrainChecks: [
-    "npm.cmd run check",
-    "npm.cmd run test -w @hydria-arena/server",
-    "npm.cmd run student:temporal-eval:replay",
-    "npm.cmd run tool:routing-eval"
+    "npm run check",
+    "npm run test -w @hydria-arena/server",
+    "npm run student:temporal-eval:replay",
+    "npm run tool:routing-eval"
   ],
   recommendedPostTrainChecks: [
-    "npm.cmd run student:temporal-eval:replay",
-    "npm.cmd run tool:routing-eval",
+    "npm run student:temporal-eval:replay",
+    "npm run tool:routing-eval",
     "compare judge delta on a small student session pack",
     "spot-check tool-safe answers for honest abstention"
   ],

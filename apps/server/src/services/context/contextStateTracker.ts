@@ -43,6 +43,7 @@ const FRENCH_MARKERS = [
   "pour",
   "entre",
   "hesite",
+  "qui",
   "quel",
   "quelle",
   "quels",
@@ -234,6 +235,19 @@ function isNegatedConstraint(label: string, message: string) {
 function extractKnownFacts(message: string) {
   const facts: string[] = [];
   const normalized = normalizeText(message);
+  const nameMatch =
+    message.match(/\b(?:je m[' ]?appelle|mon nom est|my name is|call me)\s+([A-Z\p{L}][\p{L}' -]{1,60})/iu) ??
+    message.match(/\b(?:i am|i'm)\s+([A-Z][A-Za-z' -]{1,60})\b/u);
+  if (nameMatch?.[1]) {
+    const userName = nameMatch[1].replace(/\s+(?:et|and)\b.*$/i, "").trim();
+    facts.push(`user name: ${compact(userName, 80)}`);
+  }
+  const preferenceMatch = message.match(
+    /\b(?:je prefere|je pr[eé]f[eè]re|i prefer|i would rather|call me|appelle[- ]moi)\s+(.{2,120})/iu
+  );
+  if (preferenceMatch?.[1]) {
+    facts.push(`user preference: ${compact(preferenceMatch[1], 120)}`);
+  }
   if (/\b(?:there is|there are|il y a|on a|we have|we are|on est|c'est|it is)\b/.test(normalized)) {
     facts.push(compact(message, 180));
   }

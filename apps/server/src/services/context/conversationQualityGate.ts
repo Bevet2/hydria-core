@@ -49,9 +49,13 @@ const CONSTRAINT_USE_MARKER =
 const FINAL_DECISION_INSTRUCTION_ECHO_PATTERN =
   /\b(?:final decision:\s*recall the strong constraint|decision finale:\s*rappelle la contrainte forte|recall the strong constraint,\s*recent detail,\s*active hypothesis,\s*then recommend|rappelle la contrainte forte,\s*le detail recent,\s*l[' ]?hypothese active,\s*puis recommande)\b/i;
 const PROMPT_POLICY_LEAK_PATTERN =
-  /\b(?:Conversation runtime requirements|ActiveConstraintCapsule|Answer policy|StrategicTradeoffPolicy|StrategicTradeoffPatch|Detected answer language|Detected category|topConstraints|blockingConstraints|requiredContextItems|forbiddenBehaviors|DecisionCommitmentPatch: when)\b/i;
+  /\b(?:Conversation runtime requirements|ActiveConstraintCapsule|Answer policy|StrategicTradeoffPolicy|StrategicTradeoffPatch|StrategicCoherencePolicy|StrategicCoherencePatch|Detected answer language|Detected category|topConstraints|blockingConstraints|requiredContextItems|forbiddenBehaviors|revisionTrigger|DecisionCommitmentPatch: when)\b/i;
 const STRATEGIC_TRADEOFF_MARKER =
   /\b(?:dominant|dominates|wins|priority|priorite|prioritaire|prime|gagne|defer|deferred|reject|rejected|refuse|differe|differee|tradeoff|compromis|accepted tradeoff|compromis accepte|rather than|au lieu de|pas equivalentes|not equivalent)\b/i;
+const REVISION_CONDITION_MARKER =
+  /\b(?:if|unless|until|when|only if|threshold|condition|revise|revision|change course|switch|reconsider|si|sauf si|tant que|seuil|condition|reviser|revision|changer de route|bascule|reconsiderer)\b/i;
+const UNBOUNDED_ABSOLUTE_MARKER =
+  /\b(?:always|never|permanent|permanently|definitive|definitively|no matter what|quoi qu'il arrive|quoi quil arrive|toujours|jamais|definitif|definitivement|sans condition)\b/i;
 
 function normalizeText(value: string) {
   return value
@@ -89,6 +93,16 @@ function hasGenericShape(answer: string, contextValues: string[] = []) {
     return true;
   }
   if (wordCount(answer) >= 28) {
+    return false;
+  }
+  if (
+    wordCount(answer) >= 3 &&
+    contextValues.some((value) => /^user (?:name|preference):/i.test(value)) &&
+    answerMentionsAny(answer, contextValues)
+  ) {
+    return false;
+  }
+  if (wordCount(answer) >= 12 && answerMentionsAny(answer, contextValues)) {
     return false;
   }
   return !((hasRecommendationSignal(answer) || CONCRETE_ACTION_MARKER.test(answer)) && answerMentionsAny(answer, contextValues));
@@ -167,6 +181,22 @@ function answerUsesNewTurn(answer: string, newUserMessage: string) {
     return true;
   }
   return userTerms.some((term) => answerTerms.has(term));
+}
+
+function echoesCurrentUserMessage(input: ConversationQualityGateInput) {
+  const answer = normalizeText(input.answer);
+  const user = normalizeText(input.newUserMessage);
+  if (!answer || !user) {
+    return false;
+  }
+
+  const similarity = jaccardSimilarity(input.answer, input.newUserMessage);
+  const answerWords = wordCount(input.answer);
+  const userWords = wordCount(input.newUserMessage);
+  const answerMostlyUserText =
+    answer.includes(user.slice(0, Math.min(user.length, 120))) && answerWords <= userWords + 10;
+
+  return similarity > 0.82 || answerMostlyUserText;
 }
 
 function unnecessaryAbstention(input: ConversationQualityGateInput) {
@@ -274,6 +304,57 @@ function leavesStrategicConflictUnresolved(input: ConversationQualityGateInput) 
   return !(mentionsStrategicAnchor && (showsArbitration || mentionsRejectedConstraint));
 }
 
+function contradictsActiveEnvironmentConstraint(input: ConversationQualityGateInput) {
+  const constraints = [
+    ...(input.activeConstraintCapsule?.blockingConstraints ?? []),
+    ...(input.activeConstraintCapsule?.topConstraints ?? [])
+  ];
+  const hasOnPremConstraint = constraints.some((constraint) =>
+    /\benvironment\s*:\s*on[- ]prem\b|\bon[- ]prem\b/i.test(constraint)
+  );
+  if (!hasOnPremConstraint) {
+    return false;
+  }
+
+  const answer = normalizeText(input.answer);
+  const cloudRecommendation =
+    /\b(?:recommande|recommend|choisis|choose|go with|partir sur|prefer|privilegie|privil[eé]gie)\b.{0,100}\b(?:aws|cloud|serverless)\b/.test(
+      answer
+    ) ||
+    /\b(?:aws|cloud|serverless)\b.{0,100}\b(?:recommande|recommended|preferable|prefer|meilleur|better|choix)\b/.test(
+      answer
+    );
+  const rejectsCloud =
+    /\b(?:pas|ne pas|avoid|eviter|[eé]viter|reject|refuse|obsolete|hypothese obsolete|hypothèse obsolete|plutot que|rather than|instead of)\b.{0,80}\b(?:aws|cloud|serverless)\b/.test(
+      answer
+    );
+  return cloudRecommendation && !rejectsCloud;
+}
+
+function missesStrategicRevisionCondition(input: ConversationQualityGateInput) {
+  const calibration = input.policy.strategicCoherencePolicy;
+  if (!calibration?.requiresRevisionCondition || !calibration.revisionTrigger) {
+    return false;
+  }
+
+  const answerHasRevisionMarker = REVISION_CONDITION_MARKER.test(input.answer);
+  const answerMentionsTrigger = answerMentionsSpecificValue(input.answer, calibration.revisionTrigger);
+  return !(answerHasRevisionMarker || answerMentionsTrigger);
+}
+
+function isOverRigidStrategicAnswer(input: ConversationQualityGateInput) {
+  const calibration = input.policy.strategicCoherencePolicy;
+  if (!calibration?.hasStrategicCoherenceRequirement) {
+    return false;
+  }
+
+  if (!UNBOUNDED_ABSOLUTE_MARKER.test(input.answer)) {
+    return false;
+  }
+
+  return !REVISION_CONDITION_MARKER.test(input.answer);
+}
+
 function chooseAction(issues: string[], policy: MultiTurnAnswerPolicyResult): ConversationQualityGateResult["recommendedAction"] {
   if (issues.length === 0) {
     return "accept";
@@ -288,8 +369,12 @@ function chooseAction(issues: string[], policy: MultiTurnAnswerPolicyResult): Co
     issues.includes("ignored_context_change") ||
     issues.includes("missing_bounded_decision_under_pressure") ||
     issues.includes("context_injection_not_rejected") ||
+    issues.includes("current_user_message_echo") ||
     issues.includes("stakeholder_conflict_not_resolved") ||
-    issues.includes("strategic_conflict_not_resolved")
+    issues.includes("strategic_conflict_not_resolved") ||
+    issues.includes("active_constraint_contradicted") ||
+    issues.includes("missing_strategic_revision_condition") ||
+    issues.includes("over_rigid_strategic_answer")
   ) {
     return "revise";
   }
@@ -309,6 +394,7 @@ export function analyzeConversationQuality(input: ConversationQualityGateInput):
   const contextValuesForGenericCheck = [
     ...activeConstraints,
     ...changedConstraints,
+    ...input.conversationState.knownFacts,
     input.newUserMessage,
     input.conversationState.userGoal ?? ""
   ];
@@ -326,9 +412,13 @@ export function analyzeConversationQuality(input: ConversationQualityGateInput):
 
   if (input.lastAssistantAnswer) {
     const previousSimilarity = jaccardSimilarity(input.lastAssistantAnswer, input.answer);
+    const acknowledgesCorrection =
+      /\b(?:tu as raison|je corrige|correction|you are right|i should have|let me correct)\b/i.test(
+        input.answer
+      );
     const repeatedTooClosely = previousSimilarity > 0.86;
     const repeatedWithoutNewTurn = previousSimilarity > 0.78 && !answerUsesNewTurn(input.answer, input.newUserMessage);
-    if (repeatedTooClosely || repeatedWithoutNewTurn) {
+    if (!acknowledgesCorrection && (repeatedTooClosely || repeatedWithoutNewTurn)) {
       issues.push("repeated_previous_answer");
       penalties.push("answer repeats the previous assistant recommendation");
     }
@@ -337,6 +427,11 @@ export function analyzeConversationQuality(input: ConversationQualityGateInput):
   if (unnecessaryAbstention(input)) {
     issues.push("unnecessary_abstention");
     penalties.push("answer refuses despite available conversational context");
+  }
+
+  if (echoesCurrentUserMessage(input)) {
+    issues.push("current_user_message_echo");
+    penalties.push("answer repeats the current user message instead of answering it");
   }
 
   if (echoesFinalDecisionInstruction(input)) {
@@ -367,6 +462,21 @@ export function analyzeConversationQuality(input: ConversationQualityGateInput):
   if (leavesStrategicConflictUnresolved(input)) {
     issues.push("strategic_conflict_not_resolved");
     penalties.push("answer detects context but does not explicitly arbitrate the strategic constraint conflict");
+  }
+
+  if (contradictsActiveEnvironmentConstraint(input)) {
+    issues.push("active_constraint_contradicted");
+    penalties.push("answer recommends an option that contradicts the active environment constraint");
+  }
+
+  if (missesStrategicRevisionCondition(input)) {
+    issues.push("missing_strategic_revision_condition");
+    penalties.push("answer makes a strategic choice without the required revision condition");
+  }
+
+  if (isOverRigidStrategicAnswer(input)) {
+    issues.push("over_rigid_strategic_answer");
+    penalties.push("answer is strategically rigid without a condition that would change the choice");
   }
 
   if (

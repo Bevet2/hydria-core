@@ -57,7 +57,11 @@ export class ResearchKnownEndpointService {
       .filter((entry) => entry.include)
       .sort((left, right) => right.score - left.score || left.endpoint.url.localeCompare(right.endpoint.url))
       .slice(0, 4);
-    const generatedCandidates = this.buildGeneratedCandidates(plan, excluded);
+    const generatedCandidates = [
+      ...this.buildIdentityReferenceCandidates(plan, excluded),
+      ...this.buildDefinitionReferenceCandidates(plan, excluded),
+      ...this.buildGeneratedCandidates(plan, excluded)
+    ];
 
     return [...staticCandidates, ...generatedCandidates]
       .sort((left, right) => right.score - left.score || left.endpoint.url.localeCompare(right.endpoint.url))
@@ -73,6 +77,116 @@ export class ResearchKnownEndpointService {
             retrievalEngine: "known_endpoint"
           }) satisfies SearchCandidate
       );
+  }
+
+  private buildIdentityReferenceCandidates(plan: SearchPlan, excluded: Set<string>) {
+    if (
+      plan.intent !== "fact_check" ||
+      !/\b(?:identity lookup|biography encyclopedia|historical reference)\b/i.test(
+        `${plan.reasoning} ${plan.queries.join(" ")}`
+      )
+    ) {
+      return [];
+    }
+
+    const subject = this.extractIdentitySubject(plan);
+    if (!subject) {
+      return [];
+    }
+
+    const slug = subject
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((part) =>
+        /^(?:i|v|x|l|c|d|m)+$/i.test(part)
+          ? part.toUpperCase()
+          : `${part.charAt(0).toUpperCase()}${part.slice(1)}`
+      )
+      .join("_");
+    const urls = [
+      `https://fr.wikipedia.org/api/rest_v1/page/summary/${slug}`,
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${slug}`,
+      `https://fr.wikipedia.org/wiki/${slug}`,
+      `https://en.wikipedia.org/wiki/${slug}`
+    ];
+
+    return urls
+      .filter((url) => !excluded.has(url))
+      .map((url, index) => ({
+        endpoint: {
+          url,
+          title: subject,
+          snippet: `Reference page for ${subject}.`
+        },
+        score: 130 - index
+      }));
+  }
+
+  private extractIdentitySubject(plan: SearchPlan) {
+    const query = plan.queries[0] ?? "";
+    const subject = normalizeSpace(
+      query
+        .replace(/\bsite:[^\s]+/gi, " ")
+        .replace(/\b(?:biographie|encyclopedie|encyclopédie|biography|encyclopedia|historical|reference|wikipedia|francais|français)\b/gi, " ")
+        .replace(/["']/g, " ")
+    );
+
+    return subject.length >= 2 ? subject.toLowerCase() : "";
+  }
+
+  private buildDefinitionReferenceCandidates(plan: SearchPlan, excluded: Set<string>) {
+    if (plan.intent !== "definition") {
+      return [];
+    }
+
+    const subject = this.extractDefinitionSubject(plan);
+    if (!subject) {
+      return [];
+    }
+
+    const slug = subject
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
+      .join("_");
+    const urls = [
+      `https://fr.wikipedia.org/api/rest_v1/page/summary/${slug}`,
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${slug}`,
+      `https://fr.wikipedia.org/wiki/${slug}`,
+      `https://en.wikipedia.org/wiki/${slug}`
+    ];
+
+    return urls
+      .filter((url) => !excluded.has(url))
+      .map((url, index) => ({
+        endpoint: {
+          url,
+          title: subject,
+          snippet: `Encyclopedia reference page for ${subject}.`
+        },
+        score: 118 - index
+      }));
+  }
+
+  private extractDefinitionSubject(plan: SearchPlan) {
+    const terms = [
+      ...plan.factFocusTerms,
+      ...plan.entityTerms,
+      ...plan.requiredTerms,
+      ...plan.queries.flatMap((query) =>
+        normalizeSpace(query)
+          .replace(/\bsite:[^\s]+/gi, " ")
+          .replace(
+            /\b(?:official|documentation|reference|explanation|examples|standard|rfc|mdn|encyclopedia|encyclopedie|encyclopÃ©die)\b/gi,
+            " "
+          )
+          .split(/\s+/)
+      )
+    ]
+      .map((term) => normalizeSpace(term.replace(/["']/g, " ")).toLowerCase())
+      .filter((term) => /^[a-z0-9][a-z0-9-]{2,40}$/i.test(term));
+
+    return terms.find(Boolean) ?? "";
   }
 
   private buildGeneratedCandidates(plan: SearchPlan, excluded: Set<string>) {

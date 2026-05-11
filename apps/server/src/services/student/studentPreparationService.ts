@@ -1,6 +1,12 @@
 import { performance } from "node:perf_hooks";
-import type { QuestionCategory, ResearchToolLog } from "../../types/arena.js";
+import {
+  defaultToolRoutingDecision,
+  type QuestionCategory,
+  type ResearchToolLog
+} from "../../types/arena.js";
+import { defaultAgentRoutingDecision } from "../../types/agents.js";
 import type { KnowledgeInjection } from "../../types/knowledge.js";
+import { defaultSkillRoutingDecision } from "../../types/skills.js";
 import type {
   StudentAnswer,
   StudentAnswerPreview,
@@ -37,6 +43,13 @@ export type StudentPreviewPreparation = {
   toolApplied: boolean;
 };
 
+export type StudentPreviewPreparationOptions = {
+  routingQuestion?: string;
+  researchQuestion?: string;
+  knowledgeMode?: "auto" | "skip";
+  researchMode?: "auto" | "skip";
+};
+
 export type StudentAnalysisPreparation = {
   orchestration: StudentAnswerPreview["orchestration"];
   research: ResearchToolLog;
@@ -45,6 +58,109 @@ export type StudentAnalysisPreparation = {
   finalStudentTrace: StudentAnswerPreview["trace"]["student"];
   finalStudentRespondent: ReturnType<typeof toRespondentOutput>;
 };
+
+function buildSkippedOrchestration(category: QuestionCategory): StudentAnswerPreview["orchestration"] {
+  return {
+    category,
+    focus: category === "technical_explanation" ? "pedagogy_precision" : "general_quality",
+    refinePolicy: "conservative",
+    researchPolicy: "off",
+    costPolicy: "latency_guarded",
+    refineBias: -10,
+    researchBias: -20,
+    targetOutcomes: [
+      "Answer the user directly.",
+      "Use only the current prompt and provided conversation context."
+    ],
+    prioritySignals: ["chat_direct_runtime"],
+    reasoning: ["Chat direct mode skips external research unless the caller explicitly enables it."]
+  };
+}
+
+function buildSkippedResearch(question: string): ResearchToolLog {
+  return {
+    considered: true,
+    used: false,
+    route: "not_needed",
+    toolRouting: defaultToolRoutingDecision,
+    skillRouting: defaultSkillRoutingDecision,
+    skillUsed: false,
+    skillConfidence: null,
+    skillOutcome: "not_found",
+    agentRouting: defaultAgentRoutingDecision,
+    agentOutcome: "not_found",
+    fallbackUsed: false,
+    agentRecommendation: null,
+    toolGapDetected: false,
+    toolCandidateCreated: false,
+    toolCandidateId: null,
+    missingCapabilityReason: null,
+    decision: {
+      shouldUse: false,
+      mode: "off",
+      expectedValue: "low",
+      expectedCostMs: 0,
+      triggerSignals: ["chat_direct_runtime"],
+      targetClaims: [],
+      reasoning: "Research skipped by caller for a direct chat turn."
+    },
+    queryPlan: {
+      intent: "definition",
+      queries: [],
+      selectedQuery: null,
+      requiredTerms: [],
+      preferredDomains: [],
+      factFocusTerms: [],
+      entityTerms: [],
+      temporalProfile: {
+        isTemporal: false,
+        focus: "none",
+        queryType: "none",
+        recencyDays: null,
+        absoluteDateHint: null,
+        dateRangeStart: null,
+        dateRangeEnd: null,
+        queryDirectives: [],
+        answerDirectives: []
+      }
+    },
+    query: null,
+    reasons: [`External research skipped for chat question: ${question.slice(0, 180)}`],
+    summary: [],
+    sources: [],
+    verification: {
+      sourceCount: 0,
+      extractedSourceCount: 0,
+      corroboratedSignals: [],
+      freshnessSatisfied: true,
+      freshnessWindow: "none",
+      mostRecentSourceDate: null,
+      oldestAcceptedSourceDate: null,
+      staleSourcesRejectedCount: 0
+    },
+    truth: {
+      verified_facts: [],
+      uncertain_claims: [],
+      conflicting_info: [],
+      confidence_score: 0,
+      no_reliable_source: false
+    },
+    appliedTo: {
+      A: false,
+      B: false
+    },
+    impact: {
+      refineChangedBecauseOfTool: false,
+      addedFactsCount: 0,
+      correctedClaimsCount: 0,
+      sourceBackedClaimsCount: 0,
+      costSharePct: 0,
+      netImpact: "neutral"
+    },
+    impactNotes: ["Research bypassed for direct chat latency and context fidelity."],
+    durationMs: 0
+  };
+}
 
 export class StudentPreparationService {
   private readonly toolRoutingService = new ToolRoutingService();
@@ -66,31 +182,44 @@ export class StudentPreparationService {
     return this.localModelService.getConfiguredModelName?.() ?? "local-student";
   }
 
-  async preparePreview(question: string): Promise<StudentPreviewPreparation> {
+  async preparePreview(
+    question: string,
+    options: StudentPreviewPreparationOptions = {}
+  ): Promise<StudentPreviewPreparation> {
     const startedAt = performance.now();
     const startedAtIso = new Date().toISOString();
-    const category = classifyQuestion(question);
-    const knowledge = await this.knowledgeInjectionService.buildForCategory(category, { question });
+    const routingQuestion = options.routingQuestion?.trim() || question;
+    const researchQuestion = options.researchQuestion?.trim() || routingQuestion;
+    const category = classifyQuestion(routingQuestion);
+    const knowledge =
+      options.knowledgeMode === "skip"
+        ? null
+        : await this.knowledgeInjectionService.buildForCategory(category, {
+            question: routingQuestion
+          });
     const baselineKnowledge = buildKnowledgeWithoutStudentMemory(knowledge);
     const strategy = await this.studentStrategySelectorService.select({
-      question,
+      question: routingQuestion,
       category,
       knowledge
     });
-    const toolRouting = this.toolRoutingService.route({ question, category });
+    const toolRouting = this.toolRoutingService.route({
+      question: routingQuestion,
+      category
+    });
     const skillRouting = await this.skillRoutingService.route({
-      question,
+      question: routingQuestion,
       category,
       toolRouting
     });
     const agentRouting = await this.agentRoutingService.route({
-      question,
+      question: routingQuestion,
       category,
       toolRouting,
       skillRouting
     });
     const baselineStrategy = await this.studentStrategySelectorService.select({
-      question,
+      question: routingQuestion,
       category,
       knowledge: baselineKnowledge
     });
@@ -122,12 +251,14 @@ export class StudentPreparationService {
     });
     const prepared = await this.prepareResearchAwareDraft({
       question,
+      researchQuestion,
       category,
       rawDraft: rawDraftResult.output,
       currentDraft: rawDraftResult.output,
       currentTrace: rawDraftTrace,
       knowledge,
-      strategy
+      strategy,
+      researchMode: options.researchMode ?? "auto"
     });
 
     return {
@@ -157,6 +288,7 @@ export class StudentPreparationService {
     orchestration?: StudentAnswerPreview["orchestration"];
     research?: ResearchToolLog;
     toolApplied?: boolean;
+    researchMode?: "auto" | "skip";
   }): Promise<StudentAnalysisPreparation> {
     return this.prepareResearchAwareDraft({
       question: args.question,
@@ -168,12 +300,14 @@ export class StudentPreparationService {
       strategy: args.strategy,
       orchestration: args.orchestration,
       research: args.research,
-      toolApplied: args.toolApplied ?? false
+      toolApplied: args.toolApplied ?? false,
+      researchMode: args.researchMode ?? "auto"
     });
   }
 
   private async prepareResearchAwareDraft(args: {
     question: string;
+    researchQuestion?: string;
     category: QuestionCategory;
     rawDraft: StudentAnswer;
     currentDraft: StudentAnswer;
@@ -183,6 +317,7 @@ export class StudentPreparationService {
     orchestration?: StudentAnswerPreview["orchestration"];
     research?: ResearchToolLog;
     toolApplied?: boolean;
+    researchMode?: "auto" | "skip";
   }): Promise<StudentAnalysisPreparation> {
     const rawDraftRespondent = toRespondentOutput(args.rawDraft);
     let orchestration = args.orchestration;
@@ -191,21 +326,26 @@ export class StudentPreparationService {
     let finalStudentAnswer = args.currentDraft;
     let finalStudentTrace = args.currentTrace;
 
-    if (!orchestration || !research) {
+    if (args.researchMode === "skip" && (!orchestration || !research)) {
+      orchestration = buildSkippedOrchestration(args.category);
+      research = buildSkippedResearch(args.researchQuestion?.trim() || args.question);
+      toolApplied = false;
+    } else if (!orchestration || !research) {
+      const researchQuestion = args.researchQuestion?.trim() || args.question;
       const initialRedTeam = await this.studentStepExecutor.runStudentRedTeam(
-        args.question,
+        researchQuestion,
         args.category,
         rawDraftRespondent
       );
       orchestration = await this.orchestrationPolicyService.planRound({
-        question: args.question,
+        question: researchQuestion,
         category: args.category,
         respondentA: rawDraftRespondent,
         respondentB: rawDraftRespondent,
         redTeam: initialRedTeam.output
       });
       research = await this.researchToolService.maybeCollect({
-        question: args.question,
+        question: researchQuestion,
         category: args.category,
         respondentA: rawDraftRespondent,
         respondentB: rawDraftRespondent,

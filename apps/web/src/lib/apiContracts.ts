@@ -63,6 +63,12 @@ export type {
   HydriaMemorySnapshot
 } from "../../../server/src/types/core.js";
 
+export type {
+  ChatMessage,
+  ChatMessageResponse,
+  ChatResetResponse
+} from "../../../server/src/types/chat.js";
+
 export type { KnowledgeInjection } from "../../../server/src/types/knowledge.js";
 
 export type {

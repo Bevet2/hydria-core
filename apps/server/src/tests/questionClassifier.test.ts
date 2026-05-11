@@ -51,6 +51,11 @@ test("question classifier v2 keeps explicit tradeoff decisions as mixed reasonin
   assert.ok(result.secondaryCategory);
 });
 
+test("question classifier v2 keeps simple who-is factual questions as general factual", () => {
+  assert.equal(classifyQuestion("qui est louis 14"), "other");
+  assert.equal(classifyQuestion("Who was Louis XIV?"), "other");
+});
+
 test("question classifier v2 reduces other on benchmark-like prompts", () => {
   const prompts = [
     "Explique le traitement temps reel dans une architecture streaming.",

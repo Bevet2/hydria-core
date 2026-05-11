@@ -29,7 +29,7 @@ export class ResearchVerifierFreshnessService {
     return sources
       .map((source) => ({
         source,
-        trustScore: getSourceTrustScore(source.url, preferredDomains),
+        trustScore: getSourceTrustScore(source.url, preferredDomains, intent),
         effectiveDate: parseSourceDate(source.effectiveDate ?? source.modifiedAt ?? source.publishedAt)
       }))
       .filter((entry) => entry.trustScore >= 26)

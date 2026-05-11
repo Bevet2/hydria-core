@@ -20,7 +20,7 @@ function detectPromptLanguage(question: string) {
     return "English (en)";
   }
 
-  return /\b(?:je|tu|vous|il|elle|nous|quel|quelle|quels|quelles|pourquoi|comment|explique|donne|peux|peut|est-ce|aujourd|m\u00e9t\u00e9o|meteo|temps|fran\u00e7ais|francais)\b|[\u00e0\u00e2\u00e7\u00e9\u00e8\u00ea\u00eb\u00ee\u00ef\u00f4\u00f9\u00fb\u00fc\u00ff\u0153]/i.test(
+  return /\b(?:je|tu|vous|il|elle|nous|qui|quel|quelle|quels|quelles|pourquoi|comment|explique|donne|peux|peut|est-ce|aujourd|m\u00e9t\u00e9o|meteo|temps|fran\u00e7ais|francais)\b|[\u00e0\u00e2\u00e7\u00e9\u00e8\u00ea\u00eb\u00ee\u00ef\u00f4\u00f9\u00fb\u00fc\u00ff\u0153]/i.test(
     question
   )
     ? "French (fr)"
@@ -198,8 +198,8 @@ function formatConversationRuntimeGuidance(question: string) {
 
   return [
     "Conversation runtime requirements:",
-    "- treat ActiveConstraintCapsule as the authoritative current state",
-    "- use only the capsule, current user message, and answer policy for conversation context",
+    "- treat ActiveConstraintCapsule as the authoritative active state",
+    "- use only the capsule, user message being answered, and answer policy for conversation context",
     "- DecisionCommitmentPatch: when decisionNeeded is true, answerMode is recommend/revise, or the user asks what to do, start the answer with a direct recommendation",
     "- within the first two answer sentences, cite at least one exact active or changed constraint from ActiveConstraintCapsule when constraints are present",
     "- if a new constraint is present, explain how it changes the recommendation instead of repeating the previous answer",

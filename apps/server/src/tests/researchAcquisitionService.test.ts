@@ -130,6 +130,100 @@ test("research acquisition excludes cached urls from extraction and persists ext
   );
 });
 
+test("research acquisition bypasses broad source cache for identity lookups", async () => {
+  const plan = buildPlan({
+    intent: "fact_check",
+    queries: ["saint louis louis ix biography encyclopedia"],
+    requiredTerms: ["louis"],
+    preferredDomains: [],
+    factFocusTerms: ["louis"],
+    entityTerms: ["louis"],
+    temporalProfile: buildDefaultTemporalProfile(),
+    reasoning: "Identity lookup research should verify the subject before answering."
+  });
+  let cacheRead = 0;
+  let cacheWrite = 0;
+  const extractedCalls: { urls: string[] }[] = [];
+
+  const service = new ResearchAcquisitionService({
+    sourceCacheEnabled: true,
+    sourceCacheService: {
+      async getFreshSources() {
+        cacheRead += 1;
+        return [
+          {
+            title: "St. Louis city guide",
+            url: "https://example.com/st-louis-city",
+            snippet: "City reference",
+            excerpt: "A broad cached source about the city of St. Louis.",
+            publishedAt: null,
+            modifiedAt: null,
+            effectiveDate: null,
+            dateSource: null,
+            retrievalChannel: "cache",
+            retrievalOrigin: "generic_search",
+            retrievalEngine: "cache"
+          }
+        ];
+      },
+      async rememberSources() {
+        cacheWrite += 1;
+      }
+    },
+    knownEndpointService: {
+      getCandidates() {
+        return [];
+      }
+    },
+    retriever: {
+      async searchAll() {
+        return [
+          {
+            title: "Louis IX of France",
+            url: "https://www.britannica.com/biography/Louis-IX",
+            snippet: "Louis IX, also called Saint Louis, was king of France.",
+            retrievalChannel: "live",
+            retrievalOrigin: "generic_search",
+            retrievalEngine: "duckduckgo"
+          }
+        ];
+      }
+    },
+    extractor: {
+      async extractSources(results) {
+        extractedCalls.push({
+          urls: results.map((result) => result.url)
+        });
+        return [
+          {
+            title: "Louis IX of France",
+            url: "https://www.britannica.com/biography/Louis-IX",
+            snippet: "Louis IX, also called Saint Louis, was king of France.",
+            excerpt: "Louis IX, also called Saint Louis, was king of France from 1226 to 1270.",
+            publishedAt: null,
+            modifiedAt: null,
+            effectiveDate: null,
+            dateSource: null,
+            retrievalChannel: "live",
+            retrievalOrigin: "generic_search",
+            retrievalEngine: "duckduckgo"
+          }
+        ];
+      }
+    }
+  });
+
+  const result = await service.collect(plan);
+
+  assert.equal(cacheRead, 0);
+  assert.equal(cacheWrite, 0);
+  assert.deepEqual(extractedCalls[0]?.urls, ["https://www.britannica.com/biography/Louis-IX"]);
+  assert.deepEqual(
+    result.sources.map((source) => source.url),
+    ["https://www.britannica.com/biography/Louis-IX"]
+  );
+});
+
 test("research acquisition prefers dated or richer sources when merging duplicates", async () => {
   const plan = buildPlan({
     intent: "release_freshness",

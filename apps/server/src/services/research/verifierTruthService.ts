@@ -100,7 +100,24 @@ export class ResearchVerifierTruthService {
         ...extractFocusTerms(args.args.question)
       ].filter((term) => !genericTerms.has(term.toLowerCase()))
     ).slice(0, 8);
-    const focusTerms = claimAnchorTerms.length > 0 ? claimAnchorTerms : fallbackFocusTerms;
+    const isIdentityLookupPlan =
+      args.decision.plan?.intent === "fact_check" &&
+      /\b(?:identity lookup|biography encyclopedia|historical reference)\b/i.test(
+        `${args.decision.plan?.reasoning ?? ""} ${(args.decision.plan?.queries ?? []).join(" ")}`
+      );
+    const identityPlanTerms = uniqueNormalized(
+      [
+        ...(args.decision.plan?.requiredTerms ?? []),
+        ...(args.decision.plan?.factFocusTerms ?? []),
+        ...(args.decision.plan?.entityTerms ?? [])
+      ].filter((term) => !genericTerms.has(term.toLowerCase()))
+    ).slice(0, 8);
+    const focusTerms =
+      isIdentityLookupPlan && identityPlanTerms.length > 0
+        ? identityPlanTerms
+        : claimAnchorTerms.length > 0
+          ? claimAnchorTerms
+          : fallbackFocusTerms;
 
     let candidateFacts = args.entries
       .flatMap((entry) =>
@@ -139,10 +156,19 @@ export class ResearchVerifierTruthService {
       );
     }
 
+    if (isIdentityLookupPlan) {
+      candidateFacts = candidateFacts.filter((entry) =>
+        /\b(?:is|was|are|also known as|also called|est|sont|appel[eé]|connu|connue|roi|king|born|n[eé])\b/i.test(
+          entry.sentence
+        )
+      );
+    }
+
     const verifiedFacts = uniqueNormalized(candidateFacts.map((entry) => entry.sentence))
       .filter(
         (fact) =>
           args.decision.targetClaims.length === 0 ||
+          isIdentityLookupPlan ||
           args.decision.targetClaims.some((claim) =>
             textSupportsClaim(claim, fact, temporalProfile)
           )
@@ -152,9 +178,12 @@ export class ResearchVerifierTruthService {
       .map((entry) => `${entry.source.title} ${entry.source.snippet} ${entry.source.excerpt}`)
       .join(" ")
       .toLowerCase();
-    const supportedClaimCount = args.decision.targetClaims.filter((claim) =>
-      claimSupported(claim, sourceText, verifiedFacts, temporalProfile)
-    ).length;
+    const supportedClaimCount =
+      isIdentityLookupPlan && verifiedFacts.length > 0
+        ? Math.max(1, args.decision.targetClaims.length)
+        : args.decision.targetClaims.filter((claim) =>
+            claimSupported(claim, sourceText, verifiedFacts, temporalProfile)
+          ).length;
     const uncertainClaims = uniqueNormalized(
       args.decision.targetClaims
         .filter((claim) => !claimSupported(claim, sourceText, verifiedFacts, temporalProfile))

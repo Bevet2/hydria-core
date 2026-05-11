@@ -4,7 +4,10 @@ import {
   type LocalStudentVariantState
 } from "../../types/training.js";
 import { env } from "../../utils/env.js";
-import { HydriaStateDatabase } from "../storage/hydriaStateDatabase.js";
+import {
+  createPersistenceAdapter,
+  type PersistenceAdapter
+} from "../storage/persistenceAdapter.js";
 
 type RegisterLocalStudentVariantArgs = {
   id: string;
@@ -22,7 +25,7 @@ type RegisterLocalStudentVariantArgs = {
 };
 
 export class LocalStudentVariantRegistry {
-  constructor(private readonly database = new HydriaStateDatabase()) {}
+  constructor(private readonly database: PersistenceAdapter = createPersistenceAdapter()) {}
 
   async ensureReady() {
     await this.database.ensureReady();
