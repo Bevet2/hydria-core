@@ -389,6 +389,14 @@ POSTGRES_URL=postgres://hydria:hydria@localhost:5432/hydria npm run persistence:
 
 This produces `storage/training/hydria-postgres-cutover-check-v1.json` and runs migration parity, PostgreSQL runtime health, and the runtime release gate smoke. The operational procedure is in `docs/runbooks/postgres-cutover.md`.
 
+Production OVH deployment:
+
+```text
+https://app.hydria.click
+```
+
+The operational procedure, health checks, DNS records, Caddy reverse proxy, firewall expectations, backup command, and rollback steps are documented in `docs/runbooks/ovh-production.md`.
+
 ### Runtime Release Gate
 
 Hydria Core now has a release gate that consolidates the runtime regression artifacts before a release or push.

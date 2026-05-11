@@ -138,6 +138,34 @@ function buildRedTeam(): RedTeamOutput {
   };
 }
 
+function buildFallbackTrace(): ExecutionTrace {
+  return {
+    requestedProvider: "openrouter",
+    requestedModel: "openai/gpt-5.4-mini",
+    attempts: [
+      {
+        provider: "openrouter",
+        model: "openai/gpt-5.4-mini",
+        mode: "primary"
+      }
+    ],
+    finalProvider: "openrouter",
+    finalModel: "openai/gpt-5.4-mini",
+    usedRetry: false,
+    usedFallback: false,
+    validationFailures: 0,
+    skillRouting: defaultSkillRoutingDecision,
+    skillUsed: false,
+    skillConfidence: null,
+    skillOutcome: "not_found",
+    agentRouting: defaultAgentRoutingDecision,
+    agentOutcome: "not_found",
+    fallbackUsed: false,
+    outcome: "success",
+    note: "Cloud fallback produced the student draft."
+  };
+}
+
 test("student preparation reuses existing orchestration and research without recomputing", async () => {
   let redTeamCalls = 0;
   let planCalls = 0;
@@ -174,6 +202,9 @@ test("student preparation reuses existing orchestration and research without rec
       }
     },
     {
+      async runStudentDraft() {
+        throw new Error("should not fallback");
+      },
       async runStudentRedTeam() {
         redTeamCalls += 1;
         throw new Error("should not run");
@@ -297,6 +328,9 @@ test("student preparation grounds the preview when research should be applied", 
       }
     },
     {
+      async runStudentDraft() {
+        throw new Error("should not fallback");
+      },
       async runStudentRedTeam() {
         return {
           output: buildRedTeam(),
@@ -373,6 +407,9 @@ test("student preparation separates contextual answer prompt from routing and re
       }
     },
     {
+      async runStudentDraft() {
+        throw new Error("should not fallback");
+      },
       async runStudentRedTeam(question) {
         seen.redTeamQuestion = question;
         return {
@@ -442,6 +479,9 @@ test("student preparation can skip knowledge and research for direct chat turns"
       }
     },
     {
+      async runStudentDraft() {
+        throw new Error("should not fallback");
+      },
       async runStudentRedTeam() {
         redTeamCalls += 1;
         throw new Error("should not red-team");
@@ -468,4 +508,64 @@ test("student preparation can skip knowledge and research for direct chat turns"
   assert.equal(planCalls, 0);
   assert.equal(researchCalls, 0);
   assert.equal(redTeamCalls, 0);
+});
+
+test("student preparation falls back to OpenRouter when local draft is unavailable", async () => {
+  let localCalls = 0;
+  let fallbackCalls = 0;
+
+  const service = new StudentPreparationService(
+    {
+      async answerQuestionDetailed() {
+        localCalls += 1;
+        throw new Error("fetch failed");
+      }
+    },
+    {
+      async planRound() {
+        throw new Error("should not plan");
+      }
+    },
+    {
+      async maybeCollect() {
+        throw new Error("should not research");
+      }
+    },
+    {
+      async buildForCategory() {
+        throw new Error("should not load knowledge");
+      }
+    },
+    {
+      async select() {
+        return buildStrategy();
+      }
+    },
+    {
+      async runStudentDraft() {
+        fallbackCalls += 1;
+        return {
+          output: buildAnswer("Fallback OpenRouter answer"),
+          trace: buildFallbackTrace(),
+          durationMs: 12
+        };
+      },
+      async runStudentRedTeam() {
+        throw new Error("should not red-team");
+      }
+    }
+  );
+
+  const result = await service.preparePreview("Explique Hydria Core en une phrase.", {
+    knowledgeMode: "skip",
+    researchMode: "skip"
+  });
+
+  assert.equal(result.rawDraft.answer, "Fallback OpenRouter answer");
+  assert.equal(result.previewDraft.answer, "Fallback OpenRouter answer");
+  assert.equal(result.previewTrace.finalProvider, "openrouter");
+  assert.match(result.previewTrace.note, /cloud fallback/i);
+  assert.equal(result.toolApplied, false);
+  assert.equal(localCalls, 1);
+  assert.equal(fallbackCalls, 1);
 });

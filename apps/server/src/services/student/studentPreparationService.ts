@@ -1,12 +1,14 @@
 import { performance } from "node:perf_hooks";
 import {
   defaultToolRoutingDecision,
+  type ExecutionTrace,
   type QuestionCategory,
-  type ResearchToolLog
+  type ResearchToolLog,
+  type ToolRoutingDecision
 } from "../../types/arena.js";
-import { defaultAgentRoutingDecision } from "../../types/agents.js";
+import { defaultAgentRoutingDecision, type AgentRoutingDecision } from "../../types/agents.js";
 import type { KnowledgeInjection } from "../../types/knowledge.js";
-import { defaultSkillRoutingDecision } from "../../types/skills.js";
+import { defaultSkillRoutingDecision, type SkillRoutingDecision } from "../../types/skills.js";
 import type {
   StudentAnswer,
   StudentAnswerPreview,
@@ -22,6 +24,7 @@ import { AgentRoutingService } from "../agents/agentRoutingService.js";
 import { SkillRoutingService } from "../skills/skillRoutingService.js";
 import { ToolRoutingService } from "../tools/toolRoutingService.js";
 import type { StudentStepExecutor } from "./studentStepExecutor.js";
+import { logger } from "../../utils/logger.js";
 import {
   buildKnowledgeWithoutStudentMemory,
   toRespondentOutput,
@@ -57,6 +60,11 @@ export type StudentAnalysisPreparation = {
   finalStudentAnswer: StudentAnswer;
   finalStudentTrace: StudentAnswerPreview["trace"]["student"];
   finalStudentRespondent: ReturnType<typeof toRespondentOutput>;
+};
+
+type StudentDraftResult = {
+  output: StudentAnswer;
+  trace: ExecutionTrace;
 };
 
 function buildSkippedOrchestration(category: QuestionCategory): StudentAnswerPreview["orchestration"] {
@@ -175,11 +183,80 @@ export class StudentPreparationService {
     private readonly researchToolService: Pick<ResearchToolService, "maybeCollect">,
     private readonly knowledgeInjectionService: Pick<KnowledgeInjectionService, "buildForCategory">,
     private readonly studentStrategySelectorService: Pick<StudentStrategySelectorService, "select">,
-    private readonly studentStepExecutor: Pick<StudentStepExecutor, "runStudentRedTeam">
+    private readonly studentStepExecutor: Pick<StudentStepExecutor, "runStudentRedTeam" | "runStudentDraft">
   ) {}
 
   private get localModelName() {
     return this.localModelService.getConfiguredModelName?.() ?? "local-student";
+  }
+
+  private async answerStudentDraft(args: {
+    question: string;
+    category: QuestionCategory;
+    strategy: StudentResponseStrategy;
+    knowledge?: KnowledgeInjection | null;
+    research?: ResearchToolLog | null;
+    toolRouting?: ToolRoutingDecision | null;
+    skillRouting?: SkillRoutingDecision | null;
+    agentRouting?: AgentRoutingDecision | null;
+    note: string;
+  }): Promise<StudentDraftResult> {
+    try {
+      const result = await this.localModelService.answerQuestionDetailed({
+        question: args.question,
+        category: args.category,
+        strategy: args.strategy,
+        knowledge: args.knowledge,
+        research: args.research,
+        toolRouting: args.toolRouting,
+        skillRouting: args.skillRouting
+      });
+
+      return {
+        output: result.output,
+        trace: toStudentTrace({
+          requestedModel: this.localModelName,
+          usedRetry: result.usedRetry,
+          note: args.note,
+          skillRouting: args.skillRouting,
+          agentRouting: args.agentRouting
+        })
+      };
+    } catch (error) {
+      logger.warn("Local student draft failed; falling back to OpenRouter", {
+        category: args.category,
+        error: String(error)
+      });
+      const fallback = await this.studentStepExecutor.runStudentDraft({
+        question: args.question,
+        category: args.category,
+        strategy: args.strategy,
+        knowledge: args.knowledge,
+        research: args.research,
+        toolRouting: args.toolRouting,
+        skillRouting: args.skillRouting
+      });
+
+      return {
+        output: fallback.output,
+        trace: {
+          ...fallback.trace,
+          skillRouting: args.skillRouting ?? fallback.trace.skillRouting,
+          skillUsed: args.skillRouting?.skillFound ?? fallback.trace.skillUsed,
+          skillConfidence: args.skillRouting?.skillFound
+            ? args.skillRouting.confidence
+            : fallback.trace.skillConfidence,
+          skillOutcome: args.skillRouting?.skillFound ? "recommended" : fallback.trace.skillOutcome,
+          agentRouting: args.agentRouting ?? fallback.trace.agentRouting,
+          agentOutcome: args.agentRouting?.agentFound
+            ? args.agentRouting.fallbackToCore
+              ? "fallback_core"
+              : "recommended"
+            : fallback.trace.agentOutcome,
+          fallbackUsed: args.agentRouting?.fallbackToCore ?? fallback.trace.fallbackUsed
+        }
+      };
+    }
   }
 
   async preparePreview(
@@ -225,29 +302,26 @@ export class StudentPreparationService {
     });
     const baselineDraftResult =
       knowledge && knowledge.studentMemoryRules.length > 0
-        ? await this.localModelService.answerQuestionDetailed({
-          question,
-          category,
-          strategy: baselineStrategy,
-          knowledge: baselineKnowledge,
-          toolRouting,
-          skillRouting
-        })
+        ? await this.answerStudentDraft({
+            question,
+            category,
+            strategy: baselineStrategy,
+            knowledge: baselineKnowledge,
+            toolRouting,
+            skillRouting,
+            agentRouting,
+            note: "Local student produced the baseline answer without student memory."
+          })
         : null;
-    const rawDraftResult = await this.localModelService.answerQuestionDetailed({
+    const rawDraftResult = await this.answerStudentDraft({
       question,
       category,
       strategy,
       knowledge,
       toolRouting,
-      skillRouting
-    });
-    const rawDraftTrace = toStudentTrace({
-      requestedModel: this.localModelName,
-      usedRetry: rawDraftResult.usedRetry,
-      note: "Local student produced the initial standalone answer.",
       skillRouting,
-      agentRouting
+      agentRouting,
+      note: "Local student produced the initial standalone answer."
     });
     const prepared = await this.prepareResearchAwareDraft({
       question,
@@ -255,7 +329,7 @@ export class StudentPreparationService {
       category,
       rawDraft: rawDraftResult.output,
       currentDraft: rawDraftResult.output,
-      currentTrace: rawDraftTrace,
+      currentTrace: rawDraftResult.trace,
       knowledge,
       strategy,
       researchMode: options.researchMode ?? "auto"
@@ -358,25 +432,29 @@ export class StudentPreparationService {
       toolApplied = research.decision.shouldUse;
 
       if (toolApplied) {
-        const groundedResult = await this.localModelService.answerQuestionDetailed({
+        const groundedResult = await this.answerStudentDraft({
           question: args.question,
           category: args.category,
           strategy: args.strategy,
           knowledge: args.knowledge,
           research,
           toolRouting: research.toolRouting,
-          skillRouting: research.skillRouting
-        });
-        finalStudentAnswer = groundedResult.output;
-        finalStudentTrace = toStudentTrace({
-          requestedModel: this.localModelName,
-          usedRetry: groundedResult.usedRetry,
+          skillRouting: research.skillRouting,
           note: research.truth.no_reliable_source
             ? "Local student produced the answer after truth-engine abstention guidance."
-            : "Local student produced the answer after tool-guided factual grounding.",
-          skillRouting: research.skillRouting,
-          agentRouting: research.agentRouting
+            : "Local student produced the answer after tool-guided factual grounding."
         });
+        finalStudentAnswer = groundedResult.output;
+        finalStudentTrace = {
+          ...groundedResult.trace,
+          agentRouting: research.agentRouting,
+          agentOutcome: research.agentRouting.agentFound
+            ? research.agentRouting.fallbackToCore
+              ? "fallback_core"
+              : "recommended"
+            : "not_found",
+          fallbackUsed: research.agentRouting.fallbackToCore
+        };
       }
     }
 
