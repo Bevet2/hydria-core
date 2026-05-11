@@ -2,6 +2,7 @@ node_modules
 dist
 coverage
 .env
+.env.docker
 *.log
 *.py[cod]
 __pycache__/

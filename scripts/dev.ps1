@@ -11,9 +11,9 @@ if (-not (Test-Path $envPath)) {
 Push-Location $projectRoot
 try {
   if (-not (Test-Path (Join-Path $projectRoot "node_modules"))) {
-    & npm.cmd install
+    & npm install
   }
-  & npm.cmd run dev
+  & npm run dev
 } finally {
   Pop-Location
 }

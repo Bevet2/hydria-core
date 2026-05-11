@@ -149,53 +149,53 @@ This is intentionally simple for a first LoRA/SFT pass.
 
 Build the pack:
 
-```powershell
-npm.cmd run student:training-pack
+```bash
+npm run student:training-pack
 ```
 
 Freeze the governed baseline before training:
 
-```powershell
-npm.cmd run student:baseline -- --model-name=qwen2.5:7b
+```bash
+npm run student:baseline -- --model-name=qwen2.5:7b
 ```
 
 Check the local training environment and recommended recipe:
 
-```powershell
-npm.cmd run student:training-env
+```bash
+npm run student:training-env
 ```
 
 Prepare the first external LoRA request:
 
-```powershell
-npm.cmd run student:training-request -- --runtime-model-name=qwen2.5:7b --training-base-model=Qwen/Qwen2.5-7B-Instruct
+```bash
+npm run student:training-request -- --runtime-model-name=qwen2.5:7b --training-base-model=Qwen/Qwen2.5-7B-Instruct
 ```
 
 Or let Hydria prepare the request from the machine profile:
 
-```powershell
-npm.cmd run student:training-request -- --auto
+```bash
+npm run student:training-request -- --auto
 ```
 
 Register the candidate variant after serving it through Ollama or another executor:
 
-```powershell
-npm.cmd run student:variant-register -- --id=student-local-lora-v1 --served-model-name=qwen2.5:7b-student-local-lora-v1 --base-model-name=qwen2.5:7b
+```bash
+npm run student:variant-register -- --id=student-local-lora-v1 --served-model-name=qwen2.5:7b-student-local-lora-v1 --base-model-name=qwen2.5:7b
 ```
 
 Compare the candidate against the frozen baseline and promote it only if the gain is real:
 
-```powershell
-npm.cmd run student:variant-ab -- --before-baseline=storage/training/student-local-base-baseline-v1.json --after-variant-id=student-local-lora-v1 --after-model-name=qwen2.5:7b-student-local-lora-v1 --promote-if-good
+```bash
+npm run student:variant-ab -- --before-baseline=storage/training/student-local-base-baseline-v1.json --after-variant-id=student-local-lora-v1 --after-model-name=qwen2.5:7b-student-local-lora-v1 --promote-if-good
 ```
 
 Recommended pre-train checks:
 
-```powershell
-npm.cmd run check
-npm.cmd run test -w @hydria-arena/server
-npm.cmd run student:temporal-eval:replay
-npm.cmd run tool:routing-eval
+```bash
+npm run check
+npm run test -w @hydria-arena/server
+npm run student:temporal-eval:replay
+npm run tool:routing-eval
 ```
 
 ## First Training Recommendation

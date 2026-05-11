@@ -220,7 +220,9 @@ Governance currently manages:
 
 ## Persistence Model
 
-SQLite is the source of truth.
+SQLite is the default source of truth.
+
+Runtime services go through a `PersistenceAdapter` factory. `PERSISTENCE_ADAPTER=sqlite` is the supported default, and `PERSISTENCE_ADAPTER=postgres` enables the PostgreSQL adapter when `POSTGRES_URL` is set.
 
 The repo also keeps JSON projections and derived artifacts for compatibility and inspection, but the major stores and trackers recover from SQLite when those files are missing or corrupted.
 
@@ -236,37 +238,69 @@ Important persisted families include:
 
 Health endpoints expose persistence status and projection drift.
 
+SQLite to PostgreSQL migration:
+
+```bash
+POSTGRES_URL=postgres://hydria:hydria@localhost:5432/hydria npm run persistence:migrate:postgres -- --dry-run
+POSTGRES_URL=postgres://hydria:hydria@localhost:5432/hydria npm run persistence:migrate:postgres
+```
+
+Use `POSTGRES_SCHEMA=hydria_dev` when you want an isolated schema instead of `public`.
+
 ## Quick Start
 
 ### Prerequisites
 
-- Windows
-- Node.js on `PATH`
-- `npm.cmd`
+- Node.js 24 on `PATH`
+- npm on `PATH`
 - Ollama on `PATH`
 - an OpenRouter API key if you want live arena runs
 
 ### Install
 
-```powershell
-npm.cmd install
+```bash
+npm install
 ```
 
 ### Sync the OpenRouter key
 
+Linux / macOS:
+
+```bash
+bash scripts/sync-openrouter-key.sh
+```
+
+Windows PowerShell:
+
 ```powershell
-npm.cmd run sync:openrouter
+npm run sync:openrouter
 ```
 
 ### Prepare the local model
 
+Linux / macOS:
+
+```bash
+bash scripts/setup-local-model.sh
+```
+
+Windows PowerShell:
+
 ```powershell
-npm.cmd run setup:local-model
+npm run setup:local-model
 ```
 
 ### Start development
 
 Fastest option:
+
+Linux / macOS:
+
+```bash
+bash scripts/dev.sh
+```
+
+Windows:
 
 ```powershell
 .\start.cmd
@@ -274,28 +308,86 @@ Fastest option:
 
 Equivalent commands:
 
-```powershell
-npm.cmd run dev
+```bash
+npm run dev
 ```
 
-or
+Windows helper:
 
 ```powershell
-npm.cmd run dev:ps
+npm run dev:ps
 ```
 
 ### Build
 
-```powershell
-npm.cmd run build
+```bash
+npm run build
 ```
 
 ### Validate
 
-```powershell
-npm.cmd run check
-npm.cmd run test
+```bash
+npm run check
+npm run test
 ```
+
+Linux helper scripts:
+
+```bash
+bash scripts/check.sh
+bash scripts/test.sh
+```
+
+### Docker
+
+Build and run the minimal cloud-ready package:
+
+```bash
+cp .env.docker.example .env.docker
+docker compose up --build
+```
+
+The container serves the API and the built web UI on:
+
+```text
+http://localhost:8080
+```
+
+By default Docker connects to a host Ollama endpoint at `http://host.docker.internal:11435`.
+Override it with `HYDRIA_DOCKER_LOCAL_MODEL_BASE_URL` in `.env.docker` when needed.
+The base Docker package keeps `PERSISTENCE_ADAPTER=sqlite`.
+
+Run the PostgreSQL topology with:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.postgres.yml up --build
+```
+
+The first Docker target is still intentionally minimal: API + built web + persistent `storage` volume. Workers and model-router are planned as the next compose expansion.
+
+Docker smoke gate:
+
+```bash
+npm run docker:smoke
+```
+
+The smoke gate builds the image, starts Hydria without Ollama, checks `GET /api/health`, verifies that the API stays healthy with `localModel.reachable=false`, confirms persistence uses `/app/storage`, and verifies the built web UI responds on `/`.
+
+PostgreSQL persistence smoke gate:
+
+```bash
+POSTGRES_URL=postgres://hydria:hydria@localhost:5432/hydria npm run persistence:postgres:smoke
+```
+
+This runs the PostgreSQL adapter integration test, migrates SQLite data into an isolated smoke schema, compares table counts, starts Hydria with `PERSISTENCE_ADAPTER=postgres`, and checks `GET /api/health/persistence`. Override the isolated schema with `HYDRIA_POSTGRES_SMOKE_SCHEMA`; the script refuses `public` and drops the smoke schema by default. Set `HYDRIA_POSTGRES_SMOKE_KEEP_SCHEMA=true` to inspect it after the run.
+
+PostgreSQL cutover validation:
+
+```bash
+POSTGRES_URL=postgres://hydria:hydria@localhost:5432/hydria npm run persistence:postgres:cutover-check -- --schema hydria_staging --reset-schema
+```
+
+This produces `storage/training/hydria-postgres-cutover-check-v1.json` and runs migration parity, PostgreSQL runtime health, and the runtime release gate smoke. The operational procedure is in `docs/runbooks/postgres-cutover.md`.
 
 ### Runtime Release Gate
 
@@ -303,14 +395,14 @@ Hydria Core now has a release gate that consolidates the runtime regression arti
 
 Smoke verdict over the latest persisted benchmark reports plus direct tool-routing regression eval:
 
-```powershell
-npm.cmd run runtime:release-gate -- --smoke
+```bash
+npm run runtime:release-gate -- --smoke
 ```
 
 Full-mode verdict uses the same persisted artifacts, but records the run as a release validation:
 
-```powershell
-npm.cmd run runtime:release-gate -- --full
+```bash
+npm run runtime:release-gate -- --full
 ```
 
 The report is written to:
@@ -321,22 +413,45 @@ storage/training/hydria-core-runtime-release-gate-v1.json
 
 It checks the 350 single-turn artifact, hidden tool/research gate, Conversation Gate v3 hidden full60, Strategic Constraint Conflict full40, the runtime mini multi-turn gate, and direct tool-routing regression accuracy. The 350 historical wrong-language/tool/source counts are monitored as warnings unless `--strict-monitored-counts` is used; broken answers, short high-confidence answers, prompt-injection unsafe answers, failed cases, tool/research hidden regressions, and strategic conflict regressions are blocking.
 
+### Strategic Coherence Fine Gate
+
+The fine coherence gate targets the current multi-turn gap after context tracking: choosing a firm default under conflicting constraints while still naming the condition that would revise the choice.
+
+```bash
+npm run conversation:strategic-coherence
+```
+
+It writes:
+
+```text
+storage/training/strategic-coherence-fine-benchmark-v1.json
+storage/training/strategic-coherence-fine-diagnostics-v1.json
+```
+
 ## Useful Scripts
 
 Workspace-level scripts:
 
-- `npm.cmd run dev`
-- `npm.cmd run build`
-- `npm.cmd run check`
-- `npm.cmd run test`
-- `npm.cmd run learning:loop`
-- `npm.cmd run student:temporal-eval`
-- `npm.cmd run student:temporal-eval:record`
-- `npm.cmd run student:temporal-eval:replay`
-- `npm.cmd run conversation:runtime-mini`
-- `npm.cmd run conversation:strategic-conflict`
-- `npm.cmd run runtime:release-gate`
-- `npm.cmd run tool:routing-eval`
+- `npm run dev`
+- `npm run build`
+- `npm run check`
+- `npm run test`
+- `npm run docker:smoke`
+- `npm run persistence:migrate:postgres`
+- `npm run persistence:postgres:smoke`
+- `npm run persistence:postgres:cutover-check`
+- `npm run learning:loop`
+- `npm run student:temporal-eval`
+- `npm run student:temporal-eval:record`
+- `npm run student:temporal-eval:replay`
+- `npm run conversation:runtime-mini`
+- `npm run conversation:strategic-conflict`
+- `npm run conversation:strategic-coherence`
+- `npm run runtime:release-gate`
+- `npm run tool:routing-eval`
+- `npm run dev:sh`
+- `npm run check:sh`
+- `npm run test:sh`
 
 Server-only equivalents live in `apps/server/package.json`.
 

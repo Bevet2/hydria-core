@@ -1,0 +1,37 @@
+services:
+  hydria-core:
+    build:
+      context: .
+    image: hydria-core:local
+    ports:
+      - "${HYDRIA_CORE_PORT:-8080}:8080"
+    env_file:
+      - path: .env.docker
+        required: false
+    environment:
+      SERVER_PORT: 8080
+      WEB_ORIGIN: ${HYDRIA_DOCKER_WEB_ORIGIN:-http://localhost:8080}
+      VITE_API_BASE_URL: ${HYDRIA_DOCKER_API_BASE_URL:-http://localhost:8080}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1/chat/completions}
+      OPENROUTER_HTTP_REFERER: ${HYDRIA_DOCKER_HTTP_REFERER:-http://localhost:8080}
+      OPENROUTER_APP_NAME: ${OPENROUTER_APP_NAME:-Hydria Core}
+      PERSISTENCE_ADAPTER: sqlite
+      LOCAL_MODEL_PROVIDER: ollama
+      LOCAL_MODEL_NAME: ${LOCAL_MODEL_NAME:-student-local-1p5b-toolbench-lora-v10-light:latest}
+      LOCAL_MODEL_BASE_URL: ${HYDRIA_DOCKER_LOCAL_MODEL_BASE_URL:-http://host.docker.internal:11435}
+      LOCAL_MODEL_OBSERVER_ENABLED: ${HYDRIA_DOCKER_LOCAL_MODEL_OBSERVER_ENABLED:-false}
+      LOCAL_STUDENT_FALLBACK_MODEL: ${LOCAL_STUDENT_FALLBACK_MODEL:-openai/gpt-5.4-mini}
+      POSTGRES_SCHEMA: ${POSTGRES_SCHEMA:-public}
+    volumes:
+      - hydria-storage:/app/storage
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8080/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  hydria-storage:
