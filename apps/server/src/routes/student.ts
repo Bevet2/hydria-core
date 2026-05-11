@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { createTrainingEndpointGuard } from "../middleware/trainingEndpointGuard.js";
 import { StudentPreviewNotFoundError, StudentService } from "../services/studentService.js";
 import {
   studentAnalyzeRequestSchema,
@@ -7,6 +8,7 @@ import {
 
 export function createStudentRouter(studentService: StudentService) {
   const router = Router();
+  const trainingEndpointGuard = createTrainingEndpointGuard();
 
   router.get("/history", async (_request, response, next) => {
     try {
@@ -32,7 +34,7 @@ export function createStudentRouter(studentService: StudentService) {
     }
   });
 
-  router.post("/answer", async (request, response, next) => {
+  router.post("/answer", ...trainingEndpointGuard, async (request, response, next) => {
     try {
       const parsed = studentSessionRequestSchema.parse(request.body);
       const preview = await studentService.answerOnly(parsed.question);
@@ -42,7 +44,7 @@ export function createStudentRouter(studentService: StudentService) {
     }
   });
 
-  router.post("/analyze", async (request, response, next) => {
+  router.post("/analyze", ...trainingEndpointGuard, async (request, response, next) => {
     try {
       const parsed = studentAnalyzeRequestSchema.parse(request.body);
       const session = await studentService.analyzePreview(parsed.previewId);
@@ -57,7 +59,7 @@ export function createStudentRouter(studentService: StudentService) {
     }
   });
 
-  router.post("/run", async (request, response, next) => {
+  router.post("/run", ...trainingEndpointGuard, async (request, response, next) => {
     try {
       const parsed = studentSessionRequestSchema.parse(request.body);
       const session = await studentService.runSession(parsed.question);

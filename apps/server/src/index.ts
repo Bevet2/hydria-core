@@ -118,6 +118,11 @@ app.get("/api/health", async (_request, response) => {
       refineFallbackModel: env.ARENA_REFINE_FALLBACK_MODEL,
       localStudentFallbackModel: env.LOCAL_STUDENT_FALLBACK_MODEL
     },
+    trainingEndpoints: {
+      enabled: env.TRAINING_ENDPOINTS_ENABLED,
+      requireApiKey: env.TRAINING_ENDPOINTS_REQUIRE_API_KEY,
+      openRouterScope: "training_evaluation_only"
+    },
     studentChat: {
       provider: "ollama",
       model: env.STUDENT_CHAT_LOCAL_MODEL_NAME,

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { createTrainingEndpointGuard } from "../middleware/trainingEndpointGuard.js";
 import { ArenaRunner } from "../services/arenaRunner.js";
 import type { ArenaQualityAnalyticsReport } from "../types/analytics.js";
 import { arenaRunRequestSchema } from "../types/arena.js";
@@ -9,8 +10,9 @@ export function createArenaRouter(
   getQualityReport: () => Promise<ArenaQualityAnalyticsReport>
 ) {
   const router = Router();
+  const trainingEndpointGuard = createTrainingEndpointGuard();
 
-  router.post("/run", async (request, response, next) => {
+  router.post("/run", ...trainingEndpointGuard, async (request, response, next) => {
     try {
       const parsed = arenaRunRequestSchema.parse({
         question: request.body?.question,

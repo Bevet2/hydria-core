@@ -1,11 +1,13 @@
 import { Router } from "express";
 import { benchmarkRunRequestSchema } from "../types/benchmark.js";
 import { BenchmarkService } from "../services/benchmarkService.js";
+import { createTrainingEndpointGuard } from "../middleware/trainingEndpointGuard.js";
 
 export function createBenchmarkRouter(benchmarkService: BenchmarkService) {
   const router = Router();
+  const trainingEndpointGuard = createTrainingEndpointGuard();
 
-  router.post("/run", async (request, response, next) => {
+  router.post("/run", ...trainingEndpointGuard, async (request, response, next) => {
     try {
       const parsed = benchmarkRunRequestSchema.parse({
         benchmarkId: request.body?.benchmarkId,

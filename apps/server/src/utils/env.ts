@@ -154,6 +154,14 @@ const envSchema = z.object({
   MODEL_ROUTER_OPENAI_COMPAT_API_KEY: z.string().default(""),
   MODEL_ROUTER_EMBEDDING_BASE_URL: z.string().default(""),
   MODEL_ROUTER_EMBEDDING_API_KEY: z.string().default(""),
+  TRAINING_ENDPOINTS_ENABLED: z
+    .string()
+    .default("false")
+    .transform((value) => value.toLowerCase() === "true"),
+  TRAINING_ENDPOINTS_REQUIRE_API_KEY: z
+    .string()
+    .default("true")
+    .transform((value) => value.toLowerCase() !== "false"),
   HYDRIA_API_KEYS: z.string().default(""),
   HYDRIA_API_KEY_SHA256_HASHES: z.string().default(""),
   HYDRIA_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(60000),

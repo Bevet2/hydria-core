@@ -274,6 +274,29 @@ async function runProductionSmoke(args = parseArgs()): Promise<ProductionSmokeRe
     });
   });
 
+  await runCheck(checks, "training_endpoint_guard", async () => {
+    const { response, text } = await fetchWithTimeout(
+      joinUrl(args.baseUrl, "/api/arena/run"),
+      {
+        method: "POST",
+        headers: { "content-type": "application/json; charset=utf-8" },
+        body: JSON.stringify({
+          question: "Smoke test: this public request must not trigger OpenRouter."
+        })
+      },
+      args.timeoutMs
+    );
+    if (response.status === 401 || response.status === 403 || response.status === 503) {
+      return pass("public training/evaluation execution is guarded", {
+        status: response.status,
+        preview: text.slice(0, 180)
+      });
+    }
+    return fail(`public training/evaluation execution was not guarded; got HTTP ${response.status}`, {
+      preview: text.slice(0, 300)
+    });
+  });
+
   await runCheck(checks, "chat_single_turn", async () => {
     const response = await postJson<ChatResponse>(
       args.baseUrl,

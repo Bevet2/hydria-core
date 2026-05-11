@@ -130,7 +130,7 @@ It stores:
 
 The web chat uses `ChatRuntimeService` plus a dedicated `StudentChatAdapter`.
 
-This path is still based on the local student identity and `StudentAnswer` schema, but it does not run the full Student Lab preview/analyze/research pipeline. The chat runtime prepares the current message with conversation state, `ActiveConstraintCapsule`, answer policy, recent turns, and resolved follow-up task, then asks the student model directly. Runtime chat is local open-weight only; OpenRouter remains reserved for training, arena, and evaluation flows.
+This path is still based on the local student identity and `StudentAnswer` schema, but it does not run the full Student Lab preview/analyze/research pipeline. The chat runtime prepares the current message with conversation state, `ActiveConstraintCapsule`, answer policy, recent turns, and resolved follow-up task, then asks the student model directly. Runtime chat is local open-weight only; OpenRouter is reserved for controlled training/evaluation jobs and is not part of the public runtime path.
 
 Relevant runtime knobs:
 
@@ -231,7 +231,7 @@ The API exposes:
 - `POST /api/models/plan`
 - `POST /api/models/complete`
 
-Provider identifiers in the manifest are deployment targets. Configure the actual Ollama, vLLM, OpenRouter, or OpenAI-compatible serving names before enabling live execution. The completion endpoint is protected by `MODEL_ROUTER_EXECUTION_ENABLED=false` by default, plus server-side cloud/cost/token caps. When execution is enabled, `/api/models/complete` requires `X-Hydria-API-Key`, `X-API-Key`, or `Authorization: Bearer ...`; request bodies can only tighten budget policy, never loosen the server limits.
+Provider identifiers in the manifest are deployment targets. Configure the actual Ollama, vLLM, or OpenAI-compatible serving names before enabling live execution. The completion endpoint is protected by `MODEL_ROUTER_EXECUTION_ENABLED=false` by default, plus server-side cloud/cost/token caps. Public runtime keeps `MODEL_ROUTER_ALLOW_CLOUD=false`; OpenRouter is reserved for controlled training/evaluation jobs. When execution is enabled, `/api/models/complete` requires `X-Hydria-API-Key`, `X-API-Key`, or `Authorization: Bearer ...`; request bodies can only tighten budget policy, never loosen the server limits.
 
 ### Learning Governance
 
@@ -292,7 +292,7 @@ Use `POSTGRES_SCHEMA=hydria_dev` when you want an isolated schema instead of `pu
 - Node.js 24 on `PATH`
 - npm on `PATH`
 - Ollama on `PATH`
-- an OpenRouter API key if you want live arena runs
+- an OpenRouter API key only for controlled training/evaluation jobs
 
 ### Install
 
