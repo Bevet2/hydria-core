@@ -142,6 +142,27 @@ curl -fsS https://app.hydria.click/api/models/complete \
 
 Request bodies can only tighten execution policy. They cannot enable model execution, cloud providers, higher cost tiers, or larger token limits beyond the server environment.
 
+Current OVH self-hosted Ollama backend:
+
+```text
+Ollama host bind: 0.0.0.0:11435
+Hydria container URL: http://host.docker.internal:11435
+Firewall: 11435 allowed only from the Hydria Docker subnet
+API key file: /opt/hydria-core/.hydria-api-key
+```
+
+Installed open-weight models:
+
+```text
+phi3:mini              routing fast path
+qwen2.5:3b            routing fallback / small local model
+qwen2.5:14b           main local reasoning brain
+qwen2.5-coder:7b      code specialist
+deepseek-r1:14b       deep reasoning specialist
+bge-m3                embeddings / retrieval base
+mistral:7b            writing / business fallback
+```
+
 Before first production cutover to the dedicated schema:
 
 ```bash

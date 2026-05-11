@@ -209,6 +209,8 @@ Registered roles:
 - BGE-M3 and BGE Reranker: memory retrieval and reranking
 - Phi mini and Qwen 3B: fast routing and extraction
 
+The OVH CPU backend currently runs the practical local subset through Ollama: `phi3:mini`, `qwen2.5:3b`, `qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `bge-m3`, and `mistral:7b`. Larger targets such as Qwen 32B and Mixtral are reserved for a GPU/vLLM layer.
+
 The API exposes:
 
 - `GET /api/models/capabilities`

@@ -184,7 +184,7 @@ export const modelCapabilityManifest = [
     categories: ["debug_diagnostic", "architecture_design", "technical_explanation"],
     providerKinds: ["ollama", "vllm", "openrouter", "openai_compatible"],
     providerModelIds: {
-      ollama: "qwen2.5-coder:14b",
+      ollama: "qwen2.5-coder:7b",
       vllm: "Qwen/Qwen2.5-Coder-14B-Instruct",
       openrouter: "qwen/qwen-2.5-coder-14b-instruct"
     },
@@ -246,7 +246,7 @@ export const modelCapabilityManifest = [
     categories: ["operational_writing", "product_strategy", "technical_explanation", "other"],
     providerKinds: ["ollama", "vllm", "openrouter", "openai_compatible"],
     providerModelIds: {
-      ollama: "mixtral:8x7b",
+      ollama: "mistral:7b",
       vllm: "mistralai/Mixtral-8x7B-Instruct-v0.1",
       openrouter: "mistralai/mixtral-8x7b-instruct"
     },
