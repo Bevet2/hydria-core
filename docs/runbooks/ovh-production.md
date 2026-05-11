@@ -61,7 +61,7 @@ curl -fsS https://app.hydria.click/api/chat/message \
   -d '{"message":"Reponds en une phrase : quel est le role de Hydria Core ?"}'
 ```
 
-This validates DNS, TLS, Caddy, API, PostgreSQL, and the direct student chat runtime. Chat is based on the student prompt and `StudentAnswer` schema through `StudentChatAdapter`, but it does not run the full Student Lab benchmark/research/analyze pipeline. If Ollama is unavailable or too slow on the VPS, the student chat draft should fall back to OpenRouter.
+This validates DNS, TLS, Caddy, API, PostgreSQL, and the direct student chat runtime. Chat is based on the student prompt and `StudentAnswer` schema through `StudentChatAdapter`, but it does not run the full Student Lab benchmark/research/analyze pipeline. Runtime chat must be served by the local Ollama open-weight backend; OpenRouter is reserved for training, arena, and evaluation flows.
 
 Full production smoke from any machine with this repo:
 
@@ -75,7 +75,15 @@ This writes:
 storage/training/hydria-production-smoke-v1.json
 ```
 
-The smoke is blocking on HTTPS/web/API failures, PostgreSQL not being active, production using schema `public`, schema mismatch, single-turn chat failure, broken session continuity, and `ActiveConstraintCapsule` missing a short-answer preference in a multi-turn conversation. Local Ollama being unreachable is only a warning when the cloud fallback is configured; add `--require-local-model` after Ollama is installed on the VPS.
+The smoke is blocking on HTTPS/web/API failures, PostgreSQL not being active, production using schema `public`, schema mismatch, single-turn chat failure, runtime chat not being served by local Ollama, broken session continuity, and `ActiveConstraintCapsule` missing a short-answer preference in a multi-turn conversation.
+
+Student chat production gate:
+
+```bash
+npm run student:chat-prod-gate -- --base-url=https://app.hydria.click
+```
+
+This gate fails any runtime chat turn that is not served by the local Ollama student chat model.
 
 ## Deploy Current Branch
 
@@ -209,13 +217,15 @@ HYDRIA_DOCKER_API_BASE_URL=https://app.hydria.click
 HYDRIA_DOCKER_HTTP_REFERER=https://app.hydria.click
 LOCAL_STUDENT_FALLBACK_MODEL=openai/gpt-5.4-mini
 LOCAL_MODEL_NAME=phi3:mini
+STUDENT_CHAT_LOCAL_MODEL_NAME=phi3:mini
 HYDRIA_DOCKER_LOCAL_MODEL_BASE_URL=http://host.docker.internal:11435
 LOCAL_MODEL_TIMEOUT_MS=1000
+STUDENT_CHAT_LOCAL_TIMEOUT_MS=22000
 MODEL_ROUTER_LOCAL_TIMEOUT_MS=120000
 HYDRIA_DOCKER_LOCAL_MODEL_OBSERVER_ENABLED=false
 ```
 
-The model router can still route heavier specialist calls to the installed Ollama models (`qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `mistral:7b`). Keep the direct chat/local-student timeout low on the CPU VPS so the UI does not block when a local draft is too slow and has to fall back.
+The model router can still route heavier specialist calls to the installed Ollama models (`qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `mistral:7b`). Keep the generic local-student timeout low for non-chat paths, but give runtime chat its own timeout through `STUDENT_CHAT_LOCAL_TIMEOUT_MS`; chat does not fall back to OpenRouter.
 
 Then rerun the production smoke:
 

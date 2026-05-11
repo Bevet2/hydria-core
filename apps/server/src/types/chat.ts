@@ -29,6 +29,13 @@ export type ChatMessage = {
 
 export type ChatRuntimeMode = "direct" | "conversation";
 
+export type ChatGenerationMetadata = {
+  provider: "ollama" | "fallback";
+  model: string;
+  usedStaticFallback: boolean;
+  validationIssues: string[];
+};
+
 export type ChatMessageResponse = {
   sessionId: string;
   createdAt: string;
@@ -41,6 +48,7 @@ export type ChatMessageResponse = {
   activeConstraintCapsule: ActiveConstraintCapsule;
   answerPolicy: MultiTurnAnswerPolicyResult;
   conversationQuality: ConversationQualityGateResult;
+  generation: ChatGenerationMetadata;
   usedRetry: boolean;
   durationMs: number;
 };

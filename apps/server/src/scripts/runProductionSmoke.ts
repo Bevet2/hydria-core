@@ -48,6 +48,11 @@ type ChatResponse = {
     passed?: boolean;
     issues?: string[];
   };
+  generation?: {
+    provider?: string;
+    model?: string;
+    usedStaticFallback?: boolean;
+  };
 };
 
 const currentFilePath = fileURLToPath(import.meta.url);
@@ -197,20 +202,20 @@ async function runProductionSmoke(args = parseArgs()): Promise<ProductionSmokeRe
     });
   });
 
-  await runCheck(checks, "local_model_or_fallback", async () => {
+  await runCheck(checks, "local_model_runtime", async () => {
     const localModel = health?.localModel;
     if (localModel?.reachable === true) {
-      return pass("local model endpoint is reachable", localModel);
+      return pass("local model endpoint is reachable", {
+        localModel,
+        studentChat: health?.studentChat
+      });
     }
     if (args.requireLocalModel) {
       return fail("local model endpoint is not reachable and --require-local-model is set", localModel);
     }
-    if (!health?.fallbackConfig?.localStudentFallbackModel) {
-      return fail("local model is unreachable and no local student fallback model is advertised", health?.fallbackConfig);
-    }
-    return warn("local model is unreachable; production is relying on fallback cloud model", {
+    return warn("local model is unreachable; runtime chat cannot use cloud fallback", {
       localModel,
-      fallbackConfig: health?.fallbackConfig
+      studentChat: health?.studentChat
     });
   });
 
@@ -286,8 +291,15 @@ async function runProductionSmoke(args = parseArgs()): Promise<ProductionSmokeRe
     if (hasInternalLeak(answer)) {
       return fail("chat leaked internal runtime language", { answer });
     }
+    if (response.generation?.provider !== "ollama") {
+      return fail("chat was not served by the local Ollama student runtime", {
+        generation: response.generation,
+        answer
+      });
+    }
     return pass("single-turn chat answered in French with a session", {
       sessionId: response.sessionId,
+      generation: response.generation,
       answer
     });
   });
@@ -358,9 +370,16 @@ async function runProductionSmoke(args = parseArgs()): Promise<ProductionSmokeRe
     if (third.conversationQuality?.passed === false) {
       return fail("conversation quality gate failed on follow-up", third.conversationQuality);
     }
+    if (third.generation?.provider !== "ollama") {
+      return fail("multi-turn chat was not served by the local Ollama student runtime", {
+        generation: third.generation,
+        answer
+      });
+    }
     return pass("multi-turn chat kept session state and respected the brevity constraint", {
       answer,
       wordCount: wordCount(answer),
+      generation: third.generation,
       topConstraints
     });
   });

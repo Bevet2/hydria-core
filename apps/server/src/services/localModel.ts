@@ -58,6 +58,7 @@ type LocalModelPromptOptions = {
   format?: OllamaGenerateFormat;
   numPredict?: number;
   temperature?: number;
+  timeoutMs?: number;
 };
 
 type LocalObservationArgs = {
@@ -1442,7 +1443,7 @@ export class LocalModelService {
           num_predict: options.numPredict ?? 320
         }
       }),
-      signal: AbortSignal.timeout(env.LOCAL_MODEL_TIMEOUT_MS)
+      signal: AbortSignal.timeout(options.timeoutMs ?? env.LOCAL_MODEL_TIMEOUT_MS)
     });
 
     if (!response.ok) {

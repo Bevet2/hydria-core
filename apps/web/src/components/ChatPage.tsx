@@ -57,6 +57,8 @@ export function ChatPage() {
       language: lastResponse?.activeConstraintCapsule.language ?? "unknown",
       answerMode: lastResponse?.answerPolicy.answerMode ?? "idle",
       posture: lastResponse?.answerPolicy.strategicCoherencePolicy.decisionPosture ?? "none",
+      provider: lastResponse?.generation.provider ?? "n/a",
+      model: lastResponse?.generation.model ?? "n/a",
       duration: formatDuration(lastResponse?.durationMs ?? null),
       quality: issueLabel(lastResponse)
     }),
@@ -221,6 +223,14 @@ export function ChatPage() {
               <div>
                 <span>Retry</span>
                 <strong>{lastResponse?.usedRetry ? "yes" : "no"}</strong>
+              </div>
+              <div>
+                <span>Provider</span>
+                <strong>{chatMeta.provider}</strong>
+              </div>
+              <div>
+                <span>Model</span>
+                <strong>{chatMeta.model}</strong>
               </div>
               <div>
                 <span>Confidence</span>

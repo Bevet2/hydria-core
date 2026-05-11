@@ -131,6 +131,8 @@ const envSchema = z.object({
   LOCAL_MODEL_BASE_URL: z.string().url().default("http://127.0.0.1:11435"),
   LOCAL_STUDENT_FALLBACK_MODEL: z.string().min(1).default("openai/gpt-5.4-mini"),
   LOCAL_MODEL_TIMEOUT_MS: z.coerce.number().int().min(1000).default(45000),
+  STUDENT_CHAT_LOCAL_MODEL_NAME: z.string().default(""),
+  STUDENT_CHAT_LOCAL_TIMEOUT_MS: z.coerce.number().int().min(1000).default(22000),
   LOCAL_MODEL_OBSERVER_ENABLED: z
     .string()
     .default("true")
@@ -166,7 +168,12 @@ const envSchema = z.object({
   VITE_API_BASE_URL: z.string().url().default("http://localhost:8080")
 });
 
-export const env = envSchema.parse(process.env);
+const parsedEnv = envSchema.parse(process.env);
+export const env = {
+  ...parsedEnv,
+  STUDENT_CHAT_LOCAL_MODEL_NAME:
+    parsedEnv.STUDENT_CHAT_LOCAL_MODEL_NAME.trim() || parsedEnv.LOCAL_MODEL_NAME
+};
 
 export const defaultArenaModels = {
   respondentA: env.ARENA_RESPONDENT_A_MODEL,

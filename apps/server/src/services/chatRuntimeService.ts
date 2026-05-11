@@ -1219,6 +1219,12 @@ export class ChatRuntimeService {
       activeConstraintCapsule,
       answerPolicy,
       conversationQuality,
+      generation: {
+        provider: draft.generation.provider,
+        model: draft.generation.model,
+        usedStaticFallback: draft.generation.provider === "fallback",
+        validationIssues: draft.generation.validationIssues
+      },
       usedRetry,
       durationMs: Date.now() - startedAt
     };

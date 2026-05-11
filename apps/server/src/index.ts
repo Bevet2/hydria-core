@@ -43,6 +43,9 @@ import { logger } from "./utils/logger.js";
 
 const historyStore = new HistoryStore();
 const localModelService = new LocalModelService();
+const studentChatLocalModelService = new LocalModelService({
+  modelName: env.STUDENT_CHAT_LOCAL_MODEL_NAME
+});
 const modelCapabilityService = new ModelCapabilityService();
 const modelProviderService = new ModelProviderService({ capabilityService: modelCapabilityService });
 const openRouterService = new OpenRouterService();
@@ -62,7 +65,7 @@ const studentService = new StudentService(
   researchToolService,
   studentSessionStore
 );
-const studentChatAdapter = new StudentChatAdapter(localModelService, openRouterService);
+const studentChatAdapter = new StudentChatAdapter(studentChatLocalModelService);
 const chatRuntimeService = new ChatRuntimeService(studentChatAdapter);
 const arenaRunner = new ArenaRunner(
   openRouterService,
@@ -114,6 +117,12 @@ app.get("/api/health", async (_request, response) => {
     fallbackConfig: {
       refineFallbackModel: env.ARENA_REFINE_FALLBACK_MODEL,
       localStudentFallbackModel: env.LOCAL_STUDENT_FALLBACK_MODEL
+    },
+    studentChat: {
+      provider: "ollama",
+      model: env.STUDENT_CHAT_LOCAL_MODEL_NAME,
+      timeoutMs: env.STUDENT_CHAT_LOCAL_TIMEOUT_MS,
+      cloudFallbackEnabled: false
     },
     localModel: local,
     persistence

@@ -130,7 +130,13 @@ It stores:
 
 The web chat uses `ChatRuntimeService` plus a dedicated `StudentChatAdapter`.
 
-This path is still based on the local student identity and `StudentAnswer` schema, but it does not run the full Student Lab preview/analyze/research pipeline. The chat runtime prepares the current message with conversation state, `ActiveConstraintCapsule`, answer policy, recent turns, and resolved follow-up task, then asks the student model directly. This keeps normal chat general-purpose while preserving the governed multi-turn context layer.
+This path is still based on the local student identity and `StudentAnswer` schema, but it does not run the full Student Lab preview/analyze/research pipeline. The chat runtime prepares the current message with conversation state, `ActiveConstraintCapsule`, answer policy, recent turns, and resolved follow-up task, then asks the student model directly. Runtime chat is local open-weight only; OpenRouter remains reserved for training, arena, and evaluation flows.
+
+Relevant runtime knobs:
+
+- `STUDENT_CHAT_LOCAL_MODEL_NAME`
+- `STUDENT_CHAT_LOCAL_TIMEOUT_MS`
+- `npm run student:chat-prod-gate -- --base-url=https://app.hydria.click`
 
 ### Research / Truth Engine
 
