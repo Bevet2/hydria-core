@@ -52,13 +52,21 @@ export type StudentStepResult<T> = {
   durationMs: number;
 };
 
+const cloudStudentConfidenceSchema = z.preprocess((value) => {
+  if (value === null || value === undefined || value === "") {
+    return 70;
+  }
+  const numeric = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numeric) ? numeric : 70;
+}, z.number().min(0).max(100));
+
 const cloudStudentDraftSchema = z
   .object({
     modelRole: z.string().optional().default("student"),
     answer: z.string().min(1),
     key_points: z.array(z.string()).max(12).default([]),
     assumptions: z.array(z.string()).max(12).default([]),
-    confidence: z.coerce.number().min(0).max(100).default(70)
+    confidence: cloudStudentConfidenceSchema.default(70)
   })
   .transform(
     (value): StudentAnswer => ({
@@ -72,6 +80,10 @@ const cloudStudentDraftSchema = z
       confidence: value.confidence
     })
   );
+
+export function parseCloudStudentDraft(payload: unknown): StudentAnswer {
+  return cloudStudentDraftSchema.parse(payload);
+}
 
 function buildOpenRouterTrace(model: string, note: string): ExecutionTrace {
   return {

@@ -208,28 +208,18 @@ HYDRIA_DOCKER_WEB_ORIGIN=https://app.hydria.click
 HYDRIA_DOCKER_API_BASE_URL=https://app.hydria.click
 HYDRIA_DOCKER_HTTP_REFERER=https://app.hydria.click
 LOCAL_STUDENT_FALLBACK_MODEL=openai/gpt-5.4-mini
+LOCAL_MODEL_NAME=phi3:mini
+HYDRIA_DOCKER_LOCAL_MODEL_BASE_URL=http://host.docker.internal:11435
+LOCAL_MODEL_TIMEOUT_MS=1000
 HYDRIA_DOCKER_LOCAL_MODEL_OBSERVER_ENABLED=false
 ```
 
-Current recommended OVH mode is cloud fallback for the student draft, because the VPS does not yet host Ollama. Keep the local model timeout low so health checks do not wait on an unreachable host endpoint:
+The model router can still route heavier specialist calls to the installed Ollama models (`qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `mistral:7b`). Keep the direct chat/local-student timeout low on the CPU VPS so the UI does not block when a local draft is too slow and has to fall back.
 
-```text
-HYDRIA_DOCKER_LOCAL_MODEL_BASE_URL=http://127.0.0.1:65535
-LOCAL_MODEL_TIMEOUT_MS=1000
-```
-
-When Ollama is installed on the VPS host and listening on `11435`, switch to:
-
-```text
-HYDRIA_DOCKER_LOCAL_MODEL_BASE_URL=http://host.docker.internal:11435
-LOCAL_MODEL_TIMEOUT_MS=45000
-HYDRIA_DOCKER_LOCAL_MODEL_OBSERVER_ENABLED=true
-```
-
-Then rerun:
+Then rerun the production smoke:
 
 ```bash
-npm run prod:smoke -- --base-url=https://app.hydria.click --expected-schema=hydria_prod --require-local-model
+npm run prod:smoke -- --base-url=https://app.hydria.click --expected-schema=hydria_prod
 ```
 
 ## Firewall
