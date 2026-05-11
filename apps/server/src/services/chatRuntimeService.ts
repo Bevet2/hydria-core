@@ -810,7 +810,8 @@ function shouldRepairConversationQuality(quality: ConversationQualityGateResult)
     "ignored_context_change",
     "ignored_added_constraint",
     "active_constraint_contradicted",
-    "strategic_conflict_not_resolved"
+    "strategic_conflict_not_resolved",
+    "ignored_brevity_constraint"
   ].some((issue) => quality.issues.includes(issue));
 }
 

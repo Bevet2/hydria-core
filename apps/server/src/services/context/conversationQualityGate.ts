@@ -70,6 +70,37 @@ function wordCount(value: string) {
   return (normalizeText(value).match(/[a-z0-9]+/g) ?? []).length;
 }
 
+function activeBrevityLimit(capsule?: ActiveConstraintCapsule) {
+  const constraints = capsule?.topConstraints ?? [];
+  for (const constraint of constraints) {
+    const normalized = normalizeText(constraint);
+    const explicitLimit = normalized.match(/\b(?:moins de|less than|under|maximum|max)\s+(\d+)\s+(?:mots?|words?)\b/);
+    if (explicitLimit?.[1]) {
+      return Number(explicitLimit[1]);
+    }
+    const answerLimit = normalized.match(/\banswer\s+(\d+)\s+(?:mots?|words?)\b/);
+    if (answerLimit?.[1]) {
+      return Number(answerLimit[1]);
+    }
+    if (/\b(?:very short answers?|reponses? tres courtes?|reponses? tres courte?s?)\b/.test(normalized)) {
+      return 16;
+    }
+    if (/\b(?:short answers?|reponses? courtes?|reponses? courte?s?)\b/.test(normalized)) {
+      return 28;
+    }
+  }
+  return null;
+}
+
+function violatesActiveBrevityConstraint(input: ConversationQualityGateInput) {
+  const limit = activeBrevityLimit(input.activeConstraintCapsule);
+  if (!limit) {
+    return false;
+  }
+  const tolerance = Math.min(8, Math.max(3, Math.ceil(limit * 0.5)));
+  return wordCount(input.answer) > limit + tolerance;
+}
+
 function hasRecommendationSignal(answer: string) {
   return RECOMMENDATION_MARKER.test(answer) || NATURAL_COMMITMENT_MARKER.test(answer);
 }
@@ -374,7 +405,8 @@ function chooseAction(issues: string[], policy: MultiTurnAnswerPolicyResult): Co
     issues.includes("strategic_conflict_not_resolved") ||
     issues.includes("active_constraint_contradicted") ||
     issues.includes("missing_strategic_revision_condition") ||
-    issues.includes("over_rigid_strategic_answer")
+    issues.includes("over_rigid_strategic_answer") ||
+    issues.includes("ignored_brevity_constraint")
   ) {
     return "revise";
   }
@@ -477,6 +509,11 @@ export function analyzeConversationQuality(input: ConversationQualityGateInput):
   if (isOverRigidStrategicAnswer(input)) {
     issues.push("over_rigid_strategic_answer");
     penalties.push("answer is strategically rigid without a condition that would change the choice");
+  }
+
+  if (violatesActiveBrevityConstraint(input)) {
+    issues.push("ignored_brevity_constraint");
+    penalties.push("answer exceeds the active brevity or word-count constraint");
   }
 
   if (

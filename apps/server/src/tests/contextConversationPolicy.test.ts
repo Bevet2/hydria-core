@@ -199,6 +199,33 @@ test("active constraint capsule keeps user brevity preference as an active const
   assert.doesNotMatch(policy.guidance, /Vise 65 a 115 mots/i);
 });
 
+test("conversation quality gate rejects answers that exceed active brevity constraints", () => {
+  const initial = updateConversationState(createInitialState(), "Explique Hydria Core.", "");
+  const state = updateConversationState(initial, "Pour la suite, réponds en moins de 12 mots.", "");
+  const capsule = buildActiveConstraintCapsule(state, "Explique PostgreSQL en respectant ma contrainte.");
+  const policy = decideMultiTurnAnswerPolicy({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    newUserMessage: "Explique PostgreSQL en respectant ma contrainte.",
+    category: "mixed_reasoning",
+    toolRouting: null
+  });
+
+  const result = analyzeConversationQuality({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    policy,
+    newUserMessage: "Explique PostgreSQL en respectant ma contrainte.",
+    answer:
+      "PostgreSQL est une base relationnelle fiable, ouverte, extensible, adaptée aux transactions, aux index avancés, aux requêtes SQL et aux usages applicatifs exigeants.",
+    lastAssistantAnswer: "",
+    toolRouting: null
+  });
+
+  assert.ok(result.issues.includes("ignored_brevity_constraint"));
+  assert.equal(result.recommendedAction, "revise");
+});
+
 test("active constraint capsule discards old assumptions after contradiction", () => {
   const previous = updateConversationState(
     createInitialState(),
