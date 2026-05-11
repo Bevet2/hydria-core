@@ -88,6 +88,41 @@ test("chat runtime recalls user-provided facts without triggering research", asy
   assert.equal(second.conversationQuality.passed, true);
 });
 
+test("chat runtime retries corrected identity turns on the resolved task", async () => {
+  const calls: StudentChatAdapterInput[] = [];
+  const service = new ChatRuntimeService({
+    async answer(input) {
+      calls.push(input);
+      if (calls.length === 1) {
+        return buildAdapterResult("Louis IX est une figure historique francaise.");
+      }
+      if (calls.length === 2) {
+        return buildAdapterResult(
+          "Non, je n'ai pas precisement dit que Louis IX etait egalement connu sous le nom de Saint Louis."
+        );
+      }
+      return buildAdapterResult(
+        "Saint Louis, ou Louis IX, est un roi de France capetien qui a regne de 1226 a 1270."
+      );
+    }
+  });
+
+  const first = await service.sendMessage({ message: "qui est louis 9" });
+  const second = await service.sendMessage({
+    sessionId: first.sessionId,
+    message: "tu ne connais pas louis 9 ou dit plutot saint louis"
+  });
+
+  assert.equal(calls.length, 3);
+  assert.equal(calls[1]?.routingQuestion, "qui est saint louis");
+  assert.equal(calls[2]?.userMessage, "qui est saint louis");
+  assert.equal(calls[2]?.routingQuestion, "qui est saint louis");
+  assert.equal(second.usedRetry, true);
+  assert.match(second.answer.answer, /Saint Louis/i);
+  assert.match(second.answer.answer, /France/i);
+  assert.equal(second.conversationQuality.passed, true);
+});
+
 test("chat runtime recalls user-provided project names", async () => {
   const calls: StudentChatAdapterInput[] = [];
   const service = new ChatRuntimeService({

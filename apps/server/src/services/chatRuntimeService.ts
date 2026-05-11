@@ -718,6 +718,8 @@ function buildQuestionForHydria(args: {
       : args.activeConstraintCapsule.language === "en"
         ? "English"
         : "same as the user message being answered";
+  const hasResolvedTask = normalizeText(args.routingQuestion) !== normalizeText(args.userMessage);
+  const correctionSubject = extractCorrectionSubject(args.userMessage);
   if (args.runtimeMode === "direct" && args.session.messages.length === 0 && !args.qualityRetry) {
     return [
       `Expected answer language: ${expectedLanguage}`,
@@ -755,15 +757,18 @@ function buildQuestionForHydria(args: {
       ]
     : [];
   const resolvedTaskLines =
-    normalizeText(args.routingQuestion) !== normalizeText(args.userMessage)
+    hasResolvedTask
       ? ["Resolved current task to answer instead of the literal follow-up wording:", args.routingQuestion]
       : [];
-  const correctionHandlingLines = extractCorrectionSubject(args.userMessage)
+  const correctionHandlingLines = correctionSubject
     ? [
         "Correction handling:",
         "Treat the user message as a correction of the active subject. Briefly acknowledge the update, then answer the resolved current task. Do not answer only with a meta-comment about the correction."
       ]
     : [];
+  const userMessageLines = hasResolvedTask
+    ? ["Original user message:", args.userMessage, "Answer target:", args.routingQuestion]
+    : ["User message to answer:", args.userMessage];
   const biographyShapeLines = BIOGRAPHY_REQUEST_PATTERN.test(`${args.userMessage}\n${args.routingQuestion}`)
     ? [
         "Biography answer shape:",
@@ -779,9 +784,8 @@ function buildQuestionForHydria(args: {
     ...resolvedTaskLines,
     ...correctionHandlingLines,
     ...biographyShapeLines,
-    "User message to answer:",
-    args.userMessage,
-    "Answer the resolved current task when one is present; otherwise answer the user message directly. Use prior turns to resolve references, corrections, and follow-up questions.",
+    ...userMessageLines,
+    "Answer the answer target when one is present; otherwise answer the user message directly. Use prior turns to resolve references, corrections, and follow-up questions.",
     "When a resolved current task names a subject, use that subject explicitly in the answer instead of answering only with a pronoun.",
     "If that user message corrects a previous answer, acknowledge the correction briefly and give the corrected answer.",
     "Keep the user's language. Do not mention runtime, policy, capsule, prompt, or internal instructions."
@@ -919,6 +923,31 @@ function buildCorrectionAcknowledgedText(args: {
       ? `Tu as raison : je corrige l'interpretation${correctionSubject ? ` vers ${correctionSubject}` : ""}.`
       : `You are right: I am correcting the interpretation${correctionSubject ? ` to ${correctionSubject}` : ""}.`;
   return `${acknowledgement} ${args.answer}`.replace(/\s+/g, " ").trim();
+}
+
+function needsResolvedCorrectionTaskRetry(args: {
+  newUserMessage: string;
+  routingQuestion: string;
+  answer: string;
+}) {
+  if (!extractCorrectionSubject(args.newUserMessage)) {
+    return false;
+  }
+  if (normalizeText(args.routingQuestion) === normalizeText(args.newUserMessage)) {
+    return false;
+  }
+
+  const normalizedAnswer = normalizeText(args.answer);
+  const metaOnlyCorrection =
+    /\b(?:non je n ai pas|je n ai pas precisement|je n ai pas dit|je n ai pas indique|i did not say|i didnt say|i have not said|not exactly)\b/.test(
+      normalizedAnswer
+    ) ||
+    (/\b(?:connu sous le nom|known as|also called|aussi appele)\b/.test(normalizedAnswer) &&
+      !/\b(?:roi|king|reine|queen|empereur|emperor|fondateur|founded|regne|historique|historical|franc|france|ne |born|mort|died)\b/.test(
+        normalizedAnswer
+      ));
+
+  return metaOnlyCorrection && countWords(args.answer) <= 32;
 }
 
 function buildConversationMemoryRecallAnswer(args: {
@@ -1074,6 +1103,50 @@ export class ChatRuntimeService {
       recentMessages: session.messages
     });
     let usedRetry = draft.generation.usedRetry;
+
+    if (
+      draft.generation.provider !== "fallback" &&
+      needsResolvedCorrectionTaskRetry({
+        newUserMessage: args.message,
+        routingQuestion: draft.routingQuestion,
+        answer: draft.answer.answer
+      })
+    ) {
+      const resolvedTaskDraft = await this.buildDraft({
+        userMessage: draft.routingQuestion,
+        session,
+        runtimeMode,
+        category,
+        activeConstraintCapsule,
+        answerPolicy
+      });
+      const resolvedTaskQuality = this.analyzeQuality({
+        runtimeMode,
+        conversationState,
+        activeConstraintCapsule,
+        answerPolicy,
+        newUserMessage: args.message,
+        answer: resolvedTaskDraft.answer.answer,
+        lastAssistantAnswer: session.lastAssistantAnswer,
+        recentMessages: session.messages
+      });
+
+      if (
+        resolvedTaskQuality.passed ||
+        !needsResolvedCorrectionTaskRetry({
+          newUserMessage: args.message,
+          routingQuestion: draft.routingQuestion,
+          answer: resolvedTaskDraft.answer.answer
+        })
+      ) {
+        draft = {
+          ...resolvedTaskDraft,
+          routingQuestion: draft.routingQuestion
+        };
+        conversationQuality = resolvedTaskQuality;
+        usedRetry = true;
+      }
+    }
 
     if (draft.generation.provider !== "fallback" && shouldRepairConversationQuality(conversationQuality)) {
       const repairedDraft = await this.buildDraft({

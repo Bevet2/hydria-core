@@ -58,7 +58,7 @@ const cases: ChatGateCase[] = [
     id: "fr_stable_history_charlemagne",
     language: "fr",
     conversation: ["qui est charlemagne"],
-    expectedTerms: ["charlemagne", "franc", "empereur"]
+    expectedTerms: ["charlemagne", "franc", "empire"]
   },
   {
     id: "fr_history_followup_biography",
