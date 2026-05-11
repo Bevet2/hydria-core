@@ -135,6 +135,22 @@ const envSchema = z.object({
     .string()
     .default("true")
     .transform((value) => value.toLowerCase() !== "false"),
+  MODEL_ROUTER_EXECUTION_ENABLED: z
+    .string()
+    .default("false")
+    .transform((value) => value.toLowerCase() === "true"),
+  MODEL_ROUTER_ALLOW_CLOUD: z
+    .string()
+    .default("false")
+    .transform((value) => value.toLowerCase() === "true"),
+  MODEL_ROUTER_MAX_COST_TIER: z.enum(["low", "medium", "high"]).default("medium"),
+  MODEL_ROUTER_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(32).max(8192).default(900),
+  MODEL_ROUTER_VLLM_BASE_URL: z.string().default(""),
+  MODEL_ROUTER_VLLM_API_KEY: z.string().default(""),
+  MODEL_ROUTER_OPENAI_COMPAT_BASE_URL: z.string().default(""),
+  MODEL_ROUTER_OPENAI_COMPAT_API_KEY: z.string().default(""),
+  MODEL_ROUTER_EMBEDDING_BASE_URL: z.string().default(""),
+  MODEL_ROUTER_EMBEDDING_API_KEY: z.string().default(""),
   OLLAMA_PROJECT_HOST: z.string().min(1).default("127.0.0.1:11435"),
   OLLAMA_PROJECT_MODELS_DIR: z
     .string()

@@ -14,6 +14,14 @@ export const modelSelectionPurposes = [
 
 export type ModelSelectionPurpose = (typeof modelSelectionPurposes)[number];
 
+export const modelProviderKinds = [
+  "ollama",
+  "vllm",
+  "openrouter",
+  "openai_compatible",
+  "embedding_runtime"
+] as const;
+
 export type ModelCapabilityId =
   | "qwen-14b-instruct-main"
   | "qwen-32b-instruct-main"
@@ -35,12 +43,7 @@ export type ModelCapabilityRole =
   | "reranker"
   | "fast_router";
 
-export type ModelProviderKind =
-  | "ollama"
-  | "vllm"
-  | "openrouter"
-  | "openai_compatible"
-  | "embedding_runtime";
+export type ModelProviderKind = (typeof modelProviderKinds)[number];
 
 export type ModelRuntimeStatus = "candidate" | "planned" | "available" | "active";
 export type ModelLatencyTier = "fast" | "balanced" | "slow";

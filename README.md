@@ -213,8 +213,11 @@ The API exposes:
 
 - `GET /api/models/capabilities`
 - `POST /api/models/select`
+- `GET /api/models/providers`
+- `POST /api/models/plan`
+- `POST /api/models/complete`
 
-Provider identifiers in the manifest are deployment targets. Configure the actual Ollama, vLLM, OpenRouter, or OpenAI-compatible serving names before enabling live execution.
+Provider identifiers in the manifest are deployment targets. Configure the actual Ollama, vLLM, OpenRouter, or OpenAI-compatible serving names before enabling live execution. The completion endpoint is protected by `MODEL_ROUTER_EXECUTION_ENABLED=false` by default, plus cost/cloud token caps, so production cannot accidentally expose an unauthenticated credit-burning route.
 
 ### Learning Governance
 
@@ -533,6 +536,9 @@ Server-only equivalents live in `apps/server/package.json`.
 
 - `GET /api/models/capabilities`
 - `POST /api/models/select`
+- `GET /api/models/providers`
+- `POST /api/models/plan`
+- `POST /api/models/complete`
 
 ## Example Commands
 

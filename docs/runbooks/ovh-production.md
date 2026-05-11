@@ -96,12 +96,30 @@ Hydria exposes the planned multi-model routing catalog at:
 
 ```bash
 curl -fsS https://app.hydria.click/api/models/capabilities
+curl -fsS https://app.hydria.click/api/models/providers
 curl -fsS https://app.hydria.click/api/models/select \
   -H 'content-type: application/json' \
   -d '{"purpose":"deep_reasoning","category":"mixed_reasoning","latencyPreference":"quality"}'
+curl -fsS https://app.hydria.click/api/models/plan \
+  -H 'content-type: application/json' \
+  -d '{"purpose":"main_reasoning","category":"architecture_design","preferredProvider":"ollama"}'
 ```
 
 The manifest registers Qwen 14B/32B, DeepSeek-Coder-V2, Qwen-Coder, DeepSeek-R1-Distill-Qwen, Mistral/Mixtral, BGE-M3, BGE Reranker, Phi mini, and Qwen 3B as candidate model roles. These entries are routing contracts first; live execution still requires configuring the actual serving backend on OVH or a GPU provider.
+
+Live `/api/models/complete` is disabled by default because the public API is not authenticated yet:
+
+```text
+MODEL_ROUTER_EXECUTION_ENABLED=false
+MODEL_ROUTER_ALLOW_CLOUD=false
+MODEL_ROUTER_MAX_COST_TIER=medium
+MODEL_ROUTER_MAX_OUTPUT_TOKENS=900
+MODEL_ROUTER_VLLM_BASE_URL=
+MODEL_ROUTER_OPENAI_COMPAT_BASE_URL=
+MODEL_ROUTER_EMBEDDING_BASE_URL=
+```
+
+Enable it only after API auth/rate limiting is in place, or on a private network.
 
 Before first production cutover to the dedicated schema:
 
