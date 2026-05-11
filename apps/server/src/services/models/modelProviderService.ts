@@ -318,7 +318,7 @@ export class ModelProviderService {
           num_predict: maxTokens
         }
       }),
-      signal: AbortSignal.timeout(env.LOCAL_MODEL_TIMEOUT_MS)
+      signal: AbortSignal.timeout(env.MODEL_ROUTER_LOCAL_TIMEOUT_MS)
     });
 
     return this.parseProviderResponse(response, target);

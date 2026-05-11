@@ -145,6 +145,7 @@ const envSchema = z.object({
     .transform((value) => value.toLowerCase() === "true"),
   MODEL_ROUTER_MAX_COST_TIER: z.enum(["low", "medium", "high"]).default("medium"),
   MODEL_ROUTER_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(32).max(8192).default(900),
+  MODEL_ROUTER_LOCAL_TIMEOUT_MS: z.coerce.number().int().min(1000).default(120000),
   MODEL_ROUTER_VLLM_BASE_URL: z.string().default(""),
   MODEL_ROUTER_VLLM_API_KEY: z.string().default(""),
   MODEL_ROUTER_OPENAI_COMPAT_BASE_URL: z.string().default(""),
