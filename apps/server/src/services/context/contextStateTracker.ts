@@ -243,6 +243,13 @@ function extractKnownFacts(message: string) {
     const userName = nameMatch[1].replace(/\s+(?:et|and)\b.*$/i, "").trim();
     facts.push(`user name: ${compact(userName, 80)}`);
   }
+  const projectMatch = message.match(
+    /\b(?:my project is called|my project is named|the project is called|project name is|mon projet s[' ]?appelle|le projet s[' ]?appelle|nom du projet est)\s+([A-Z\p{L}0-9][\p{L}0-9' ._-]{1,80})/iu
+  );
+  if (projectMatch?.[1]) {
+    const projectName = projectMatch[1].replace(/[.!?]+$/g, "").trim();
+    facts.push(`project name: ${compact(projectName, 80)}`);
+  }
   const preferenceMatch = message.match(
     /\b(?:je prefere|je pr[eé]f[eè]re|i prefer|i would rather|call me|appelle[- ]moi)\s+(.{2,120})/iu
   );

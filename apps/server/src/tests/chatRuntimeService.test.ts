@@ -86,6 +86,32 @@ test("chat runtime recalls user-provided facts without triggering research", asy
   assert.equal(second.conversationQuality.passed, true);
 });
 
+test("chat runtime recalls user-provided project names", async () => {
+  const calls: StudentChatAdapterInput[] = [];
+  const service = new ChatRuntimeService({
+    async answer(input) {
+      calls.push(input);
+      return buildAdapterResult(
+        calls.length === 1
+          ? "Noted: your project is called Hydria Core."
+          : "I cannot verify the project name from live data."
+      );
+    }
+  });
+
+  const first = await service.sendMessage({ message: "My project is called Hydria Core." });
+  const second = await service.sendMessage({
+    sessionId: first.sessionId,
+    message: "What is my project called?"
+  });
+
+  assert.equal(calls[1]?.answerPolicy.shouldUseContext, true);
+  assert.equal(second.runtimeMode, "conversation");
+  assert.match(second.assistantMessage.content, /Hydria Core/);
+  assert.equal(second.generation.provider, "ollama");
+  assert.equal(second.conversationQuality.passed, true);
+});
+
 test("chat runtime resolves possessive biography follow-ups to the prior subject", async () => {
   const calls: StudentChatAdapterInput[] = [];
   const answers = [

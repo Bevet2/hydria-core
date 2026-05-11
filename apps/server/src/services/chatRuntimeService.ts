@@ -63,7 +63,7 @@ const CONTEXT_FOLLOWUP_PATTERN =
 const IDENTITY_LOOKUP_PATTERN =
   /\b(?:who is|who was|who are|qui est|qui etait|qui était|qui sont)\b/i;
 const MEMORY_RECALL_PATTERN =
-  /\b(?:comment je m[' ]?appelle|quel est mon nom|tu te souviens|souviens[- ]toi|what is my name|what did i say|do you remember|remember what i said|what did we decide|qu[' ]?est[- ]ce qu[' ]?on a decide|qu[' ]?est[- ]ce qu[' ]?on a d[eÃ©]cid[eÃ©])\b/i;
+  /\b(?:comment je m[' ]?appelle|quel est mon nom|comment s[' ]?appelle mon projet|quel est le nom du projet|tu te souviens|souviens[- ]toi|what is my name|what is my project called|what is the project called|what did i say|do you remember|remember what i said|what did we decide|qu[' ]?est[- ]ce qu[' ]?on a decide|qu[' ]?est[- ]ce qu[' ]?on a d[eÃ©]cid[eÃ©])\b/i;
 const EXTERNAL_GROUNDING_PATTERN =
   /\b(?:today|current|currently|latest|recent|this week|this month|now|live|news|release|version|weather|price|stock|crypto|exchange rate|ceo|president|official|source|cite|verify|aujourd'hui|actuel|actuelle|maintenant|dernier|derni[eÃ¨]re|r[eÃ©]cent|cette semaine|ce mois|m[eÃ©]t[eÃ©]o|prix|bourse|crypto|taux de change|pdg|pr[eÃ©]sident|officiel|source fiable|v[eÃ©]rifie)\b/i;
 const STABLE_FACTUAL_EXPLANATION_PATTERN =
@@ -929,7 +929,8 @@ function buildConversationMemoryRecallAnswer(args: {
   }
 
   const asksName = /\b(?:appelle|nom|name)\b/i.test(args.newUserMessage);
-  if (asksName) {
+  const asksProject = /\b(?:project|projet)\b/i.test(args.newUserMessage);
+  if (asksName && !asksProject) {
     const nameFact = args.conversationState.knownFacts.find((fact) => /^user name:/i.test(fact));
     const name = nameFact?.replace(/^user name:\s*/i, "").replace(/[.!?]+$/g, "").trim();
     if (name) {
@@ -944,6 +945,27 @@ function buildConversationMemoryRecallAnswer(args: {
           args.conversationState.language === "en"
             ? ["Conversation memory", "User-provided fact"]
             : ["Memoire de conversation", "Fait fourni par l'utilisateur"],
+        assumptions: [],
+        confidence: 90
+      };
+    }
+  }
+
+  if (asksProject) {
+    const projectFact = args.conversationState.knownFacts.find((fact) => /^project name:/i.test(fact));
+    const projectName = projectFact?.replace(/^project name:\s*/i, "").replace(/[.!?]+$/g, "").trim();
+    if (projectName) {
+      const answer =
+        args.conversationState.language === "fr"
+          ? `Ton projet s'appelle ${projectName}, d'apres ce que tu m'as dit plus haut.`
+          : `Your project is called ${projectName}, based on what you told me earlier.`;
+      return {
+        modelRole: "student",
+        answer,
+        key_points:
+          args.conversationState.language === "fr"
+            ? ["Memoire de conversation", "Projet fourni par l'utilisateur"]
+            : ["Conversation memory", "User-provided project"],
         assumptions: [],
         confidence: 90
       };
