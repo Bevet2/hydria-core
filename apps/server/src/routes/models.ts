@@ -1,12 +1,15 @@
 import { Router } from "express";
 import { z } from "zod";
 import { modelProviderKinds, modelSelectionPurposes } from "../data/modelCapabilityManifest.js";
+import { createApiKeyAuthMiddleware } from "../middleware/apiKeyAuth.js";
+import { createRateLimitMiddleware } from "../middleware/rateLimit.js";
 import { ModelCapabilityService } from "../services/models/modelCapabilityService.js";
 import {
   ModelExecutionBlockedError,
   ModelProviderService
 } from "../services/models/modelProviderService.js";
 import { questionCategorySchema } from "../types/arena.js";
+import { env } from "../utils/env.js";
 
 const modelSelectionRequestSchema = z.object({
   purpose: z.enum(modelSelectionPurposes).optional(),
@@ -46,12 +49,30 @@ export function createModelsRouter(
   modelProviderService: ModelProviderService
 ) {
   const router = Router();
+  const generalModelsRateLimit = createRateLimitMiddleware({
+    keyPrefix: "models",
+    windowMs: env.HYDRIA_RATE_LIMIT_WINDOW_MS,
+    maxRequests: env.HYDRIA_API_RATE_LIMIT_MAX_REQUESTS
+  });
+  const planRateLimit = createRateLimitMiddleware({
+    keyPrefix: "models-plan",
+    windowMs: env.HYDRIA_RATE_LIMIT_WINDOW_MS,
+    maxRequests: env.MODEL_ROUTER_PLAN_RATE_LIMIT_MAX_REQUESTS
+  });
+  const completeRateLimit = createRateLimitMiddleware({
+    keyPrefix: "models-complete",
+    windowMs: env.HYDRIA_RATE_LIMIT_WINDOW_MS,
+    maxRequests: env.MODEL_ROUTER_COMPLETE_RATE_LIMIT_MAX_REQUESTS
+  });
+  const completeApiKeyAuth = createApiKeyAuthMiddleware({
+    requireWhen: () => env.MODEL_ROUTER_EXECUTION_ENABLED
+  });
 
-  router.get("/capabilities", (_request, response) => {
+  router.get("/capabilities", generalModelsRateLimit, (_request, response) => {
     response.json(modelCapabilityService.listManifests());
   });
 
-  router.post("/select", (request, response, next) => {
+  router.post("/select", generalModelsRateLimit, (request, response, next) => {
     try {
       const parsed = modelSelectionRequestSchema.parse(request.body);
       response.json(modelCapabilityService.selectModel(parsed));
@@ -60,13 +81,13 @@ export function createModelsRouter(
     }
   });
 
-  router.get("/providers", (_request, response) => {
+  router.get("/providers", generalModelsRateLimit, (_request, response) => {
     response.json({
       providers: modelProviderService.getProviderStatuses()
     });
   });
 
-  router.post("/plan", (request, response, next) => {
+  router.post("/plan", planRateLimit, (request, response, next) => {
     try {
       const parsed = modelExecutionPlanRequestSchema.parse(request.body);
       response.json(modelProviderService.planExecution(parsed));
@@ -75,7 +96,7 @@ export function createModelsRouter(
     }
   });
 
-  router.post("/complete", async (request, response, next) => {
+  router.post("/complete", completeRateLimit, completeApiKeyAuth, async (request, response, next) => {
     try {
       const parsed = modelCompletionRequestSchema.parse(request.body);
       response.json(await modelProviderService.complete(parsed));

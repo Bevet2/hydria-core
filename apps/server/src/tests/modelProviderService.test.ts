@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { ModelBudgetPolicyService } from "../services/models/modelBudgetPolicy.js";
 import { ModelProviderService } from "../services/models/modelProviderService.js";
 
 test("model provider plan is blocked when execution is disabled", () => {
@@ -18,7 +19,13 @@ test("model provider plan is blocked when execution is disabled", () => {
 });
 
 test("model budget policy downgrades deep reasoning when cost is capped", () => {
-  const service = new ModelProviderService();
+  const service = new ModelProviderService({
+    budgetPolicyService: new ModelBudgetPolicyService({
+      executionEnabled: true,
+      allowCloud: false,
+      maxCostTier: "medium"
+    })
+  });
   const plan = service.planExecution({
     purpose: "deep_reasoning",
     category: "mixed_reasoning",
@@ -33,6 +40,31 @@ test("model budget policy downgrades deep reasoning when cost is capped", () => 
 
   assert.equal(plan.budget.allowed, true);
   assert.equal(plan.budget.downgraded, true);
+  assert.equal(plan.budget.selectedModel?.id, "qwen-14b-instruct-main");
+  assert.equal(plan.target?.provider, "ollama");
+});
+
+test("model budget policy does not let request body loosen server cloud policy", () => {
+  const service = new ModelProviderService({
+    budgetPolicyService: new ModelBudgetPolicyService({
+      executionEnabled: true,
+      allowCloud: false,
+      maxCostTier: "medium"
+    })
+  });
+  const plan = service.planExecution({
+    purpose: "main_reasoning",
+    category: "mixed_reasoning",
+    preferredProvider: "openrouter",
+    privacyMode: "cloud_allowed",
+    budget: {
+      executionEnabled: true,
+      allowCloud: true,
+      maxCostTier: "high"
+    }
+  });
+
+  assert.equal(plan.budget.allowed, true);
   assert.equal(plan.budget.selectedModel?.id, "qwen-14b-instruct-main");
   assert.equal(plan.target?.provider, "ollama");
 });
@@ -59,7 +91,15 @@ test("model provider executes an OpenRouter-compatible completion with budget ca
       }
     );
   };
-  const service = new ModelProviderService({ fetchImpl });
+  const service = new ModelProviderService({
+    fetchImpl,
+    budgetPolicyService: new ModelBudgetPolicyService({
+      executionEnabled: true,
+      allowCloud: true,
+      maxCostTier: "medium",
+      maxOutputTokens: 256
+    })
+  });
   const result = await service.complete({
     purpose: "main_reasoning",
     category: "architecture_design",

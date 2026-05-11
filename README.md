@@ -217,7 +217,7 @@ The API exposes:
 - `POST /api/models/plan`
 - `POST /api/models/complete`
 
-Provider identifiers in the manifest are deployment targets. Configure the actual Ollama, vLLM, OpenRouter, or OpenAI-compatible serving names before enabling live execution. The completion endpoint is protected by `MODEL_ROUTER_EXECUTION_ENABLED=false` by default, plus cost/cloud token caps, so production cannot accidentally expose an unauthenticated credit-burning route.
+Provider identifiers in the manifest are deployment targets. Configure the actual Ollama, vLLM, OpenRouter, or OpenAI-compatible serving names before enabling live execution. The completion endpoint is protected by `MODEL_ROUTER_EXECUTION_ENABLED=false` by default, plus server-side cloud/cost/token caps. When execution is enabled, `/api/models/complete` requires `X-Hydria-API-Key`, `X-API-Key`, or `Authorization: Bearer ...`; request bodies can only tighten budget policy, never loosen the server limits.
 
 ### Learning Governance
 

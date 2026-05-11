@@ -107,7 +107,7 @@ curl -fsS https://app.hydria.click/api/models/plan \
 
 The manifest registers Qwen 14B/32B, DeepSeek-Coder-V2, Qwen-Coder, DeepSeek-R1-Distill-Qwen, Mistral/Mixtral, BGE-M3, BGE Reranker, Phi mini, and Qwen 3B as candidate model roles. These entries are routing contracts first; live execution still requires configuring the actual serving backend on OVH or a GPU provider.
 
-Live `/api/models/complete` is disabled by default because the public API is not authenticated yet:
+Live `/api/models/complete` is disabled by default. When enabled, it is protected by Hydria API keys and route-level rate limits:
 
 ```text
 MODEL_ROUTER_EXECUTION_ENABLED=false
@@ -117,9 +117,30 @@ MODEL_ROUTER_MAX_OUTPUT_TOKENS=900
 MODEL_ROUTER_VLLM_BASE_URL=
 MODEL_ROUTER_OPENAI_COMPAT_BASE_URL=
 MODEL_ROUTER_EMBEDDING_BASE_URL=
+HYDRIA_API_KEYS=
+HYDRIA_API_KEY_SHA256_HASHES=
+HYDRIA_RATE_LIMIT_WINDOW_MS=60000
+HYDRIA_API_RATE_LIMIT_MAX_REQUESTS=120
+MODEL_ROUTER_PLAN_RATE_LIMIT_MAX_REQUESTS=60
+MODEL_ROUTER_COMPLETE_RATE_LIMIT_MAX_REQUESTS=12
 ```
 
-Enable it only after API auth/rate limiting is in place, or on a private network.
+Use `HYDRIA_API_KEY_SHA256_HASHES` instead of plain keys when possible:
+
+```bash
+printf 'your-secret-key' | sha256sum
+```
+
+Authenticated model execution:
+
+```bash
+curl -fsS https://app.hydria.click/api/models/complete \
+  -H 'content-type: application/json' \
+  -H 'x-hydria-api-key: <secret>' \
+  -d '{"purpose":"main_reasoning","category":"architecture_design","prompt":"Design a small event bus."}'
+```
+
+Request bodies can only tighten execution policy. They cannot enable model execution, cloud providers, higher cost tiers, or larger token limits beyond the server environment.
 
 Before first production cutover to the dedicated schema:
 

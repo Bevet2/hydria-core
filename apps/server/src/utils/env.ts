@@ -151,6 +151,12 @@ const envSchema = z.object({
   MODEL_ROUTER_OPENAI_COMPAT_API_KEY: z.string().default(""),
   MODEL_ROUTER_EMBEDDING_BASE_URL: z.string().default(""),
   MODEL_ROUTER_EMBEDDING_API_KEY: z.string().default(""),
+  HYDRIA_API_KEYS: z.string().default(""),
+  HYDRIA_API_KEY_SHA256_HASHES: z.string().default(""),
+  HYDRIA_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(60000),
+  HYDRIA_API_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().min(1).default(120),
+  MODEL_ROUTER_PLAN_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().min(1).default(60),
+  MODEL_ROUTER_COMPLETE_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().min(1).default(12),
   OLLAMA_PROJECT_HOST: z.string().min(1).default("127.0.0.1:11435"),
   OLLAMA_PROJECT_MODELS_DIR: z
     .string()

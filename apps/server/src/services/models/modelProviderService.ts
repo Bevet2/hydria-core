@@ -125,6 +125,10 @@ function providerPriority(args: {
   return ordered;
 }
 
+function isCloudProvider(provider: ModelProviderKind) {
+  return provider === "openrouter" || provider === "openai_compatible";
+}
+
 export class ModelProviderService {
   private readonly capabilityService: ModelCapabilityService;
   private readonly budgetPolicyService: ModelBudgetPolicyService;
@@ -187,7 +191,7 @@ export class ModelProviderService {
       ? this.resolveProviderTarget(budget.selectedModel, {
           preferredProvider: input.preferredProvider ?? input.budget?.preferredProvider ?? null,
           privacyMode: input.privacyMode,
-          allowCloud: input.budget?.allowCloud ?? env.MODEL_ROUTER_ALLOW_CLOUD
+          allowCloud: budget.effectiveAllowCloud
         })
       : null;
     const warnings = [
@@ -245,6 +249,9 @@ export class ModelProviderService {
   ): ModelProviderTarget | null {
     for (const provider of providerPriority(args)) {
       if (!model.providerKinds.includes(provider)) {
+        continue;
+      }
+      if (!args.allowCloud && isCloudProvider(provider)) {
         continue;
       }
 

@@ -239,6 +239,36 @@ async function runProductionSmoke(args = parseArgs()): Promise<ProductionSmokeRe
     });
   });
 
+  await runCheck(checks, "model_execution_guard", async () => {
+    const { response, text } = await fetchWithTimeout(
+      joinUrl(args.baseUrl, "/api/models/complete"),
+      {
+        method: "POST",
+        headers: { "content-type": "application/json; charset=utf-8" },
+        body: JSON.stringify({
+          purpose: "main_reasoning",
+          category: "architecture_design",
+          prompt: "Smoke test: do not execute publicly.",
+          budget: {
+            executionEnabled: true,
+            allowCloud: true,
+            maxCostTier: "high"
+          }
+        })
+      },
+      args.timeoutMs
+    );
+    if (response.status === 401 || response.status === 403 || response.status === 503) {
+      return pass("public model execution is guarded", {
+        status: response.status,
+        preview: text.slice(0, 180)
+      });
+    }
+    return fail(`public model execution was not guarded; got HTTP ${response.status}`, {
+      preview: text.slice(0, 300)
+    });
+  });
+
   await runCheck(checks, "chat_single_turn", async () => {
     const response = await postJson<ChatResponse>(
       args.baseUrl,
