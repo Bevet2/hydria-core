@@ -1052,7 +1052,7 @@ export class ChatRuntimeService {
     });
     let usedRetry = draft.generation.usedRetry;
 
-    if (shouldRepairConversationQuality(conversationQuality)) {
+    if (draft.generation.provider !== "fallback" && shouldRepairConversationQuality(conversationQuality)) {
       const repairedDraft = await this.buildDraft({
         userMessage: args.message,
         session,
