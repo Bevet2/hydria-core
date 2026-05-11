@@ -8,7 +8,6 @@ import { z } from "zod";
 import type {
   ActiveConstraintCapsule
 } from "./context/contextStateTracker.js";
-import { formatActiveConstraintCapsuleForPrompt } from "./context/contextStateTracker.js";
 import type { ConversationQualityGateResult } from "./context/conversationQualityGate.js";
 import type { MultiTurnAnswerPolicyResult } from "./context/multiTurnAnswerPolicy.js";
 import type { LocalModelService } from "./localModel.js";
@@ -113,8 +112,27 @@ function compact(value: string, maxChars = 420) {
 
 function formatRecentMessages(messages: ChatMessage[]) {
   return messages
-    .slice(-6)
-    .map((message) => `${message.role}: ${compact(message.content, 240)}`)
+    .slice(-4)
+    .map((message) => `${message.role}: ${compact(message.content, 160)}`)
+    .join("\n");
+}
+
+function formatCompactCapsule(capsule: ActiveConstraintCapsule) {
+  return [
+    capsule.userGoal ? `goal=${compact(capsule.userGoal, 120)}` : "",
+    capsule.topConstraints.length > 0
+      ? `constraints=${capsule.topConstraints.slice(0, 3).map((item) => compact(item, 100)).join(" | ")}`
+      : "",
+    capsule.changedConstraints.length > 0
+      ? `changed=${capsule.changedConstraints.slice(0, 2).map((item) => compact(item, 100)).join(" | ")}`
+      : "",
+    capsule.discardedAssumptions.length > 0
+      ? `discarded=${capsule.discardedAssumptions.slice(0, 2).map((item) => compact(item, 100)).join(" | ")}`
+      : "",
+    capsule.decisionNeeded ? "decisionNeeded=true" : "",
+    capsule.recommendedDirection ? `direction=${compact(capsule.recommendedDirection, 140)}` : ""
+  ]
+    .filter(Boolean)
     .join("\n");
 }
 
@@ -155,14 +173,12 @@ export function buildStudentChatPrompt(input: StudentChatAdapterInput) {
     `Mode: ${input.runtimeMode}; category: ${input.category}`,
     ...maybeCurrentDataGuidance(input),
     input.runtimeMode === "conversation" ? "Active context:" : "",
-    input.runtimeMode === "conversation"
-      ? compact(formatActiveConstraintCapsuleForPrompt(input.activeConstraintCapsule), 900)
-      : "",
+    input.runtimeMode === "conversation" ? formatCompactCapsule(input.activeConstraintCapsule) : "",
     input.runtimeMode === "conversation" && recentMessages ? "Recent conversation turns:" : "",
     input.runtimeMode === "conversation" ? recentMessages : "",
     input.runtimeMode === "conversation" ? `Answer mode: ${input.answerPolicy.answerMode}` : "",
     input.runtimeMode === "conversation" && input.answerPolicy.guidance
-      ? `Guidance: ${compact(input.answerPolicy.guidance, 260)}`
+      ? `Guidance: ${compact(input.answerPolicy.guidance, 160)}`
       : "",
     ...retryLines,
     input.routingQuestion !== input.userMessage ? "Resolved current task:" : "",
@@ -204,7 +220,7 @@ export class StudentChatAdapter {
     try {
       const response = await this.localModelService.testPrompt(prompt, studentChatSystemPrompt, {
         format: studentChatAnswerJsonSchema,
-        numPredict: 260,
+        numPredict: 180,
         temperature: 0.1,
         timeoutMs: env.STUDENT_CHAT_LOCAL_TIMEOUT_MS
       });
