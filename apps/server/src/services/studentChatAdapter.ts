@@ -1,9 +1,9 @@
 import { studentDirectSystemPrompt } from "../prompts/localStudent.js";
 import type { QuestionCategory } from "../types/arena.js";
 import type { ChatMessage, ChatRuntimeMode } from "../types/chat.js";
-import { studentAnswerSchema, type StudentAnswer } from "../types/student.js";
+import type { StudentAnswer } from "../types/student.js";
 import { env } from "../utils/env.js";
-import { parseStructuredOutput } from "../utils/jsonRepair.js";
+import { parseLooseJson } from "../utils/jsonRepair.js";
 import { logger } from "../utils/logger.js";
 import { parseModelCandidates } from "../utils/modelCandidates.js";
 import type {
@@ -14,6 +14,7 @@ import type { ConversationQualityGateResult } from "./context/conversationQualit
 import type { MultiTurnAnswerPolicyResult } from "./context/multiTurnAnswerPolicy.js";
 import type { LocalModelService } from "./localModel.js";
 import type { OpenRouterService } from "./openrouter.js";
+import { parseCloudStudentDraft } from "./student/studentStepExecutor.js";
 
 export type StudentChatAdapterInput = {
   question: string;
@@ -150,7 +151,7 @@ export function buildStudentChatPrompt(input: StudentChatAdapterInput) {
 }
 
 function parseStudentChatAnswer(raw: string) {
-  return parseStructuredOutput(raw, studentAnswerSchema, "Student chat answer");
+  return parseCloudStudentDraft(parseLooseJson(raw, "Student chat answer"));
 }
 
 function buildFallbackAnswer(input: StudentChatAdapterInput, reason: string): StudentAnswer {
@@ -169,7 +170,7 @@ function buildFallbackAnswer(input: StudentChatAdapterInput, reason: string): St
 export class StudentChatAdapter {
   constructor(
     private readonly localModelService: Pick<LocalModelService, "testPrompt" | "getConfiguredModelName">,
-    private readonly openRouterService?: Pick<OpenRouterService, "completeJson">
+    private readonly openRouterService?: Pick<OpenRouterService, "complete">
   ) {}
 
   async answer(input: StudentChatAdapterInput): Promise<StudentChatAdapterResult> {
@@ -200,21 +201,19 @@ export class StudentChatAdapter {
     const fallbackModel = parseModelCandidates(env.LOCAL_STUDENT_FALLBACK_MODEL)[0];
     if (this.openRouterService && fallbackModel) {
       try {
-        const response = await this.openRouterService.completeJson({
+        const response = await this.openRouterService.complete({
           model: fallbackModel,
           systemPrompt: studentDirectSystemPrompt,
           userPrompt: prompt,
-          schema: studentAnswerSchema,
-          label: "Student Chat Fallback",
           maxTokens: 760,
           temperature: 0.1
         });
         return {
-          answer: response.parsed,
+          answer: parseStudentChatAnswer(response.content),
           usedRetry: true,
           provider: "openrouter",
           model: fallbackModel,
-          raw: response.raw,
+          raw: response.content,
           validationIssues: []
         };
       } catch (error) {
