@@ -46,7 +46,7 @@ test("model router selects code specialists for code and diagnostics", () => {
   const explicitCode = service.selectModel({ purpose: "code", requiresCode: true });
   const diagnostic = service.selectModel({ category: "debug_diagnostic" });
 
-  assert.equal(explicitCode.selected.id, "deepseek-coder-v2-code");
+  assert.equal(explicitCode.selected.id, "qwen-coder-code");
   assert.equal(diagnostic.inferredPurpose, "code");
   assert.equal(diagnostic.selected.role, "code_specialist");
 });

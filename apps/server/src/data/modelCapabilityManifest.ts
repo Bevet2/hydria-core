@@ -151,9 +151,8 @@ export const modelCapabilityManifest = [
     role: "code_specialist",
     purposes: ["code"],
     categories: ["debug_diagnostic", "architecture_design", "technical_explanation"],
-    providerKinds: ["ollama", "vllm", "openrouter", "openai_compatible"],
+    providerKinds: ["vllm", "openrouter", "openai_compatible"],
     providerModelIds: {
-      ollama: "deepseek-coder-v2",
       vllm: "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
       openrouter: "deepseek/deepseek-coder"
     },
@@ -189,13 +188,14 @@ export const modelCapabilityManifest = [
       openrouter: "qwen/qwen-2.5-coder-14b-instruct"
     },
     runtimeStatus: "candidate",
-    priority: 8,
+    priority: 11,
     latencyTier: "balanced",
     costTier: "medium",
     qualityTier: "strong",
     privacyTier: "local_first",
     maxContextTokensHint: 32768,
     strengths: [
+      "Default OVH local code route",
       "Code-focused fallback",
       "TypeScript and implementation tasks",
       "Structured code explanations"
