@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { StudentSession } from "../../types/student.js";
 import { env } from "../../utils/env.js";
-import { HydriaStateDatabase } from "./hydriaStateDatabase.js";
+import { createPersistenceAdapter } from "./persistenceAdapter.js";
 import { normalizeStudentSessionHistoryFile } from "./studentSessionHistoryNormalizer.js";
 
 type StudentSessionPersistenceOptions = {
@@ -16,7 +16,7 @@ export async function listPersistedStudentSessions(
 ) {
   const historyFile = options.historyFile ?? env.STUDENT_SESSION_HISTORY_FILE;
   const databaseFile = options.databaseFile ?? env.PERSISTENCE_DB_FILE;
-  const database = new HydriaStateDatabase(databaseFile);
+  const database = createPersistenceAdapter({ sqliteFile: databaseFile });
 
   try {
     await mkdir(dirname(historyFile), { recursive: true });

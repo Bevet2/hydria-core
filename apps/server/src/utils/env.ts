@@ -67,6 +67,9 @@ const envSchema = z.object({
     .min(1)
     .default(projectPath("storage", "datasets", "student-rounds.jsonl")),
   HISTORY_PROJECTION_LIMIT: z.coerce.number().int().min(0).default(0),
+  PERSISTENCE_ADAPTER: z.enum(["sqlite", "postgres"]).default("sqlite"),
+  POSTGRES_URL: z.string().default(""),
+  POSTGRES_SCHEMA: z.string().min(1).default("public"),
   STUDENT_CURATED_DATASET_FILE: z
     .string()
     .min(1)

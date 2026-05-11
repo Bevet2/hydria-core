@@ -1,0 +1,29 @@
+services:
+  hydria-core:
+    environment:
+      PERSISTENCE_ADAPTER: postgres
+      POSTGRES_URL: postgres://hydria:hydria@postgres:5432/hydria
+      POSTGRES_SCHEMA: ${POSTGRES_SCHEMA:-public}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: hydria
+      POSTGRES_USER: hydria
+      POSTGRES_PASSWORD: hydria
+    ports:
+      - "${HYDRIA_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - hydria-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hydria -d hydria"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  hydria-postgres:

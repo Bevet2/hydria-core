@@ -7,7 +7,7 @@ import type {
   PersistenceHealthSummary,
   PersistenceProjectionHealth
 } from "../../types/health.js";
-import { HydriaStateDatabase } from "./hydriaStateDatabase.js";
+import { createPersistenceAdapter } from "./persistenceAdapter.js";
 import { normalizeArenaHistoryFile } from "./arenaHistoryNormalizer.js";
 import { normalizeStudentSessionHistoryFile } from "./studentSessionHistoryNormalizer.js";
 
@@ -35,6 +35,8 @@ export class PersistenceHealthService {
 
     return {
       status: report.status,
+      databaseAdapter: report.database.adapter,
+      databaseTarget: report.database.target,
       databaseFile: report.database.path,
       arenaRoundCount: report.database.arenaRoundCount,
       studentSessionCount: report.database.studentSessionCount,
@@ -44,7 +46,9 @@ export class PersistenceHealthService {
   }
 
   async getReport(): Promise<PersistenceHealthReport> {
-    const database = new HydriaStateDatabase(this.databaseFile);
+    const adapter = env.PERSISTENCE_ADAPTER;
+    const isSqlite = adapter === "sqlite";
+    const database = createPersistenceAdapter({ sqliteFile: this.databaseFile });
 
     try {
       await database.ensureReady();
@@ -72,10 +76,13 @@ export class PersistenceHealthService {
       return {
         status: reportStatus,
         database: {
+          adapter,
+          target: isSqlite ? this.databaseFile : `postgres:${env.POSTGRES_SCHEMA}`,
           path: this.databaseFile,
-          exists: databaseFile.exists,
-          walExists: walFile.exists,
-          shmExists: shmFile.exists,
+          postgresSchema: isSqlite ? null : env.POSTGRES_SCHEMA,
+          exists: isSqlite ? databaseFile.exists : true,
+          walExists: isSqlite ? walFile.exists : false,
+          shmExists: isSqlite ? shmFile.exists : false,
           arenaRoundCount,
           studentSessionCount
         },

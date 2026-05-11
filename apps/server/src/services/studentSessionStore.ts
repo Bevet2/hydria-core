@@ -10,7 +10,10 @@ import {
 import { env } from "../utils/env.js";
 import { logger } from "../utils/logger.js";
 import { KnowledgeMemoryService } from "./knowledgeMemoryService.js";
-import { HydriaStateDatabase } from "./storage/hydriaStateDatabase.js";
+import {
+  createPersistenceAdapter,
+  type PersistenceAdapter
+} from "./storage/persistenceAdapter.js";
 import { normalizeStudentSessionHistoryFile } from "./storage/studentSessionHistoryNormalizer.js";
 import { StudentRuleImpactTrackerService } from "./studentRuleImpactTrackerService.js";
 import { StudentStrategyImpactTrackerService } from "./studentStrategyImpactTrackerService.js";
@@ -23,14 +26,15 @@ export class StudentSessionStore {
   private readonly studentRuleImpactTrackerService: StudentRuleImpactTrackerService;
   private readonly studentStrategyImpactTrackerService: StudentStrategyImpactTrackerService;
   private readonly studentToolImpactTrackerService: StudentToolImpactTrackerService;
-  private readonly database: HydriaStateDatabase;
+  private readonly database: PersistenceAdapter;
 
   constructor(
     private readonly historyFile = env.STUDENT_SESSION_HISTORY_FILE,
     private readonly datasetFile = env.STUDENT_SESSION_DATASET_FILE,
-    databaseFile = env.PERSISTENCE_DB_FILE
+    databaseFile = env.PERSISTENCE_DB_FILE,
+    database: PersistenceAdapter = createPersistenceAdapter({ sqliteFile: databaseFile })
   ) {
-    this.database = new HydriaStateDatabase(databaseFile);
+    this.database = database;
     this.knowledgeMemoryService = new KnowledgeMemoryService(
       env.KNOWLEDGE_MEMORY_FILE,
       historyFile,

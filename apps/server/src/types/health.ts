@@ -27,7 +27,10 @@ export type PersistenceDerivedArtifactHealth = PersistenceFileStat & {
 export type PersistenceHealthReport = {
   status: PersistenceStatus;
   database: {
+    adapter: "sqlite" | "postgres";
+    target: string;
     path: string;
+    postgresSchema: string | null;
     exists: boolean;
     walExists: boolean;
     shmExists: boolean;
@@ -50,6 +53,8 @@ export type PersistenceHealthReport = {
 
 export type PersistenceHealthSummary = {
   status: PersistenceStatus;
+  databaseAdapter: "sqlite" | "postgres";
+  databaseTarget: string;
   databaseFile: string;
   arenaRoundCount: number;
   studentSessionCount: number;

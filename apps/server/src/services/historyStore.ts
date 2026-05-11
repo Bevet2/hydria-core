@@ -7,21 +7,25 @@ import {
 import { env } from "../utils/env.js";
 import { RoundDatasetStore } from "./roundDatasetStore.js";
 import { normalizeArenaHistoryFile } from "./storage/arenaHistoryNormalizer.js";
-import { HydriaStateDatabase } from "./storage/hydriaStateDatabase.js";
+import {
+  createPersistenceAdapter,
+  type PersistenceAdapter
+} from "./storage/persistenceAdapter.js";
 
 export class HistoryStore {
   private writeQueue = Promise.resolve();
   private readonly roundDatasetStore: RoundDatasetStore;
-  private readonly database: HydriaStateDatabase;
+  private readonly database: PersistenceAdapter;
 
   constructor(
     private readonly filePath = env.HISTORY_FILE,
     databaseFile = env.PERSISTENCE_DB_FILE,
     roundDatasetFile = env.ROUND_DATASET_FILE,
-    private readonly historyProjectionLimit = env.HISTORY_PROJECTION_LIMIT
+    private readonly historyProjectionLimit = env.HISTORY_PROJECTION_LIMIT,
+    database: PersistenceAdapter = createPersistenceAdapter({ sqliteFile: databaseFile })
   ) {
     this.roundDatasetStore = new RoundDatasetStore(roundDatasetFile);
-    this.database = new HydriaStateDatabase(databaseFile);
+    this.database = database;
   }
 
   async ensureReady() {

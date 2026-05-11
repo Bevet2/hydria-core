@@ -20,7 +20,11 @@
     "student:extended-benchmark": "tsx src/scripts/runLocalStudentExtendedBenchmark.ts",
     "conversation:runtime-mini": "tsx src/scripts/runConversationRuntimeMiniBenchmark.ts",
     "conversation:strategic-conflict": "tsx src/scripts/runStrategicConstraintConflictBenchmark.ts",
+    "conversation:strategic-coherence": "tsx src/scripts/runStrategicCoherenceFineBenchmark.ts",
     "runtime:release-gate": "tsx src/scripts/runHydriaCoreRuntimeReleaseGate.ts",
+    "persistence:migrate:postgres": "tsx src/scripts/migrateSqliteToPostgres.ts",
+    "persistence:postgres:smoke": "tsx src/scripts/runPostgresPersistenceSmoke.ts",
+    "persistence:postgres:cutover-check": "tsx src/scripts/runPostgresCutoverCheck.ts",
     "student:strategy-discovery": "tsx src/scripts/runStudentStrategyDiscoveryLoop.ts",
     "student:temporal-eval": "tsx src/scripts/runStudentTemporalEval.ts",
     "student:temporal-eval:record": "tsx src/scripts/runStudentTemporalEval.ts --acquisition=record --cache=off",
@@ -33,12 +37,14 @@
     "dotenv": "^16.6.1",
     "express": "^5.1.0",
     "jsonrepair": "^3.13.1",
+    "pg": "^8.20.0",
     "zod": "^4.1.5"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/node": "^24.3.1",
+    "@types/pg": "^8.20.0",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2"
   }
