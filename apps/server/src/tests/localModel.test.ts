@@ -1,6 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { LocalModelService } from "../services/localModel.js";
+import { studentAnswerSchema } from "../types/student.js";
+
+test("student answer schema normalizes non-finite confidence", () => {
+  const parsed = studentAnswerSchema.parse({
+    modelRole: "student",
+    answer: "PostgreSQL stores relational data reliably.",
+    key_points: ["Relational data"],
+    assumptions: [],
+    confidence: "NaN"
+  });
+
+  assert.equal(parsed.confidence, 50);
+});
 
 test("local model observation parser repairs array-shaped payloads", () => {
   const service = new LocalModelService();

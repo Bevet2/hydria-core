@@ -141,7 +141,8 @@ const CONSTRAINT_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
   { label: "sensitive data", pattern: /\b(?:sensitive data|donnees sensibles|donn[eé]es sensibles|pii|personal data)\b/i },
   {
     label: "user preference",
-    pattern: /\b(?:prefer|preference|would rather|favor|avoid|je prefere|pr[eé]f[eè]re|preference utilisateur|eviter|[eé]viter|priorise|prioritize)\b/i
+    pattern:
+      /\b(?:prefer|preference|would rather|favor|avoid|je prefere|pr[eé]f[eè]re|preference utilisateur|eviter|[eé]viter|priorise|prioritize|reponse\s+(?:tres\s+)?courte|réponse\s+(?:très\s+)?courte|reponds?\s+en\s+moins\s+de\s+\d+\s+mots?|réponds?\s+en\s+moins\s+de\s+\d+\s+mots?|very short answer|short answer|answer in less than \d+ words?)\b/i
   }
 ];
 
@@ -413,6 +414,20 @@ function summarizeConstraintText(label: string, value: string) {
   }
   if (label === "sensitive data") {
     return "sensitive data present";
+  }
+  if (label === "user preference") {
+    const wordLimit =
+      value.match(/\b(?:moins de|less than)\s+\d+\s+(?:mots?|words?)\b/i) ??
+      value.match(/\b\d+\s+(?:mots?|words?)\b/i);
+    if (wordLimit) {
+      return `answer ${wordLimit[0]}`;
+    }
+    if (/\b(?:reponse\s+tres\s+courte|réponse\s+très\s+courte|very short answer)\b/i.test(value)) {
+      return "very short answers";
+    }
+    if (/\b(?:reponse\s+courte|réponse\s+courte|short answer)\b/i.test(value)) {
+      return "short answers";
+    }
   }
   if (label === "risk" || label === "urgency") {
     if (/\b(?:logs?|journaux|intermittent|marge|margin|p95|hypothese|hypothesis|instrument|retour arriere|revenir en arriere|two hours|deux heures)\b/i.test(value)) {

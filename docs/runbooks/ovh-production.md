@@ -14,6 +14,7 @@ Purpose: operate the first Hydria Core cloud deployment on the OVH VPS.
 - Persistence: PostgreSQL in Docker
 
 PostgreSQL is not exposed publicly. Hydria Core is bound to `127.0.0.1:8080`, and Caddy exposes HTTPS on ports `80` and `443`.
+Production must use the dedicated PostgreSQL schema `hydria_prod`; do not run production on `public`.
 
 ## DNS
 
@@ -48,6 +49,7 @@ Expected:
 - Hydria Core container is `healthy`.
 - Postgres container is `healthy`.
 - Persistence reports `adapter: postgres`.
+- Persistence reports `postgresSchema: hydria_prod`.
 - Public `:8080` must not answer from outside the VPS.
 
 ## Real Chat Smoke
@@ -59,6 +61,20 @@ curl -fsS https://app.hydria.click/api/chat/message \
 ```
 
 This validates DNS, TLS, Caddy, API, PostgreSQL, and the student runtime. If Ollama is unavailable on the VPS, the student draft should fall back to OpenRouter.
+
+Full production smoke from any machine with this repo:
+
+```bash
+npm run prod:smoke -- --base-url=https://app.hydria.click --expected-schema=hydria_prod
+```
+
+This writes:
+
+```text
+storage/training/hydria-production-smoke-v1.json
+```
+
+The smoke is blocking on HTTPS/web/API failures, PostgreSQL not being active, production using schema `public`, schema mismatch, single-turn chat failure, broken session continuity, and `ActiveConstraintCapsule` missing a short-answer preference in a multi-turn conversation. Local Ollama being unreachable is only a warning when the cloud fallback is configured; add `--require-local-model` after Ollama is installed on the VPS.
 
 ## Deploy Current Branch
 
@@ -72,6 +88,17 @@ sudo docker compose --env-file .env.docker -f docker-compose.yml -f docker-compo
 ```
 
 Then run the health checks.
+
+Before first production cutover to the dedicated schema:
+
+```bash
+cd /opt/hydria-core
+sudo docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.ovh.yml up -d postgres
+sudo docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.ovh.yml run --rm hydria-core \
+  npm run persistence:postgres:cutover-check -- --schema hydria_prod --reset-schema
+```
+
+Only run this destructive `--reset-schema` command before production traffic uses the schema.
 
 ## Restart
 
@@ -101,10 +128,34 @@ Do not commit this file. Required values:
 ```text
 OPENROUTER_API_KEY=<secret>
 POSTGRES_PASSWORD=<secret>
+POSTGRES_SCHEMA=hydria_prod
 HYDRIA_CORE_PORT=127.0.0.1:8080
 HYDRIA_DOCKER_WEB_ORIGIN=https://app.hydria.click
 HYDRIA_DOCKER_API_BASE_URL=https://app.hydria.click
 HYDRIA_DOCKER_HTTP_REFERER=https://app.hydria.click
+LOCAL_STUDENT_FALLBACK_MODEL=openai/gpt-5.4-mini
+HYDRIA_DOCKER_LOCAL_MODEL_OBSERVER_ENABLED=false
+```
+
+Current recommended OVH mode is cloud fallback for the student draft, because the VPS does not yet host Ollama. Keep the local model timeout low so health checks do not wait on an unreachable host endpoint:
+
+```text
+HYDRIA_DOCKER_LOCAL_MODEL_BASE_URL=http://127.0.0.1:65535
+LOCAL_MODEL_TIMEOUT_MS=1000
+```
+
+When Ollama is installed on the VPS host and listening on `11435`, switch to:
+
+```text
+HYDRIA_DOCKER_LOCAL_MODEL_BASE_URL=http://host.docker.internal:11435
+LOCAL_MODEL_TIMEOUT_MS=45000
+HYDRIA_DOCKER_LOCAL_MODEL_OBSERVER_ENABLED=true
+```
+
+Then rerun:
+
+```bash
+npm run prod:smoke -- --base-url=https://app.hydria.click --expected-schema=hydria_prod --require-local-model
 ```
 
 ## Firewall

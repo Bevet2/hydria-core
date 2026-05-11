@@ -189,6 +189,9 @@ function buildGuidance(args: {
     capsule.decisionNeeded ||
     capsule.changedConstraints.length > 0 ||
     capsule.recommendedDirection !== null;
+  const hasExplicitLengthConstraint = capsule.topConstraints.some((constraint) =>
+    /\b(?:user preference:.*(?:short|court|courte|moins de|less than|\d+\s+(?:mots?|words?)))\b/i.test(constraint)
+  );
 
   if (language === "fr") {
     return [
@@ -235,7 +238,9 @@ function buildGuidance(args: {
         ? "Continue le raisonnement avec les contraintes existantes et une hypothese explicite si necessaire."
         : "",
       "Garde la langue de l'utilisateur.",
-      "Vise 65 a 115 mots avec une decision, un compromis et une prochaine etape concrete.",
+      hasExplicitLengthConstraint
+        ? "Respecte la contrainte active de format ou de brievete; ne force pas la longueur 65-115 mots."
+        : "Vise 65 a 115 mots avec une decision, un compromis et une prochaine etape concrete.",
       "Evite les formules generiques comme bonnes pratiques, ca depend, ou plus de contexte.",
       "Reste concis et n'expose pas de chaine de pensee brute."
     ]
@@ -285,7 +290,9 @@ function buildGuidance(args: {
       ? "Continue with the existing constraints and state a reasonable assumption if needed."
       : "",
     "Keep the user's language.",
-    "Aim for 65 to 115 words with a decision, a tradeoff, and a concrete next step.",
+    hasExplicitLengthConstraint
+      ? "Respect the active format or brevity constraint; do not force the 65-115 word length."
+      : "Aim for 65 to 115 words with a decision, a tradeoff, and a concrete next step.",
     "Avoid generic phrasing such as best practices, it depends, or more context.",
     "Stay concise and do not expose raw chain-of-thought."
   ]

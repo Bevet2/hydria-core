@@ -178,6 +178,27 @@ test("active constraint capsule detects explicit decision requests and fills dir
   assert.ok(capsule.recommendedDirection);
 });
 
+test("active constraint capsule keeps user brevity preference as an active constraint", () => {
+  const initial = updateConversationState(createInitialState(), "Explique Hydria Core.", "");
+  const updated = updateConversationState(
+    initial,
+    "Pour la suite, réponds en moins de 12 mots.",
+    "Hydria Core orchestre le runtime."
+  );
+  const capsule = buildActiveConstraintCapsule(updated, "Explique PostgreSQL en respectant ma contrainte.");
+  const policy = decideMultiTurnAnswerPolicy({
+    conversationState: updated,
+    activeConstraintCapsule: capsule,
+    newUserMessage: "Explique PostgreSQL en respectant ma contrainte.",
+    category: "mixed_reasoning",
+    toolRouting: null
+  });
+
+  assert.ok(capsule.topConstraints.some((item) => /user preference/i.test(item) && /12 mots/i.test(item)));
+  assert.match(policy.guidance, /contrainte active de format ou de brievete/i);
+  assert.doesNotMatch(policy.guidance, /Vise 65 a 115 mots/i);
+});
+
 test("active constraint capsule discards old assumptions after contradiction", () => {
   const previous = updateConversationState(
     createInitialState(),

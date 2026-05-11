@@ -28,6 +28,7 @@
     "runtime:release-gate": "npm run runtime:release-gate -w @hydria-arena/server",
     "persistence:migrate:postgres": "npm run persistence:migrate:postgres -w @hydria-arena/server --",
     "persistence:postgres:cutover-check": "npm run persistence:postgres:cutover-check -w @hydria-arena/server --",
+    "prod:smoke": "npm run prod:smoke -w @hydria-arena/server --",
     "student:temporal-eval": "npm run student:temporal-eval -w @hydria-arena/server",
     "student:temporal-eval:record": "npm run student:temporal-eval:record -w @hydria-arena/server",
     "student:temporal-eval:replay": "npm run student:temporal-eval:replay -w @hydria-arena/server",

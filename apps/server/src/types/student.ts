@@ -14,7 +14,10 @@ import {
 } from "./core.js";
 import { knowledgeInjectionSchema } from "./knowledge.js";
 
-const boundedScoreSchema = z.coerce.number().min(0).max(100);
+const boundedScoreSchema = z.preprocess((value) => {
+  const numeric = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(numeric) ? numeric : 50;
+}, z.number().min(0).max(100));
 const LEGACY_NIL_UUID = "00000000-0000-0000-0000-000000000000";
 const LEGACY_DATETIME = "1970-01-01T00:00:00.000Z";
 

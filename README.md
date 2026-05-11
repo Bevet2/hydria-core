@@ -363,6 +363,8 @@ Run the PostgreSQL topology with:
 docker compose -f docker-compose.yml -f docker-compose.postgres.yml up --build
 ```
 
+The local PostgreSQL compose override uses `POSTGRES_SCHEMA=hydria_dev` by default, not `public`.
+
 The first Docker target is still intentionally minimal: API + built web + persistent `storage` volume. Workers and model-router are planned as the next compose expansion.
 
 Docker smoke gate:
@@ -396,6 +398,14 @@ https://app.hydria.click
 ```
 
 The operational procedure, health checks, DNS records, Caddy reverse proxy, firewall expectations, backup command, and rollback steps are documented in `docs/runbooks/ovh-production.md`.
+
+Production smoke gate:
+
+```bash
+npm run prod:smoke -- --base-url=https://app.hydria.click --expected-schema=hydria_prod
+```
+
+This verifies HTTPS, API health, PostgreSQL persistence on the expected schema, local-model/fallback status, single-turn chat, and multi-turn memory/capsule handling.
 
 ### Runtime Release Gate
 
@@ -448,6 +458,7 @@ Workspace-level scripts:
 - `npm run persistence:migrate:postgres`
 - `npm run persistence:postgres:smoke`
 - `npm run persistence:postgres:cutover-check`
+- `npm run prod:smoke`
 - `npm run learning:loop`
 - `npm run student:temporal-eval`
 - `npm run student:temporal-eval:record`

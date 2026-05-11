@@ -19,9 +19,10 @@ services:
       LOCAL_MODEL_PROVIDER: ollama
       LOCAL_MODEL_NAME: ${LOCAL_MODEL_NAME:-student-local-1p5b-toolbench-lora-v10-light:latest}
       LOCAL_MODEL_BASE_URL: ${HYDRIA_DOCKER_LOCAL_MODEL_BASE_URL:-http://host.docker.internal:11435}
+      LOCAL_MODEL_TIMEOUT_MS: ${LOCAL_MODEL_TIMEOUT_MS:-45000}
       LOCAL_MODEL_OBSERVER_ENABLED: ${HYDRIA_DOCKER_LOCAL_MODEL_OBSERVER_ENABLED:-false}
       LOCAL_STUDENT_FALLBACK_MODEL: ${LOCAL_STUDENT_FALLBACK_MODEL:-openai/gpt-5.4-mini}
-      POSTGRES_SCHEMA: ${POSTGRES_SCHEMA:-public}
+      POSTGRES_SCHEMA: ${POSTGRES_SCHEMA:-hydria_dev}
     volumes:
       - hydria-storage:/app/storage
     extra_hosts:

@@ -25,6 +25,7 @@
     "persistence:migrate:postgres": "tsx src/scripts/migrateSqliteToPostgres.ts",
     "persistence:postgres:smoke": "tsx src/scripts/runPostgresPersistenceSmoke.ts",
     "persistence:postgres:cutover-check": "tsx src/scripts/runPostgresCutoverCheck.ts",
+    "prod:smoke": "tsx src/scripts/runProductionSmoke.ts",
     "student:strategy-discovery": "tsx src/scripts/runStudentStrategyDiscoveryLoop.ts",
     "student:temporal-eval": "tsx src/scripts/runStudentTemporalEval.ts",
     "student:temporal-eval:record": "tsx src/scripts/runStudentTemporalEval.ts --acquisition=record --cache=off",
