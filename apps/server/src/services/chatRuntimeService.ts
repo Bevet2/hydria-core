@@ -16,10 +16,10 @@ import {
   decideMultiTurnAnswerPolicy,
   type MultiTurnAnswerPolicyResult
 } from "./context/multiTurnAnswerPolicy.js";
-import type { StudentService } from "./studentService.js";
+import type { StudentChatAdapter, StudentChatAdapterResult } from "./studentChatAdapter.js";
 import type { QuestionCategory } from "../types/arena.js";
 import type { ChatMessage, ChatMessageResponse, ChatRuntimeMode } from "../types/chat.js";
-import type { StudentAnswer, StudentAnswerPreview } from "../types/student.js";
+import type { StudentAnswer } from "../types/student.js";
 
 type ChatRuntimeSession = {
   sessionId: string;
@@ -33,7 +33,7 @@ type ChatRuntimeSession = {
 type ChatDraft = {
   answer: StudentAnswer;
   category: QuestionCategory;
-  preview: StudentAnswerPreview;
+  generation: StudentChatAdapterResult;
   routingQuestion: string;
 };
 
@@ -989,7 +989,7 @@ function buildUserFactAcknowledgementAnswer(args: {
 export class ChatRuntimeService {
   private readonly sessions = new Map<string, ChatRuntimeSession>();
 
-  constructor(private readonly studentService: Pick<StudentService, "answerOnly">) {}
+  constructor(private readonly studentChatAdapter: Pick<StudentChatAdapter, "answer">) {}
 
   resetSession(sessionId: string) {
     this.sessions.delete(sessionId);
@@ -1036,6 +1036,7 @@ export class ChatRuntimeService {
       userMessage: args.message,
       session,
       runtimeMode,
+      category,
       activeConstraintCapsule,
       answerPolicy
     });
@@ -1049,13 +1050,14 @@ export class ChatRuntimeService {
       lastAssistantAnswer: session.lastAssistantAnswer,
       recentMessages: session.messages
     });
-    let usedRetry = draft.preview.trace.student.usedRetry;
+    let usedRetry = draft.generation.usedRetry;
 
     if (shouldRepairConversationQuality(conversationQuality)) {
       const repairedDraft = await this.buildDraft({
         userMessage: args.message,
         session,
         runtimeMode,
+        category,
         activeConstraintCapsule,
         answerPolicy,
         qualityRetry: conversationQuality
@@ -1226,6 +1228,7 @@ export class ChatRuntimeService {
     userMessage: string;
     session: ChatRuntimeSession;
     runtimeMode: ChatRuntimeMode;
+    category: QuestionCategory;
     activeConstraintCapsule: ActiveConstraintCapsule;
     answerPolicy: MultiTurnAnswerPolicyResult;
     qualityRetry?: ConversationQualityGateResult;
@@ -1242,16 +1245,22 @@ export class ChatRuntimeService {
       userMessage: args.userMessage,
       routingQuestion
     });
-    const preview = await this.studentService.answerOnly(question, {
+    const generation = await this.studentChatAdapter.answer({
+      question,
       routingQuestion,
-      researchQuestion: routingQuestion,
-      knowledgeMode: "skip",
-      researchMode: shouldUseExternalGrounding ? "auto" : "skip"
+      userMessage: args.userMessage,
+      runtimeMode: args.runtimeMode,
+      category: args.category,
+      recentMessages: args.session.messages,
+      activeConstraintCapsule: args.activeConstraintCapsule,
+      answerPolicy: args.answerPolicy,
+      qualityRetry: args.qualityRetry,
+      requiresExternalGrounding: shouldUseExternalGrounding
     });
     return {
-      answer: preview.student.draft,
-      category: preview.category,
-      preview,
+      answer: generation.answer,
+      category: args.category,
+      generation,
       routingQuestion
     };
   }

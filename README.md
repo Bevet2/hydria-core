@@ -126,6 +126,12 @@ It stores:
 - rule, strategy, and tool impact
 - workflow and memory snapshots
 
+### Chat Runtime
+
+The web chat uses `ChatRuntimeService` plus a dedicated `StudentChatAdapter`.
+
+This path is still based on the local student identity and `StudentAnswer` schema, but it does not run the full Student Lab preview/analyze/research pipeline. The chat runtime prepares the current message with conversation state, `ActiveConstraintCapsule`, answer policy, recent turns, and resolved follow-up task, then asks the student model directly. This keeps normal chat general-purpose while preserving the governed multi-turn context layer.
+
 ### Research / Truth Engine
 
 The research stack is split into explicit layers:

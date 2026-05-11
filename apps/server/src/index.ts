@@ -35,6 +35,7 @@ import { OrchestrationPolicyService } from "./services/orchestrationPolicy.js";
 import { ResearchToolService } from "./services/researchToolService.js";
 import { RefineRouterService } from "./services/refineRouter.js";
 import { PersistenceHealthService } from "./services/storage/persistenceHealthService.js";
+import { StudentChatAdapter } from "./services/studentChatAdapter.js";
 import { StudentService } from "./services/studentService.js";
 import { StudentSessionStore } from "./services/studentSessionStore.js";
 import { defaultArenaModels, env } from "./utils/env.js";
@@ -61,7 +62,8 @@ const studentService = new StudentService(
   researchToolService,
   studentSessionStore
 );
-const chatRuntimeService = new ChatRuntimeService(studentService);
+const studentChatAdapter = new StudentChatAdapter(localModelService, openRouterService);
+const chatRuntimeService = new ChatRuntimeService(studentChatAdapter);
 const arenaRunner = new ArenaRunner(
   openRouterService,
   localModelService,

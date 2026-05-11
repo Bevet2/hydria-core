@@ -61,7 +61,7 @@ curl -fsS https://app.hydria.click/api/chat/message \
   -d '{"message":"Reponds en une phrase : quel est le role de Hydria Core ?"}'
 ```
 
-This validates DNS, TLS, Caddy, API, PostgreSQL, and the student runtime. If Ollama is unavailable on the VPS, the student draft should fall back to OpenRouter.
+This validates DNS, TLS, Caddy, API, PostgreSQL, and the direct student chat runtime. Chat is based on the student prompt and `StudentAnswer` schema through `StudentChatAdapter`, but it does not run the full Student Lab benchmark/research/analyze pipeline. If Ollama is unavailable or too slow on the VPS, the student chat draft should fall back to OpenRouter.
 
 Full production smoke from any machine with this repo:
 
