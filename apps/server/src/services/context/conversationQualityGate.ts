@@ -92,6 +92,22 @@ function activeBrevityLimit(capsule?: ActiveConstraintCapsule) {
   return null;
 }
 
+function isBrevityConstraint(value: string) {
+  return /^user preference:/i.test(value) && /\b(?:answer|reponse|réponse|short|court|courte|mots?|words?)\b/i.test(value);
+}
+
+function satisfiesActiveBrevityConstraint(input: ConversationQualityGateInput) {
+  const limit = activeBrevityLimit(input.activeConstraintCapsule);
+  if (!limit) {
+    return false;
+  }
+  const tolerance = Math.min(8, Math.max(3, Math.ceil(limit * 0.5)));
+  return (
+    wordCount(input.answer) <= limit + tolerance &&
+    answerMentionsAny(input.answer, [input.newUserMessage, input.conversationState.userGoal ?? ""])
+  );
+}
+
 function violatesActiveBrevityConstraint(input: ConversationQualityGateInput) {
   const limit = activeBrevityLimit(input.activeConstraintCapsule);
   if (!limit) {
@@ -431,7 +447,7 @@ export function analyzeConversationQuality(input: ConversationQualityGateInput):
     input.conversationState.userGoal ?? ""
   ];
 
-  if (hasGenericShape(input.answer, contextValuesForGenericCheck)) {
+  if (!satisfiesActiveBrevityConstraint(input) && hasGenericShape(input.answer, contextValuesForGenericCheck)) {
     issues.push("generic_answer");
     penalties.push("answer is too generic or too short for a multi-turn reasoning gate");
   }
@@ -524,10 +540,11 @@ export function analyzeConversationQuality(input: ConversationQualityGateInput):
     penalties.push("answer does not show how the changed context affects the decision");
   }
 
+  const constraintsRequiringExplicitUse = blockingConstraints.filter((constraint) => !isBrevityConstraint(constraint));
   if (
-    blockingConstraints.length > 0 &&
+    constraintsRequiringExplicitUse.length > 0 &&
     input.policy.answerMode !== "clarify" &&
-    !answerShowsConstraintUse(input.answer, blockingConstraints)
+    !answerShowsConstraintUse(input.answer, constraintsRequiringExplicitUse)
   ) {
     issues.push("ignored_added_constraint");
     penalties.push("answer does not show how active constraints shaped the decision");

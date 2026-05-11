@@ -48,11 +48,27 @@ function hasAny(text: string, pattern: RegExp) {
   return pattern.test(normalizeText(text));
 }
 
+function isFormatPreferenceConstraint(value: string) {
+  return /^user preference:/i.test(value) && /\b(?:answer|reponse|réponse|short|court|courte|mots?|words?)\b/i.test(value);
+}
+
 function hasStrategicPressure(args: {
   capsule: ActiveConstraintCapsule;
   currentUserMessage: string;
   category: QuestionCategory;
 }) {
+  const strategicCategories = ["architecture_design", "incident_response", "product_strategy", "mixed_reasoning"];
+  const hasOnlyFormatConstraint =
+    args.capsule.topConstraints.length > 0 &&
+    args.capsule.topConstraints.every(isFormatPreferenceConstraint) &&
+    args.capsule.blockingConstraints.length === 0 &&
+    args.capsule.changedConstraints.length === 0 &&
+    !args.capsule.decisionNeeded &&
+    !strategicCategories.includes(args.category);
+  if (hasOnlyFormatConstraint) {
+    return false;
+  }
+
   const combined = [
     args.currentUserMessage,
     args.capsule.userGoal ?? "",
@@ -66,7 +82,7 @@ function hasStrategicPressure(args: {
     args.capsule.decisionNeeded ||
     args.capsule.blockingConstraints.length >= 2 ||
     args.capsule.changedConstraints.length > 0 ||
-    ["architecture_design", "incident_response", "product_strategy", "mixed_reasoning"].includes(args.category) ||
+    strategicCategories.includes(args.category) ||
     hasAny(
       combined,
       /\b(?:tradeoff|compromis|dominant|dominante|constraint|contrainte|deadline|budget|scale|risk|risque|stakeholder|sponsor|owner|audit|rollback|reversible|reversible|sensitive|donnees sensibles|scope|segment|signal)\b/

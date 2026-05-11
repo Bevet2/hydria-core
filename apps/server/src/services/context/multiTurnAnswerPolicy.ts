@@ -75,6 +75,10 @@ function hasConversationMemory(state: ConversationState, capsule: ActiveConstrai
   );
 }
 
+function isFormatPreferenceConstraint(value: string) {
+  return /^user preference:/i.test(value) && /\b(?:answer|reponse|réponse|short|court|courte|mots?|words?)\b/i.test(value);
+}
+
 function hasChangedContext(input: MultiTurnAnswerPolicyInput) {
   const capsule = input.activeConstraintCapsule ?? buildActiveConstraintCapsule(input.conversationState, input.newUserMessage);
   return (
@@ -323,11 +327,14 @@ export function decideMultiTurnAnswerPolicy(
     strategicTradeoffPolicy
   });
   const shouldReviseAssumptions = hasChangedContext(input);
+  const hasSubstantiveConstraints = activeConstraintCapsule.topConstraints.some(
+    (constraint) => !isFormatPreferenceConstraint(constraint)
+  );
   const shouldMakeRecommendation =
     strategicTradeoffPolicy.hasConflict ||
     activeConstraintCapsule.decisionNeeded ||
     recommendationRequested(input.newUserMessage) ||
-    Boolean(activeConstraintCapsule.userGoal && activeConstraintCapsule.topConstraints.length > 0) ||
+    Boolean(activeConstraintCapsule.userGoal && hasSubstantiveConstraints) ||
     Boolean(activeConstraintCapsule.recommendedDirection);
   const canProceedFromConversationRecall = canTreatToolBlockerAsConversationRecall(input, activeConstraintCapsule);
   const isContextSettingTurn = clarification.reason === "conversation_context_setting_turn";

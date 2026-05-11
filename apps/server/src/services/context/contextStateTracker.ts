@@ -518,12 +518,13 @@ function buildRecommendedDirection(args: {
   decisionNeeded: boolean;
   currentUserMessage: string;
 }) {
-  const hasEnoughContext = args.topConstraints.length > 0;
+  const substantiveConstraints = args.topConstraints.filter((constraint) => !isFormatPreferenceConstraint(constraint));
+  const hasEnoughContext = substantiveConstraints.length > 0;
   if (!hasEnoughContext && !args.decisionNeeded) {
     return null;
   }
 
-  const constraints = args.topConstraints
+  const constraints = substantiveConstraints
     .slice(0, 3)
     .map((constraint) => `${constraintLabel(constraint)}=${constraintText(constraint)}`)
     .join("; ");
@@ -571,6 +572,10 @@ function buildRecommendedDirection(args: {
   return constraints
     ? `Recommend the simplest reversible option while accounting for ${constraints}.`
     : "Make a bounded recommendation with an explicit assumption.";
+}
+
+function isFormatPreferenceConstraint(value: string) {
+  return /^user preference:/i.test(value) && /\b(?:answer|reponse|réponse|short|court|courte|mots?|words?)\b/i.test(value);
 }
 
 function capsuleConfidence(args: {

@@ -168,6 +168,27 @@ function countWords(value: string) {
   return (value.trim().match(/[\p{L}\p{N}]+/gu) ?? []).length;
 }
 
+function activeBrevityLimit(capsule: ActiveConstraintCapsule) {
+  for (const constraint of capsule.topConstraints) {
+    const normalized = normalizeText(constraint);
+    const explicitLimit = normalized.match(/\b(?:moins de|less than|under|maximum|max|answer)\s+(\d+)\s+(?:mots?|words?)\b/);
+    if (explicitLimit?.[1]) {
+      return Number(explicitLimit[1]);
+    }
+    if (/\b(?:very short answers?|reponses? tres courtes?|reponses? tres courte?s?)\b/.test(normalized)) {
+      return 16;
+    }
+    if (/\b(?:short answers?|reponses? courtes?|reponses? courte?s?)\b/.test(normalized)) {
+      return 28;
+    }
+  }
+  return null;
+}
+
+function allowedBrevityWords(limit: number) {
+  return limit + Math.min(8, Math.max(3, Math.ceil(limit * 0.5)));
+}
+
 function normalizeText(value: string) {
   return value
     .normalize("NFKD")
@@ -241,6 +262,65 @@ function textSimilarity(left: string, right: string) {
     }
   }
   return overlap / (leftTerms.size + rightTerms.size - overlap);
+}
+
+function splitAnswerSentences(answer: string) {
+  return answer
+    .replace(/\s+/g, " ")
+    .split(/(?<=[.!?])\s+|\n+/u)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function isBrevityMetaSentence(sentence: string) {
+  return /\b(?:contrainte|constraint|moins de|less than|mots?|words?|reponse courte|réponse courte|short answer|j[' ]?assume|assumption)\b/i.test(
+    sentence
+  );
+}
+
+function trimToWordLimit(sentence: string, maxWords: number) {
+  const words = sentence.match(/[\p{L}\p{N}'’:-]+/gu) ?? [];
+  if (words.length <= maxWords) {
+    return sentence.trim();
+  }
+  return `${words.slice(0, maxWords).join(" ").replace(/[,:;]+$/g, "")}.`;
+}
+
+function enforceActiveBrevityConstraint(args: {
+  answer: StudentAnswer;
+  activeConstraintCapsule: ActiveConstraintCapsule;
+  newUserMessage: string;
+}) {
+  const limit = activeBrevityLimit(args.activeConstraintCapsule);
+  if (!limit) {
+    return args.answer;
+  }
+  const maxWords = allowedBrevityWords(limit);
+  if (countWords(args.answer.answer) <= maxWords) {
+    return args.answer;
+  }
+
+  const salientTerms = extractTerms(args.newUserMessage, 8);
+  const candidates = splitAnswerSentences(args.answer.answer).filter((sentence) => !isBrevityMetaSentence(sentence));
+  const ranked = candidates
+    .map((sentence, index) => {
+      const mentionsSalient = answerMentionsAnyTerm(sentence, salientTerms);
+      const startsWithSalient = salientTerms.some((term) => normalizeText(sentence).startsWith(term));
+      const isRecommendation = /\b(?:recommande|recommend|choisis|choose)\b/i.test(sentence);
+      const withinLimit = countWords(sentence) <= maxWords;
+      return {
+        sentence,
+        score: (mentionsSalient ? 4 : 0) + (startsWithSalient ? 2 : 0) + (withinLimit ? 2 : 0) - (isRecommendation ? 1 : 0) - index * 0.01
+      };
+    })
+    .sort((left, right) => right.score - left.score);
+  const selected = ranked[0]?.sentence ?? candidates[0] ?? args.answer.answer;
+  const compressed = trimToWordLimit(selected, maxWords);
+  return {
+    ...args.answer,
+    answer: compressed,
+    confidence: Number.isFinite(args.answer.confidence) ? Math.min(args.answer.confidence, 82) : 50
+  };
 }
 
 function qualityScore(quality: ConversationQualityGateResult) {
@@ -1081,6 +1161,25 @@ export class ChatRuntimeService {
     });
     if (resolvedSubjectAnswer.answer !== finalAnswer.answer) {
       finalAnswer = resolvedSubjectAnswer;
+      conversationQuality = this.analyzeQuality({
+        runtimeMode,
+        conversationState,
+        activeConstraintCapsule,
+        answerPolicy,
+        newUserMessage: args.message,
+        answer: finalAnswer.answer,
+        lastAssistantAnswer: session.lastAssistantAnswer,
+        recentMessages: session.messages
+      });
+    }
+
+    const brevityAdjustedAnswer = enforceActiveBrevityConstraint({
+      answer: finalAnswer,
+      activeConstraintCapsule,
+      newUserMessage: args.message
+    });
+    if (brevityAdjustedAnswer.answer !== finalAnswer.answer) {
+      finalAnswer = brevityAdjustedAnswer;
       conversationQuality = this.analyzeQuality({
         runtimeMode,
         conversationState,
