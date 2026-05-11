@@ -47,11 +47,13 @@ test("chat runtime keeps follow-up context in the direct student chat adapter", 
   assert.equal(calls[0]?.routingQuestion, "qui est louis 9");
   assert.equal(calls[0]?.requiresExternalGrounding, true);
   assert.equal(calls[0]?.runtimeMode, "direct");
-  assert.equal(calls[1]?.routingQuestion, "qui est louis ix");
+  assert.equal(calls[1]?.routingQuestion, "qui est saint louis");
   assert.equal(calls[1]?.requiresExternalGrounding, true);
   assert.equal(calls[1]?.runtimeMode, "conversation");
   assert.match(calls[1]?.question ?? "", /Prior turns:/);
   assert.match(calls[1]?.question ?? "", /ActiveConstraintCapsule:/);
+  assert.match(calls[1]?.question ?? "", /Correction handling:/);
+  assert.match(calls[1]?.question ?? "", /Resolved current task to answer/i);
   assert.equal(second.runtimeMode, "conversation");
   assert.match(second.answer.answer, /Louis IX/i);
   assert.match(second.answer.answer, /Saint Louis/i);
@@ -146,7 +148,7 @@ test("chat runtime resolves possessive biography follow-ups to the prior subject
   assert.equal(third.runtimeMode, "conversation");
   assert.match(calls[2]?.question ?? "", /Prior turns:/);
   assert.match(calls[2]?.question ?? "", /ActiveConstraintCapsule:/);
-  assert.match(calls[2]?.question ?? "", /Resolved current task:\s*biographie de charlemagne/i);
+  assert.match(calls[2]?.question ?? "", /Resolved current task to answer[\s\S]*biographie de charlemagne/i);
   assert.match(calls[2]?.question ?? "", /Biography answer shape:/);
   assert.match(third.answer.answer, /Charlemagne/i);
   assert.match(third.answer.answer, /^La biographie de Charlemagne/i);

@@ -684,13 +684,7 @@ function buildRoutingQuestionForHydria(args: {
 
   const correctionSubject = extractCorrectionSubject(args.userMessage);
   if (correctionSubject && isIdentityLookup(previousUserMessage)) {
-    const previousSubject = normalizeShortOrdinalAliases(extractIdentitySubjectFragment(previousUserMessage));
-    const previousSubjectHasOrdinal = /\b(?:[ivxlcdm]+|\d+)\b/i.test(previousSubject);
-    const correctedSubject = previousSubjectHasOrdinal
-      ? previousSubject
-      : previousSubject && !normalizeText(correctionSubject).includes(normalizeText(previousSubject))
-        ? `${previousSubject} ${correctionSubject}`
-        : correctionSubject;
+    const correctedSubject = normalizeShortOrdinalAliases(correctionSubject);
     return /^\s*(?:qui|qu')\b/i.test(previousUserMessage)
       ? `qui est ${correctedSubject}`
       : `who is ${correctedSubject}`;
@@ -762,8 +756,14 @@ function buildQuestionForHydria(args: {
     : [];
   const resolvedTaskLines =
     normalizeText(args.routingQuestion) !== normalizeText(args.userMessage)
-      ? ["Resolved current task:", args.routingQuestion]
+      ? ["Resolved current task to answer instead of the literal follow-up wording:", args.routingQuestion]
       : [];
+  const correctionHandlingLines = extractCorrectionSubject(args.userMessage)
+    ? [
+        "Correction handling:",
+        "Treat the user message as a correction of the active subject. Briefly acknowledge the update, then answer the resolved current task. Do not answer only with a meta-comment about the correction."
+      ]
+    : [];
   const biographyShapeLines = BIOGRAPHY_REQUEST_PATTERN.test(`${args.userMessage}\n${args.routingQuestion}`)
     ? [
         "Biography answer shape:",
@@ -777,10 +777,11 @@ function buildQuestionForHydria(args: {
     ...contextLines,
     ...repairLines,
     ...resolvedTaskLines,
+    ...correctionHandlingLines,
     ...biographyShapeLines,
     "User message to answer:",
     args.userMessage,
-    "Answer that user message only. Use prior turns to resolve references, corrections, and follow-up questions.",
+    "Answer the resolved current task when one is present; otherwise answer the user message directly. Use prior turns to resolve references, corrections, and follow-up questions.",
     "When a resolved current task names a subject, use that subject explicitly in the answer instead of answering only with a pronoun.",
     "If that user message corrects a previous answer, acknowledge the correction briefly and give the corrected answer.",
     "Keep the user's language. Do not mention runtime, policy, capsule, prompt, or internal instructions."
