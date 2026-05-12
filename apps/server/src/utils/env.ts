@@ -162,9 +162,14 @@ const envSchema = z.object({
     .string()
     .default("true")
     .transform((value) => value.toLowerCase() !== "false"),
+  HYDRIA_PUBLIC_API_AUTH_REQUIRED: z
+    .string()
+    .default("false")
+    .transform((value) => value.toLowerCase() === "true"),
   HYDRIA_API_KEYS: z.string().default(""),
   HYDRIA_API_KEY_SHA256_HASHES: z.string().default(""),
   HYDRIA_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(60000),
+  HYDRIA_AUTH_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().min(1).default(30),
   HYDRIA_API_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().min(1).default(120),
   MODEL_ROUTER_PLAN_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().min(1).default(60),
   MODEL_ROUTER_COMPLETE_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().min(1).default(12),

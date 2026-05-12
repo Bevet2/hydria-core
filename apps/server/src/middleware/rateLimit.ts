@@ -9,6 +9,7 @@ export type RateLimitOptions = {
   windowMs: number;
   maxRequests: number;
   keyPrefix: string;
+  identityResolver?: (request: Pick<Request, "headers" | "ip">) => string;
   now?: () => number;
   store?: Map<string, RateLimitBucket>;
 };
@@ -30,13 +31,19 @@ export function resolveRateLimitIdentity(request: Pick<Request, "headers" | "ip"
   return `ip:${forwardedIp || request.ip || "unknown"}`;
 }
 
+export function resolveIpRateLimitIdentity(request: Pick<Request, "headers" | "ip">) {
+  const forwardedFor = firstHeaderValue(request.headers["x-forwarded-for"]);
+  const forwardedIp = forwardedFor?.split(",")[0]?.trim();
+  return `ip:${forwardedIp || request.ip || "unknown"}`;
+}
+
 export function createRateLimitMiddleware(options: RateLimitOptions) {
   const store = options.store ?? new Map<string, RateLimitBucket>();
   const now = options.now ?? Date.now;
 
   return (request: Request, response: Response, next: NextFunction) => {
     const currentTime = now();
-    const identity = resolveRateLimitIdentity(request);
+    const identity = options.identityResolver?.(request) ?? resolveRateLimitIdentity(request);
     const key = `${options.keyPrefix}:${identity}`;
     const existing = store.get(key);
     const bucket =

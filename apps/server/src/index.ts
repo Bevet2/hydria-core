@@ -12,6 +12,12 @@ import { createLearningRouter } from "./routes/learning.js";
 import { createLocalModelRouter } from "./routes/localModel.js";
 import { createModelsRouter } from "./routes/models.js";
 import { createStudentRouter } from "./routes/student.js";
+import { createApiKeyAuthMiddleware } from "./middleware/apiKeyAuth.js";
+import {
+  createRateLimitMiddleware,
+  resolveIpRateLimitIdentity
+} from "./middleware/rateLimit.js";
+import { createUsageLoggerMiddleware } from "./middleware/usageLogger.js";
 import {
   OFFICIAL_BASELINE_FROZEN_AT,
   OFFICIAL_BASELINE_LABEL,
@@ -123,6 +129,11 @@ app.get("/api/health", async (_request, response) => {
       requireApiKey: env.TRAINING_ENDPOINTS_REQUIRE_API_KEY,
       openRouterScope: "training_evaluation_only"
     },
+    publicApi: {
+      authRequired: env.HYDRIA_PUBLIC_API_AUTH_REQUIRED,
+      rateLimitWindowMs: env.HYDRIA_RATE_LIMIT_WINDOW_MS,
+      maxRequestsPerWindow: env.HYDRIA_API_RATE_LIMIT_MAX_REQUESTS
+    },
     studentChat: {
       provider: "ollama",
       model: env.STUDENT_CHAT_LOCAL_MODEL_NAME,
@@ -141,6 +152,37 @@ app.get("/api/health", async (_request, response) => {
     persistence
   });
 });
+
+const protectedApiPaths = [
+  "/api/chat",
+  "/api/student",
+  "/api/arena",
+  "/api/benchmark",
+  "/api/learning",
+  "/api/local-model"
+];
+const protectedApiAuthAttemptRateLimit = createRateLimitMiddleware({
+  keyPrefix: "protected-api-auth",
+  windowMs: env.HYDRIA_RATE_LIMIT_WINDOW_MS,
+  maxRequests: env.HYDRIA_AUTH_RATE_LIMIT_MAX_REQUESTS,
+  identityResolver: resolveIpRateLimitIdentity
+});
+const protectedApiAuth = createApiKeyAuthMiddleware({
+  requireWhen: () => env.HYDRIA_PUBLIC_API_AUTH_REQUIRED
+});
+const protectedApiRateLimit = createRateLimitMiddleware({
+  keyPrefix: "protected-api",
+  windowMs: env.HYDRIA_RATE_LIMIT_WINDOW_MS,
+  maxRequests: env.HYDRIA_API_RATE_LIMIT_MAX_REQUESTS
+});
+const protectedApiUsageLogger = createUsageLoggerMiddleware("protected-api");
+app.use(
+  protectedApiPaths,
+  protectedApiAuthAttemptRateLimit,
+  protectedApiAuth,
+  protectedApiRateLimit,
+  protectedApiUsageLogger
+);
 
 app.use(
   "/api/arena",

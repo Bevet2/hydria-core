@@ -19,6 +19,7 @@ type ProductionSmokeReport = {
     expectedSchema: string;
     allowPublicSchema: boolean;
     requireLocalModel: boolean;
+    authRequired: boolean;
   };
   passed: boolean;
   failedChecks: string[];
@@ -33,6 +34,7 @@ type Args = {
   requireLocalModel: boolean;
   output: string;
   timeoutMs: number;
+  apiKey: string;
 };
 
 type ChatResponse = {
@@ -83,7 +85,8 @@ function parseArgs(argv = process.argv.slice(2)): Args {
     allowPublicSchema: hasFlag(argv, "--allow-public-schema"),
     requireLocalModel: hasFlag(argv, "--require-local-model"),
     output: resolve(projectRoot, readOption(argv, "--output") ?? defaultOutput),
-    timeoutMs: Number(readOption(argv, "--timeout-ms") ?? "120000")
+    timeoutMs: Number(readOption(argv, "--timeout-ms") ?? "120000"),
+    apiKey: readOption(argv, "--api-key") ?? process.env.HYDRIA_API_KEY ?? process.env.HYDRIA_PROD_API_KEY ?? ""
   };
 }
 
@@ -104,6 +107,14 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
   return { response, text };
 }
 
+function authHeaders(apiKey: string) {
+  return apiKey
+    ? {
+        "x-hydria-api-key": apiKey
+      }
+    : {};
+}
+
 async function getJson<T>(baseUrl: string, path: string, timeoutMs: number): Promise<T> {
   const { response, text } = await fetchWithTimeout(joinUrl(baseUrl, path), {}, timeoutMs);
   if (!response.ok) {
@@ -112,12 +123,21 @@ async function getJson<T>(baseUrl: string, path: string, timeoutMs: number): Pro
   return JSON.parse(text) as T;
 }
 
-async function postJson<T>(baseUrl: string, path: string, body: unknown, timeoutMs: number): Promise<T> {
+async function postJson<T>(
+  baseUrl: string,
+  path: string,
+  body: unknown,
+  timeoutMs: number,
+  apiKey = ""
+): Promise<T> {
   const { response, text } = await fetchWithTimeout(
     joinUrl(baseUrl, path),
     {
       method: "POST",
-      headers: { "content-type": "application/json; charset=utf-8" },
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        ...authHeaders(apiKey)
+      },
       body: JSON.stringify(body)
     },
     timeoutMs
@@ -299,6 +319,29 @@ async function runProductionSmoke(args = parseArgs()): Promise<ProductionSmokeRe
     });
   });
 
+  await runCheck(checks, "protected_chat_auth_guard", async () => {
+    const { response, text } = await fetchWithTimeout(
+      joinUrl(args.baseUrl, "/api/chat/message"),
+      {
+        method: "POST",
+        headers: { "content-type": "application/json; charset=utf-8" },
+        body: JSON.stringify({
+          message: "Smoke test: this unauthenticated chat request must be rejected."
+        })
+      },
+      args.timeoutMs
+    );
+    if (response.status === 401 || response.status === 503 || response.status === 429) {
+      return pass("public chat requires a Hydria API key", {
+        status: response.status,
+        preview: text.slice(0, 180)
+      });
+    }
+    return fail(`public chat accepted an unauthenticated request; got HTTP ${response.status}`, {
+      preview: text.slice(0, 300)
+    });
+  });
+
   await runCheck(checks, "training_endpoint_guard", async () => {
     const { response, text } = await fetchWithTimeout(
       joinUrl(args.baseUrl, "/api/arena/run"),
@@ -323,11 +366,15 @@ async function runProductionSmoke(args = parseArgs()): Promise<ProductionSmokeRe
   });
 
   await runCheck(checks, "chat_single_turn", async () => {
+    if (!args.apiKey) {
+      return fail("HYDRIA_API_KEY or --api-key is required for authenticated chat smoke");
+    }
     const response = await postJson<ChatResponse>(
       args.baseUrl,
       "/api/chat/message",
       { message: "Réponds en une phrase courte : quel est le rôle de Hydria Core ?" },
-      args.timeoutMs
+      args.timeoutMs,
+      args.apiKey
     );
     const answer = answerText(response);
     if (!response.sessionId) {
@@ -353,11 +400,15 @@ async function runProductionSmoke(args = parseArgs()): Promise<ProductionSmokeRe
   });
 
   await runCheck(checks, "chat_multi_turn_memory", async () => {
+    if (!args.apiKey) {
+      return fail("HYDRIA_API_KEY or --api-key is required for authenticated multi-turn chat smoke");
+    }
     const first = await postJson<ChatResponse>(
       args.baseUrl,
       "/api/chat/message",
       { message: "On parle de bases de données." },
-      args.timeoutMs
+      args.timeoutMs,
+      args.apiKey
     );
     if (!first.sessionId) {
       return fail("first chat turn has no sessionId", first);
@@ -369,7 +420,8 @@ async function runProductionSmoke(args = parseArgs()): Promise<ProductionSmokeRe
         sessionId: first.sessionId,
         message: "Pour la suite, réponds en moins de 12 mots."
       },
-      args.timeoutMs
+      args.timeoutMs,
+      args.apiKey
     );
     const third = await postJson<ChatResponse>(
       args.baseUrl,
@@ -378,7 +430,8 @@ async function runProductionSmoke(args = parseArgs()): Promise<ProductionSmokeRe
         sessionId: first.sessionId,
         message: "Explique PostgreSQL en respectant ma contrainte."
       },
-      args.timeoutMs
+      args.timeoutMs,
+      args.apiKey
     );
     const answer = answerText(third);
     const topConstraints = third.activeConstraintCapsule?.topConstraints ?? [];
@@ -440,7 +493,8 @@ async function runProductionSmoke(args = parseArgs()): Promise<ProductionSmokeRe
       baseUrl: args.baseUrl,
       expectedSchema: args.expectedSchema,
       allowPublicSchema: args.allowPublicSchema,
-      requireLocalModel: args.requireLocalModel
+      requireLocalModel: args.requireLocalModel,
+      authRequired: true
     },
     passed: failedChecks.length === 0,
     failedChecks,

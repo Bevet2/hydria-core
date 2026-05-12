@@ -23,11 +23,22 @@ export const CORE_BENCHMARK_ID = "core-benchmark-v2";
 export const TOOL_BENCHMARK_ID = "tool-benchmark-v1";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/+$/, "");
+const HYDRIA_API_KEY_STORAGE_KEY = "hydria.apiKey";
+
+export function readHydriaApiKey() {
+  try {
+    return window.localStorage.getItem(HYDRIA_API_KEY_STORAGE_KEY)?.trim() || "";
+  } catch {
+    return "";
+  }
+}
 
 async function request<T>(path: string, init?: RequestInit) {
+  const apiKey = readHydriaApiKey();
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
       "Content-Type": "application/json",
+      ...(apiKey ? { "x-hydria-api-key": apiKey } : {}),
       ...(init?.headers ?? {})
     },
     ...init
@@ -39,6 +50,14 @@ async function request<T>(path: string, init?: RequestInit) {
   }
 
   return (await response.json()) as T;
+}
+
+export function setHydriaApiKey(apiKey: string) {
+  window.localStorage.setItem(HYDRIA_API_KEY_STORAGE_KEY, apiKey.trim());
+}
+
+export function clearHydriaApiKey() {
+  window.localStorage.removeItem(HYDRIA_API_KEY_STORAGE_KEY);
 }
 
 export async function runArena(question: string, models: ArenaModels) {

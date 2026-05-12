@@ -35,6 +35,12 @@ curl -fsS https://app.hydria.click/api/health/persistence
 curl -fsS https://app.hydria.click/api/models/capabilities
 ```
 
+Sensitive API routes require a Hydria API key in production:
+
+```bash
+HYDRIA_API_KEY="$(ssh ubuntu@51.210.46.30 'cat /opt/hydria-core/.hydria-api-key')"
+```
+
 From the VPS:
 
 ```bash
@@ -58,6 +64,7 @@ Expected:
 ```bash
 curl -fsS https://app.hydria.click/api/chat/message \
   -H 'content-type: application/json' \
+  -H "x-hydria-api-key: $HYDRIA_API_KEY" \
   -d '{"message":"Reponds en une phrase : quel est le role de Hydria Core ?"}'
 ```
 
@@ -66,7 +73,7 @@ This validates DNS, TLS, Caddy, API, PostgreSQL, and the direct student chat run
 Full production smoke from any machine with this repo:
 
 ```bash
-npm run prod:smoke -- --base-url=https://app.hydria.click --expected-schema=hydria_prod
+HYDRIA_API_KEY="<secret>" npm run prod:smoke -- --base-url=https://app.hydria.click --expected-schema=hydria_prod
 ```
 
 This writes:
@@ -75,12 +82,12 @@ This writes:
 storage/training/hydria-production-smoke-v1.json
 ```
 
-The smoke is blocking on HTTPS/web/API failures, PostgreSQL not being active, production using schema `public`, schema mismatch, public training/evaluation endpoints not being guarded, missing local chat specialist routing, single-turn chat failure, runtime chat not being served by local Ollama, broken session continuity, and `ActiveConstraintCapsule` missing a short-answer preference in a multi-turn conversation.
+The smoke is blocking on HTTPS/web/API failures, PostgreSQL not being active, production using schema `public`, schema mismatch, public training/evaluation endpoints not being guarded, unauthenticated chat being accepted, missing local chat specialist routing, authenticated single-turn chat failure, runtime chat not being served by local Ollama, broken session continuity, and `ActiveConstraintCapsule` missing a short-answer preference in a multi-turn conversation.
 
 Student chat production gate:
 
 ```bash
-npm run student:chat-prod-gate -- --base-url=https://app.hydria.click
+HYDRIA_API_KEY="<secret>" npm run student:chat-prod-gate -- --base-url=https://app.hydria.click
 ```
 
 This gate fails any runtime chat turn that is not served by the local Ollama student chat model.
@@ -127,7 +134,9 @@ MODEL_ROUTER_OPENAI_COMPAT_BASE_URL=
 MODEL_ROUTER_EMBEDDING_BASE_URL=
 HYDRIA_API_KEYS=
 HYDRIA_API_KEY_SHA256_HASHES=
+HYDRIA_PUBLIC_API_AUTH_REQUIRED=true
 HYDRIA_RATE_LIMIT_WINDOW_MS=60000
+HYDRIA_AUTH_RATE_LIMIT_MAX_REQUESTS=30
 HYDRIA_API_RATE_LIMIT_MAX_REQUESTS=120
 MODEL_ROUTER_PLAN_RATE_LIMIT_MAX_REQUESTS=60
 MODEL_ROUTER_COMPLETE_RATE_LIMIT_MAX_REQUESTS=12
@@ -225,6 +234,11 @@ MODEL_ROUTER_LOCAL_TIMEOUT_MS=120000
 HYDRIA_DOCKER_LOCAL_MODEL_OBSERVER_ENABLED=false
 TRAINING_ENDPOINTS_ENABLED=false
 TRAINING_ENDPOINTS_REQUIRE_API_KEY=true
+HYDRIA_PUBLIC_API_AUTH_REQUIRED=true
+HYDRIA_API_KEY_SHA256_HASHES=<sha256-secret>
+HYDRIA_RATE_LIMIT_WINDOW_MS=60000
+HYDRIA_AUTH_RATE_LIMIT_MAX_REQUESTS=30
+HYDRIA_API_RATE_LIMIT_MAX_REQUESTS=120
 ```
 
 The model router can still route heavier specialist calls to the installed Ollama models (`qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `mistral:7b`). Keep the generic local-student timeout low for non-chat paths, but give runtime chat its own timeout through `STUDENT_CHAT_LOCAL_TIMEOUT_MS`; chat does not fall back to OpenRouter. Public OVH must keep `TRAINING_ENDPOINTS_ENABLED=false`; enable it only for controlled training/evaluation sessions and keep API-key protection enabled.
@@ -232,7 +246,7 @@ The model router can still route heavier specialist calls to the installed Ollam
 Then rerun the production smoke:
 
 ```bash
-npm run prod:smoke -- --base-url=https://app.hydria.click --expected-schema=hydria_prod
+HYDRIA_API_KEY="<secret>" npm run prod:smoke -- --base-url=https://app.hydria.click --expected-schema=hydria_prod
 ```
 
 ## Firewall

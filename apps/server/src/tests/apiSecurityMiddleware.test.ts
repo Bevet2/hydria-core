@@ -8,8 +8,10 @@ import {
 } from "../middleware/apiKeyAuth.js";
 import {
   createRateLimitMiddleware,
+  resolveIpRateLimitIdentity,
   resolveRateLimitIdentity
 } from "../middleware/rateLimit.js";
+import { createUsageLoggerMiddleware } from "../middleware/usageLogger.js";
 
 function sha256(value: string) {
   return createHash("sha256").update(value, "utf8").digest("hex");
@@ -109,6 +111,14 @@ test("api key middleware rejects protected endpoints without a valid key", () =>
 
 test("rate limiter keys by api key or forwarded IP and resets per window", () => {
   assert.equal(
+    resolveIpRateLimitIdentity({
+      headers: { "x-api-key": "abcdef", "x-forwarded-for": "203.0.113.10" },
+      ip: "127.0.0.1"
+    } as any),
+    "ip:203.0.113.10"
+  );
+
+  assert.equal(
     resolveRateLimitIdentity({
       headers: { "x-api-key": "abcdef" },
       ip: "127.0.0.1"
@@ -152,4 +162,79 @@ test("rate limiter keys by api key or forwarded IP and resets per window", () =>
 
   assert.equal(nextCalls, 3);
   assert.equal(reset.statusCode, 200);
+});
+
+test("rate limiter can force an IP-only identity before authentication", () => {
+  const middleware = createRateLimitMiddleware({
+    keyPrefix: "auth",
+    windowMs: 1000,
+    maxRequests: 1,
+    identityResolver: resolveIpRateLimitIdentity,
+    store: new Map()
+  });
+  let nextCalls = 0;
+  const next = () => {
+    nextCalls += 1;
+  };
+
+  middleware(
+    { headers: { "x-api-key": "first", "x-forwarded-for": "198.51.100.2" }, ip: "127.0.0.1" } as any,
+    createMockResponse() as any,
+    next
+  );
+  const limited = createMockResponse();
+  middleware(
+    { headers: { "x-api-key": "second", "x-forwarded-for": "198.51.100.2" }, ip: "127.0.0.1" } as any,
+    limited as any,
+    next
+  );
+
+  assert.equal(nextCalls, 1);
+  assert.equal(limited.statusCode, 429);
+});
+
+test("usage logger does not expose raw API keys", () => {
+  const listeners = new Map<string, () => void>();
+  const logLines: string[] = [];
+  const originalLog = console.log;
+  let nextCalls = 0;
+  const middleware = createUsageLoggerMiddleware("test");
+  const response = {
+    statusCode: 200,
+    on(event: string, listener: () => void) {
+      listeners.set(event, listener);
+      return this;
+    }
+  };
+
+  middleware(
+    {
+      method: "POST",
+      path: "/api/chat/message",
+      ip: "127.0.0.1",
+      headers: {
+        "x-hydria-api-key": "super-secret-key",
+        "user-agent": "test-agent"
+      }
+    } as any,
+    response as any,
+    () => {
+      nextCalls += 1;
+    }
+  );
+
+  console.log = (message?: unknown, ...rest: unknown[]) => {
+    logLines.push([message, ...rest].map(String).join(" "));
+  };
+  try {
+    listeners.get("finish")?.();
+  } finally {
+    console.log = originalLog;
+  }
+
+  assert.equal(nextCalls, 1);
+  const serializedLogs = logLines.join("\n");
+  assert.match(serializedLogs, /apiKeyHash/);
+  assert.match(serializedLogs, new RegExp(sha256("super-secret-key").slice(0, 12)));
+  assert.doesNotMatch(serializedLogs, /super-secret-key/);
 });

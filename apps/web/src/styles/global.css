@@ -99,6 +99,20 @@ textarea {
   flex-wrap: wrap;
 }
 
+.chat-auth {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  align-items: center;
+  max-width: 100%;
+}
+
+.chat-auth__input {
+  width: min(260px, 100%);
+  min-height: 40px;
+}
+
 .chat-thread {
   display: flex;
   flex-direction: column;
@@ -839,6 +853,16 @@ h4 {
 
   .chat-main {
     min-height: auto;
+  }
+
+  .chat-auth {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .chat-auth__input,
+  .chat-auth .button {
+    width: 100%;
   }
 
   .chat-thread {

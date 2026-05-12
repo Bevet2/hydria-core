@@ -47,6 +47,7 @@ type Args = {
   output: string;
   timeoutMs: number;
   limit: number | null;
+  apiKey: string;
 };
 
 const currentFilePath = fileURLToPath(import.meta.url);
@@ -223,14 +224,24 @@ function parseArgs(argv = process.argv.slice(2)): Args {
     baseUrl: (readOption(argv, "--base-url") ?? "https://app.hydria.click").replace(/\/+$/g, ""),
     output: resolve(projectRoot, readOption(argv, "--output") ?? defaultOutput),
     timeoutMs: Number(readOption(argv, "--timeout-ms") ?? "120000"),
-    limit: limit ? Number(limit) : null
+    limit: limit ? Number(limit) : null,
+    apiKey: readOption(argv, "--api-key") ?? process.env.HYDRIA_API_KEY ?? process.env.HYDRIA_PROD_API_KEY ?? ""
   };
 }
 
-async function postJson<T>(baseUrl: string, path: string, body: unknown, timeoutMs: number): Promise<T> {
+async function postJson<T>(
+  baseUrl: string,
+  path: string,
+  body: unknown,
+  timeoutMs: number,
+  apiKey = ""
+): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
     method: "POST",
-    headers: { "content-type": "application/json; charset=utf-8" },
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      ...(apiKey ? { "x-hydria-api-key": apiKey } : {})
+    },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(timeoutMs)
   });
@@ -275,7 +286,8 @@ async function runCase(testCase: ChatGateCase, args: Args): Promise<CaseResult> 
       args.baseUrl,
       "/api/chat/message",
       sessionId ? { sessionId, message } : { message },
-      args.timeoutMs
+      args.timeoutMs,
+      args.apiKey
     );
     sessionId = response.sessionId;
     finalAnswer = answerText(response);
