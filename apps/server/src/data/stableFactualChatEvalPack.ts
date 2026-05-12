@@ -90,7 +90,10 @@ export const STABLE_FACTUAL_CHAT_EVAL_PACK: StableFactualChatEvalCase[] = [
       { id: "subject", anyOf: ["marie curie"] },
       { id: "radioactivity", anyOf: ["radioactivite", "radioactif"] },
       { id: "award_or_period", anyOf: ["nobel", "1867", "1934"] },
-      { id: "scientific_legacy", anyOf: ["radium", "polonium", "deux prix nobel", "deux nobel"] }
+      {
+        id: "scientific_legacy",
+        anyOf: ["radium", "polonium", "deux prix nobel", "deux nobel", "physique en 1903", "chimie en 1911"]
+      }
     ],
     forbiddenClaims: [
       { id: "computing_confusion", anyOf: ["informatique", "ordinateur"] }

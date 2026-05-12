@@ -84,7 +84,7 @@ test("student chat prompt compacts stable factual biographies", () => {
 
   assert.match(prompt, /Stable factual answer shape/i);
   assert.match(prompt, /30-50 words/i);
-  assert.match(prompt, /role\/title/i);
+  assert.match(prompt, /highest title\/role/i);
   assert.match(prompt, /key_points to one short item/i);
   assert.match(prompt, /Do not write a long biography/i);
 });
