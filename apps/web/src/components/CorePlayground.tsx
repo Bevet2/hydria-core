@@ -6,6 +6,7 @@ import {
   fetchHistory,
   fetchLearningGovernanceState,
   fetchLocalHealth,
+  fetchModelRuntimeOps,
   fetchPersistenceHealth,
   runArena,
   testLocalModel,
@@ -16,6 +17,7 @@ import {
   type LearningGovernanceState,
   type LocalModelHealth,
   type LocalModelTestResponse,
+  type ModelRuntimeOpsSummary,
   type PersistenceHealthReport
 } from "../lib/api";
 import { AppNav } from "./AppNav";
@@ -44,6 +46,7 @@ export function CorePlayground() {
   const [learningState, setLearningState] = useState<LearningGovernanceState | null>(null);
   const [appHealth, setAppHealth] = useState<AppHealth | null>(null);
   const [localHealth, setLocalHealth] = useState<LocalModelHealth | null>(null);
+  const [modelRuntimeOps, setModelRuntimeOps] = useState<ModelRuntimeOpsSummary | null>(null);
   const [persistenceHealth, setPersistenceHealth] = useState<PersistenceHealthReport | null>(null);
   const [lastLocalTest, setLastLocalTest] = useState<LocalModelTestResponse | null>(null);
   const requestedRoundId = new URLSearchParams(window.location.search).get("roundId");
@@ -83,13 +86,19 @@ export function CorePlayground() {
   }
 
   async function refreshAppHealth() {
-    const [health, persistence] = await Promise.all([
+    const [health, persistence, modelOps] = await Promise.all([
       fetchAppHealth(),
-      fetchPersistenceHealth()
+      fetchPersistenceHealth(),
+      fetchModelRuntimeOps()
     ]);
     setAppHealth(health);
     setLocalHealth(health.localModel);
     setPersistenceHealth(persistence);
+    setModelRuntimeOps(modelOps);
+  }
+
+  async function refreshModelRuntimeOps() {
+    setModelRuntimeOps(await fetchModelRuntimeOps());
   }
 
   async function refreshLearningState() {
@@ -166,10 +175,12 @@ export function CorePlayground() {
           qualityReport={qualityReport}
           learningState={learningState}
           localHealth={localHealth}
+          modelRuntimeOps={modelRuntimeOps}
           persistenceHealth={persistenceHealth}
           lastLocalTest={lastLocalTest}
           onRefreshHealth={refreshLocalHealth}
           onRefreshLearning={refreshLearningState}
+          onRefreshModelRuntime={refreshModelRuntimeOps}
           onRefreshPersistence={refreshAppHealth}
           onRunTest={handleLocalTest}
           onSelectRound={(round) => {

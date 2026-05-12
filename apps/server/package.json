@@ -29,6 +29,7 @@
     "student:chat-prod-gate": "tsx src/scripts/runStudentChatProductionGate.ts",
     "models:pretraining-gate": "tsx src/scripts/runModelRolePreTrainingGate.ts",
     "models:routing-gate": "tsx src/scripts/runModelRoutingEconomicsGate.ts",
+    "models:ops-gate": "tsx src/scripts/runModelRuntimeOpsGate.ts",
     "retrieval:reranker-gate": "tsx src/scripts/runRetrievalRerankerMiniGate.ts",
     "student:strategy-discovery": "tsx src/scripts/runStudentStrategyDiscoveryLoop.ts",
     "student:temporal-eval": "tsx src/scripts/runStudentTemporalEval.ts",

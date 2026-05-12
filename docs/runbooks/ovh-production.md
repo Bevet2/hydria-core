@@ -161,11 +161,13 @@ Validation gates:
 ```bash
 npm run models:pretraining-gate
 npm run models:routing-gate
+npm run models:ops-gate -- --allow-empty
 npm run retrieval:reranker-gate -- --require-runtime
 ```
 
 `retrieval:reranker-gate` without `--require-runtime` validates fallback precision only. Promotion of reranker-dependent retrieval requires the runtime-backed mode.
 `models:routing-gate` writes `storage/training/model-routing-economics-gate-v1.json` and blocks model governance changes when a case selects the wrong specialist, violates local-only policy, over-escalates to DeepSeek, or exceeds the expected relative cost budget.
+`models:ops-gate` writes `storage/training/model-runtime-ops-gate-v1.json` from runtime telemetry. Use `--allow-empty` only before traffic exists; on production, run it after `prod:smoke` or `student:chat-prod-gate` so the gate validates real model events.
 
 The model router returns an economic multi-provider v2 plan. The plan includes the selected model, provider target, fallback candidates, relative estimated cost units, criticality, and cost policy. Request bodies may tighten the policy with:
 
@@ -319,6 +321,7 @@ Before changing the multi-model runtime, run:
 
 ```bash
 npm run models:routing-gate
+npm run models:ops-gate -- --allow-empty
 ```
 
 Expected current baseline: all cases pass, no local-only violation, no unnecessary deep-reasoning escalation, and no failed critical case.
@@ -328,6 +331,15 @@ Then rerun the production smoke:
 ```bash
 npm run prod:smoke -- --base-url=https://app.hydria.click --expected-schema=hydria_prod
 ```
+
+After smoke traffic has created model telemetry, check runtime ops without `--allow-empty`:
+
+```bash
+npm run models:ops-gate
+curl -fsS https://app.hydria.click/api/models/ops?limit=50
+```
+
+The ops gate tracks p95 latency, retry rate, local Ollama usage, static fallbacks, cloud runtime events, deep-reasoning escalation, and tool/model role distribution.
 
 ## Firewall
 

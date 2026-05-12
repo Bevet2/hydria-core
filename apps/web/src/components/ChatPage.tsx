@@ -1,11 +1,14 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  fetchModelRuntimeOps,
   resetChatSession,
   sendChatMessage,
   type ChatMessage,
-  type ChatMessageResponse
+  type ChatMessageResponse,
+  type ModelRuntimeOpsSummary
 } from "../lib/api";
 import { AppNav } from "./AppNav";
+import { ModelRuntimePanel } from "./ModelRuntimePanel";
 
 type ChatUiMessage = ChatMessage & {
   pending?: boolean;
@@ -55,6 +58,7 @@ export function ChatPage() {
   const [messages, setMessages] = useState<ChatUiMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [lastResponse, setLastResponse] = useState<ChatMessageResponse | null>(null);
+  const [modelRuntimeOps, setModelRuntimeOps] = useState<ModelRuntimeOpsSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -85,6 +89,16 @@ export function ChatPage() {
     [lastResponse]
   );
 
+  async function refreshModelRuntimeOps() {
+    setModelRuntimeOps(await fetchModelRuntimeOps());
+  }
+
+  useEffect(() => {
+    void refreshModelRuntimeOps().catch(() => {
+      setModelRuntimeOps(null);
+    });
+  }, []);
+
   async function submitMessage(nextMessage = draft) {
     const content = nextMessage.trim();
     if (!content || loading) {
@@ -113,6 +127,9 @@ export function ChatPage() {
         response.userMessage,
         response.assistantMessage
       ]);
+      void refreshModelRuntimeOps().catch(() => {
+        setModelRuntimeOps(null);
+      });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Chat request failed.");
       setMessages((current) =>
@@ -224,6 +241,8 @@ export function ChatPage() {
         </section>
 
         <aside className="chat-inspector">
+          <ModelRuntimePanel summary={modelRuntimeOps} onRefresh={refreshModelRuntimeOps} />
+
           <section className="panel">
             <div className="panel__header">
               <h2>Runtime</h2>

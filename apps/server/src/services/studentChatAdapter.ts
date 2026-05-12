@@ -43,6 +43,13 @@ export type StudentChatAdapterResult = {
   };
   raw: string;
   validationIssues: string[];
+  latencyMs?: number;
+  attempts?: Array<{
+    model: string;
+    status: "success" | "failed";
+    latencyMs: number;
+    error?: string;
+  }>;
 };
 
 const studentChatAnswerJsonSchema = {
@@ -289,13 +296,16 @@ export class StudentChatAdapter {
   ) {}
 
   async answer(input: StudentChatAdapterInput): Promise<StudentChatAdapterResult> {
+    const startedAt = Date.now();
     const route = selectStudentChatModelRoute(input);
     const prompt = buildStudentChatPrompt(input, route);
     const localModel = this.localModelService.getConfiguredModelName?.() ?? "local-student";
     const candidateModels = route.fallbackModelNames.length > 0 ? route.fallbackModelNames : [localModel];
     const validationIssues: string[] = [];
+    const attempts: NonNullable<StudentChatAdapterResult["attempts"]> = [];
 
     for (const [index, modelName] of candidateModels.entries()) {
+      const attemptStartedAt = Date.now();
       try {
         const response = await this.localModelService.testPrompt(prompt, studentChatSystemPrompt, {
           format: studentChatAnswerJsonSchema,
@@ -303,6 +313,11 @@ export class StudentChatAdapter {
           numPredict: route.specialistRole === "deep_reasoner" ? 240 : 180,
           temperature: 0.1,
           timeoutMs: route.timeoutMs
+        });
+        attempts.push({
+          model: modelName,
+          status: "success",
+          latencyMs: Date.now() - attemptStartedAt
         });
         return {
           answer: parseStudentChatAnswer(response.response),
@@ -317,10 +332,18 @@ export class StudentChatAdapter {
             pipeline: route.pipeline
           },
           raw: response.response,
-          validationIssues: index > 0 ? validationIssues : []
+          validationIssues: index > 0 ? validationIssues : [],
+          latencyMs: Date.now() - startedAt,
+          attempts
         };
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
+        attempts.push({
+          model: modelName,
+          status: "failed",
+          latencyMs: Date.now() - attemptStartedAt,
+          error: reason
+        });
         validationIssues.push(`${modelName}: ${reason}`);
         logger.warn("Student chat local specialist draft failed; trying next local model when available", {
           selectedModel: route.modelName,
@@ -347,7 +370,9 @@ export class StudentChatAdapter {
         pipeline: route.pipeline
       },
       raw: answer.answer,
-      validationIssues: ["student_chat_generation_failed", ...validationIssues]
+      validationIssues: ["student_chat_generation_failed", ...validationIssues],
+      latencyMs: Date.now() - startedAt,
+      attempts
     };
   }
 }

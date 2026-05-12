@@ -8,6 +8,7 @@ import {
   ModelExecutionBlockedError,
   ModelProviderService
 } from "../services/models/modelProviderService.js";
+import { ModelRuntimeTelemetryService } from "../services/models/modelRuntimeTelemetryService.js";
 import { questionCategorySchema } from "../types/arena.js";
 import { env } from "../utils/env.js";
 
@@ -50,7 +51,8 @@ const modelCompletionRequestSchema = modelExecutionPlanRequestSchema.extend({
 
 export function createModelsRouter(
   modelCapabilityService: ModelCapabilityService,
-  modelProviderService: ModelProviderService
+  modelProviderService: ModelProviderService,
+  modelRuntimeTelemetryService = new ModelRuntimeTelemetryService()
 ) {
   const router = Router();
   const generalModelsRateLimit = createRateLimitMiddleware({
@@ -89,6 +91,15 @@ export function createModelsRouter(
     response.json({
       providers: modelProviderService.getProviderStatuses()
     });
+  });
+
+  router.get("/ops", generalModelsRateLimit, async (request, response, next) => {
+    try {
+      const limit = Number(request.query.limit ?? "500");
+      response.json(await modelRuntimeTelemetryService.buildSummary(Number.isFinite(limit) ? limit : 500));
+    } catch (error) {
+      next(error);
+    }
   });
 
   router.post("/plan", planRateLimit, (request, response, next) => {

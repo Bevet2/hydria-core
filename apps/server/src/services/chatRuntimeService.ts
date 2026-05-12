@@ -32,6 +32,7 @@ import {
   type LocalToolExecutionResult
 } from "./tools/localToolExecutionService.js";
 import { ToolRoutingService } from "./tools/toolRoutingService.js";
+import type { ModelRuntimeTelemetryService } from "./models/modelRuntimeTelemetryService.js";
 
 type ChatRuntimeSession = {
   sessionId: string;
@@ -1215,7 +1216,8 @@ export class ChatRuntimeService {
     private readonly studentChatAdapter: Pick<StudentChatAdapter, "answer">,
     private readonly toolRoutingService: Pick<ToolRoutingService, "route"> = new ToolRoutingService(),
     private readonly localToolExecutionService: Pick<LocalToolExecutionService, "tryExecute"> =
-      new LocalToolExecutionService()
+      new LocalToolExecutionService(),
+    private readonly modelRuntimeTelemetryService: Pick<ModelRuntimeTelemetryService, "safeRecordEvent"> | null = null
   ) {}
 
   resetSession(sessionId: string) {
@@ -1512,6 +1514,27 @@ export class ChatRuntimeService {
       conversationQuality,
       usedRetry,
       durationMs
+    });
+    await this.modelRuntimeTelemetryService?.safeRecordEvent({
+      scope: "public_chat",
+      status: draft.generation.provider === "fallback" ? "fallback" : "success",
+      provider: draft.generation.provider,
+      model: draft.generation.model,
+      capabilityId: draft.generation.specialist.capabilityId,
+      specialistRole: draft.generation.specialist.role,
+      category: draft.category,
+      runtimeMode,
+      durationMs,
+      retryUsed: usedRetry || draft.generation.usedRetry,
+      attemptCount: draft.generation.attempts?.length ?? (usedRetry ? 2 : 1),
+      staticFallbackUsed: draft.generation.provider === "fallback",
+      toolUsed: tooling.used,
+      toolRequired: tooling.routing.toolRequired,
+      qualityPassed: conversationQuality.passed,
+      issues: [
+        ...conversationQuality.issues,
+        ...draft.generation.validationIssues
+      ].slice(0, 12)
     });
 
     return {

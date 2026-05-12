@@ -13,6 +13,7 @@ import {
   type ModelSelectionInput,
   type ModelSelectionResult
 } from "./modelCapabilityService.js";
+import type { ModelRuntimeTelemetryService } from "./modelRuntimeTelemetryService.js";
 import { env } from "../../utils/env.js";
 
 export type ModelProviderStatus = {
@@ -88,6 +89,7 @@ type ModelProviderServiceOptions = {
   capabilityService?: ModelCapabilityService;
   budgetPolicyService?: ModelBudgetPolicyService;
   fetchImpl?: FetchLike;
+  telemetryService?: Pick<ModelRuntimeTelemetryService, "safeRecordEvent"> | null;
 };
 
 export class ModelExecutionBlockedError extends Error {
@@ -189,11 +191,13 @@ export class ModelProviderService {
   private readonly capabilityService: ModelCapabilityService;
   private readonly budgetPolicyService: ModelBudgetPolicyService;
   private readonly fetchImpl: FetchLike;
+  private readonly telemetryService: Pick<ModelRuntimeTelemetryService, "safeRecordEvent"> | null;
 
   constructor(options: ModelProviderServiceOptions = {}) {
     this.capabilityService = options.capabilityService ?? new ModelCapabilityService();
     this.budgetPolicyService = options.budgetPolicyService ?? new ModelBudgetPolicyService();
     this.fetchImpl = options.fetchImpl ?? fetch;
+    this.telemetryService = options.telemetryService ?? null;
   }
 
   getProviderStatuses(): ModelProviderStatus[] {
@@ -321,12 +325,34 @@ export class ModelProviderService {
           status: "success",
           latencyMs: Date.now() - attemptStartedAt
         });
+        const latencyMs = Date.now() - startedAt;
+        await this.telemetryService?.safeRecordEvent({
+          scope: "model_completion",
+          status: "success",
+          provider: target.provider,
+          model: target.modelId,
+          capabilityId: target.capabilityId,
+          specialistRole: plan.budget.selectedModel?.role ?? plan.selection.selected.role,
+          category: input.category ?? null,
+          runtimeMode: null,
+          durationMs: latencyMs,
+          estimatedCostUnits: target.estimatedCostUnits,
+          local: target.local,
+          cloud: target.provider === "openrouter" || target.provider === "openai_compatible",
+          retryUsed: attempts.length > 1,
+          attemptCount: attempts.length,
+          staticFallbackUsed: false,
+          toolUsed: false,
+          toolRequired: false,
+          qualityPassed: null,
+          issues: attempts.filter((attempt) => attempt.status === "failed").map((attempt) => attempt.error ?? "failed")
+        });
 
         return {
           content,
           provider: target.provider,
           modelId: target.modelId,
-          latencyMs: Date.now() - startedAt,
+          latencyMs,
           attempts,
           plan
         };
@@ -340,6 +366,28 @@ export class ModelProviderService {
         });
       }
     }
+
+    await this.telemetryService?.safeRecordEvent({
+      scope: "model_completion",
+      status: "failed",
+      provider: plan.target?.provider ?? "fallback",
+      model: plan.target?.modelId ?? plan.selection.selected.providerModelIds.ollama ?? plan.selection.selected.id,
+      capabilityId: plan.target?.capabilityId ?? plan.selection.selected.id,
+      specialistRole: plan.budget.selectedModel?.role ?? plan.selection.selected.role,
+      category: input.category ?? null,
+      runtimeMode: null,
+      durationMs: Date.now() - startedAt,
+      estimatedCostUnits: plan.target?.estimatedCostUnits ?? 0,
+      local: plan.target?.local ?? false,
+      cloud: plan.target ? isCloudProvider(plan.target.provider) : false,
+      retryUsed: attempts.length > 1,
+      attemptCount: attempts.length,
+      staticFallbackUsed: false,
+      toolUsed: false,
+      toolRequired: false,
+      qualityPassed: null,
+      issues: attempts.map((attempt) => attempt.error ?? "failed")
+    });
 
     throw new ModelExecutionBlockedError(
       attempts.at(-1)?.error ?? "All configured provider targets failed.",

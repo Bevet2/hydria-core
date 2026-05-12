@@ -11,6 +11,7 @@ import type {
   ChatResetResponse,
   LocalModelHealth,
   LocalModelTestResponse,
+  ModelRuntimeOpsSummary,
   PersistenceHealthReport,
   StudentAnswerPreview,
   StudentProgressSummary,
@@ -93,6 +94,10 @@ export async function fetchLearningGovernanceState() {
 
 export async function fetchLocalHealth() {
   return request<LocalModelHealth>("/api/local-model/health");
+}
+
+export async function fetchModelRuntimeOps(limit = 500) {
+  return request<ModelRuntimeOpsSummary>(`/api/models/ops?limit=${encodeURIComponent(String(limit))}`);
 }
 
 export async function testLocalModel(prompt: string) {

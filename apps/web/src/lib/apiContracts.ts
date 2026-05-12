@@ -134,6 +134,13 @@ export type {
   PersistenceHealthSummary
 } from "../../../server/src/types/health.js";
 
+export type {
+  ModelRuntimeEvent,
+  ModelRuntimeOpsGateReport,
+  ModelRuntimeOpsSummary,
+  ModelRuntimeStat
+} from "../../../server/src/types/modelOps.js";
+
 import type {
   JudgeScorePair,
   ModelSelection

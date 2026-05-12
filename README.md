@@ -165,6 +165,7 @@ Relevant runtime knobs:
 - `npm run student:chat-prod-gate -- --base-url=https://app.hydria.click`
 - `npm run models:pretraining-gate`
 - `npm run models:routing-gate`
+- `npm run models:ops-gate`
 - `npm run retrieval:reranker-gate -- --require-runtime`
 
 ### Economic Multi-Provider Router
@@ -271,6 +272,7 @@ The API exposes:
 - `GET /api/models/capabilities`
 - `POST /api/models/select`
 - `GET /api/models/providers`
+- `GET /api/models/ops`
 - `POST /api/models/plan`
 - `POST /api/models/complete`
 
@@ -283,6 +285,14 @@ npm run models:routing-gate
 ```
 
 This writes `storage/training/model-routing-economics-gate-v1.json` and checks that chat/provider routing selects the expected specialist role, keeps public runtime local-first, avoids unnecessary DeepSeek escalation on simple explanations, keeps conceptual API questions off the code specialist, and respects relative cost budgets. Run it before changing model routing, expanding watchers, or starting role-specific training.
+
+Model runtime ops validation:
+
+```bash
+npm run models:ops-gate
+```
+
+This writes `storage/training/model-runtime-ops-gate-v1.json` from `storage/observability/model-runtime-events-v1.jsonl` and blocks runtime changes when latency, retry rate, static fallbacks, cloud runtime use, or deep-reasoning escalation drift beyond the configured thresholds. Local environments without runtime traffic can use `npm run models:ops-gate -- --allow-empty`; production should run it after a smoke or chat gate has generated telemetry. The same summary is exposed through `GET /api/models/ops`.
 
 ### Learning Governance
 
@@ -557,6 +567,7 @@ Workspace-level scripts:
 - `npm run conversation:strategic-coherence`
 - `npm run runtime:release-gate`
 - `npm run models:routing-gate`
+- `npm run models:ops-gate`
 - `npm run tool:routing-eval`
 - `npm run dev:sh`
 - `npm run check:sh`

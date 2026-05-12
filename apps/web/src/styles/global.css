@@ -550,6 +550,28 @@ h4 {
   font-size: 0.85rem;
 }
 
+.runtime-mini-table {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.runtime-mini-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.52);
+  border: 1px solid rgba(61, 45, 28, 0.08);
+  font-size: 0.88rem;
+}
+
+.runtime-mini-row span {
+  overflow-wrap: anywhere;
+}
+
 .summary-card,
 .impact-card {
   display: grid;

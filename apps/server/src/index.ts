@@ -36,6 +36,7 @@ import { LearningGovernanceService } from "./services/learningGovernanceService.
 import { LocalModelService } from "./services/localModel.js";
 import { ModelCapabilityService } from "./services/models/modelCapabilityService.js";
 import { ModelProviderService } from "./services/models/modelProviderService.js";
+import { ModelRuntimeTelemetryService } from "./services/models/modelRuntimeTelemetryService.js";
 import { OpenRouterService } from "./services/openrouter.js";
 import { OrchestrationPolicyService } from "./services/orchestrationPolicy.js";
 import { ResearchToolService } from "./services/researchToolService.js";
@@ -53,7 +54,11 @@ const studentChatLocalModelService = new LocalModelService({
   modelName: env.STUDENT_CHAT_LOCAL_MODEL_NAME
 });
 const modelCapabilityService = new ModelCapabilityService();
-const modelProviderService = new ModelProviderService({ capabilityService: modelCapabilityService });
+const modelRuntimeTelemetryService = new ModelRuntimeTelemetryService();
+const modelProviderService = new ModelProviderService({
+  capabilityService: modelCapabilityService,
+  telemetryService: modelRuntimeTelemetryService
+});
 const openRouterService = new OpenRouterService();
 const benchmarkStore = new BenchmarkStore();
 const studentSessionStore = new StudentSessionStore();
@@ -72,7 +77,12 @@ const studentService = new StudentService(
   studentSessionStore
 );
 const studentChatAdapter = new StudentChatAdapter(studentChatLocalModelService);
-const chatRuntimeService = new ChatRuntimeService(studentChatAdapter);
+const chatRuntimeService = new ChatRuntimeService(
+  studentChatAdapter,
+  undefined,
+  undefined,
+  modelRuntimeTelemetryService
+);
 const arenaRunner = new ArenaRunner(
   openRouterService,
   localModelService,
@@ -207,7 +217,7 @@ app.use("/api/arena/history", createHistoryRouter(historyStore));
 app.use("/api/benchmark", createBenchmarkRouter(benchmarkService));
 app.use("/api/chat", createChatRouter(chatRuntimeService));
 app.use("/api/local-model", createLocalModelRouter(localModelService));
-app.use("/api/models", createModelsRouter(modelCapabilityService, modelProviderService));
+app.use("/api/models", createModelsRouter(modelCapabilityService, modelProviderService, modelRuntimeTelemetryService));
 app.use("/api/learning", createLearningRouter(learningGovernanceService));
 app.use("/api/student", createStudentRouter(studentService));
 
