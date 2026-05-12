@@ -126,6 +126,16 @@ test("context state tracker detects short French calculation requests", () => {
   assert.equal(updated.language, "fr");
 });
 
+test("context state tracker detects French short-answer instructions without accents", () => {
+  const updated = updateConversationState(
+    createInitialState(),
+    "Reponds en moins de 12 mots : explique PostgreSQL.",
+    ""
+  );
+
+  assert.equal(updated.language, "fr");
+});
+
 test("active constraint capsule marks changed budget obsolete and keeps latest budget active", () => {
   const initial = updateConversationState(
     createInitialState(),

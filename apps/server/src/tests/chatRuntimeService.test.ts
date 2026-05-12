@@ -391,3 +391,22 @@ test("chat runtime acknowledges pure context setup without a model call", async 
   assert.match(response.answer.answer, /bases de donnees/i);
   assert.equal(response.conversationQuality.passed, true);
 });
+
+test("chat runtime accepts English context setup acknowledgements as quality-passed", async () => {
+  let adapterCalled = false;
+  const service = new ChatRuntimeService({
+    async answer() {
+      adapterCalled = true;
+      return buildAdapterResult("Fallback answer that should not be used.");
+    }
+  });
+
+  const response = await service.sendMessage({ message: "We are talking about incident response." });
+
+  assert.equal(adapterCalled, false);
+  assert.equal(response.generation.provider, "tool");
+  assert.equal(response.generation.model, "context_ack");
+  assert.match(response.answer.answer, /incident response/i);
+  assert.equal(response.conversationQuality.passed, true);
+  assert.deepEqual(response.conversationQuality.issues, []);
+});

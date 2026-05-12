@@ -1490,6 +1490,14 @@ export class ChatRuntimeService {
       recentMessages: session.messages,
       toolRouting: tooling.routing
     });
+    if (draft.generation.model === "context_ack") {
+      conversationQuality = {
+        passed: true,
+        issues: [],
+        penalties: [],
+        recommendedAction: "accept"
+      };
+    }
     let usedRetry = draft.generation.usedRetry;
 
     if (
