@@ -55,6 +55,8 @@ export type ModelRuntimeOpsSummary = {
   window: {
     eventLimit: number;
     eventCount: number;
+    since: string | null;
+    until: string | null;
   };
   totals: ModelRuntimeStat & {
     localOllamaRate: number;

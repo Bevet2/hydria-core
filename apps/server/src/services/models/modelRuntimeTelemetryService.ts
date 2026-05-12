@@ -42,6 +42,12 @@ export type ModelRuntimeOpsGateThresholds = {
   requireLocalOnly?: boolean;
 };
 
+export type ModelRuntimeSummaryOptions = {
+  limit?: number;
+  since?: string | Date | null;
+  until?: string | Date | null;
+};
+
 const currentFilePath = fileURLToPath(import.meta.url);
 const projectRoot = resolve(dirname(currentFilePath), "../../../../../");
 const defaultTelemetryFile = resolve(projectRoot, "storage", "observability", "model-runtime-events-v1.jsonl");
@@ -101,6 +107,29 @@ function rate(count: number, total: number) {
 
 function round(value: number) {
   return Number(value.toFixed(2));
+}
+
+function normalizeDateInput(value: string | Date | null | undefined) {
+  if (!value) {
+    return null;
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function normalizeSummaryOptions(options: number | ModelRuntimeSummaryOptions = 500) {
+  if (typeof options === "number") {
+    return {
+      limit: Math.max(1, Math.round(options)),
+      since: null,
+      until: null
+    };
+  }
+  return {
+    limit: Math.max(1, Math.round(options.limit ?? 500)),
+    since: normalizeDateInput(options.since),
+    until: normalizeDateInput(options.until)
+  };
 }
 
 function buildStat(events: readonly ModelRuntimeEvent[]): ModelRuntimeStat {
@@ -169,12 +198,12 @@ export class ModelRuntimeTelemetryService {
     }
   }
 
-  async listEvents(limit = 500) {
+  async listEvents(options: number | ModelRuntimeSummaryOptions = 500) {
+    const normalized = normalizeSummaryOptions(options);
     try {
       const raw = await readFile(this.telemetryFile, "utf8");
       const lines = raw.split(/\r?\n/).filter(Boolean);
       return lines
-        .slice(-Math.max(1, limit))
         .map((line) => {
           try {
             return JSON.parse(line) as ModelRuntimeEvent;
@@ -182,7 +211,21 @@ export class ModelRuntimeTelemetryService {
             return null;
           }
         })
-        .filter((event): event is ModelRuntimeEvent => Boolean(event));
+        .filter((event): event is ModelRuntimeEvent => Boolean(event))
+        .filter((event) => {
+          const createdAt = new Date(event.createdAt).getTime();
+          if (!Number.isFinite(createdAt)) {
+            return false;
+          }
+          if (normalized.since && createdAt < normalized.since.getTime()) {
+            return false;
+          }
+          if (normalized.until && createdAt > normalized.until.getTime()) {
+            return false;
+          }
+          return true;
+        })
+        .slice(-normalized.limit);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         return [];
@@ -198,15 +241,18 @@ export class ModelRuntimeTelemetryService {
     return normalized;
   }
 
-  async buildSummary(limit = 500): Promise<ModelRuntimeOpsSummary> {
-    const events = await this.listEvents(limit);
+  async buildSummary(options: number | ModelRuntimeSummaryOptions = 500): Promise<ModelRuntimeOpsSummary> {
+    const normalized = normalizeSummaryOptions(options);
+    const events = await this.listEvents(normalized);
     const totals = buildStat(events);
     return {
       version: "hydria-model-runtime-ops-v1",
       generatedAt: new Date().toISOString(),
       window: {
-        eventLimit: limit,
-        eventCount: events.length
+        eventLimit: normalized.limit,
+        eventCount: events.length,
+        since: normalized.since?.toISOString() ?? null,
+        until: normalized.until?.toISOString() ?? null
       },
       totals: {
         ...totals,

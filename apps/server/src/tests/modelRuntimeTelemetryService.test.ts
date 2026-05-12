@@ -68,6 +68,61 @@ test("model runtime telemetry summarizes latency, retries, providers, and roles"
   });
 });
 
+test("model runtime telemetry filters summaries by time window before applying the limit", async () => {
+  await withTelemetryFile(async (service) => {
+    await service.writeEventsForTest([
+      {
+        createdAt: "2026-05-12T10:00:00.000Z",
+        scope: "public_chat",
+        status: "fallback",
+        provider: "fallback",
+        model: "qwen2.5:14b",
+        capabilityId: "qwen-14b-instruct-main",
+        specialistRole: "primary_brain",
+        category: "other",
+        runtimeMode: "direct",
+        durationMs: 60000,
+        retryUsed: true,
+        attemptCount: 2,
+        staticFallbackUsed: true,
+        toolUsed: false,
+        toolRequired: false,
+        qualityPassed: false,
+        issues: ["old_failure"]
+      },
+      {
+        createdAt: "2026-05-12T11:00:00.000Z",
+        scope: "public_chat",
+        status: "success",
+        provider: "ollama",
+        model: "qwen2.5:3b",
+        capabilityId: "qwen-3b-router",
+        specialistRole: "fast_router",
+        category: "other",
+        runtimeMode: "direct",
+        durationMs: 12000,
+        retryUsed: false,
+        attemptCount: 1,
+        staticFallbackUsed: false,
+        toolUsed: false,
+        toolRequired: false,
+        qualityPassed: true,
+        issues: []
+      }
+    ]);
+
+    const summary = await service.buildSummary({
+      limit: 10,
+      since: "2026-05-12T10:30:00.000Z"
+    });
+
+    assert.equal(summary.window.eventCount, 1);
+    assert.equal(summary.window.since, "2026-05-12T10:30:00.000Z");
+    assert.equal(summary.totals.staticFallbackRate, 0);
+    assert.equal(summary.recentEvents[0]?.model, "qwen2.5:3b");
+  });
+});
+
 test("model runtime ops gate blocks cloud runtime events and empty telemetry", async () => {
   await withTelemetryFile(async (service) => {
     const empty = service.buildGateReport(await service.buildSummary());

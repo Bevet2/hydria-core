@@ -35,6 +35,8 @@ function numberOption(argv: string[], name: string, fallback: number) {
 export async function runModelRuntimeOpsGate(argv = process.argv.slice(2)) {
   const output = resolve(projectRoot, readOption(argv, "--output") ?? defaultOutput);
   const limit = numberOption(argv, "--limit", 500);
+  const since = readOption(argv, "--since") ?? null;
+  const sinceMs = numberOption(argv, "--since-ms", 0);
   const allowEmpty = hasFlag(argv, "--allow-empty");
   const thresholds: ModelRuntimeOpsGateThresholds = {
     minEvents: allowEmpty ? 0 : numberOption(argv, "--min-events", 1),
@@ -48,7 +50,10 @@ export async function runModelRuntimeOpsGate(argv = process.argv.slice(2)) {
     requireLocalOnly: !hasFlag(argv, "--allow-cloud-runtime")
   };
   const service = new ModelRuntimeTelemetryService();
-  const summary = await service.buildSummary(limit);
+  const summary = await service.buildSummary({
+    limit,
+    since: since ?? (sinceMs > 0 ? new Date(Date.now() - sinceMs).toISOString() : null)
+  });
   const report = service.buildGateReport(summary, thresholds);
 
   await mkdir(dirname(output), { recursive: true });

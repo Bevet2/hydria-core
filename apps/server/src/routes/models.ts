@@ -96,7 +96,26 @@ export function createModelsRouter(
   router.get("/ops", generalModelsRateLimit, async (request, response, next) => {
     try {
       const limit = Number(request.query.limit ?? "500");
-      response.json(await modelRuntimeTelemetryService.buildSummary(Number.isFinite(limit) ? limit : 500));
+      const since =
+        typeof request.query.since === "string" && request.query.since.trim()
+          ? request.query.since.trim()
+          : null;
+      const until =
+        typeof request.query.until === "string" && request.query.until.trim()
+          ? request.query.until.trim()
+          : null;
+      const sinceMs = Number(request.query.sinceMs);
+      const computedSince =
+        !since && Number.isFinite(sinceMs) && sinceMs > 0
+          ? new Date(Date.now() - sinceMs).toISOString()
+          : since;
+      response.json(
+        await modelRuntimeTelemetryService.buildSummary({
+          limit: Number.isFinite(limit) ? limit : 500,
+          since: computedSince,
+          until
+        })
+      );
     } catch (error) {
       next(error);
     }
