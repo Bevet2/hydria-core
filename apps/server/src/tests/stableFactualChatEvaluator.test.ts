@@ -66,7 +66,7 @@ test("stable factual evaluator accepts planned light fallback for stable fact ro
 test("stable factual evaluator catches known historical confusions", () => {
   const result = evaluateStableFactualAnswer(
     charlemagneCase,
-    "Charlemagne, aussi appele Charles le Chauve, est un roi franc associe a l'Empire carolingien.",
+    "Charlemagne, aussi appele Charles le Chauve, est un roi franc associe a l'Empire carolingien. Il a etabli le Saint-Empire romain germanique.",
     {
       provider: "ollama",
       model: "mistral:7b",
@@ -79,6 +79,8 @@ test("stable factual evaluator catches known historical confusions", () => {
   assert.equal(result.passed, false);
   assert.equal(result.forbiddenClaims.includes("charles_the_bald_confusion"), true);
   assert.equal(result.issues.includes("forbidden_claim:charles_the_bald_confusion"), true);
+  assert.equal(result.forbiddenClaims.includes("holy_roman_empire_founder"), true);
+  assert.equal(result.issues.includes("forbidden_claim:holy_roman_empire_founder"), true);
 });
 
 test("stable factual evaluator catches missing anchors and generic fallbacks", () => {

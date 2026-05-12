@@ -83,9 +83,10 @@ test("student chat prompt compacts stable factual biographies", () => {
   const prompt = buildStudentChatPrompt(buildInput());
 
   assert.match(prompt, /Stable factual answer shape/i);
-  assert.match(prompt, /30-50 words/i);
+  assert.match(prompt, /28-45 words/i);
   assert.match(prompt, /highest title\/role/i);
-  assert.match(prompt, /king or emperor/i);
+  assert.match(prompt, /own realm or dynasty/i);
+  assert.match(prompt, /anachronistic labels/i);
   assert.match(prompt, /key_points to one short item/i);
   assert.match(prompt, /Do not write a long biography/i);
 });

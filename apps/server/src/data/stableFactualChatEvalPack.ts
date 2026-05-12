@@ -56,13 +56,14 @@ export const STABLE_FACTUAL_CHAT_EVAL_PACK: StableFactualChatEvalCase[] = [
     ...stableFactRoute,
     expectedAnchors: [
       { id: "subject", anyOf: ["charlemagne"] },
-      { id: "frankish_king", anyOf: ["roi des francs", "roi franc"] },
+      { id: "frankish_king", anyOf: ["roi des francs", "roi franc", "empereur franc"] },
       { id: "emperor", anyOf: ["empereur", "empire carolingien", "carolingien"] },
-      { id: "period", anyOf: ["768", "814", "ixe siecle", "9e siecle"] }
+      { id: "period", anyOf: ["768", "814", "viiie siecle", "8e siecle", "ixe siecle", "9e siecle"] }
     ],
     forbiddenClaims: [
       { id: "charles_the_bald_confusion", anyOf: ["charles le chauve"] },
-      { id: "unknown_birth_as_main_fact", anyOf: ["ne a une date inconnue"] }
+      { id: "unknown_birth_as_main_fact", anyOf: ["ne a une date inconnue"] },
+      { id: "holy_roman_empire_founder", anyOf: ["etabli le saint-empire romain germanique", "established the holy roman empire"] }
     ]
   },
   {
