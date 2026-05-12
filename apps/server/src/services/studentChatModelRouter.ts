@@ -66,9 +66,18 @@ function containsCodeSignal(text: string, category: QuestionCategory) {
   if (category === "debug_diagnostic") {
     return true;
   }
-  return /\b(?:code|typescript|javascript|python|react|node|api|endpoint|stack trace|erreur|error|bug|debug|repo|repository|docker|sql|postgres|schema|test|compile|fonction|function|classe|class|component|composant)\b/.test(
-    text
-  );
+  const explicitCodeSignal =
+    /\b(?:code|typescript|javascript|python|react|node|stack trace|erreur|error|bug|debug|repo|repository|docker|sql|postgres|schema|test|compile|fonction|function|classe|class|component|composant)\b/.test(
+      text
+    );
+  const apiImplementationSignal =
+    /\b(?:api|endpoint)\b.*\b(?:bug|debug|error|erreur|handler|route|request|response|status|schema|typescript|node|test|compile)\b/.test(
+      text
+    ) ||
+    /\b(?:bug|debug|error|erreur|handler|route|request|response|status|schema|typescript|node|test|compile)\b.*\b(?:api|endpoint)\b/.test(
+      text
+    );
+  return explicitCodeSignal || apiImplementationSignal;
 }
 
 function containsWritingSignal(text: string, category: QuestionCategory) {
@@ -96,15 +105,24 @@ function containsDeepReasoningSignal(input: StudentChatModelRoutingInput, text: 
   if (input.answerPolicy.strategicTradeoffPolicy?.hasConflict) {
     return true;
   }
+  const decisionCategory = ["architecture_design", "incident_response", "mixed_reasoning", "product_strategy"].includes(
+    input.category
+  );
   if (
     input.activeConstraintCapsule.decisionNeeded &&
-    ["architecture_design", "incident_response", "mixed_reasoning", "product_strategy"].includes(input.category)
+    decisionCategory
   ) {
     return true;
   }
-  return /\b(?:arbitre|arbitrer|tradeoff|compromis|contrainte contradictoire|conflict|conflit|rollback|incident|risk|risque|urgence|decision critique|critical decision|choisis|recommendation finale|recommande quoi)\b/.test(
-    text
-  );
+  if (
+    decisionCategory &&
+    /\b(?:arbitre|arbitrer|tradeoff|compromis|contrainte contradictoire|conflict|conflit|rollback|incident|risk|risque|urgence|decision critique|critical decision|choisis|recommendation finale|recommande quoi)\b/.test(
+      text
+    )
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function buildFallbacks(primary: string, role: StudentChatSpecialistRole) {

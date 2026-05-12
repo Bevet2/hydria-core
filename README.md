@@ -164,6 +164,7 @@ Relevant runtime knobs:
 - `MODEL_ROUTER_RERANKER_BASE_URL`
 - `npm run student:chat-prod-gate -- --base-url=https://app.hydria.click`
 - `npm run models:pretraining-gate`
+- `npm run models:routing-gate`
 - `npm run retrieval:reranker-gate -- --require-runtime`
 
 ### Economic Multi-Provider Router
@@ -274,6 +275,14 @@ The API exposes:
 - `POST /api/models/complete`
 
 Provider identifiers in the manifest are deployment targets. Configure the actual Ollama, vLLM, or OpenAI-compatible serving names before enabling live execution. The completion endpoint is protected by `MODEL_ROUTER_EXECUTION_ENABLED=false` by default, plus server-side cloud/cost/token caps. Public runtime keeps `MODEL_ROUTER_ALLOW_CLOUD=false`; OpenRouter is reserved for controlled training/evaluation jobs. When execution is enabled, `/api/models/complete` requires `X-Hydria-API-Key`, `X-API-Key`, or `Authorization: Bearer ...`; request bodies can only tighten budget policy, never loosen the server limits.
+
+Model governance validation:
+
+```bash
+npm run models:routing-gate
+```
+
+This writes `storage/training/model-routing-economics-gate-v1.json` and checks that chat/provider routing selects the expected specialist role, keeps public runtime local-first, avoids unnecessary DeepSeek escalation on simple explanations, keeps conceptual API questions off the code specialist, and respects relative cost budgets. Run it before changing model routing, expanding watchers, or starting role-specific training.
 
 ### Learning Governance
 
@@ -547,6 +556,7 @@ Workspace-level scripts:
 - `npm run conversation:strategic-conflict`
 - `npm run conversation:strategic-coherence`
 - `npm run runtime:release-gate`
+- `npm run models:routing-gate`
 - `npm run tool:routing-eval`
 - `npm run dev:sh`
 - `npm run check:sh`

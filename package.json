@@ -31,6 +31,7 @@
     "prod:smoke": "npm run prod:smoke -w @hydria-arena/server --",
     "student:chat-prod-gate": "npm run student:chat-prod-gate -w @hydria-arena/server --",
     "models:pretraining-gate": "npm run models:pretraining-gate -w @hydria-arena/server --",
+    "models:routing-gate": "npm run models:routing-gate -w @hydria-arena/server --",
     "retrieval:reranker-gate": "npm run retrieval:reranker-gate -w @hydria-arena/server --",
     "student:temporal-eval": "npm run student:temporal-eval -w @hydria-arena/server",
     "student:temporal-eval:record": "npm run student:temporal-eval:record -w @hydria-arena/server",
