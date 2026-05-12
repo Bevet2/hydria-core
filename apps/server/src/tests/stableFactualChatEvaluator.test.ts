@@ -45,6 +45,24 @@ test("stable factual evaluator accepts anchored factual answers", () => {
   assert.deepEqual(result.forbiddenClaims, []);
 });
 
+test("stable factual evaluator accepts planned light fallback for stable fact route", () => {
+  const result = evaluateStableFactualAnswer(
+    charlemagneCase,
+    "Charlemagne est un roi des Francs qui regne de 768 a 814. Il devient empereur en 800 et son pouvoir donne son nom a l'Empire carolingien.",
+    {
+      provider: "ollama",
+      model: "qwen2.5:3b",
+      budgetProfile: "stable_fact_chat",
+      usedRetry: true,
+      latencyMs: 72000,
+      qualityPassed: true
+    }
+  );
+
+  assert.equal(result.passed, true);
+  assert.deepEqual(result.routeIssues, []);
+});
+
 test("stable factual evaluator catches known historical confusions", () => {
   const result = evaluateStableFactualAnswer(
     charlemagneCase,
@@ -132,4 +150,3 @@ test("stable factual diagnostics aggregates factual failure modes", () => {
   assert.equal(diagnostics.counts.retries, 1);
   assert.equal(diagnostics.examples[0]?.id, charlemagneCase.id);
 });
-

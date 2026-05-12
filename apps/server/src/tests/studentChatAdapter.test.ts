@@ -71,6 +71,43 @@ test("student chat adapter routes stable biographies through the Mistral factual
   assert.match(result.answer.answer, /Charlemagne/);
 });
 
+test("student chat adapter retries stable factual chat on the light local model before static fallback", async () => {
+  const selectedModels: string[] = [];
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "phi3:mini";
+    },
+    async testPrompt(_prompt, _system, options) {
+      const selectedModel = options?.modelName ?? "";
+      selectedModels.push(selectedModel);
+      if (selectedModel === "mistral:7b") {
+        throw new Error("mistral timeout");
+      }
+      return {
+        provider: "ollama",
+        model: selectedModel,
+        response: JSON.stringify({
+          modelRole: "student",
+          answer: "Charlemagne est un roi des Francs et un empereur carolingien.",
+          key_points: ["Factual fallback"],
+          assumptions: [],
+          confidence: 82
+        }),
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer(buildInput());
+
+  assert.deepEqual(selectedModels, ["mistral:7b", "qwen2.5:3b"]);
+  assert.equal(result.provider, "ollama");
+  assert.equal(result.model, "qwen2.5:3b");
+  assert.equal(result.usedRetry, true);
+  assert.equal(result.runtimeBudget?.profile, "stable_fact_chat");
+  assert.equal(result.validationIssues.some((issue) => issue.includes("mistral timeout")), true);
+});
+
 test("student chat adapter routes simple stable definitions through standard-light chat", async () => {
   let selectedModel = "";
   const input = {

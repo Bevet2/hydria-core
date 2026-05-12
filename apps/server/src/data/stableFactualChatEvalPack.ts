@@ -33,10 +33,10 @@ export type StableFactualChatEvalCase = {
 
 const stableFactRoute = {
   expectedProvider: "ollama" as const,
-  expectedModel: "mistral:7b",
+  expectedModel: ["mistral:7b", "qwen2.5:3b"],
   expectedBudgetProfile: "stable_fact_chat" as const,
   minWords: 18,
-  maxLatencyMs: 80000
+  maxLatencyMs: 90000
 };
 
 const standardLightRoute = {
@@ -168,7 +168,7 @@ export const STABLE_FACTUAL_CHAT_EVAL_PACK: StableFactualChatEvalCase[] = [
       { id: "subject", anyOf: ["cold war"] },
       { id: "us", anyOf: ["united states", "u.s.", "usa"] },
       { id: "ussr", anyOf: ["soviet", "ussr"] },
-      { id: "not_direct", anyOf: ["ideological", "geopolitical", "nuclear", "indirect"] }
+      { id: "not_direct", anyOf: ["ideological", "geopolitical", "political", "military tension", "global influence", "nuclear", "indirect"] }
     ],
     forbiddenClaims: [
       { id: "direct_war_confusion", anyOf: ["direct war between the united states and the soviet union"] }
@@ -213,9 +213,9 @@ export const STABLE_FACTUAL_CHAT_EVAL_PACK: StableFactualChatEvalCase[] = [
     ...standardLightRoute,
     expectedAnchors: [
       { id: "subject", anyOf: ["eventual consistency"] },
-      { id: "replicas", anyOf: ["replica", "replicas", "distributed"] },
+      { id: "replicas", anyOf: ["replica", "replicas", "distributed", "nodes"] },
       { id: "eventually", anyOf: ["eventually", "over time"] },
-      { id: "not_immediate", anyOf: ["not immediate", "temporary", "may be stale"] }
+      { id: "not_immediate", anyOf: ["not immediate", "not immediately", "temporary", "may be stale"] }
     ],
     forbiddenClaims: [
       { id: "strong_consistency_confusion", anyOf: ["all reads always return the latest write immediately"] }

@@ -223,6 +223,15 @@ function buildStandardLightFallbacks(primary: string) {
   ]);
 }
 
+function buildStableFactFallbacks(primary: string) {
+  return unique([
+    primary,
+    QWEN_3B,
+    env.STUDENT_CHAT_LOCAL_MODEL_NAME,
+    env.LOCAL_MODEL_NAME
+  ]);
+}
+
 function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: string): ModelRuntimeBudget {
   const requestedLongTimeoutMs = Math.max(env.STUDENT_CHAT_LOCAL_TIMEOUT_MS, env.MODEL_ROUTER_LOCAL_TIMEOUT_MS);
   if (profile === "fast_tool") {
@@ -274,7 +283,7 @@ function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: stri
       maxLatencyMs: stableFactTimeoutMs,
       maxOutputTokens: env.MODEL_RUNTIME_STANDARD_MAX_OUTPUT_TOKENS,
       maxConcurrent: env.MODEL_RUNTIME_STANDARD_MAX_CONCURRENCY,
-      fallbackDepth: 0,
+      fallbackDepth: 1,
       concurrencyKey: "standard_local_chat"
     };
   }
@@ -430,8 +439,8 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
       modelName: MISTRAL_BUSINESS,
       specialistRole: "writing_business",
       routingReason: reason,
-      pipeline: [...basePipeline, `stable_fact_writer:${MISTRAL_BUSINESS}`],
-      fallbackModelNames: buildFallbacks(MISTRAL_BUSINESS, "writing_business"),
+      pipeline: [...basePipeline, `stable_fact_writer:${MISTRAL_BUSINESS}`, `stable_fact_light_fallback:${QWEN_3B}`],
+      fallbackModelNames: buildStableFactFallbacks(MISTRAL_BUSINESS),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
     };

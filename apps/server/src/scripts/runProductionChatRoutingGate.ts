@@ -163,9 +163,10 @@ const writingExpectation: TurnExpectation = {
 
 const stableFactExpectation: TurnExpectation = {
   provider: "ollama",
-  model: "mistral:7b",
+  model: ["mistral:7b", "qwen2.5:3b"],
   budgetProfile: "stable_fact_chat",
-  maxLatencyMs: 80000
+  maxLatencyMs: 90000,
+  allowRetry: true
 };
 
 const codeExpectation: TurnExpectation = {

@@ -147,7 +147,7 @@ The public chat path is guarded by **Model Runtime Governor v1**. Each turn rece
 
 - `fast_tool`: verified deterministic tool answers, short timeout, small output budget
 - `standard_light_chat`: CPU-aware stable definitions and simple conceptual answers on the 3B route
-- `stable_fact_chat`: Mistral factual writing for stable biographies/history, with a CPU-safe longer timeout and no 14B fallback
+- `stable_fact_chat`: Mistral factual writing for stable biographies/history, with a CPU-safe `qwen2.5:3b` fallback and no 14B fallback
 - `standard_chat`: primary-brain chat, capped timeout and serialized heavy-model concurrency
 - `code_chat`: code/debug specialist budget
 - `writing_chat`: business/writing budget
@@ -318,10 +318,10 @@ This writes `storage/training/model-runtime-ops-gate-v1.json` from `storage/obse
 Stable factual chat validation:
 
 ```bash
-npm run prod:stable-factual-gate -- --base-url=https://app.hydria.click --timeout-ms=120000
+npm run prod:stable-factual-gate -- --base-url=https://app.hydria.click --timeout-ms=180000
 ```
 
-This writes `storage/training/stable-factual-chat-gate-v1.json` and `storage/training/stable-factual-chat-diagnostics-v1.json`. The gate checks stable biographies, history, and technical concepts with expected factual anchors plus forbidden confusion claims, so a route can fail even when the selected model and quality gate look healthy.
+This writes `storage/training/stable-factual-chat-gate-v1.json` and `storage/training/stable-factual-chat-diagnostics-v1.json`. The gate checks stable biographies, history, and technical concepts with expected factual anchors plus forbidden confusion claims, so a route can fail even when the selected model and quality gate look healthy. Stable factual biographies should use Mistral first and may retry once on `qwen2.5:3b`; they must not fall through to a static fallback.
 
 ### Learning Governance
 

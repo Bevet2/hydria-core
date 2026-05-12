@@ -67,7 +67,7 @@ curl -fsS https://app.hydria.click/api/chat/message \
   -d '{"message":"Reponds en une phrase : quel est le role de Hydria Core ?"}'
 ```
 
-This validates DNS, TLS, Caddy, API, PostgreSQL, and the direct student chat runtime. Chat is based on the student prompt and `StudentAnswer` schema through `StudentChatAdapter`, but it does not run the full Student Lab benchmark/research/analyze pipeline. Runtime chat must be served by the local Ollama open-weight backend with local specialist routing: `phi3:mini` for routing trace, `qwen2.5:3b` for concise turns, lightweight context turns, and CPU-aware standard-light definitions, `qwen2.5:14b` as the main reasoning brain for complex standard synthesis, `qwen2.5-coder:7b` for code/debug, `deepseek-r1:14b` for deep reasoning, and `mistral:7b` for writing/business plus stable biographical/history answers. Public chat also runs governed tool routing before model generation: deterministic local tools can provide verified weather, finance, time/date, calculator/conversion, release/status, and repo facts, and the model only receives the verified facts/sources. OpenRouter is reserved for controlled training/evaluation jobs and is blocked from the public runtime path by default.
+This validates DNS, TLS, Caddy, API, PostgreSQL, and the direct student chat runtime. Chat is based on the student prompt and `StudentAnswer` schema through `StudentChatAdapter`, but it does not run the full Student Lab benchmark/research/analyze pipeline. Runtime chat must be served by the local Ollama open-weight backend with local specialist routing: `phi3:mini` for routing trace, `qwen2.5:3b` for concise turns, lightweight context turns, CPU-aware standard-light definitions, and fallback stable factual answers, `qwen2.5:14b` as the main reasoning brain for complex standard synthesis, `qwen2.5-coder:7b` for code/debug, `deepseek-r1:14b` for deep reasoning, and `mistral:7b` for writing/business plus stable biographical/history answers. Public chat also runs governed tool routing before model generation: deterministic local tools can provide verified weather, finance, time/date, calculator/conversion, release/status, and repo facts, and the model only receives the verified facts/sources. OpenRouter is reserved for controlled training/evaluation jobs and is blocked from the public runtime path by default.
 
 Full production smoke from any machine with this repo:
 
@@ -113,7 +113,7 @@ npm run models:ops-gate -- --since=<telemetrySince> --min-events=1
 Stable factual chat gate:
 
 ```bash
-npm run prod:stable-factual-gate -- --base-url=https://app.hydria.click --timeout-ms=120000
+npm run prod:stable-factual-gate -- --base-url=https://app.hydria.click --timeout-ms=180000
 ```
 
 This writes:
@@ -123,7 +123,7 @@ storage/training/stable-factual-chat-gate-v1.json
 storage/training/stable-factual-chat-diagnostics-v1.json
 ```
 
-It checks biographies, history, and stable technical concepts with expected anchors and forbidden confusion claims. Use it after changing `standard_light_chat`, `stable_fact_chat`, Mistral/Qwen routing, or prompt context.
+It checks biographies, history, and stable technical concepts with expected anchors and forbidden confusion claims. Use it after changing `standard_light_chat`, `stable_fact_chat`, Mistral/Qwen routing, or prompt context. Stable factual biographies should use Mistral first and may retry once on `qwen2.5:3b`; they must not fall through to a static fallback.
 
 ## Deploy Current Branch
 
@@ -279,7 +279,7 @@ Installed open-weight models:
 
 ```text
 phi3:mini              routing fast path
-qwen2.5:3b            concise / context / standard-light definitions
+qwen2.5:3b            concise / context / standard-light definitions / stable factual fallback
 qwen2.5:14b           main local reasoning brain for complex standard synthesis
 qwen2.5-coder:7b      code specialist
 deepseek-r1:14b       deep reasoning specialist
@@ -363,7 +363,7 @@ HYDRIA_AUTH_RATE_LIMIT_MAX_REQUESTS=30
 HYDRIA_API_RATE_LIMIT_MAX_REQUESTS=120
 ```
 
-The model router can still route heavier specialist calls to the installed Ollama models (`qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `mistral:7b`). Keep the generic local-student timeout low for non-chat paths, but let Model Runtime Governor v1 cap runtime chat by profile: fast verified tool answers, standard-light definitions, `stable_fact_chat` factual writing, standard chat, code, writing, and deep reasoning. `stable_fact_chat` intentionally uses Mistral without a Qwen 14B fallback to avoid CPU timeout cascades. Chat does not fall back to OpenRouter. Public chat is intentionally open but IP-rate-limited. Public OVH must keep `TRAINING_ENDPOINTS_ENABLED=false`; enable it only for controlled training/evaluation sessions and keep API-key protection enabled.
+The model router can still route heavier specialist calls to the installed Ollama models (`qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `mistral:7b`). Keep the generic local-student timeout low for non-chat paths, but let Model Runtime Governor v1 cap runtime chat by profile: fast verified tool answers, standard-light definitions, `stable_fact_chat` factual writing, standard chat, code, writing, and deep reasoning. `stable_fact_chat` intentionally uses Mistral first with one `qwen2.5:3b` retry, without a Qwen 14B fallback, to avoid CPU timeout cascades. Chat does not fall back to OpenRouter. Public chat is intentionally open but IP-rate-limited. Public OVH must keep `TRAINING_ENDPOINTS_ENABLED=false`; enable it only for controlled training/evaluation sessions and keep API-key protection enabled.
 
 Before changing the multi-model runtime, run:
 
