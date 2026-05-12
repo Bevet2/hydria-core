@@ -59,12 +59,12 @@ test("student chat adapter normalizes local student role variations and uses the
   const result = await adapter.answer(buildInput());
 
   assert.equal(result.provider, "ollama");
-  assert.equal(result.model, "mistral:7b");
-  assert.equal(result.specialist.role, "writing_business");
+  assert.equal(result.model, "qwen2.5:14b");
+  assert.equal(result.specialist.role, "primary_brain");
   assert.equal(result.answer.modelRole, "student");
   assert.equal(result.answer.confidence, 95);
   assert.equal(timeoutMs > 1000, true);
-  assert.equal(selectedModel, "mistral:7b");
+  assert.equal(selectedModel, "qwen2.5:14b");
   assert.match(result.answer.answer, /Charlemagne/);
 });
 
@@ -171,7 +171,7 @@ test("student chat adapter does not call cloud fallback when local generation fa
   const result = await adapter.answer(buildInput());
 
   assert.equal(result.provider, "fallback");
-  assert.equal(result.model, "mistral:7b");
-  assert.equal(result.specialist.role, "writing_business");
+  assert.equal(result.model, "qwen2.5:14b");
+  assert.equal(result.specialist.role, "primary_brain");
   assert.equal(result.validationIssues.includes("student_chat_generation_failed"), true);
 });

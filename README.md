@@ -135,10 +135,10 @@ This path is still based on the local student identity and `StudentAnswer` schem
 Local chat specialist routing:
 
 - `phi3:mini`: fast routing trace
-- `qwen2.5:14b`: main reasoning brain
+- `qwen2.5:14b`: main reasoning brain and stable educational/conceptual answers
 - `qwen2.5-coder:7b`: code and debug specialist
 - `deepseek-r1:14b`: deep reasoning / conflict arbitration
-- `mistral:7b`: writing, business, and lightweight stable factual answers
+- `mistral:7b`: writing, business, and lightweight general answers
 
 Relevant runtime knobs:
 

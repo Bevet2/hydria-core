@@ -61,7 +61,7 @@ curl -fsS https://app.hydria.click/api/chat/message \
   -d '{"message":"Reponds en une phrase : quel est le role de Hydria Core ?"}'
 ```
 
-This validates DNS, TLS, Caddy, API, PostgreSQL, and the direct student chat runtime. Chat is based on the student prompt and `StudentAnswer` schema through `StudentChatAdapter`, but it does not run the full Student Lab benchmark/research/analyze pipeline. Runtime chat must be served by the local Ollama open-weight backend with local specialist routing: `phi3:mini` for routing trace, `qwen2.5:14b` as the main reasoning brain, `qwen2.5-coder:7b` for code/debug, `deepseek-r1:14b` for deep reasoning, and `mistral:7b` for writing/business/lightweight factual turns. OpenRouter is reserved for controlled training/evaluation jobs and is blocked from the public runtime path by default.
+This validates DNS, TLS, Caddy, API, PostgreSQL, and the direct student chat runtime. Chat is based on the student prompt and `StudentAnswer` schema through `StudentChatAdapter`, but it does not run the full Student Lab benchmark/research/analyze pipeline. Runtime chat must be served by the local Ollama open-weight backend with local specialist routing: `phi3:mini` for routing trace, `qwen2.5:14b` as the main reasoning brain and stable educational/conceptual route, `qwen2.5-coder:7b` for code/debug, `deepseek-r1:14b` for deep reasoning, and `mistral:7b` for writing/business/lightweight general turns. OpenRouter is reserved for controlled training/evaluation jobs and is blocked from the public runtime path by default.
 
 Full production smoke from any machine with this repo:
 

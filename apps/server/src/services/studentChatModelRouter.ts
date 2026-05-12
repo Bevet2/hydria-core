@@ -80,6 +80,18 @@ function containsWritingSignal(text: string, category: QuestionCategory) {
   );
 }
 
+function containsStableKnowledgeSignal(text: string) {
+  return /\b(?:who is|who was|what is|what was|qui est|qu est ce|quest ce|c est quoi|explique|explain|definition|define|biographie|biography|histoire|history|known for|connu pour|renaissance|empire|emperor|empereur)\b/.test(
+    text
+  );
+}
+
+function containsLiveFreshnessSignal(text: string) {
+  return /\b(?:today|current|currently|latest|recent|now|2026|aujourd hui|actuel|actuelle|derniere|dernier|recent|recente|maintenant|ceo|president|price|prix|weather|meteo|status)\b/.test(
+    text
+  );
+}
+
 function containsDeepReasoningSignal(input: StudentChatModelRoutingInput, text: string) {
   if (input.answerPolicy.strategicTradeoffPolicy?.hasConflict) {
     return true;
@@ -145,8 +157,39 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
   }
 
   if (
-    containsWritingSignal(text, input.category) ||
-    (input.category === "other" && input.runtimeMode === "direct" && !input.requiresExternalGrounding)
+    input.category === "other" &&
+    containsStableKnowledgeSignal(text) &&
+    !containsLiveFreshnessSignal(text)
+  ) {
+    return {
+      capabilityId: "qwen-14b-instruct-main",
+      displayName: "Qwen 14B Instruct",
+      modelName: QWEN_MAIN,
+      specialistRole: "primary_brain",
+      routingReason: "Stable educational, biography, or conceptual knowledge route.",
+      pipeline: [...basePipeline, `primary_brain:${QWEN_MAIN}`],
+      fallbackModelNames: buildFallbacks(QWEN_MAIN, "primary_brain"),
+      timeoutMs: longTimeoutMs
+    };
+  }
+
+  if (containsWritingSignal(text, input.category)) {
+    return {
+      capabilityId: "mistral-mixtral-business",
+      displayName: "Mistral/Mixtral",
+      modelName: MISTRAL_BUSINESS,
+      specialistRole: "writing_business",
+      routingReason: "Writing or business synthesis route.",
+      pipeline: [...basePipeline, `writing_business:${MISTRAL_BUSINESS}`],
+      fallbackModelNames: buildFallbacks(MISTRAL_BUSINESS, "writing_business"),
+      timeoutMs: env.STUDENT_CHAT_LOCAL_TIMEOUT_MS
+    };
+  }
+
+  if (
+    input.category === "other" &&
+    input.runtimeMode === "direct" &&
+    !input.requiresExternalGrounding
   ) {
     return {
       capabilityId: "mistral-mixtral-business",
