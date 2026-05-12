@@ -147,6 +147,46 @@ test("student chat adapter routes concise direct answers to the fast 3B speciali
   assert.equal(result.runtimeBudget?.profile, "concise_chat");
 });
 
+test("student chat adapter routes lightweight context-setting turns to the fast 3B specialist", async () => {
+  let selectedModel = "";
+  const input = {
+    ...buildInput(),
+    category: "other" as const,
+    routingQuestion: "On parle de bases de donnees.",
+    userMessage: "On parle de bases de donnees.",
+    question: "On parle de bases de donnees.",
+    runtimeMode: "direct" as const,
+    requiresExternalGrounding: false
+  };
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "phi3:mini";
+    },
+    async testPrompt(_prompt, _system, options) {
+      selectedModel = options?.modelName ?? "";
+      return {
+        provider: "ollama",
+        model: selectedModel,
+        response: JSON.stringify({
+          modelRole: "student",
+          answer: "C'est note, on reste sur les bases de donnees.",
+          key_points: ["Contexte conserve"],
+          assumptions: [],
+          confidence: 90
+        }),
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer(input);
+
+  assert.equal(selectedModel, "qwen2.5:3b");
+  assert.equal(result.specialist.role, "fast_router");
+  assert.match(result.specialist.routingReason, /context-setting turn/i);
+  assert.equal(result.runtimeBudget?.profile, "concise_chat");
+});
+
 test("student chat adapter uses fast budget for verified calculator tool answers", async () => {
   let selectedModel = "";
   let timeoutMs = 0;

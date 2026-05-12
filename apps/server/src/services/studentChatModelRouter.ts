@@ -112,6 +112,17 @@ function containsBrevitySignal(text: string, input: StudentChatModelRoutingInput
   );
 }
 
+function containsLightweightContextSetupSignal(text: string) {
+  return (
+    /^(?:on parle de|nous parlons de|le sujet est|contexte\s*:|pour contexte|we are talking about|we're talking about|the topic is|context\s*:|for context)\b/.test(
+      text
+    ) ||
+    /\b(?:pour la suite|a partir de maintenant|from now on|for the rest)\b.*\b(?:reponds|answer|contrainte|constraint|moins de|less than|court|short)\b/.test(
+      text
+    )
+  );
+}
+
 function containsStableKnowledgeSignal(text: string) {
   return /\b(?:who is|who was|what is|what was|qui est|qu est ce|quest ce|c est quoi|explique|explain|definition|define|biographie|biography|histoire|history|known for|connu pour|renaissance|empire|emperor|empereur)\b/.test(
     text
@@ -316,6 +327,22 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
       specialistRole: "fast_router",
       routingReason: reason,
       pipeline: [...basePipeline, `concise_answer:${QWEN_3B}`],
+      fallbackModelNames: buildFallbacks(QWEN_3B, "fast_router"),
+      timeoutMs: budget.timeoutMs,
+      runtimeBudget: budget
+    };
+  }
+
+  if (containsLightweightContextSetupSignal(text)) {
+    const reason = "Lightweight context-setting turn; use the fast 3B local chat route instead of the 14B primary brain.";
+    const budget = buildRuntimeBudget("concise_chat", reason);
+    return {
+      capabilityId: "qwen-3b-router",
+      displayName: "Qwen 3B",
+      modelName: QWEN_3B,
+      specialistRole: "fast_router",
+      routingReason: reason,
+      pipeline: [...basePipeline, `context_setup:${QWEN_3B}`],
       fallbackModelNames: buildFallbacks(QWEN_3B, "fast_router"),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
