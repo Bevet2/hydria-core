@@ -108,6 +108,7 @@ type Args = {
   output: string;
   timeoutMs: number;
   delayMs: number;
+  maxDurationMs: number;
   limit: number | null;
   apiKey: string;
 };
@@ -437,6 +438,7 @@ function parseArgs(argv = process.argv.slice(2)): Args {
     output: resolve(projectRoot, readOption(argv, "--output") ?? defaultOutput),
     timeoutMs: Number(readOption(argv, "--timeout-ms") ?? "180000"),
     delayMs: Number(readOption(argv, "--delay-ms") ?? "1000"),
+    maxDurationMs: Number(readOption(argv, "--max-duration-ms") ?? "0"),
     limit: limit ? Number(limit) : null,
     apiKey: readOption(argv, "--api-key") ?? process.env.HYDRIA_API_KEY ?? process.env.HYDRIA_PROD_API_KEY ?? ""
   };
@@ -668,8 +670,69 @@ export async function runProductionChatRoutingGate(args = parseArgs()) {
   const startedAt = Date.now();
   const telemetrySince = new Date(startedAt).toISOString();
   const results: CaseResult[] = [];
+  let stoppedReason: string | null = null;
+
+  const buildReport = () => {
+    const allTurns = results.flatMap((result) => result.turns);
+    const latencies = allTurns.map((turn) => turn.latencyMs);
+    const failedCases = results.filter((result) => !result.passed);
+    const failedTurns = allTurns.filter((turn) => !turn.passed);
+    const toolRequiredTurns = allTurns.filter((turn) => turn.toolRequired);
+    const completed = results.length === selectedCases.length && !stoppedReason;
+    return {
+      version: "hydria-production-chat-routing-gate-v1",
+      generatedAt: new Date().toISOString(),
+      target: {
+        baseUrl: args.baseUrl,
+        caseCount: selectedCases.length,
+        timeoutMs: args.timeoutMs,
+        delayMs: args.delayMs,
+        maxDurationMs: args.maxDurationMs,
+        telemetrySince
+      },
+      completed,
+      stoppedReason,
+      passed: completed && failedCases.length === 0,
+      summary: {
+        plannedCases: selectedCases.length,
+        completedCases: results.length,
+        passedCases: results.length - failedCases.length,
+        failedCases: failedCases.length,
+        totalTurns: allTurns.length,
+        failedTurns: failedTurns.length,
+        passRate: rate(results.length - failedCases.length, results.length),
+        localOllamaRate: rate(allTurns.filter((turn) => turn.provider === "ollama").length, allTurns.length),
+        toolProviderRate: rate(allTurns.filter((turn) => turn.provider === "tool").length, allTurns.length),
+        staticFallbackRate: rate(allTurns.filter((turn) => turn.usedStaticFallback).length, allTurns.length),
+        retryRate: rate(allTurns.filter((turn) => turn.usedRetry).length, allTurns.length),
+        qualityFailureRate: rate(allTurns.filter((turn) => !turn.qualityPassed).length, allTurns.length),
+        toolRequiredButNotUsed: toolRequiredTurns.filter((turn) => !turn.toolUsed).length,
+        p50LatencyMs: percentile(latencies, 50),
+        p95LatencyMs: percentile(latencies, 95),
+        maxLatencyMs: Math.max(0, ...latencies),
+        durationMs: Date.now() - startedAt,
+        byRouteFamily: countBy(results.map((result) => result.routeFamily)),
+        byProvider: countBy(allTurns.map((turn) => turn.provider)),
+        byBudgetProfile: countBy(allTurns.map((turn) => turn.budgetProfile)),
+        byModel: countBy(allTurns.map((turn) => turn.model))
+      },
+      failedCaseIds: failedCases.map((result) => result.id),
+      results
+    };
+  };
+
+  const writeReport = async () => {
+    await mkdir(dirname(args.output), { recursive: true });
+    const report = buildReport();
+    await writeFile(args.output, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    return report;
+  };
 
   for (const [index, testCase] of selectedCases.entries()) {
+    if (args.maxDurationMs > 0 && Date.now() - startedAt > args.maxDurationMs) {
+      stoppedReason = "max_duration_reached";
+      break;
+    }
     if (index > 0 && args.delayMs > 0) {
       await sleep(args.delayMs);
     }
@@ -686,52 +749,10 @@ export async function runProductionChatRoutingGate(args = parseArgs()) {
         turns: []
       });
     }
+    await writeReport();
   }
 
-  const allTurns = results.flatMap((result) => result.turns);
-  const latencies = allTurns.map((turn) => turn.latencyMs);
-  const failedCases = results.filter((result) => !result.passed);
-  const failedTurns = allTurns.filter((turn) => !turn.passed);
-  const toolRequiredTurns = allTurns.filter((turn) => turn.toolRequired);
-  const report = {
-    version: "hydria-production-chat-routing-gate-v1",
-    generatedAt: new Date().toISOString(),
-    target: {
-      baseUrl: args.baseUrl,
-      caseCount: selectedCases.length,
-      timeoutMs: args.timeoutMs,
-      telemetrySince
-    },
-    passed: failedCases.length === 0,
-    summary: {
-      completedCases: results.length,
-      passedCases: results.length - failedCases.length,
-      failedCases: failedCases.length,
-      totalTurns: allTurns.length,
-      failedTurns: failedTurns.length,
-      passRate: rate(results.length - failedCases.length, results.length),
-      localOllamaRate: rate(allTurns.filter((turn) => turn.provider === "ollama").length, allTurns.length),
-      toolProviderRate: rate(allTurns.filter((turn) => turn.provider === "tool").length, allTurns.length),
-      staticFallbackRate: rate(allTurns.filter((turn) => turn.usedStaticFallback).length, allTurns.length),
-      retryRate: rate(allTurns.filter((turn) => turn.usedRetry).length, allTurns.length),
-      qualityFailureRate: rate(allTurns.filter((turn) => !turn.qualityPassed).length, allTurns.length),
-      toolRequiredButNotUsed: toolRequiredTurns.filter((turn) => !turn.toolUsed).length,
-      p50LatencyMs: percentile(latencies, 50),
-      p95LatencyMs: percentile(latencies, 95),
-      maxLatencyMs: Math.max(0, ...latencies),
-      durationMs: Date.now() - startedAt,
-      byRouteFamily: countBy(results.map((result) => result.routeFamily)),
-      byProvider: countBy(allTurns.map((turn) => turn.provider)),
-      byBudgetProfile: countBy(allTurns.map((turn) => turn.budgetProfile)),
-      byModel: countBy(allTurns.map((turn) => turn.model))
-    },
-    failedCaseIds: failedCases.map((result) => result.id),
-    results
-  };
-
-  await mkdir(dirname(args.output), { recursive: true });
-  await writeFile(args.output, `${JSON.stringify(report, null, 2)}\n`, "utf8");
-  return report;
+  return await writeReport();
 }
 
 const currentProcessPath = process.argv[1] ? resolve(process.argv[1]) : "";
