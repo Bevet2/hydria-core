@@ -99,11 +99,10 @@ export async function buildRetrievalRerankerMiniGateReport(args: {
 } = {}): Promise<RetrievalRerankerMiniGateReport> {
   const service = args.service ?? new GovernedRerankerService();
   const requireRuntime = args.requireRuntime ?? false;
-  const results = await Promise.all(
-    retrievalRerankerMiniGatePack.map((gateCase) =>
-      evaluateCase(service, gateCase, requireRuntime)
-    )
-  );
+  const results: RetrievalRerankerMiniGateResult[] = [];
+  for (const gateCase of retrievalRerankerMiniGatePack) {
+    results.push(await evaluateCase(service, gateCase, requireRuntime));
+  }
   const passed = results.filter((result) => result.passed).length;
   const runtimeUsed = results.filter((result) => result.runtimeUsed).length;
   const fallbackUsed = results.length - runtimeUsed;

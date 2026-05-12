@@ -1,5 +1,6 @@
 import os
 import re
+from threading import Lock
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
@@ -15,6 +16,7 @@ ALLOW_LEXICAL_FALLBACK = os.getenv("BGE_RERANKER_ALLOW_LEXICAL_FALLBACK", "true"
 app = FastAPI(title="Hydria BGE Reranker Runtime", version="1.0.0")
 _model = None
 _model_error: str | None = None
+_model_lock = Lock()
 
 
 class RerankDocument(BaseModel):
@@ -36,16 +38,20 @@ def get_model():
     if BACKEND == "lexical":
         return None
 
-    try:
-        from sentence_transformers import CrossEncoder
+    with _model_lock:
+        if _model is not None:
+            return _model
+        try:
+            from sentence_transformers import CrossEncoder
 
-        _model = CrossEncoder(MODEL_NAME, max_length=MAX_LENGTH, device=DEVICE)
-        return _model
-    except Exception as exc:  # pragma: no cover - exercised in the runtime container
-        _model_error = str(exc)
-        if ALLOW_LEXICAL_FALLBACK:
-            return None
-        raise
+            _model = CrossEncoder(MODEL_NAME, max_length=MAX_LENGTH, device=DEVICE)
+            _model_error = None
+            return _model
+        except Exception as exc:  # pragma: no cover - exercised in the runtime container
+            _model_error = str(exc)
+            if ALLOW_LEXICAL_FALLBACK:
+                return None
+            raise
 
 
 def tokens(value: str) -> set[str]:
