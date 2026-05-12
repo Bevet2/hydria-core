@@ -124,12 +124,29 @@ function languageLooksRight(answer: string, language: StableFactualChatEvalCase[
   const englishSignals = /\b(?:the|this|that|with|was|were|is|are|and|because|defined|system|computer)\b/.test(
     normalized
   );
+  const mixedEnglishInFrench =
+    /\b(?:known as|was known|king of|queen of|emperor of|is known for|was born|died in)\b/.test(normalized);
+  if (language === "fr" && mixedEnglishInFrench) {
+    return false;
+  }
   return language === "fr" ? frenchSignals || !englishSignals : englishSignals || !frenchSignals;
 }
 
 function hasGenericFailure(answer: string) {
   return /\b(?:je n'ai pas reussi|generation indisponible|reformule|could not generate|cannot verify|no reliable source|tool-dependent)\b/i.test(
     answer
+  );
+}
+
+function hasTruncatedEnding(answer: string) {
+  const trimmed = answer.trim();
+  if (!trimmed) {
+    return true;
+  }
+  return (
+    !/[.!?]$/.test(trimmed) ||
+    /\b\d{1,3}$/.test(trimmed) ||
+    /\b(?:a|au|aux|de|des|du|en|et|la|le|les|l|of|the|to|with|for)$/i.test(trimmed)
   );
 }
 
@@ -173,6 +190,9 @@ export function evaluateStableFactualAnswer(
   }
   if (wordCount(answer) < testCase.minWords) {
     routeIssues.push("too_short");
+  }
+  if (hasTruncatedEnding(answer)) {
+    routeIssues.push("truncated_answer");
   }
 
   const issues = [
@@ -324,4 +344,3 @@ export function buildStableFactualDiagnostics(report: StableFactualGateReport): 
       }))
   };
 }
-

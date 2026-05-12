@@ -74,8 +74,8 @@ test("student chat adapter routes stable biographies through the Mistral factual
   assert.equal(timeoutMs > 1000, true);
   assert.equal(selectedModel, "mistral:7b");
   assert.equal(result.runtimeBudget?.profile, "stable_fact_chat");
-  assert.equal(result.runtimeBudget?.maxOutputTokens, 92);
-  assert.equal(numPredict, 92);
+  assert.equal(result.runtimeBudget?.maxOutputTokens, 112);
+  assert.equal(numPredict, 112);
   assert.match(result.answer.answer, /Charlemagne/);
 });
 
@@ -83,7 +83,8 @@ test("student chat prompt compacts stable factual biographies", () => {
   const prompt = buildStudentChatPrompt(buildInput());
 
   assert.match(prompt, /Stable factual answer shape/i);
-  assert.match(prompt, /28-45 words/i);
+  assert.match(prompt, /18-32 words/i);
+  assert.match(prompt, /every JSON string value must be French/i);
   assert.match(prompt, /highest title\/role/i);
   assert.match(prompt, /own realm or dynasty/i);
   assert.match(prompt, /anachronistic labels/i);

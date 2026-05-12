@@ -279,7 +279,7 @@ function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: stri
   }
   if (profile === "stable_fact_chat") {
     const stableFactTimeoutMs = Math.min(env.MODEL_RUNTIME_DEEP_TIMEOUT_MS, 60000);
-    const stableFactMaxOutputTokens = Math.min(env.MODEL_RUNTIME_STANDARD_MAX_OUTPUT_TOKENS, 92);
+    const stableFactMaxOutputTokens = Math.min(env.MODEL_RUNTIME_STANDARD_MAX_OUTPUT_TOKENS, 112);
     return {
       profile,
       label: "Stable factual writing",

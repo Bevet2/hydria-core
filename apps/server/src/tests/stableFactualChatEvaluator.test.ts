@@ -103,6 +103,25 @@ test("stable factual evaluator catches missing anchors and generic fallbacks", (
   assert.equal(result.routeIssues.includes("static_fallback"), true);
 });
 
+test("stable factual evaluator catches mixed language and truncated endings", () => {
+  const louisCase = STABLE_FACTUAL_CHAT_EVAL_PACK.find((item) => item.id === "fr_bio_louis_ix")!;
+  const result = evaluateStableFactualAnswer(
+    louisCase,
+    "Louis IX, known as Saint Louis, etait roi de France de 1226 a 1270",
+    {
+      provider: "ollama",
+      model: "mistral:7b",
+      budgetProfile: "stable_fact_chat",
+      latencyMs: 42000,
+      qualityPassed: true
+    }
+  );
+
+  assert.equal(result.passed, false);
+  assert.equal(result.languageIssue, "wrong_language:fr");
+  assert.equal(result.routeIssues.includes("truncated_answer"), true);
+});
+
 test("stable factual diagnostics aggregates factual failure modes", () => {
   const failedEvaluation = evaluateStableFactualAnswer(
     charlemagneCase,

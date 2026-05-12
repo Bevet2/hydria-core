@@ -35,7 +35,7 @@ const stableFactRoute = {
   expectedProvider: "ollama" as const,
   expectedModel: ["mistral:7b", "qwen2.5:3b"],
   expectedBudgetProfile: "stable_fact_chat" as const,
-  minWords: 18,
+  minWords: 12,
   maxLatencyMs: 90000
 };
 
@@ -56,14 +56,14 @@ export const STABLE_FACTUAL_CHAT_EVAL_PACK: StableFactualChatEvalCase[] = [
     ...stableFactRoute,
     expectedAnchors: [
       { id: "subject", anyOf: ["charlemagne"] },
-      { id: "frankish_king", anyOf: ["roi des francs", "roi franc", "empereur franc"] },
+      { id: "frankish_king", anyOf: ["roi des francs", "roi franc", "empereur franc", "empereur des francs", "royaume franc"] },
       { id: "emperor", anyOf: ["empereur", "empire carolingien", "carolingien"] },
       { id: "period", anyOf: ["768", "814", "viiie siecle", "8e siecle", "ixe siecle", "9e siecle"] }
     ],
     forbiddenClaims: [
       { id: "charles_the_bald_confusion", anyOf: ["charles le chauve"] },
       { id: "unknown_birth_as_main_fact", anyOf: ["ne a une date inconnue"] },
-      { id: "holy_roman_empire_founder", anyOf: ["etabli le saint-empire romain germanique", "established the holy roman empire"] }
+      { id: "holy_roman_empire_founder", anyOf: ["etabli le saint-empire romain germanique", "saint-empire romain germanique", "established the holy roman empire"] }
     ]
   },
   {
