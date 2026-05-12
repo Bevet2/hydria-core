@@ -130,8 +130,10 @@ app.get("/api/health", async (_request, response) => {
       openRouterScope: "training_evaluation_only"
     },
     publicApi: {
-      authRequired: env.HYDRIA_PUBLIC_API_AUTH_REQUIRED,
+      chatAuthRequired: false,
+      protectedRoutesAuthRequired: env.HYDRIA_PUBLIC_API_AUTH_REQUIRED,
       rateLimitWindowMs: env.HYDRIA_RATE_LIMIT_WINDOW_MS,
+      chatMaxRequestsPerWindow: env.HYDRIA_CHAT_RATE_LIMIT_MAX_REQUESTS,
       maxRequestsPerWindow: env.HYDRIA_API_RATE_LIMIT_MAX_REQUESTS
     },
     studentChat: {
@@ -154,7 +156,6 @@ app.get("/api/health", async (_request, response) => {
 });
 
 const protectedApiPaths = [
-  "/api/chat",
   "/api/student",
   "/api/arena",
   "/api/benchmark",
@@ -183,6 +184,15 @@ app.use(
   protectedApiRateLimit,
   protectedApiUsageLogger
 );
+
+const publicChatRateLimit = createRateLimitMiddleware({
+  keyPrefix: "public-chat",
+  windowMs: env.HYDRIA_RATE_LIMIT_WINDOW_MS,
+  maxRequests: env.HYDRIA_CHAT_RATE_LIMIT_MAX_REQUESTS,
+  identityResolver: resolveIpRateLimitIdentity
+});
+const publicChatUsageLogger = createUsageLoggerMiddleware("public-chat");
+app.use("/api/chat", publicChatRateLimit, publicChatUsageLogger);
 
 app.use(
   "/api/arena",

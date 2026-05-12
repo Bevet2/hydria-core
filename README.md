@@ -151,7 +151,7 @@ Relevant runtime knobs:
 
 - `STUDENT_CHAT_LOCAL_MODEL_NAME`
 - `STUDENT_CHAT_LOCAL_TIMEOUT_MS`
-- `HYDRIA_API_KEY=<secret> npm run student:chat-prod-gate -- --base-url=https://app.hydria.click`
+- `npm run student:chat-prod-gate -- --base-url=https://app.hydria.click`
 
 ### Research / Truth Engine
 
@@ -455,10 +455,10 @@ The operational procedure, health checks, DNS records, Caddy reverse proxy, fire
 Production smoke gate:
 
 ```bash
-HYDRIA_API_KEY=<secret> npm run prod:smoke -- --base-url=https://app.hydria.click --expected-schema=hydria_prod
+npm run prod:smoke -- --base-url=https://app.hydria.click --expected-schema=hydria_prod
 ```
 
-This verifies HTTPS, API health, PostgreSQL persistence on the expected schema, guarded public execution endpoints, authenticated local chat, and multi-turn memory/capsule handling.
+This verifies HTTPS, API health, PostgreSQL persistence on the expected schema, guarded admin/training execution endpoints, public rate-limited local chat, and multi-turn memory/capsule handling.
 
 ### Runtime Release Gate
 

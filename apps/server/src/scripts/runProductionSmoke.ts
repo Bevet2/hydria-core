@@ -19,7 +19,7 @@ type ProductionSmokeReport = {
     expectedSchema: string;
     allowPublicSchema: boolean;
     requireLocalModel: boolean;
-    authRequired: boolean;
+    chatAuthRequired: boolean;
   };
   passed: boolean;
   failedChecks: string[];
@@ -319,29 +319,6 @@ async function runProductionSmoke(args = parseArgs()): Promise<ProductionSmokeRe
     });
   });
 
-  await runCheck(checks, "protected_chat_auth_guard", async () => {
-    const { response, text } = await fetchWithTimeout(
-      joinUrl(args.baseUrl, "/api/chat/message"),
-      {
-        method: "POST",
-        headers: { "content-type": "application/json; charset=utf-8" },
-        body: JSON.stringify({
-          message: "Smoke test: this unauthenticated chat request must be rejected."
-        })
-      },
-      args.timeoutMs
-    );
-    if (response.status === 401 || response.status === 503 || response.status === 429) {
-      return pass("public chat requires a Hydria API key", {
-        status: response.status,
-        preview: text.slice(0, 180)
-      });
-    }
-    return fail(`public chat accepted an unauthenticated request; got HTTP ${response.status}`, {
-      preview: text.slice(0, 300)
-    });
-  });
-
   await runCheck(checks, "training_endpoint_guard", async () => {
     const { response, text } = await fetchWithTimeout(
       joinUrl(args.baseUrl, "/api/arena/run"),
@@ -366,9 +343,6 @@ async function runProductionSmoke(args = parseArgs()): Promise<ProductionSmokeRe
   });
 
   await runCheck(checks, "chat_single_turn", async () => {
-    if (!args.apiKey) {
-      return fail("HYDRIA_API_KEY or --api-key is required for authenticated chat smoke");
-    }
     const response = await postJson<ChatResponse>(
       args.baseUrl,
       "/api/chat/message",
@@ -400,9 +374,6 @@ async function runProductionSmoke(args = parseArgs()): Promise<ProductionSmokeRe
   });
 
   await runCheck(checks, "chat_multi_turn_memory", async () => {
-    if (!args.apiKey) {
-      return fail("HYDRIA_API_KEY or --api-key is required for authenticated multi-turn chat smoke");
-    }
     const first = await postJson<ChatResponse>(
       args.baseUrl,
       "/api/chat/message",
@@ -494,7 +465,7 @@ async function runProductionSmoke(args = parseArgs()): Promise<ProductionSmokeRe
       expectedSchema: args.expectedSchema,
       allowPublicSchema: args.allowPublicSchema,
       requireLocalModel: args.requireLocalModel,
-      authRequired: true
+      chatAuthRequired: false
     },
     passed: failedChecks.length === 0,
     failedChecks,

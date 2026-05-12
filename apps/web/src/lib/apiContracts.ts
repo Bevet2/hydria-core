@@ -183,6 +183,13 @@ export type AppHealth = {
     requireApiKey: boolean;
     openRouterScope: string;
   };
+  publicApi?: {
+    chatAuthRequired: boolean;
+    protectedRoutesAuthRequired: boolean;
+    rateLimitWindowMs: number;
+    chatMaxRequestsPerWindow: number;
+    maxRequestsPerWindow: number;
+  };
   localModel: LocalModelHealth;
   persistence: PersistenceHealthSummary;
 };

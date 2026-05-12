@@ -1,10 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import {
-  clearHydriaApiKey,
-  readHydriaApiKey,
   resetChatSession,
   sendChatMessage,
-  setHydriaApiKey,
   type ChatMessage,
   type ChatMessageResponse
 } from "../lib/api";
@@ -47,8 +44,6 @@ export function ChatPage() {
   const [lastResponse, setLastResponse] = useState<ChatMessageResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [apiKeyDraft, setApiKeyDraft] = useState(() => readHydriaApiKey());
-  const [hasApiKey, setHasApiKey] = useState(() => readHydriaApiKey().length > 0);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const canSend = draft.trim().length > 0 && !loading;
@@ -135,21 +130,6 @@ export function ChatPage() {
     inputRef.current?.focus();
   }
 
-  function saveApiKey() {
-    const value = apiKeyDraft.trim();
-    if (value) {
-      setHydriaApiKey(value);
-      setHasApiKey(true);
-      setError(null);
-    }
-  }
-
-  function removeApiKey() {
-    clearHydriaApiKey();
-    setApiKeyDraft("");
-    setHasApiKey(false);
-  }
-
   return (
     <main className="app-shell">
       <AppNav current="chat" />
@@ -166,27 +146,9 @@ export function ChatPage() {
                 <span className="pill">Latency {chatMeta.duration}</span>
               </div>
             </div>
-            <div className="chat-auth">
-              <input
-                className="text-input chat-auth__input"
-                type="password"
-                value={apiKeyDraft}
-                onChange={(event) => setApiKeyDraft(event.target.value)}
-                placeholder="API key"
-                autoComplete="off"
-              />
-              <button type="button" className="button button--secondary" onClick={saveApiKey}>
-                {hasApiKey ? "Mettre a jour" : "Enregistrer"}
-              </button>
-              {hasApiKey ? (
-                <button type="button" className="button button--secondary" onClick={removeApiKey}>
-                  Effacer
-                </button>
-              ) : null}
-              <button type="button" className="button button--secondary" onClick={resetChat} disabled={loading}>
-                Nouveau chat
-              </button>
-            </div>
+            <button type="button" className="button button--secondary" onClick={resetChat} disabled={loading}>
+              Nouveau chat
+            </button>
           </div>
 
           <div className="chat-thread" aria-live="polite">
