@@ -155,6 +155,8 @@ The public chat path is guarded by **Model Runtime Governor v1**. Each turn rece
 
 The governor records profile, timeout, queue time, budget-exceeded status, and provider/model attempts into the chat trace and model ops telemetry.
 
+The Chat UI exposes an **Orchestration Trace** for each answer. It shows the observable runtime path only: language/context detection, task routing, tool routing, verified facts, selected model/provider, runtime budget, attempts, quality gate, and latency. It deliberately does not expose hidden prompts or private chain-of-thought.
+
 Chat tool flow:
 
 - `ToolRoutingService` decides whether a governed tool is required or recommended.
@@ -185,6 +187,7 @@ Relevant runtime knobs:
 - `npm run student:chat-prod-gate -- --base-url=https://app.hydria.click`
 - `npm run models:pretraining-gate`
 - `npm run models:routing-gate`
+- `npm run prod:chat-slo-gate -- --base-url=https://app.hydria.click --timeout-ms=180000`
 - `npm run prod:stable-factual-gate -- --base-url=https://app.hydria.click --limit=4`
 - `npm run models:ops-gate`
 - `npm run retrieval:reranker-gate -- --require-runtime`

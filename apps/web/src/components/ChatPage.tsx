@@ -53,6 +53,28 @@ function traceStatusClass(status: string) {
   return "neutral";
 }
 
+function formatTraceDetail(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.length > 0 ? value.map((item) => String(item)).join(" -> ") : "none";
+  }
+  if (value === null || value === undefined || value === "") {
+    return "none";
+  }
+  if (typeof value === "boolean") {
+    return value ? "yes" : "no";
+  }
+  return String(value);
+}
+
+function traceDetailEntries(details: Record<string, unknown>) {
+  return Object.entries(details).filter(([, value]) => {
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+    return value !== null && value !== undefined && value !== "";
+  });
+}
+
 export function ChatPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatUiMessage[]>([]);
@@ -313,7 +335,7 @@ export function ChatPage() {
 
           <section className="panel">
             <div className="panel__header">
-              <h2>Trace</h2>
+              <h2>Orchestration Trace</h2>
               <span className="pill">no private CoT</span>
             </div>
             <div className="chat-trace">
@@ -329,6 +351,16 @@ export function ChatPage() {
                         </span>
                       </div>
                       <p>{step.summary}</p>
+                      {traceDetailEntries(step.details).length > 0 ? (
+                        <dl className="chat-trace-details">
+                          {traceDetailEntries(step.details).map(([key, value]) => (
+                            <div key={key}>
+                              <dt>{key}</dt>
+                              <dd>{formatTraceDetail(value)}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      ) : null}
                     </div>
                   </article>
                 ))

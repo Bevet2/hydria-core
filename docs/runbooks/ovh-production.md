@@ -125,6 +125,38 @@ storage/training/stable-factual-chat-diagnostics-v1.json
 
 It checks biographies, history, and stable technical concepts with expected anchors and forbidden confusion claims. Use it after changing `standard_light_chat`, `stable_fact_chat`, Mistral/Qwen routing, or prompt context. Stable factual biographies should use Mistral first and may retry once on `qwen2.5:3b`; they must not fall through to a static fallback.
 
+Chat runtime SLO gate:
+
+```bash
+npm run prod:chat-slo-gate -- --base-url=https://app.hydria.click --timeout-ms=180000
+```
+
+This writes:
+
+```text
+storage/training/chat-runtime-slo-gate-v1.json
+```
+
+It validates public chat runtime observability and operational SLOs: orchestration trace coverage, local-only runtime, static fallback rate, cloud runtime rate, wrong language rate, quality failures, retry rate, and p95 latency. Default thresholds are production-safe for the current CPU VPS:
+
+```text
+max p95 latency: 60000 ms
+max retry rate: 10%
+max static fallback rate: 0%
+max cloud runtime rate: 0%
+max wrong language rate: 0%
+max quality failure rate: 0%
+min trace coverage: 100%
+```
+
+Use a stricter latency target while tuning:
+
+```bash
+npm run prod:chat-slo-gate -- --base-url=https://app.hydria.click --timeout-ms=180000 --max-p95-ms=45000
+```
+
+The Chat UI displays an **Orchestration Trace** panel. It is a runtime trace, not private chain-of-thought: it shows language/context, category, constraints, tool decision, verified facts, model/provider, budget profile, attempts, quality gate, and latency.
+
 ## Deploy Current Branch
 
 ```bash
@@ -195,6 +227,7 @@ Validation gates:
 ```bash
 npm run models:pretraining-gate
 npm run models:routing-gate
+npm run prod:chat-slo-gate -- --base-url=https://app.hydria.click --timeout-ms=180000
 npm run prod:stable-factual-gate -- --base-url=https://app.hydria.click --limit=4
 npm run models:ops-gate -- --allow-empty
 npm run retrieval:reranker-gate -- --require-runtime
@@ -202,6 +235,7 @@ npm run retrieval:reranker-gate -- --require-runtime
 
 `retrieval:reranker-gate` without `--require-runtime` validates fallback precision only. Promotion of reranker-dependent retrieval requires the runtime-backed mode.
 `models:routing-gate` writes `storage/training/model-routing-economics-gate-v1.json` and blocks model governance changes when a case selects the wrong specialist, violates local-only policy, over-escalates to DeepSeek, or exceeds the expected relative cost budget.
+`prod:chat-slo-gate` writes `storage/training/chat-runtime-slo-gate-v1.json` and blocks trace loss, wrong language, static fallback, cloud runtime usage, quality failures, excessive retries, and p95 latency regression.
 `prod:stable-factual-gate` writes stable factual gate and diagnostics reports, blocking anchor misses, known factual confusions, wrong language, static fallbacks, and route drift on stable chat answers.
 `models:ops-gate` writes `storage/training/model-runtime-ops-gate-v1.json` from runtime telemetry. Use `--allow-empty` only before traffic exists; on production, run it after `prod:smoke` or `student:chat-prod-gate` so the gate validates real model events.
 

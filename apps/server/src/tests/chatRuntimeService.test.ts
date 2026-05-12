@@ -79,15 +79,11 @@ test("chat runtime keeps follow-up context in the direct student chat adapter", 
 });
 
 test("chat runtime recalls user-provided facts without triggering research", async () => {
-  const calls: StudentChatAdapterInput[] = [];
+  let adapterCalled = false;
   const service = new ChatRuntimeService({
-    async answer(input) {
-      calls.push(input);
-      return buildAdapterResult(
-        calls.length === 1
-          ? "C'est note : tu t'appelles Marc et tu travailles sur Hydria."
-          : "Je ne peux pas verifier cette information actuelle depuis le prompt."
-      );
+    async answer() {
+      adapterCalled = true;
+      return buildAdapterResult("Model answer that should not be needed.");
     }
   });
 
@@ -97,10 +93,9 @@ test("chat runtime recalls user-provided facts without triggering research", asy
     message: "Comment je m'appelle ?"
   });
 
-  assert.equal(calls[0]?.requiresExternalGrounding, false);
-  assert.equal(calls[1]?.requiresExternalGrounding, false);
-  assert.equal(calls[1]?.answerPolicy.shouldUseContext, true);
-  assert.match(calls[1]?.question ?? "", /Prior turns:/);
+  assert.equal(adapterCalled, false);
+  assert.equal(first.generation.model, "conversation_fact_ack");
+  assert.equal(second.generation.model, "conversation_memory");
   assert.equal(second.runtimeMode, "conversation");
   assert.match(second.assistantMessage.content, /Marc/);
   assert.equal(second.conversationQuality.passed, true);
@@ -142,15 +137,11 @@ test("chat runtime retries corrected identity turns on the resolved task", async
 });
 
 test("chat runtime recalls user-provided project names", async () => {
-  const calls: StudentChatAdapterInput[] = [];
+  let adapterCalled = false;
   const service = new ChatRuntimeService({
-    async answer(input) {
-      calls.push(input);
-      return buildAdapterResult(
-        calls.length === 1
-          ? "Noted: your project is called Hydria Core."
-          : "I cannot verify the project name from live data."
-      );
+    async answer() {
+      adapterCalled = true;
+      return buildAdapterResult("Model answer that should not be needed.");
     }
   });
 
@@ -160,10 +151,12 @@ test("chat runtime recalls user-provided project names", async () => {
     message: "What is my project called?"
   });
 
-  assert.equal(calls[1]?.answerPolicy.shouldUseContext, true);
+  assert.equal(adapterCalled, false);
+  assert.equal(first.generation.model, "conversation_fact_ack");
+  assert.equal(second.generation.model, "conversation_memory");
   assert.equal(second.runtimeMode, "conversation");
   assert.match(second.assistantMessage.content, /Hydria Core/);
-  assert.equal(second.generation.provider, "ollama");
+  assert.equal(second.generation.provider, "tool");
   assert.equal(second.conversationQuality.passed, true);
 });
 

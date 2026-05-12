@@ -279,6 +279,36 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+.chat-trace-details {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+
+.chat-trace-details div {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.45fr) minmax(0, 1fr);
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(61, 45, 28, 0.08);
+}
+
+.chat-trace-details dt,
+.chat-trace-details dd {
+  margin: 0;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.chat-trace-details dt {
+  color: var(--muted);
+}
+
+.chat-trace-details dd {
+  color: var(--text);
+}
+
 .benchmark-grid,
 .benchmark-lists {
   display: grid;

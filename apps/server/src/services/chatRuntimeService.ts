@@ -1071,33 +1071,140 @@ function buildUserFactAcknowledgementAnswer(args: {
   conversationState: ConversationState;
   newUserMessage: string;
 }): StudentAnswer | null {
-  if (
-    !/\b(?:je m[' ]?appelle|mon nom est|my name is|call me)\b/i.test(args.newUserMessage) ||
-    /[?]|\b(?:explique|peux|aide|help|can you|could you|what|how|pourquoi|comment)\b/i.test(args.newUserMessage)
-  ) {
+  const isNameSetup = /\b(?:je m[' ]?appelle|mon nom est|my name is|call me)\b/i.test(args.newUserMessage);
+  const isProjectSetup =
+    /\b(?:my project is called|my project is named|the project is called|project name is|mon projet s[' ]?appelle|le projet s[' ]?appelle|nom du projet est)\b/i.test(
+      args.newUserMessage
+    );
+  if (!isNameSetup && !isProjectSetup) {
+    return null;
+  }
+  if (/[?]|\b(?:explique|peux|aide|help|can you|could you|what|how|pourquoi|comment)\b/i.test(args.newUserMessage)) {
     return null;
   }
 
-  const nameFact = args.conversationState.knownFacts.find((fact) => /^user name:/i.test(fact));
-  const name = nameFact?.replace(/^user name:\s*/i, "").replace(/[.!?]+$/g, "").trim();
-  if (!name) {
+  const fact = args.conversationState.knownFacts.find((knownFact) =>
+    isProjectSetup ? /^project name:/i.test(knownFact) : /^user name:/i.test(knownFact)
+  );
+  const factValue = fact
+    ?.replace(isProjectSetup ? /^project name:\s*/i : /^user name:\s*/i, "")
+    .replace(/[.!?]+$/g, "")
+    .trim();
+  if (!factValue) {
     return null;
   }
 
-  const answer =
-    args.conversationState.language === "en"
-      ? `Noted, ${name}. I will keep that detail for this conversation.`
-      : `C'est note, ${name}. Je garde ce detail pour cette conversation.`;
+  const answer = isProjectSetup
+    ? args.conversationState.language === "fr"
+      ? `C'est note, ton projet s'appelle ${factValue}. Je garde ce detail pour cette conversation.`
+      : `Noted, your project is called ${factValue}. I will keep that detail for this conversation.`
+    : args.conversationState.language === "en"
+      ? `Noted, ${factValue}. I will keep that detail for this conversation.`
+      : `C'est note, ${factValue}. Je garde ce detail pour cette conversation.`;
   return {
     modelRole: "student",
     answer,
     key_points:
       args.conversationState.language === "en"
-        ? ["Conversation memory", "User-provided fact"]
-        : ["Memoire de conversation", "Fait fourni par l'utilisateur"],
+        ? ["Conversation memory", isProjectSetup ? "User-provided project" : "User-provided fact"]
+        : ["Memoire de conversation", isProjectSetup ? "Projet fourni par l'utilisateur" : "Fait fourni par l'utilisateur"],
     assumptions: [],
     confidence: 88
   };
+}
+
+function buildDeterministicRuntimeDraft(args: {
+  answer: StudentAnswer;
+  category: QuestionCategory;
+  routingQuestion: string;
+  model: string;
+  displayName: string;
+  routingReason: string;
+  pipeline: string[];
+}): ChatDraft {
+  return {
+    answer: args.answer,
+    category: args.category,
+    routingQuestion: args.routingQuestion,
+    generation: {
+      answer: args.answer,
+      usedRetry: false,
+      provider: "tool",
+      model: args.model,
+      specialist: {
+        capabilityId: "phi-mini-router",
+        role: "fast_router",
+        displayName: args.displayName,
+        routingReason: args.routingReason,
+        pipeline: args.pipeline
+      },
+      raw: JSON.stringify(args.answer),
+      validationIssues: [],
+      runtimeBudget: {
+        profile: "fast_tool",
+        label: args.displayName,
+        reason: args.routingReason,
+        timeoutMs: 0,
+        maxLatencyMs: 0,
+        maxOutputTokens: 0,
+        maxConcurrent: 1,
+        fallbackDepth: 0,
+        concurrencyKey: args.model
+      },
+      queueMs: 0,
+      budgetExceeded: false,
+      latencyMs: 0,
+      attempts: []
+    }
+  };
+}
+
+function buildUserFactSetupDraft(args: {
+  conversationState: ConversationState;
+  newUserMessage: string;
+  category: QuestionCategory;
+  routingQuestion: string;
+}): ChatDraft | null {
+  const answer = buildUserFactAcknowledgementAnswer({
+    conversationState: args.conversationState,
+    newUserMessage: args.newUserMessage
+  });
+  if (!answer) {
+    return null;
+  }
+  return buildDeterministicRuntimeDraft({
+    answer,
+    category: args.category,
+    routingQuestion: args.routingQuestion,
+    model: "conversation_fact_ack",
+    displayName: "Runtime fact acknowledgement",
+    routingReason: "User provided a durable conversation fact; acknowledge it without a local model call.",
+    pipeline: ["context_state_tracker", "deterministic_fact_ack"]
+  });
+}
+
+function buildMemoryRecallDraft(args: {
+  conversationState: ConversationState;
+  newUserMessage: string;
+  category: QuestionCategory;
+  routingQuestion: string;
+}): ChatDraft | null {
+  const answer = buildConversationMemoryRecallAnswer({
+    conversationState: args.conversationState,
+    newUserMessage: args.newUserMessage
+  });
+  if (!answer) {
+    return null;
+  }
+  return buildDeterministicRuntimeDraft({
+    answer,
+    category: args.category,
+    routingQuestion: args.routingQuestion,
+    model: "conversation_memory",
+    displayName: "Runtime conversation memory",
+    routingReason: "The answer is already present in governed conversation memory; no model generation is needed.",
+    pipeline: ["context_state_tracker", "deterministic_memory_recall"]
+  });
 }
 
 function extractContextSetupSubject(message: string) {
@@ -1143,41 +1250,15 @@ function buildContextSetupDraft(args: {
     confidence: 92
   };
 
-  return {
+  return buildDeterministicRuntimeDraft({
     answer,
     category: args.category,
     routingQuestion: args.routingQuestion,
-    generation: {
-      answer,
-      usedRetry: false,
-      provider: "tool",
-      model: "context_ack",
-      specialist: {
-        capabilityId: "phi-mini-router",
-        role: "fast_router",
-        displayName: "Runtime context acknowledgement",
-        routingReason: "Pure context-setting turn can be acknowledged deterministically without a local model call.",
-        pipeline: ["context_state_tracker", "deterministic_context_ack"]
-      },
-      raw: JSON.stringify(answer),
-      validationIssues: [],
-      runtimeBudget: {
-        profile: "fast_tool",
-        label: "Deterministic context acknowledgement",
-        reason: "Context-only turn does not need model generation.",
-        timeoutMs: 0,
-        maxLatencyMs: 0,
-        maxOutputTokens: 0,
-        maxConcurrent: 1,
-        fallbackDepth: 0,
-        concurrencyKey: "deterministic_context_ack"
-      },
-      queueMs: 0,
-      budgetExceeded: false,
-      latencyMs: 0,
-      attempts: []
-    }
-  };
+    model: "context_ack",
+    displayName: "Runtime context acknowledgement",
+    routingReason: "Pure context-setting turn can be acknowledged deterministically without a local model call.",
+    pipeline: ["context_state_tracker", "deterministic_context_ack"]
+  });
 }
 
 function extractedToolLanguage(tooling: ChatToolMetadata): "fr" | "en" | null {
@@ -1469,6 +1550,18 @@ export class ChatRuntimeService {
         language: conversationState.language,
         routingQuestion
       }) ??
+      buildUserFactSetupDraft({
+        conversationState,
+        newUserMessage: args.message,
+        category,
+        routingQuestion
+      }) ??
+      buildMemoryRecallDraft({
+        conversationState,
+        newUserMessage: args.message,
+        category,
+        routingQuestion
+      }) ??
       buildContextSetupDraft({
         conversationState,
         newUserMessage: args.message,
@@ -1496,7 +1589,11 @@ export class ChatRuntimeService {
       recentMessages: session.messages,
       toolRouting: tooling.routing
     });
-    if (draft.generation.model === "context_ack") {
+    if (
+      draft.generation.model === "context_ack" ||
+      draft.generation.model === "conversation_fact_ack" ||
+      draft.generation.model === "conversation_memory"
+    ) {
       conversationQuality = {
         passed: true,
         issues: [],
