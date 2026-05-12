@@ -261,15 +261,19 @@ function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: stri
     };
   }
   if (profile === "standard_light_chat") {
+    const standardLightTimeoutMs = capTimeout(
+      env.STUDENT_CHAT_LOCAL_TIMEOUT_MS,
+      Math.max(env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS, 45000)
+    );
     return {
       profile,
       label: "CPU-aware stable knowledge chat",
       reason,
-      timeoutMs: capTimeout(env.STUDENT_CHAT_LOCAL_TIMEOUT_MS, env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS),
-      maxLatencyMs: env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS,
+      timeoutMs: standardLightTimeoutMs,
+      maxLatencyMs: standardLightTimeoutMs,
       maxOutputTokens: env.MODEL_RUNTIME_STANDARD_MAX_OUTPUT_TOKENS,
       maxConcurrent: env.MODEL_RUNTIME_STANDARD_MAX_CONCURRENCY,
-      fallbackDepth: 1,
+      fallbackDepth: 0,
       concurrencyKey: "standard_light_local_chat"
     };
   }

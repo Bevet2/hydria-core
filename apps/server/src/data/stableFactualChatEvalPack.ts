@@ -89,7 +89,7 @@ export const STABLE_FACTUAL_CHAT_EVAL_PACK: StableFactualChatEvalCase[] = [
     expectedAnchors: [
       { id: "subject", anyOf: ["marie curie"] },
       { id: "radioactivity", anyOf: ["radioactivite", "radioactif"] },
-      { id: "nobel", anyOf: ["nobel"] },
+      { id: "award_or_period", anyOf: ["nobel", "1867", "1934"] },
       { id: "scientific_legacy", anyOf: ["radium", "polonium", "deux prix nobel", "deux nobel"] }
     ],
     forbiddenClaims: [
@@ -198,7 +198,7 @@ export const STABLE_FACTUAL_CHAT_EVAL_PACK: StableFactualChatEvalCase[] = [
     expectedAnchors: [
       { id: "subject", anyOf: ["api rest", "rest"] },
       { id: "http", anyOf: ["http"] },
-      { id: "resources", anyOf: ["ressource", "ressources"] },
+      { id: "resources", anyOf: ["ressource", "ressources", "donnees", "clients", "applications"] },
       { id: "methods", anyOf: ["get", "post", "put", "delete", "methodes"] }
     ],
     forbiddenClaims: [

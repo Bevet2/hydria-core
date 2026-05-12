@@ -110,6 +110,7 @@ test("student chat adapter retries stable factual chat on the light local model 
 
 test("student chat adapter routes simple stable definitions through standard-light chat", async () => {
   let selectedModel = "";
+  let timeoutMs = 0;
   const input = {
     ...buildInput(),
     category: "technical_explanation" as const,
@@ -124,6 +125,7 @@ test("student chat adapter routes simple stable definitions through standard-lig
     },
     async testPrompt(_prompt, _system, options) {
       selectedModel = options?.modelName ?? "";
+      timeoutMs = options?.timeoutMs ?? 0;
       return {
         provider: "ollama",
         model: selectedModel,
@@ -144,6 +146,8 @@ test("student chat adapter routes simple stable definitions through standard-lig
   assert.equal(selectedModel, "qwen2.5:3b");
   assert.equal(result.specialist.role, "primary_brain");
   assert.equal(result.runtimeBudget?.profile, "standard_light_chat");
+  assert.equal(result.runtimeBudget?.fallbackDepth, 0);
+  assert.equal(timeoutMs >= 45000, true);
 });
 
 test("student chat adapter reserves qwen 14B for complex standard reasoning", async () => {
