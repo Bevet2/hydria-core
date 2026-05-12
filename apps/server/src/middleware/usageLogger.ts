@@ -28,7 +28,7 @@ export function createUsageLoggerMiddleware(scope: string) {
       logger.info("Protected API request completed", {
         scope,
         method: request.method,
-        path: request.path,
+        path: request.originalUrl || request.path,
         statusCode: response.statusCode,
         durationMs: Date.now() - startedAt,
         apiKeyHash,

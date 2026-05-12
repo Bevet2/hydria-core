@@ -211,6 +211,7 @@ test("usage logger does not expose raw API keys", () => {
     {
       method: "POST",
       path: "/api/chat/message",
+      originalUrl: "/api/chat/message?debug=true",
       ip: "127.0.0.1",
       headers: {
         "x-hydria-api-key": "super-secret-key",
@@ -235,6 +236,7 @@ test("usage logger does not expose raw API keys", () => {
   assert.equal(nextCalls, 1);
   const serializedLogs = logLines.join("\n");
   assert.match(serializedLogs, /apiKeyHash/);
+  assert.match(serializedLogs, /\/api\/chat\/message\?debug=true/);
   assert.match(serializedLogs, new RegExp(sha256("super-secret-key").slice(0, 12)));
   assert.doesNotMatch(serializedLogs, /super-secret-key/);
 });
