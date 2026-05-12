@@ -216,6 +216,7 @@ function maybeStableFactCompaction(route: StudentChatModelRoute) {
   return [
     "Stable factual answer shape: answer in 2 concise sentences, target 30-50 words.",
     "For biographies, put the highest title/role or signature achievement in the first sentence before minor birth/death details.",
+    "For rulers, state titles such as king or emperor before dates; for scientists, state field and discovery or award before dates.",
     "Then include the active period or dates and defining legacy in the answer text.",
     "Keep key_points to one short item.",
     "Do not write a long biography, timeline, or essay unless the user explicitly asks for it."
