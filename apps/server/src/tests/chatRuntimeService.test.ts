@@ -66,6 +66,16 @@ test("chat runtime keeps follow-up context in the direct student chat adapter", 
   assert.match(second.answer.answer, /Louis IX/i);
   assert.match(second.answer.answer, /Saint Louis/i);
   assert.equal(second.conversationQuality.passed, true);
+  assert.equal(second.orchestrationTrace.version, "chat_orchestration_trace_v1");
+  assert.equal(second.orchestrationTrace.disclosure, "runtime_trace_no_private_chain_of_thought");
+  assert.equal(
+    second.orchestrationTrace.steps.some((step) => step.id === "model_selection"),
+    true
+  );
+  assert.equal(
+    second.orchestrationTrace.steps.some((step) => String(step.summary).includes("private")),
+    false
+  );
 });
 
 test("chat runtime recalls user-provided facts without triggering research", async () => {
@@ -251,4 +261,8 @@ test("chat runtime executes required local tools and injects verified facts into
   assert.equal(response.tooling.used, true);
   assert.equal(response.tooling.routing.toolType, "time");
   assert.equal(response.tooling.routing.toolResultUsed, true);
+  assert.equal(
+    response.orchestrationTrace.steps.find((step) => step.id === "tool_routing")?.summary,
+    "Used time/current_time."
+  );
 });

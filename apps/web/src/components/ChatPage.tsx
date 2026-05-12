@@ -37,6 +37,19 @@ function issueLabel(response: ChatMessageResponse | null) {
   return response.conversationQuality.issues.join(" | ");
 }
 
+function traceStatusClass(status: string) {
+  if (status === "passed") {
+    return "success";
+  }
+  if (status === "failed") {
+    return "error";
+  }
+  if (status === "warning") {
+    return "fallback";
+  }
+  return "neutral";
+}
+
 export function ChatPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatUiMessage[]>([]);
@@ -50,6 +63,7 @@ export function ChatPage() {
   const activeConstraints = lastResponse?.activeConstraintCapsule.topConstraints ?? [];
   const changedConstraints = lastResponse?.activeConstraintCapsule.changedConstraints ?? [];
   const discardedAssumptions = lastResponse?.activeConstraintCapsule.discardedAssumptions ?? [];
+  const traceSteps = lastResponse?.orchestrationTrace.steps ?? [];
   const chatMeta = useMemo(
     () => ({
       category: lastResponse?.category ?? "n/a",
@@ -261,6 +275,33 @@ export function ChatPage() {
             </div>
             <p className="muted chat-route">{chatMeta.pipeline}</p>
             <p className="muted chat-route">{chatMeta.toolType}/{chatMeta.toolIntent}</p>
+          </section>
+
+          <section className="panel">
+            <div className="panel__header">
+              <h2>Trace</h2>
+              <span className="pill">no private CoT</span>
+            </div>
+            <div className="chat-trace">
+              {traceSteps.length > 0 ? (
+                traceSteps.map((step, index) => (
+                  <article key={step.id} className={`chat-trace-step chat-trace-step--${step.status}`}>
+                    <div className="chat-trace-step__index">{index + 1}</div>
+                    <div>
+                      <div className="chat-trace-step__header">
+                        <strong>{step.label}</strong>
+                        <span className={`status-badge status-badge--${traceStatusClass(step.status)}`}>
+                          {step.status}
+                        </span>
+                      </div>
+                      <p>{step.summary}</p>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <p className="muted">none</p>
+              )}
+            </div>
           </section>
 
           <section className="panel">

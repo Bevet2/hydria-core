@@ -60,6 +60,20 @@ export type ChatToolMetadata = {
   failureReason: string | null;
 };
 
+export type ChatOrchestrationTraceStep = {
+  id: string;
+  label: string;
+  status: "passed" | "warning" | "failed" | "skipped";
+  summary: string;
+  details: Record<string, string | number | boolean | null | string[]>;
+};
+
+export type ChatOrchestrationTrace = {
+  version: "chat_orchestration_trace_v1";
+  disclosure: "runtime_trace_no_private_chain_of_thought";
+  steps: ChatOrchestrationTraceStep[];
+};
+
 export const defaultChatToolMetadata: ChatToolMetadata = {
   route: "not_needed",
   used: false,
@@ -84,6 +98,7 @@ export type ChatMessageResponse = {
   conversationQuality: ConversationQualityGateResult;
   generation: ChatGenerationMetadata;
   tooling: ChatToolMetadata;
+  orchestrationTrace: ChatOrchestrationTrace;
   usedRetry: boolean;
   durationMs: number;
 };

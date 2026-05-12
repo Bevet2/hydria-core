@@ -347,9 +347,9 @@ export class ModelProviderService {
       budget: ModelBudgetPolicyDecision;
     }
   ): ModelProviderTarget[] {
-    const candidates: Array<ModelProviderTarget & { preferred: boolean }> = [];
+    const candidates: Array<ModelProviderTarget & { preferred: boolean; modelOrder: number }> = [];
     const seen = new Set<string>();
-    for (const model of models) {
+    for (const [modelOrder, model] of models.entries()) {
       if (!this.isAllowedByEconomicPolicy(model, args.budget)) {
         continue;
       }
@@ -399,7 +399,8 @@ export class ModelProviderService {
           costTier: model.costTier,
           qualityTier: model.qualityTier,
           local: isLocalProvider(provider),
-          preferred: provider === args.preferredProvider
+          preferred: provider === args.preferredProvider,
+          modelOrder
         });
       }
     }
@@ -407,7 +408,7 @@ export class ModelProviderService {
     return candidates
       .sort((left, right) => this.compareTargets(left, right, args.budget.effectiveCostPolicy))
       .slice(0, args.budget.fallbackDepth + 1)
-      .map(({ preferred: _preferred, ...target }) => target);
+      .map(({ preferred: _preferred, modelOrder: _modelOrder, ...target }) => target);
   }
 
   private isAllowedByEconomicPolicy(model: ModelCapabilityManifest, budget: ModelBudgetPolicyDecision) {
@@ -424,8 +425,8 @@ export class ModelProviderService {
   }
 
   private compareTargets(
-    left: ModelProviderTarget & { preferred: boolean },
-    right: ModelProviderTarget & { preferred: boolean },
+    left: ModelProviderTarget & { preferred: boolean; modelOrder: number },
+    right: ModelProviderTarget & { preferred: boolean; modelOrder: number },
     costPolicy: ModelBudgetPolicyDecision["effectiveCostPolicy"]
   ) {
     if (left.preferred !== right.preferred) {
@@ -435,6 +436,7 @@ export class ModelProviderService {
       return (
         qualityRank[right.qualityTier] - qualityRank[left.qualityTier] ||
         left.estimatedCostUnits - right.estimatedCostUnits ||
+        left.modelOrder - right.modelOrder ||
         latencyRank[left.latencyTier] - latencyRank[right.latencyTier]
       );
     }
@@ -442,12 +444,14 @@ export class ModelProviderService {
       return (
         left.estimatedCostUnits - right.estimatedCostUnits ||
         latencyRank[left.latencyTier] - latencyRank[right.latencyTier] ||
+        left.modelOrder - right.modelOrder ||
         qualityRank[right.qualityTier] - qualityRank[left.qualityTier]
       );
     }
     return (
       Number(right.local) - Number(left.local) ||
       left.estimatedCostUnits - right.estimatedCostUnits ||
+      left.modelOrder - right.modelOrder ||
       qualityRank[right.qualityTier] - qualityRank[left.qualityTier] ||
       latencyRank[left.latencyTier] - latencyRank[right.latencyTier]
     );

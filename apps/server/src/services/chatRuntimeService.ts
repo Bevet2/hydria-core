@@ -21,6 +21,7 @@ import type { QuestionCategory, ToolRoutingDecision } from "../types/arena.js";
 import type {
   ChatMessage,
   ChatMessageResponse,
+  ChatOrchestrationTrace,
   ChatRuntimeMode,
   ChatToolMetadata
 } from "../types/chat.js";
@@ -1084,6 +1085,120 @@ function buildUserFactAcknowledgementAnswer(args: {
   };
 }
 
+function buildChatOrchestrationTrace(args: {
+  runtimeMode: ChatRuntimeMode;
+  category: QuestionCategory;
+  routingQuestion: string;
+  activeConstraintCapsule: ActiveConstraintCapsule;
+  answerPolicy: MultiTurnAnswerPolicyResult;
+  tooling: ChatToolMetadata;
+  generation: StudentChatAdapterResult;
+  conversationQuality: ConversationQualityGateResult;
+  usedRetry: boolean;
+  durationMs: number;
+}): ChatOrchestrationTrace {
+  const capsule = args.activeConstraintCapsule;
+  const toolRouteStatus =
+    args.tooling.route === "failed" || args.tooling.route === "unsupported"
+      ? "warning"
+      : args.tooling.used || args.tooling.route === "not_needed"
+        ? "passed"
+        : "skipped";
+  const modelStatus =
+    args.generation.provider === "fallback" || args.generation.validationIssues.length > 0
+      ? "warning"
+      : "passed";
+  const qualityStatus = args.conversationQuality.passed ? "passed" : "warning";
+
+  return {
+    version: "chat_orchestration_trace_v1",
+    disclosure: "runtime_trace_no_private_chain_of_thought",
+    steps: [
+      {
+        id: "language_context",
+        label: "Language and context",
+        status: "passed",
+        summary: `Detected ${capsule.language} language with ${args.runtimeMode} runtime.`,
+        details: {
+          language: capsule.language,
+          runtimeMode: args.runtimeMode,
+          category: args.category,
+          priorContextUsed: args.answerPolicy.shouldUseContext,
+          activeConstraints: capsule.topConstraints.slice(0, 5),
+          changedConstraints: capsule.changedConstraints.slice(0, 3),
+          discardedAssumptions: capsule.discardedAssumptions.slice(0, 3)
+        }
+      },
+      {
+        id: "task_routing",
+        label: "Task routing",
+        status: "passed",
+        summary: `Classified as ${args.category}; answer mode ${args.answerPolicy.answerMode}.`,
+        details: {
+          category: args.category,
+          answerMode: args.answerPolicy.answerMode,
+          decisionNeeded: capsule.decisionNeeded,
+          recommendedDirection: capsule.recommendedDirection ?? null,
+          routingQuestion: args.routingQuestion
+        }
+      },
+      {
+        id: "tool_routing",
+        label: "Tool routing",
+        status: toolRouteStatus,
+        summary: args.tooling.used
+          ? `Used ${args.tooling.routing.toolType}/${args.tooling.routing.intent}.`
+          : args.tooling.routing.toolRequired
+            ? `Required ${args.tooling.routing.toolType}/${args.tooling.routing.intent}, but no usable result was returned.`
+            : args.tooling.routing.toolRecommended
+              ? `Recommended ${args.tooling.routing.toolType}/${args.tooling.routing.intent}, not executed.`
+              : "No external tool was needed.",
+        details: {
+          route: args.tooling.route,
+          toolType: args.tooling.routing.toolType,
+          intent: args.tooling.routing.intent,
+          toolRequired: args.tooling.routing.toolRequired,
+          toolRecommended: args.tooling.routing.toolRecommended,
+          resultUsed: args.tooling.used,
+          verifiedFacts: args.tooling.verifiedFacts.slice(0, 5),
+          failureReason: args.tooling.failureReason
+        }
+      },
+      {
+        id: "model_selection",
+        label: "Model selection",
+        status: modelStatus,
+        summary: `${args.generation.specialist.displayName} handled the turn via ${args.generation.provider}.`,
+        details: {
+          provider: args.generation.provider,
+          model: args.generation.model,
+          specialistRole: args.generation.specialist.role,
+          capabilityId: args.generation.specialist.capabilityId,
+          routingReason: args.generation.specialist.routingReason,
+          pipeline: args.generation.specialist.pipeline,
+          usedStaticFallback: args.generation.provider === "fallback",
+          validationIssues: args.generation.validationIssues.slice(0, 5)
+        }
+      },
+      {
+        id: "quality_gate",
+        label: "Quality gate",
+        status: qualityStatus,
+        summary: args.conversationQuality.passed
+          ? "Runtime quality gate passed."
+          : `Runtime quality gate kept warnings: ${args.conversationQuality.issues.join(", ")}.`,
+        details: {
+          passed: args.conversationQuality.passed,
+          usedRetry: args.usedRetry,
+          issues: args.conversationQuality.issues.slice(0, 8),
+          confidence: args.generation.answer.confidence,
+          durationMs: args.durationMs
+        }
+      }
+    ]
+  };
+}
+
 export class ChatRuntimeService {
   private readonly sessions = new Map<string, ChatRuntimeSession>();
 
@@ -1376,6 +1491,20 @@ export class ChatRuntimeService {
     session.messages.push(userMessage, assistantMessage);
     this.pruneSessions();
 
+    const durationMs = Date.now() - startedAt;
+    const orchestrationTrace = buildChatOrchestrationTrace({
+      runtimeMode,
+      category: draft.category,
+      routingQuestion: draft.routingQuestion,
+      activeConstraintCapsule,
+      answerPolicy,
+      tooling,
+      generation: draft.generation,
+      conversationQuality,
+      usedRetry,
+      durationMs
+    });
+
     return {
       sessionId: session.sessionId,
       createdAt: assistantMessage.createdAt,
@@ -1396,8 +1525,9 @@ export class ChatRuntimeService {
         validationIssues: draft.generation.validationIssues
       },
       tooling,
+      orchestrationTrace,
       usedRetry,
-      durationMs: Date.now() - startedAt
+      durationMs
     };
   }
 

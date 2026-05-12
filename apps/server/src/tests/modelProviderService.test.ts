@@ -209,3 +209,31 @@ test("economic model provider v2 respects maximum estimated cost units", () => {
   assert.equal(plan.target?.provider, "ollama");
   assert.ok(plan.targetCandidates.every((target) => target.estimatedCostUnits <= 1));
 });
+
+test("economic model provider v2 keeps the selected specialist as primary on equal-cost ties", () => {
+  const service = new ModelProviderService({
+    budgetPolicyService: new ModelBudgetPolicyService({
+      executionEnabled: true,
+      allowCloud: false,
+      maxCostTier: "low",
+      maxOutputTokens: 512
+    })
+  });
+  const plan = service.planExecution({
+    purpose: "fast_routing",
+    category: "mixed_reasoning",
+    latencyPreference: "low",
+    privacyMode: "local_required",
+    budget: {
+      executionEnabled: true,
+      allowCloud: false,
+      maxCostTier: "low",
+      costPolicy: "minimize",
+      fallbackDepth: 1
+    }
+  });
+
+  assert.equal(plan.selection.selected.id, "phi-mini-router");
+  assert.equal(plan.target?.modelId, "phi3:mini");
+  assert.equal(plan.target?.capabilityId, "phi-mini-router");
+});
