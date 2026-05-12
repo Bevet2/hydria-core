@@ -214,7 +214,7 @@ function maybeStableFactCompaction(route: StudentChatModelRoute) {
     return [];
   }
   return [
-    "Stable factual answer shape: answer in 2-4 concise sentences, target 45-80 words.",
+    "Stable factual answer shape: answer in 2-3 concise sentences, target 35-60 words.",
     "Include the central identity, role/domain, and one or two durable dates or legacy facts when relevant.",
     "Do not write a long biography, timeline, or essay unless the user explicitly asks for it."
   ];
