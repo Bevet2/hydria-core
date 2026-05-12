@@ -4,6 +4,7 @@ export type ModelRuntimeBudgetProfile =
   | "fast_tool"
   | "concise_chat"
   | "standard_light_chat"
+  | "stable_fact_chat"
   | "standard_chat"
   | "code_chat"
   | "writing_chat"

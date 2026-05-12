@@ -346,7 +346,7 @@ HYDRIA_AUTH_RATE_LIMIT_MAX_REQUESTS=30
 HYDRIA_API_RATE_LIMIT_MAX_REQUESTS=120
 ```
 
-The model router can still route heavier specialist calls to the installed Ollama models (`qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `mistral:7b`). Keep the generic local-student timeout low for non-chat paths, but let Model Runtime Governor v1 cap runtime chat by profile: fast verified tool answers, standard-light definitions, stable factual writing, standard chat, code, writing, and deep reasoning. Chat does not fall back to OpenRouter. Public chat is intentionally open but IP-rate-limited. Public OVH must keep `TRAINING_ENDPOINTS_ENABLED=false`; enable it only for controlled training/evaluation sessions and keep API-key protection enabled.
+The model router can still route heavier specialist calls to the installed Ollama models (`qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `mistral:7b`). Keep the generic local-student timeout low for non-chat paths, but let Model Runtime Governor v1 cap runtime chat by profile: fast verified tool answers, standard-light definitions, `stable_fact_chat` factual writing, standard chat, code, writing, and deep reasoning. `stable_fact_chat` intentionally uses Mistral without a Qwen 14B fallback to avoid CPU timeout cascades. Chat does not fall back to OpenRouter. Public chat is intentionally open but IP-rate-limited. Public OVH must keep `TRAINING_ENDPOINTS_ENABLED=false`; enable it only for controlled training/evaluation sessions and keep API-key protection enabled.
 
 Before changing the multi-model runtime, run:
 

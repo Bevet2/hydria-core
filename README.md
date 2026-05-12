@@ -147,6 +147,7 @@ The public chat path is guarded by **Model Runtime Governor v1**. Each turn rece
 
 - `fast_tool`: verified deterministic tool answers, short timeout, small output budget
 - `standard_light_chat`: CPU-aware stable definitions and simple conceptual answers on the 3B route
+- `stable_fact_chat`: Mistral factual writing for stable biographies/history, with a CPU-safe longer timeout and no 14B fallback
 - `standard_chat`: primary-brain chat, capped timeout and serialized heavy-model concurrency
 - `code_chat`: code/debug specialist budget
 - `writing_chat`: business/writing budget

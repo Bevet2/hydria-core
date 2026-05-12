@@ -318,9 +318,14 @@ export class ModelRuntimeTelemetryService {
         (profile === "concise_chat" ||
           profile === "standard_light_chat" ||
           profile === "standard_chat" ||
-          profile === "writing_chat" ||
           profile === "code_chat") &&
         stat.p95LatencyMs > effective.maxStandardP95LatencyMs
+      ) {
+        blockers.push(`${profile}_budget_p95_latency_exceeded`);
+      }
+      if (
+        (profile === "writing_chat" || profile === "stable_fact_chat") &&
+        stat.p95LatencyMs > Math.max(effective.maxStandardP95LatencyMs, 70000)
       ) {
         blockers.push(`${profile}_budget_p95_latency_exceeded`);
       }

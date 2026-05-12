@@ -67,7 +67,7 @@ test("student chat adapter routes stable biographies through the Mistral factual
   assert.equal(result.answer.confidence, 95);
   assert.equal(timeoutMs > 1000, true);
   assert.equal(selectedModel, "mistral:7b");
-  assert.equal(result.runtimeBudget?.profile, "writing_chat");
+  assert.equal(result.runtimeBudget?.profile, "stable_fact_chat");
   assert.match(result.answer.answer, /Charlemagne/);
 });
 

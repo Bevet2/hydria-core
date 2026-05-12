@@ -264,6 +264,20 @@ function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: stri
       concurrencyKey: "standard_light_local_chat"
     };
   }
+  if (profile === "stable_fact_chat") {
+    const stableFactTimeoutMs = Math.min(env.MODEL_RUNTIME_DEEP_TIMEOUT_MS, 60000);
+    return {
+      profile,
+      label: "Stable factual writing",
+      reason,
+      timeoutMs: stableFactTimeoutMs,
+      maxLatencyMs: stableFactTimeoutMs,
+      maxOutputTokens: env.MODEL_RUNTIME_STANDARD_MAX_OUTPUT_TOKENS,
+      maxConcurrent: env.MODEL_RUNTIME_STANDARD_MAX_CONCURRENCY,
+      fallbackDepth: 0,
+      concurrencyKey: "standard_local_chat"
+    };
+  }
   if (profile === "code_chat") {
     return {
       profile,
@@ -409,7 +423,7 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
   if (containsStablePersonFactSignal(text, input)) {
     const reason =
       "Stable person, biography, or historical fact question; use Mistral 7B instead of the 3B route for stronger factual prose on CPU.";
-    const budget = buildRuntimeBudget("writing_chat", reason);
+    const budget = buildRuntimeBudget("stable_fact_chat", reason);
     return {
       capabilityId: "mistral-mixtral-business",
       displayName: "Mistral/Mixtral",

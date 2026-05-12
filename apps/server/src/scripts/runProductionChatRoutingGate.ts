@@ -161,6 +161,13 @@ const writingExpectation: TurnExpectation = {
   maxLatencyMs: 70000
 };
 
+const stableFactExpectation: TurnExpectation = {
+  provider: "ollama",
+  model: "mistral:7b",
+  budgetProfile: "stable_fact_chat",
+  maxLatencyMs: 80000
+};
+
 const codeExpectation: TurnExpectation = {
   provider: "ollama",
   model: "qwen2.5-coder:7b",
@@ -273,7 +280,7 @@ const cases: RoutingGateCase[] = [
     description: "Stable biography should use the Mistral factual writing route, not the 3B definition route.",
     routeFamily: "stable_factual_chat",
     language: "fr",
-    turns: [{ message: "Qui est Charlemagne ?", expect: writingExpectation }],
+    turns: [{ message: "Qui est Charlemagne ?", expect: stableFactExpectation }],
     expectedFinalTerms: ["Charlemagne"]
   },
   {
