@@ -107,6 +107,45 @@ test("student chat adapter routes code questions to the local code specialist", 
   assert.equal(result.specialist.pipeline.some((step) => step.includes("qwen2.5-coder:7b")), true);
 });
 
+test("student chat adapter routes general direct questions to the local primary brain", async () => {
+  let selectedModel = "";
+  const input = {
+    ...buildInput(),
+    category: "other" as const,
+    routingQuestion: "Quel est le role de Hydria Core ?",
+    userMessage: "Reponds en une phrase courte : quel est le role de Hydria Core ?",
+    question: "Reponds en une phrase courte : quel est le role de Hydria Core ?",
+    runtimeMode: "direct" as const,
+    requiresExternalGrounding: false
+  };
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "phi3:mini";
+    },
+    async testPrompt(_prompt, _system, options) {
+      selectedModel = options?.modelName ?? "";
+      return {
+        provider: "ollama",
+        model: selectedModel,
+        response: JSON.stringify({
+          modelRole: "student",
+          answer: "Hydria Core orchestre le raisonnement, les outils et les modeles locaux.",
+          key_points: ["Routage general"],
+          assumptions: [],
+          confidence: 88
+        }),
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer(input);
+
+  assert.equal(selectedModel, "qwen2.5:14b");
+  assert.equal(result.specialist.role, "primary_brain");
+  assert.match(result.specialist.routingReason, /General direct question/);
+});
+
 test("student chat adapter routes strategic decisions to the local deep reasoner", async () => {
   let selectedModel = "";
   const state = createInitialState();

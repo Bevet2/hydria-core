@@ -192,27 +192,27 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
     !input.requiresExternalGrounding
   ) {
     return {
-      capabilityId: "mistral-mixtral-business",
-      displayName: "Mistral/Mixtral",
-      modelName: MISTRAL_BUSINESS,
-      specialistRole: "writing_business",
-      routingReason: "Writing, business, or lightweight general-answer route.",
-      pipeline: [...basePipeline, `writing_business:${MISTRAL_BUSINESS}`],
-      fallbackModelNames: buildFallbacks(MISTRAL_BUSINESS, "writing_business"),
-      timeoutMs: env.STUDENT_CHAT_LOCAL_TIMEOUT_MS
+      capabilityId: "qwen-14b-instruct-main",
+      displayName: "Qwen 14B Instruct",
+      modelName: QWEN_MAIN,
+      specialistRole: "primary_brain",
+      routingReason: "General direct question routed to the local primary brain.",
+      pipeline: [...basePipeline, `primary_brain:${QWEN_MAIN}`],
+      fallbackModelNames: buildFallbacks(QWEN_MAIN, "primary_brain"),
+      timeoutMs: longTimeoutMs
     };
   }
 
   if (input.category === "other" && input.requiresExternalGrounding) {
     return {
-      capabilityId: "mistral-mixtral-business",
-      displayName: "Mistral/Mixtral",
-      modelName: MISTRAL_BUSINESS,
-      specialistRole: "writing_business",
-      routingReason: "Stable factual/general question routed to the lightweight local answer specialist.",
-      pipeline: [...basePipeline, `writing_business:${MISTRAL_BUSINESS}`],
-      fallbackModelNames: buildFallbacks(MISTRAL_BUSINESS, "writing_business"),
-      timeoutMs: env.STUDENT_CHAT_LOCAL_TIMEOUT_MS
+      capabilityId: "qwen-14b-instruct-main",
+      displayName: "Qwen 14B Instruct",
+      modelName: QWEN_MAIN,
+      specialistRole: "primary_brain",
+      routingReason: "Stable factual/general question routed to the local primary brain.",
+      pipeline: [...basePipeline, `primary_brain:${QWEN_MAIN}`],
+      fallbackModelNames: buildFallbacks(QWEN_MAIN, "primary_brain"),
+      timeoutMs: longTimeoutMs
     };
   }
 
