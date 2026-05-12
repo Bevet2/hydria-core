@@ -31,7 +31,7 @@ export type ChatMessage = {
 export type ChatRuntimeMode = "direct" | "conversation";
 
 export type ChatGenerationMetadata = {
-  provider: "ollama" | "fallback";
+  provider: "ollama" | "fallback" | "tool";
   model: string;
   specialist?: {
     capabilityId: string;

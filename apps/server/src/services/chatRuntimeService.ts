@@ -1095,6 +1095,93 @@ function buildUserFactAcknowledgementAnswer(args: {
   };
 }
 
+function extractCalculatorResult(facts: string[], summaries: string[]) {
+  const combined = [...facts, ...summaries].join("\n");
+  const match = combined.match(/(?:computed result|calculator result)\s*:\s*(.+?)\s*=\s*([^\n.]+)\.?/i);
+  if (match?.[1] && match[2]) {
+    return {
+      expression: match[1].trim(),
+      result: match[2].trim()
+    };
+  }
+
+  const looseMatch = combined.match(/=\s*([0-9][0-9\s.,-]*)\.?$/m);
+  return looseMatch?.[1]
+    ? {
+        expression: "",
+        result: looseMatch[1].trim()
+      }
+    : null;
+}
+
+function buildDeterministicVerifiedToolDraft(args: {
+  tooling: ChatToolMetadata;
+  category: QuestionCategory;
+  language: ConversationState["language"];
+  routingQuestion: string;
+}): ChatDraft | null {
+  if (!args.tooling.used || args.tooling.routing.toolType !== "calculator") {
+    return null;
+  }
+
+  const calculation = extractCalculatorResult(args.tooling.verifiedFacts, args.tooling.summary);
+  if (!calculation?.result) {
+    return null;
+  }
+
+  const isEnglish = args.language === "en";
+  const answerText = calculation.expression
+    ? isEnglish
+      ? `The result of ${calculation.expression} is ${calculation.result}.`
+      : `Le resultat de ${calculation.expression} est ${calculation.result}.`
+    : isEnglish
+      ? `The result is ${calculation.result}.`
+      : `Le resultat est ${calculation.result}.`;
+  const answer: StudentAnswer = {
+    modelRole: "student",
+    answer: answerText,
+    key_points: isEnglish ? ["Verified calculation"] : ["Calcul verifie"],
+    assumptions: [],
+    confidence: 100
+  };
+
+  return {
+    answer,
+    category: args.category,
+    routingQuestion: args.routingQuestion,
+    generation: {
+      answer,
+      usedRetry: false,
+      provider: "tool",
+      model: "calculator",
+      specialist: {
+        capabilityId: "phi-mini-router",
+        role: "fast_router",
+        displayName: "Verified tool answer",
+        routingReason: "Calculator returned an exact verified result; no model call was needed.",
+        pipeline: ["tool_routing:calculator", "deterministic_answer"]
+      },
+      raw: JSON.stringify(answer),
+      validationIssues: [],
+      runtimeBudget: {
+        profile: "fast_tool",
+        label: "Deterministic verified-tool answer",
+        reason: "Calculator returned an exact verified result; no model call was needed.",
+        timeoutMs: 0,
+        maxLatencyMs: 0,
+        maxOutputTokens: 0,
+        maxConcurrent: 1,
+        fallbackDepth: 0,
+        concurrencyKey: "deterministic_tool_answer"
+      },
+      queueMs: 0,
+      budgetExceeded: false,
+      latencyMs: 0,
+      attempts: []
+    }
+  };
+}
+
 function buildChatOrchestrationTrace(args: {
   runtimeMode: ChatRuntimeMode;
   category: QuestionCategory;
@@ -1115,7 +1202,8 @@ function buildChatOrchestrationTrace(args: {
         ? "passed"
         : "skipped";
   const modelStatus =
-    args.generation.provider === "fallback" || args.generation.validationIssues.length > 0
+    (args.generation.provider === "fallback" || args.generation.validationIssues.length > 0) &&
+    args.generation.provider !== "tool"
       ? "warning"
       : "passed";
   const qualityStatus = args.conversationQuality.passed ? "passed" : "warning";
@@ -1277,16 +1365,23 @@ export class ChatRuntimeService {
       ? "conversation"
       : "direct";
 
-    let draft = await this.buildDraft({
-      userMessage: args.message,
-      session,
-      runtimeMode,
-      category,
-      activeConstraintCapsule,
-      answerPolicy,
-      routingQuestion,
-      tooling
-    });
+    let draft =
+      buildDeterministicVerifiedToolDraft({
+        tooling,
+        category,
+        language: conversationState.language,
+        routingQuestion
+      }) ??
+      (await this.buildDraft({
+        userMessage: args.message,
+        session,
+        runtimeMode,
+        category,
+        activeConstraintCapsule,
+        answerPolicy,
+        routingQuestion,
+        tooling
+      }));
     let conversationQuality = this.analyzeQuality({
       runtimeMode,
       conversationState,
@@ -1301,7 +1396,7 @@ export class ChatRuntimeService {
     let usedRetry = draft.generation.usedRetry;
 
     if (
-      draft.generation.provider !== "fallback" &&
+      draft.generation.provider === "ollama" &&
       needsResolvedCorrectionTaskRetry({
         newUserMessage: args.message,
         routingQuestion: draft.routingQuestion,
@@ -1347,7 +1442,7 @@ export class ChatRuntimeService {
       }
     }
 
-    if (draft.generation.provider !== "fallback" && shouldRepairConversationQuality(conversationQuality)) {
+    if (draft.generation.provider === "ollama" && shouldRepairConversationQuality(conversationQuality)) {
       const repairedDraft = await this.buildDraft({
         userMessage: args.message,
         session,
@@ -1523,32 +1618,34 @@ export class ChatRuntimeService {
       usedRetry,
       durationMs
     });
-    await this.modelRuntimeTelemetryService?.safeRecordEvent({
-      scope: "public_chat",
-      status: draft.generation.provider === "fallback" ? "fallback" : "success",
-      provider: draft.generation.provider,
-      model: draft.generation.model,
-      capabilityId: draft.generation.specialist.capabilityId,
-      specialistRole: draft.generation.specialist.role,
-      category: draft.category,
-      runtimeMode,
-      durationMs,
-      retryUsed: usedRetry || draft.generation.usedRetry,
-      attemptCount: draft.generation.attempts?.length ?? (usedRetry ? 2 : 1),
-      staticFallbackUsed: draft.generation.provider === "fallback",
-      toolUsed: tooling.used,
-      toolRequired: tooling.routing.toolRequired,
-      qualityPassed: conversationQuality.passed,
-      budgetProfile: draft.generation.runtimeBudget?.profile ?? null,
-      timeoutMs: draft.generation.runtimeBudget?.timeoutMs ?? null,
-      budgetExceeded:
-        draft.generation.budgetExceeded ??
-        (draft.generation.runtimeBudget ? durationMs > draft.generation.runtimeBudget.maxLatencyMs : false),
-      issues: [
-        ...conversationQuality.issues,
-        ...draft.generation.validationIssues
-      ].slice(0, 12)
-    });
+    if (draft.generation.provider !== "tool") {
+      await this.modelRuntimeTelemetryService?.safeRecordEvent({
+        scope: "public_chat",
+        status: draft.generation.provider === "fallback" ? "fallback" : "success",
+        provider: draft.generation.provider,
+        model: draft.generation.model,
+        capabilityId: draft.generation.specialist.capabilityId,
+        specialistRole: draft.generation.specialist.role,
+        category: draft.category,
+        runtimeMode,
+        durationMs,
+        retryUsed: usedRetry || draft.generation.usedRetry,
+        attemptCount: draft.generation.attempts?.length ?? (usedRetry ? 2 : 1),
+        staticFallbackUsed: draft.generation.provider === "fallback",
+        toolUsed: tooling.used,
+        toolRequired: tooling.routing.toolRequired,
+        qualityPassed: conversationQuality.passed,
+        budgetProfile: draft.generation.runtimeBudget?.profile ?? null,
+        timeoutMs: draft.generation.runtimeBudget?.timeoutMs ?? null,
+        budgetExceeded:
+          draft.generation.budgetExceeded ??
+          (draft.generation.runtimeBudget ? durationMs > draft.generation.runtimeBudget.maxLatencyMs : false),
+        issues: [
+          ...conversationQuality.issues,
+          ...draft.generation.validationIssues
+        ].slice(0, 12)
+      });
+    }
 
     return {
       sessionId: session.sessionId,

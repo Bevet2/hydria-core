@@ -268,6 +268,7 @@ test("chat runtime executes required local tools and injects verified facts into
 });
 
 test("chat runtime accepts concise calculator answers from verified tool results", async () => {
+  let adapterCalled = false;
   const routing = {
     ...defaultToolRoutingDecision,
     toolRequired: true,
@@ -285,6 +286,7 @@ test("chat runtime accepts concise calculator answers from verified tool results
   const service = new ChatRuntimeService(
     {
       async answer() {
+        adapterCalled = true;
         return buildAdapterResult("Le resultat de 12 multiplie par 37 est 444.");
       }
     },
@@ -310,6 +312,9 @@ test("chat runtime accepts concise calculator answers from verified tool results
   const response = await service.sendMessage({ message: "Calcule 12 * 37." });
 
   assert.equal(response.tooling.used, true);
+  assert.equal(adapterCalled, false);
+  assert.equal(response.generation.provider, "tool");
+  assert.equal(response.generation.model, "calculator");
   assert.equal(response.conversationQuality.passed, true);
   assert.equal(response.conversationQuality.issues.includes("off_topic_direct_answer"), false);
   assert.equal(

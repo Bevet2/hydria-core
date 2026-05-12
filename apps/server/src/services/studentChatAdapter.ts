@@ -37,7 +37,7 @@ export type StudentChatAdapterInput = {
 export type StudentChatAdapterResult = {
   answer: StudentAnswer;
   usedRetry: boolean;
-  provider: "ollama" | "fallback";
+  provider: "ollama" | "fallback" | "tool";
   model: string;
   specialist: {
     capabilityId: StudentChatModelRoute["capabilityId"];
