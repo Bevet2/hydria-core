@@ -6,6 +6,7 @@ import {
   createInitialState
 } from "../services/context/contextStateTracker.js";
 import { decideMultiTurnAnswerPolicy } from "../services/context/multiTurnAnswerPolicy.js";
+import { defaultChatToolMetadata } from "../types/chat.js";
 
 function buildInput(): StudentChatAdapterInput {
   const state = createInitialState();
@@ -27,7 +28,8 @@ function buildInput(): StudentChatAdapterInput {
     recentMessages: [],
     activeConstraintCapsule: capsule,
     answerPolicy: policy,
-    requiresExternalGrounding: true
+    requiresExternalGrounding: true,
+    tooling: defaultChatToolMetadata
   };
 }
 
@@ -150,7 +152,8 @@ test("student chat adapter routes strategic decisions to the local deep reasoner
     recentMessages: [],
     activeConstraintCapsule: capsule,
     answerPolicy: policy,
-    requiresExternalGrounding: false
+    requiresExternalGrounding: false,
+    tooling: defaultChatToolMetadata
   });
 
   assert.equal(selectedModel, "deepseek-r1:14b");

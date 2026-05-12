@@ -62,6 +62,9 @@ export function ChatPage() {
       specialist: lastResponse?.generation.specialist?.role ?? "n/a",
       specialistName: lastResponse?.generation.specialist?.displayName ?? "n/a",
       pipeline: lastResponse?.generation.specialist?.pipeline.join(" -> ") ?? "n/a",
+      toolRoute: lastResponse?.tooling.route ?? "n/a",
+      toolType: lastResponse?.tooling.routing.toolType ?? "none",
+      toolIntent: lastResponse?.tooling.routing.intent ?? "none",
       duration: formatDuration(lastResponse?.durationMs ?? null),
       quality: issueLabel(lastResponse)
     }),
@@ -244,11 +247,38 @@ export function ChatPage() {
                 <strong>{chatMeta.specialistName}</strong>
               </div>
               <div>
+                <span>Tool</span>
+                <strong>{chatMeta.toolRoute}</strong>
+              </div>
+              <div>
+                <span>Tool type</span>
+                <strong>{chatMeta.toolType}</strong>
+              </div>
+              <div>
                 <span>Confidence</span>
                 <strong>{lastResponse?.answer.confidence ?? "n/a"}</strong>
               </div>
             </div>
             <p className="muted chat-route">{chatMeta.pipeline}</p>
+            <p className="muted chat-route">{chatMeta.toolType}/{chatMeta.toolIntent}</p>
+          </section>
+
+          <section className="panel">
+            <h2>Tools</h2>
+            <div className="chat-list">
+              <h3>Verified facts</h3>
+              {(lastResponse?.tooling.verifiedFacts ?? []).length > 0 ? (
+                lastResponse?.tooling.verifiedFacts.map((item) => <p key={item}>{item}</p>)
+              ) : (
+                <p className="muted">none</p>
+              )}
+              <h3>Summary</h3>
+              {(lastResponse?.tooling.summary ?? []).length > 0 ? (
+                lastResponse?.tooling.summary.map((item) => <p key={item}>{item}</p>)
+              ) : (
+                <p className="muted">none</p>
+              )}
+            </div>
           </section>
 
           <section className="panel">

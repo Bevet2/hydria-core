@@ -1,5 +1,5 @@
 import type { QuestionCategory } from "../types/arena.js";
-import type { ChatMessage, ChatRuntimeMode } from "../types/chat.js";
+import type { ChatMessage, ChatRuntimeMode, ChatToolMetadata } from "../types/chat.js";
 import type { StudentAnswer } from "../types/student.js";
 import { parseLooseJson } from "../utils/jsonRepair.js";
 import { logger } from "../utils/logger.js";
@@ -26,6 +26,7 @@ export type StudentChatAdapterInput = {
   answerPolicy: MultiTurnAnswerPolicyResult;
   qualityRetry?: ConversationQualityGateResult;
   requiresExternalGrounding: boolean;
+  tooling: ChatToolMetadata;
 };
 
 export type StudentChatAdapterResult = {
@@ -158,6 +159,16 @@ function expectedLanguage(capsule: ActiveConstraintCapsule) {
 }
 
 function maybeCurrentDataGuidance(input: StudentChatAdapterInput) {
+  if (input.tooling.used) {
+    return [
+      "Verified external context is available. Use it as the source of truth for current/tool-dependent facts."
+    ];
+  }
+  if (input.tooling.routing.toolRequired && input.tooling.routing.fallbackAllowed === false) {
+    return [
+      "A required external/tool result is unavailable. Do not invent the missing fact; ask for the missing input or state the verification limit briefly."
+    ];
+  }
   if (!input.requiresExternalGrounding) {
     return [
       "Stable/non-live task: answer from model knowledge."
@@ -169,8 +180,45 @@ function maybeCurrentDataGuidance(input: StudentChatAdapterInput) {
   ];
 }
 
+function formatToolContext(tooling: ChatToolMetadata) {
+  if (!tooling.routing.toolRequired && !tooling.routing.toolRecommended && tooling.route === "not_needed") {
+    return "";
+  }
+
+  const header = [
+    `route=${tooling.route}`,
+    `type=${tooling.routing.toolType}`,
+    `intent=${tooling.routing.intent}`,
+    `required=${tooling.routing.toolRequired ? "yes" : "no"}`,
+    `resultUsed=${tooling.used ? "yes" : "no"}`
+  ].join("; ");
+  const facts = tooling.verifiedFacts.slice(0, 5).map((fact) => `- ${compact(fact, 180)}`);
+  const summary = tooling.summary.slice(0, 4).map((item) => `- ${compact(item, 180)}`);
+  const sources = tooling.sources
+    .slice(0, 3)
+    .map((source) => `- ${compact(source.title || source.url || "source", 120)}${source.url ? ` (${source.url})` : ""}`);
+
+  return [
+    "Verified external context:",
+    header,
+    tooling.failureReason ? `limit=${compact(tooling.failureReason, 220)}` : "",
+    facts.length > 0 ? "Verified facts:" : "",
+    ...facts,
+    summary.length > 0 ? "Summary:" : "",
+    ...summary,
+    sources.length > 0 ? "Sources:" : "",
+    ...sources,
+    tooling.used
+      ? "Use these verified facts. Do not add fresh/current claims that are not supported by them."
+      : "No verified result is available for this route. If the answer depends on current/private data, do not guess."
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 export function buildStudentChatPrompt(input: StudentChatAdapterInput, route = selectStudentChatModelRoute(input)) {
   const recentMessages = formatRecentMessages(input.recentMessages);
+  const toolContext = formatToolContext(input.tooling);
   const retryLines = input.qualityRetry
     ? [
         "Repair signal:",
@@ -187,6 +235,7 @@ export function buildStudentChatPrompt(input: StudentChatAdapterInput, route = s
     `Local specialist pipeline: ${route.pipeline.join(" -> ")}`,
     "Use the selected specialist capability, but do not mention model routing in the answer.",
     ...maybeCurrentDataGuidance(input),
+    toolContext,
     input.runtimeMode === "conversation" ? "Active context:" : "",
     input.runtimeMode === "conversation" ? formatCompactCapsule(input.activeConstraintCapsule) : "",
     input.runtimeMode === "conversation" && recentMessages ? "Recent conversation turns:" : "",

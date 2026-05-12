@@ -17,9 +17,20 @@ import {
   type MultiTurnAnswerPolicyResult
 } from "./context/multiTurnAnswerPolicy.js";
 import type { StudentChatAdapter, StudentChatAdapterResult } from "./studentChatAdapter.js";
-import type { QuestionCategory } from "../types/arena.js";
-import type { ChatMessage, ChatMessageResponse, ChatRuntimeMode } from "../types/chat.js";
+import type { QuestionCategory, ToolRoutingDecision } from "../types/arena.js";
+import type {
+  ChatMessage,
+  ChatMessageResponse,
+  ChatRuntimeMode,
+  ChatToolMetadata
+} from "../types/chat.js";
+import { defaultChatToolMetadata } from "../types/chat.js";
 import type { StudentAnswer } from "../types/student.js";
+import {
+  LocalToolExecutionService,
+  type LocalToolExecutionResult
+} from "./tools/localToolExecutionService.js";
+import { ToolRoutingService } from "./tools/toolRoutingService.js";
 
 type ChatRuntimeSession = {
   sessionId: string;
@@ -798,6 +809,7 @@ function analyzeDirectChatQuality(args: {
   newUserMessage: string;
   recentMessages: ChatMessage[];
   answer: string;
+  toolRouting: ToolRoutingDecision;
 }): ConversationQualityGateResult {
   const issues: string[] = [];
   const penalties: string[] = [];
@@ -852,11 +864,41 @@ function analyzeDirectChatQuality(args: {
     penalties.push("answer is too short to be useful");
   }
 
+  if (args.toolRouting.toolRequired && args.toolRouting.fallbackAllowed === false && !args.toolRouting.toolResultUsed) {
+    const hasSafeLimit =
+      /\b(?:cannot verify|can't verify|could not verify|missing|need|which|quelle|quel|precise|preciser|je ne peux pas verifier|impossible de verifier|source fiable|outil)\b/i.test(
+        args.answer
+      );
+    if (!hasSafeLimit) {
+      issues.push("tool_required_but_not_used");
+      penalties.push("answer does not acknowledge that a required tool result is unavailable");
+    }
+  }
+
   return {
     passed: issues.length === 0,
     issues,
     penalties,
     recommendedAction: issues.length === 0 ? "accept" : "retry_with_context"
+  };
+}
+
+function buildFailedTooling(
+  routing: ToolRoutingDecision,
+  failureReason: string,
+  route: Extract<ChatToolMetadata["route"], "failed" | "unsupported">
+): ChatToolMetadata {
+  return {
+    route,
+    used: false,
+    routing: {
+      ...routing,
+      toolResultUsed: false
+    },
+    summary: [],
+    verifiedFacts: [],
+    sources: [],
+    failureReason
   };
 }
 
@@ -1041,7 +1083,12 @@ function buildUserFactAcknowledgementAnswer(args: {
 export class ChatRuntimeService {
   private readonly sessions = new Map<string, ChatRuntimeSession>();
 
-  constructor(private readonly studentChatAdapter: Pick<StudentChatAdapter, "answer">) {}
+  constructor(
+    private readonly studentChatAdapter: Pick<StudentChatAdapter, "answer">,
+    private readonly toolRoutingService: Pick<ToolRoutingService, "route"> = new ToolRoutingService(),
+    private readonly localToolExecutionService: Pick<LocalToolExecutionService, "tryExecute"> =
+      new LocalToolExecutionService()
+  ) {}
 
   resetSession(sessionId: string) {
     this.sessions.delete(sessionId);
@@ -1064,12 +1111,20 @@ export class ChatRuntimeService {
     );
     const activeConstraintCapsule = buildActiveConstraintCapsule(conversationState, args.message);
     const category = classifyChatTurn(previousConversationState, conversationState, args.message);
+    const routingQuestion = buildRoutingQuestionForHydria({
+      userMessage: args.message,
+      session
+    });
+    const tooling = await this.collectTooling({
+      question: routingQuestion,
+      category
+    });
     const answerPolicy = decideMultiTurnAnswerPolicy({
       conversationState,
       activeConstraintCapsule,
       newUserMessage: args.message,
       category,
-      toolRouting: null,
+      toolRouting: tooling.routing,
       lastAssistantAnswer: session.lastAssistantAnswer
     });
     const runtimeMode: ChatRuntimeMode = shouldUseConversationRuntime({
@@ -1090,7 +1145,9 @@ export class ChatRuntimeService {
       runtimeMode,
       category,
       activeConstraintCapsule,
-      answerPolicy
+      answerPolicy,
+      routingQuestion,
+      tooling
     });
     let conversationQuality = this.analyzeQuality({
       runtimeMode,
@@ -1100,7 +1157,8 @@ export class ChatRuntimeService {
       newUserMessage: args.message,
       answer: draft.answer.answer,
       lastAssistantAnswer: session.lastAssistantAnswer,
-      recentMessages: session.messages
+      recentMessages: session.messages,
+      toolRouting: tooling.routing
     });
     let usedRetry = draft.generation.usedRetry;
 
@@ -1118,7 +1176,9 @@ export class ChatRuntimeService {
         runtimeMode,
         category,
         activeConstraintCapsule,
-        answerPolicy
+        answerPolicy,
+        routingQuestion: draft.routingQuestion,
+        tooling
       });
       const resolvedTaskQuality = this.analyzeQuality({
         runtimeMode,
@@ -1128,7 +1188,8 @@ export class ChatRuntimeService {
         newUserMessage: args.message,
         answer: resolvedTaskDraft.answer.answer,
         lastAssistantAnswer: session.lastAssistantAnswer,
-        recentMessages: session.messages
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
       });
 
       if (
@@ -1156,6 +1217,8 @@ export class ChatRuntimeService {
         category,
         activeConstraintCapsule,
         answerPolicy,
+        routingQuestion,
+        tooling,
         qualityRetry: conversationQuality
       });
       const repairedQuality = this.analyzeQuality({
@@ -1166,7 +1229,8 @@ export class ChatRuntimeService {
         newUserMessage: args.message,
         answer: repairedDraft.answer.answer,
         lastAssistantAnswer: session.lastAssistantAnswer,
-        recentMessages: session.messages
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
       });
 
       if (repairedQuality.passed || qualityScore(repairedQuality) <= qualityScore(conversationQuality)) {
@@ -1199,7 +1263,8 @@ export class ChatRuntimeService {
         newUserMessage: args.message,
         answer: acknowledgedAnswer.answer,
         lastAssistantAnswer: session.lastAssistantAnswer,
-        recentMessages: session.messages
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
       });
 
       if (acknowledgedQuality.passed || qualityScore(acknowledgedQuality) < qualityScore(conversationQuality)) {
@@ -1221,7 +1286,8 @@ export class ChatRuntimeService {
         newUserMessage: args.message,
         answer: userFactAcknowledgement.answer,
         lastAssistantAnswer: session.lastAssistantAnswer,
-        recentMessages: session.messages
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
       });
       if (acknowledgementQuality.passed || qualityScore(acknowledgementQuality) <= qualityScore(conversationQuality)) {
         finalAnswer = userFactAcknowledgement;
@@ -1242,7 +1308,8 @@ export class ChatRuntimeService {
         newUserMessage: args.message,
         answer: memoryRecallAnswer.answer,
         lastAssistantAnswer: session.lastAssistantAnswer,
-        recentMessages: session.messages
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
       });
       if (memoryRecallQuality.passed || qualityScore(memoryRecallQuality) < qualityScore(conversationQuality)) {
         finalAnswer = memoryRecallAnswer;
@@ -1267,7 +1334,8 @@ export class ChatRuntimeService {
         newUserMessage: args.message,
         answer: finalAnswer.answer,
         lastAssistantAnswer: session.lastAssistantAnswer,
-        recentMessages: session.messages
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
       });
     }
 
@@ -1286,7 +1354,8 @@ export class ChatRuntimeService {
         newUserMessage: args.message,
         answer: finalAnswer.answer,
         lastAssistantAnswer: session.lastAssistantAnswer,
-        recentMessages: session.messages
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
       });
     }
 
@@ -1322,6 +1391,7 @@ export class ChatRuntimeService {
         usedStaticFallback: draft.generation.provider === "fallback",
         validationIssues: draft.generation.validationIssues
       },
+      tooling,
       usedRetry,
       durationMs: Date.now() - startedAt
     };
@@ -1334,23 +1404,21 @@ export class ChatRuntimeService {
     category: QuestionCategory;
     activeConstraintCapsule: ActiveConstraintCapsule;
     answerPolicy: MultiTurnAnswerPolicyResult;
+    routingQuestion: string;
+    tooling: ChatToolMetadata;
     qualityRetry?: ConversationQualityGateResult;
   }): Promise<ChatDraft> {
-    const routingQuestion = buildRoutingQuestionForHydria({
-      userMessage: args.userMessage,
-      session: args.session
-    });
     const question = buildQuestionForHydria({
       ...args,
-      routingQuestion
+      routingQuestion: args.routingQuestion
     });
     const shouldUseExternalGrounding = shouldUseExternalGroundingForChat({
       userMessage: args.userMessage,
-      routingQuestion
-    });
+      routingQuestion: args.routingQuestion
+    }) || args.tooling.routing.toolRequired || args.tooling.routing.toolRecommended;
     const generation = await this.studentChatAdapter.answer({
       question,
-      routingQuestion,
+      routingQuestion: args.routingQuestion,
       userMessage: args.userMessage,
       runtimeMode: args.runtimeMode,
       category: args.category,
@@ -1358,13 +1426,75 @@ export class ChatRuntimeService {
       activeConstraintCapsule: args.activeConstraintCapsule,
       answerPolicy: args.answerPolicy,
       qualityRetry: args.qualityRetry,
-      requiresExternalGrounding: shouldUseExternalGrounding
+      requiresExternalGrounding: shouldUseExternalGrounding,
+      tooling: args.tooling
     });
     return {
       answer: generation.answer,
       category: args.category,
       generation,
-      routingQuestion
+      routingQuestion: args.routingQuestion
+    };
+  }
+
+  private async collectTooling(args: {
+    question: string;
+    category: QuestionCategory;
+  }): Promise<ChatToolMetadata> {
+    const routing = this.toolRoutingService.route({
+      question: args.question,
+      category: args.category
+    });
+
+    if (!routing.toolRequired && !routing.toolRecommended) {
+      return {
+        ...defaultChatToolMetadata,
+        routing
+      };
+    }
+
+    let result: LocalToolExecutionResult | null = null;
+    try {
+      result = await this.localToolExecutionService.tryExecute(routing);
+    } catch (error) {
+      return buildFailedTooling(
+        routing,
+        error instanceof Error ? error.message : String(error),
+        "failed"
+      );
+    }
+
+    if (result) {
+      return {
+        route: "used",
+        used: true,
+        routing: {
+          ...routing,
+          toolResultUsed: true
+        },
+        summary: result.summary,
+        verifiedFacts: result.verifiedFacts,
+        sources: result.sources ?? [],
+        failureReason: null
+      };
+    }
+
+    if (routing.toolRequired) {
+      return buildFailedTooling(
+        routing,
+        `Required tool path ${routing.toolType}/${routing.intent} did not return a structured result.`,
+        "unsupported"
+      );
+    }
+
+    return {
+      route: "recommended_not_executed",
+      used: false,
+      routing,
+      summary: [],
+      verifiedFacts: [],
+      sources: [],
+      failureReason: null
     };
   }
 
@@ -1377,6 +1507,7 @@ export class ChatRuntimeService {
     answer: string;
     lastAssistantAnswer: string;
     recentMessages: ChatMessage[];
+    toolRouting: ToolRoutingDecision;
   }) {
     if (args.runtimeMode === "conversation") {
       return analyzeConversationQuality({
@@ -1386,14 +1517,15 @@ export class ChatRuntimeService {
         newUserMessage: args.newUserMessage,
         answer: args.answer,
         lastAssistantAnswer: args.lastAssistantAnswer,
-        toolRouting: null
+        toolRouting: args.toolRouting
       });
     }
 
     return analyzeDirectChatQuality({
       newUserMessage: args.newUserMessage,
       recentMessages: args.recentMessages,
-      answer: args.answer
+      answer: args.answer,
+      toolRouting: args.toolRouting
     });
   }
 

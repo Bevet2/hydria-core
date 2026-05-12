@@ -130,7 +130,7 @@ It stores:
 
 The web chat uses `ChatRuntimeService` plus a dedicated `StudentChatAdapter`.
 
-This path is still based on the local student identity and `StudentAnswer` schema, but it does not run the full Student Lab preview/analyze/research pipeline. The chat runtime prepares the current message with conversation state, `ActiveConstraintCapsule`, answer policy, recent turns, and resolved follow-up task, then routes to a local specialist model. Runtime chat is local open-weight only; OpenRouter is reserved for controlled training/evaluation jobs and is not part of the public runtime path.
+This path is still based on the local student identity and `StudentAnswer` schema, but it does not run the full Student Lab preview/analyze/research pipeline. The chat runtime prepares the current message with conversation state, `ActiveConstraintCapsule`, answer policy, recent turns, resolved follow-up task, and governed tool context, then routes to a local specialist model. Runtime chat is local open-weight only; OpenRouter is reserved for controlled training/evaluation jobs and is not part of the public runtime path.
 
 Local chat specialist routing:
 
@@ -139,6 +139,13 @@ Local chat specialist routing:
 - `qwen2.5-coder:7b`: code and debug specialist
 - `deepseek-r1:14b`: deep reasoning / conflict arbitration
 - `mistral:7b`: writing, business, and lightweight general answers
+
+Chat tool flow:
+
+- `ToolRoutingService` decides whether a governed tool is required or recommended.
+- `LocalToolExecutionService` executes deterministic tools for live/current facts, time/date, weather, finance, calculator/conversions, release/status lookups, and repo structure.
+- Hydria injects only verified facts, summaries, and sources into the specialist model prompt.
+- If a required tool result is unavailable, the model is instructed to ask for missing input or state the verification limit instead of inventing.
 
 Relevant runtime knobs:
 

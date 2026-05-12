@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { ChatRuntimeService } from "../services/chatRuntimeService.js";
 import type { StudentChatAdapterInput, StudentChatAdapterResult } from "../services/studentChatAdapter.js";
+import { defaultToolRoutingDecision } from "../types/arena.js";
 import type { StudentAnswer } from "../types/student.js";
 
 function buildAnswer(answer: string): StudentAnswer {
@@ -196,4 +197,58 @@ test("chat runtime resolves possessive biography follow-ups to the prior subject
   assert.match(third.answer.answer, /^La biographie de Charlemagne/i);
   assert.doesNotMatch(third.answer.answer, /cannot verify|tool-dependent|reliable source/i);
   assert.equal(third.conversationQuality.passed, true);
+});
+
+test("chat runtime executes required local tools and injects verified facts into the adapter", async () => {
+  const calls: StudentChatAdapterInput[] = [];
+  const routing = {
+    ...defaultToolRoutingDecision,
+    toolRequired: true,
+    toolRecommended: true,
+    toolType: "time" as const,
+    intent: "current_time",
+    confidence: 0.96,
+    fallbackAllowed: false,
+    reason: "Current time requires a time-aware tool path.",
+    extractedArgs: {
+      location: "Paris",
+      language: "fr"
+    }
+  };
+  const service = new ChatRuntimeService(
+    {
+      async answer(input) {
+        calls.push(input);
+        return buildAdapterResult("Il est 10:30 a Paris selon le contexte verifie.");
+      }
+    },
+    {
+      route() {
+        return routing;
+      }
+    },
+    {
+      async tryExecute(receivedRouting) {
+        assert.equal(receivedRouting.intent, "current_time");
+        return {
+          toolType: "time",
+          intent: "current_time",
+          summary: ["Time tool result: Paris -> 10:30"],
+          verifiedFacts: ["Current time in Paris: 10:30."],
+          confidenceScore: 1,
+          resultLabel: "Paris -> 10:30"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "Quelle heure est-il a Paris ?" });
+
+  assert.equal(calls[0]?.tooling.used, true);
+  assert.equal(calls[0]?.tooling.routing.toolResultUsed, true);
+  assert.equal(calls[0]?.requiresExternalGrounding, true);
+  assert.deepEqual(calls[0]?.tooling.verifiedFacts, ["Current time in Paris: 10:30."]);
+  assert.equal(response.tooling.used, true);
+  assert.equal(response.tooling.routing.toolType, "time");
+  assert.equal(response.tooling.routing.toolResultUsed, true);
 });

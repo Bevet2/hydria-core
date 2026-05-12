@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { QuestionCategory } from "./arena.js";
+import { defaultToolRoutingDecision, type QuestionCategory, type ResearchToolLog, type ToolRoutingDecision } from "./arena.js";
 import type { StudentAnswer } from "./student.js";
 import type { ConversationQualityGateResult } from "../services/context/conversationQualityGate.js";
 import type {
@@ -43,6 +43,33 @@ export type ChatGenerationMetadata = {
   validationIssues: string[];
 };
 
+export type ChatToolRoute =
+  | "not_needed"
+  | "used"
+  | "recommended_not_executed"
+  | "failed"
+  | "unsupported";
+
+export type ChatToolMetadata = {
+  route: ChatToolRoute;
+  used: boolean;
+  routing: ToolRoutingDecision;
+  summary: string[];
+  verifiedFacts: string[];
+  sources: ResearchToolLog["sources"];
+  failureReason: string | null;
+};
+
+export const defaultChatToolMetadata: ChatToolMetadata = {
+  route: "not_needed",
+  used: false,
+  routing: { ...defaultToolRoutingDecision },
+  summary: [],
+  verifiedFacts: [],
+  sources: [],
+  failureReason: null
+};
+
 export type ChatMessageResponse = {
   sessionId: string;
   createdAt: string;
@@ -56,6 +83,7 @@ export type ChatMessageResponse = {
   answerPolicy: MultiTurnAnswerPolicyResult;
   conversationQuality: ConversationQualityGateResult;
   generation: ChatGenerationMetadata;
+  tooling: ChatToolMetadata;
   usedRetry: boolean;
   durationMs: number;
 };
