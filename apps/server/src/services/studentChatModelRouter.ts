@@ -97,6 +97,19 @@ function containsWritingSignal(text: string, category: QuestionCategory) {
   );
 }
 
+function containsBrevitySignal(text: string, input: StudentChatModelRoutingInput) {
+  if (
+    /\b(?:phrase courte|reponse courte|r[eé]ponds? court|moins de\s+\d+\s+mots?|short answer|briefly|less than\s+\d+\s+words?|under\s+\d+\s+words?)\b/.test(
+      text
+    )
+  ) {
+    return true;
+  }
+  return input.activeConstraintCapsule.topConstraints.some((constraint) =>
+    /\b(?:moins de\s+\d+\s+mots?|less than\s+\d+\s+words?|short|court|courte)\b/i.test(constraint)
+  );
+}
+
 function containsStableKnowledgeSignal(text: string) {
   return /\b(?:who is|who was|what is|what was|qui est|qu est ce|quest ce|c est quoi|explique|explain|definition|define|biographie|biography|histoire|history|known for|connu pour|renaissance|empire|emperor|empereur)\b/.test(
     text
@@ -273,6 +286,22 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
       routingReason: reason,
       pipeline: [...basePipeline, `deep_reasoner:${DEEPSEEK_REASONER}`, `synthesis_fallback:${QWEN_MAIN}`],
       fallbackModelNames: buildFallbacks(DEEPSEEK_REASONER, "deep_reasoner"),
+      timeoutMs: budget.timeoutMs,
+      runtimeBudget: budget
+    };
+  }
+
+  if (containsBrevitySignal(text, input)) {
+    const reason = "Explicit short-answer constraint; use the lighter writing specialist instead of the 14B primary brain.";
+    const budget = buildRuntimeBudget("writing_chat", reason);
+    return {
+      capabilityId: "mistral-mixtral-business",
+      displayName: "Mistral/Mixtral",
+      modelName: MISTRAL_BUSINESS,
+      specialistRole: "writing_business",
+      routingReason: reason,
+      pipeline: [...basePipeline, `concise_answer:${MISTRAL_BUSINESS}`],
+      fallbackModelNames: buildFallbacks(MISTRAL_BUSINESS, "writing_business"),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
     };
