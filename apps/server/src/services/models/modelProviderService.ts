@@ -5,7 +5,8 @@ import type {
 import {
   ModelBudgetPolicyService,
   type ModelBudgetPolicyInput,
-  type ModelBudgetPolicyDecision
+  type ModelBudgetPolicyDecision,
+  modelCostRank
 } from "./modelBudgetPolicy.js";
 import {
   ModelCapabilityService,
@@ -25,6 +26,13 @@ export type ModelProviderTarget = {
   provider: ModelProviderKind;
   modelId: string;
   endpoint: string;
+  capabilityId: string;
+  displayName: string;
+  estimatedCostUnits: number;
+  latencyTier: ModelCapabilityManifest["latencyTier"];
+  costTier: ModelCapabilityManifest["costTier"];
+  qualityTier: ModelCapabilityManifest["qualityTier"];
+  local: boolean;
 };
 
 export type ModelExecutionPlanInput = ModelSelectionInput & {
@@ -37,7 +45,16 @@ export type ModelExecutionPlan = {
   selection: ModelSelectionResult;
   budget: ModelBudgetPolicyDecision;
   target: ModelProviderTarget | null;
+  targetCandidates: ModelProviderTarget[];
   executable: boolean;
+  orchestration: {
+    version: "economic_multi_provider_v2";
+    costPolicy: ModelBudgetPolicyDecision["effectiveCostPolicy"];
+    criticality: ModelBudgetPolicyDecision["criticality"];
+    fallbackDepth: number;
+    primaryEstimatedCostUnits: number | null;
+    candidateCount: number;
+  };
   reasons: string[];
   warnings: string[];
 };
@@ -53,7 +70,16 @@ export type ModelCompletionResult = {
   provider: ModelProviderKind;
   modelId: string;
   latencyMs: number;
+  attempts: ModelProviderAttempt[];
   plan: ModelExecutionPlan;
+};
+
+export type ModelProviderAttempt = {
+  provider: ModelProviderKind;
+  modelId: string;
+  status: "success" | "failed";
+  latencyMs: number;
+  error?: string;
 };
 
 type FetchLike = typeof fetch;
@@ -129,6 +155,36 @@ function isCloudProvider(provider: ModelProviderKind) {
   return provider === "openrouter" || provider === "openai_compatible";
 }
 
+function isLocalProvider(provider: ModelProviderKind) {
+  return provider === "ollama" || provider === "vllm" || provider === "embedding_runtime";
+}
+
+const providerCostMultiplier: Record<ModelProviderKind, number> = {
+  ollama: 0.2,
+  embedding_runtime: 0.2,
+  vllm: 1,
+  openai_compatible: 3,
+  openrouter: 4
+};
+
+const latencyRank: Record<ModelCapabilityManifest["latencyTier"], number> = {
+  fast: 1,
+  balanced: 2,
+  slow: 3
+};
+
+const qualityRank: Record<ModelCapabilityManifest["qualityTier"], number> = {
+  routing: 1,
+  standard: 2,
+  strong: 3,
+  deep: 4
+};
+
+function estimateCostUnits(model: ModelCapabilityManifest, provider: ModelProviderKind, maxTokens: number) {
+  const tokenFactor = Math.max(1, Math.ceil(maxTokens / 512));
+  return Number((modelCostRank[model.costTier] * providerCostMultiplier[provider] * tokenFactor).toFixed(2));
+}
+
 export class ModelProviderService {
   private readonly capabilityService: ModelCapabilityService;
   private readonly budgetPolicyService: ModelBudgetPolicyService;
@@ -187,29 +243,42 @@ export class ModelProviderService {
         preferredProvider: input.preferredProvider ?? input.budget?.preferredProvider ?? null
       }
     });
-    const target = budget.selectedModel
-      ? this.resolveProviderTarget(budget.selectedModel, {
+    const targetCandidates = budget.selectedModel
+      ? this.resolveProviderTargets([budget.selectedModel, ...selection.fallbacks], {
           preferredProvider: input.preferredProvider ?? input.budget?.preferredProvider ?? null,
           privacyMode: input.privacyMode,
-          allowCloud: budget.effectiveAllowCloud
+          budget
         })
-      : null;
+      : [];
+    const target = targetCandidates[0] ?? null;
     const warnings = [
       ...selection.warnings,
       ...budget.warnings,
-      ...(!target && budget.allowed ? ["No configured provider target is available for the selected model."] : [])
+      ...(!target && budget.allowed ? ["No configured provider target is available within the economic policy."] : [])
     ];
     const reasons = [
       selection.reason,
       ...budget.reasons,
-      ...(target ? [`Provider target resolved to ${target.provider}:${target.modelId}.`] : [])
+      ...(target ? [`Economic router v2 selected ${target.provider}:${target.modelId} as primary target.`] : []),
+      ...(targetCandidates.length > 1
+        ? [`Fallback chain has ${targetCandidates.length - 1} candidate(s) within budget.`]
+        : [])
     ];
 
     return {
       selection,
       budget,
       target,
+      targetCandidates,
       executable: budget.allowed && Boolean(target),
+      orchestration: {
+        version: "economic_multi_provider_v2",
+        costPolicy: budget.effectiveCostPolicy,
+        criticality: budget.criticality,
+        fallbackDepth: budget.fallbackDepth,
+        primaryEstimatedCostUnits: target?.estimatedCostUnits ?? null,
+        candidateCount: targetCandidates.length
+      },
       reasons,
       warnings
     };
@@ -225,50 +294,163 @@ export class ModelProviderService {
     }
 
     const startedAt = Date.now();
-    const content =
-      plan.target.provider === "ollama"
-        ? await this.completeOllama(plan.target, input, plan.budget.adjustedMaxTokens)
-        : await this.completeOpenAiCompatible(plan.target, input, plan.budget.adjustedMaxTokens);
+    const attempts: ModelProviderAttempt[] = [];
+    const candidates = plan.targetCandidates.length > 0 ? plan.targetCandidates : [plan.target];
+    for (const target of candidates) {
+      if (!target) {
+        continue;
+      }
 
-    return {
-      content,
-      provider: plan.target.provider,
-      modelId: plan.target.modelId,
-      latencyMs: Date.now() - startedAt,
+      const attemptStartedAt = Date.now();
+      try {
+        const content =
+          target.provider === "ollama"
+            ? await this.completeOllama(target, input, plan.budget.adjustedMaxTokens)
+            : await this.completeOpenAiCompatible(target, input, plan.budget.adjustedMaxTokens);
+        attempts.push({
+          provider: target.provider,
+          modelId: target.modelId,
+          status: "success",
+          latencyMs: Date.now() - attemptStartedAt
+        });
+
+        return {
+          content,
+          provider: target.provider,
+          modelId: target.modelId,
+          latencyMs: Date.now() - startedAt,
+          attempts,
+          plan
+        };
+      } catch (error) {
+        attempts.push({
+          provider: target.provider,
+          modelId: target.modelId,
+          status: "failed",
+          latencyMs: Date.now() - attemptStartedAt,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
+
+    throw new ModelExecutionBlockedError(
+      attempts.at(-1)?.error ?? "All configured provider targets failed.",
       plan
-    };
+    );
   }
 
-  private resolveProviderTarget(
-    model: ModelCapabilityManifest,
+  private resolveProviderTargets(
+    models: readonly ModelCapabilityManifest[],
     args: {
       preferredProvider?: ModelProviderKind | null;
       privacyMode?: string | null;
-      allowCloud?: boolean;
+      budget: ModelBudgetPolicyDecision;
     }
-  ): ModelProviderTarget | null {
-    for (const provider of providerPriority(args)) {
-      if (!model.providerKinds.includes(provider)) {
+  ): ModelProviderTarget[] {
+    const candidates: Array<ModelProviderTarget & { preferred: boolean }> = [];
+    const seen = new Set<string>();
+    for (const model of models) {
+      if (!this.isAllowedByEconomicPolicy(model, args.budget)) {
         continue;
       }
-      if (!args.allowCloud && isCloudProvider(provider)) {
-        continue;
-      }
+      for (const provider of providerPriority({
+        preferredProvider: args.preferredProvider,
+        privacyMode: args.privacyMode,
+        allowCloud: args.budget.effectiveAllowCloud
+      })) {
+        if (!model.providerKinds.includes(provider)) {
+          continue;
+        }
+        if (!args.budget.effectiveAllowCloud && isCloudProvider(provider)) {
+          continue;
+        }
 
-      const modelId = model.providerModelIds[provider];
-      if (!modelId) {
-        continue;
-      }
+        const modelId = model.providerModelIds[provider];
+        if (!modelId) {
+          continue;
+        }
 
-      const endpoint = this.endpointForProvider(provider);
-      if (!endpoint) {
-        continue;
-      }
+        const endpoint = this.endpointForProvider(provider);
+        if (!endpoint) {
+          continue;
+        }
 
-      return { provider, modelId, endpoint };
+        const key = `${provider}:${modelId}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        const estimatedCostUnits = estimateCostUnits(model, provider, args.budget.adjustedMaxTokens);
+        if (
+          args.budget.maxEstimatedCostUnits !== null &&
+          estimatedCostUnits > args.budget.maxEstimatedCostUnits
+        ) {
+          continue;
+        }
+
+        candidates.push({
+          provider,
+          modelId,
+          endpoint,
+          capabilityId: model.id,
+          displayName: model.displayName,
+          estimatedCostUnits,
+          latencyTier: model.latencyTier,
+          costTier: model.costTier,
+          qualityTier: model.qualityTier,
+          local: isLocalProvider(provider),
+          preferred: provider === args.preferredProvider
+        });
+      }
     }
 
-    return null;
+    return candidates
+      .sort((left, right) => this.compareTargets(left, right, args.budget.effectiveCostPolicy))
+      .slice(0, args.budget.fallbackDepth + 1)
+      .map(({ preferred: _preferred, ...target }) => target);
+  }
+
+  private isAllowedByEconomicPolicy(model: ModelCapabilityManifest, budget: ModelBudgetPolicyDecision) {
+    if (modelCostRank[model.costTier] > modelCostRank[budget.effectiveMaxCostTier]) {
+      return false;
+    }
+    if (!budget.effectiveAllowDeepReasoning && model.role === "deep_reasoner") {
+      return false;
+    }
+    if (!budget.effectiveAllowCloud && !model.providerKinds.some(isLocalProvider)) {
+      return false;
+    }
+    return true;
+  }
+
+  private compareTargets(
+    left: ModelProviderTarget & { preferred: boolean },
+    right: ModelProviderTarget & { preferred: boolean },
+    costPolicy: ModelBudgetPolicyDecision["effectiveCostPolicy"]
+  ) {
+    if (left.preferred !== right.preferred) {
+      return left.preferred ? -1 : 1;
+    }
+    if (costPolicy === "quality") {
+      return (
+        qualityRank[right.qualityTier] - qualityRank[left.qualityTier] ||
+        left.estimatedCostUnits - right.estimatedCostUnits ||
+        latencyRank[left.latencyTier] - latencyRank[right.latencyTier]
+      );
+    }
+    if (costPolicy === "minimize") {
+      return (
+        left.estimatedCostUnits - right.estimatedCostUnits ||
+        latencyRank[left.latencyTier] - latencyRank[right.latencyTier] ||
+        qualityRank[right.qualityTier] - qualityRank[left.qualityTier]
+      );
+    }
+    return (
+      Number(right.local) - Number(left.local) ||
+      left.estimatedCostUnits - right.estimatedCostUnits ||
+      qualityRank[right.qualityTier] - qualityRank[left.qualityTier] ||
+      latencyRank[left.latencyTier] - latencyRank[right.latencyTier]
+    );
   }
 
   private endpointForProvider(provider: ModelProviderKind) {

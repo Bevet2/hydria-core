@@ -14,7 +14,14 @@ export type ModelBudgetPolicyInput = {
   requestedMaxTokens?: number | null;
   allowDeepReasoning?: boolean;
   preferredProvider?: ModelProviderKind | null;
+  costPolicy?: ModelCostPolicy;
+  criticality?: ModelRequestCriticality;
+  fallbackDepth?: number;
+  maxEstimatedCostUnits?: number | null;
 };
+
+export type ModelCostPolicy = "minimize" | "balanced" | "quality";
+export type ModelRequestCriticality = "low" | "normal" | "high" | "critical";
 
 export type ModelBudgetPolicyDecision = {
   allowed: boolean;
@@ -23,6 +30,11 @@ export type ModelBudgetPolicyDecision = {
   adjustedMaxTokens: number;
   effectiveAllowCloud: boolean;
   effectiveMaxCostTier: ModelCostTier;
+  effectiveAllowDeepReasoning: boolean;
+  effectiveCostPolicy: ModelCostPolicy;
+  criticality: ModelRequestCriticality;
+  fallbackDepth: number;
+  maxEstimatedCostUnits: number | null;
   reasons: string[];
   warnings: string[];
 };
@@ -34,10 +46,16 @@ type ModelBudgetPolicyServiceOptions = {
   maxOutputTokens?: number;
 };
 
-const costRank: Record<ModelCostTier, number> = {
+export const modelCostRank: Record<ModelCostTier, number> = {
   low: 1,
   medium: 2,
   high: 3
+};
+
+export const defaultMaxEstimatedCostUnitsByTier: Record<ModelCostTier, number> = {
+  low: 2,
+  medium: 8,
+  high: 24
 };
 
 function isCloudOnly(model: ModelCapabilityManifest) {
@@ -75,7 +93,7 @@ export class ModelBudgetPolicyService {
     const allowCloud = this.runtimeAllowCloud && (budget.allowCloud ?? true);
     const requestedMaxCostTier = budget.maxCostTier ?? this.runtimeMaxCostTier;
     const maxCostTier =
-      costRank[requestedMaxCostTier] < costRank[this.runtimeMaxCostTier]
+      modelCostRank[requestedMaxCostTier] < modelCostRank[this.runtimeMaxCostTier]
         ? requestedMaxCostTier
         : this.runtimeMaxCostTier;
     const maxOutputTokens = Math.min(
@@ -84,6 +102,11 @@ export class ModelBudgetPolicyService {
     );
     const requestedMaxTokens = budget.requestedMaxTokens ?? maxOutputTokens;
     const allowDeepReasoning = budget.allowDeepReasoning ?? true;
+    const costPolicy = budget.costPolicy ?? (budget.maxCostTier === "low" ? "minimize" : "balanced");
+    const criticality = budget.criticality ?? "normal";
+    const fallbackDepth = Math.max(0, Math.min(5, budget.fallbackDepth ?? (criticality === "critical" ? 3 : 1)));
+    const maxEstimatedCostUnits =
+      budget.maxEstimatedCostUnits ?? defaultMaxEstimatedCostUnitsByTier[maxCostTier];
     const candidates = [args.selected, ...args.fallbacks];
     const warnings: string[] = [];
     const reasons: string[] = [];
@@ -96,6 +119,11 @@ export class ModelBudgetPolicyService {
         adjustedMaxTokens: Math.min(requestedMaxTokens, maxOutputTokens),
         effectiveAllowCloud: allowCloud,
         effectiveMaxCostTier: maxCostTier,
+        effectiveAllowDeepReasoning: allowDeepReasoning,
+        effectiveCostPolicy: costPolicy,
+        criticality,
+        fallbackDepth,
+        maxEstimatedCostUnits,
         reasons: [
           this.runtimeExecutionEnabled
             ? "Model execution was disabled by the request budget."
@@ -113,6 +141,11 @@ export class ModelBudgetPolicyService {
         adjustedMaxTokens: Math.min(requestedMaxTokens, maxOutputTokens),
         effectiveAllowCloud: allowCloud,
         effectiveMaxCostTier: maxCostTier,
+        effectiveAllowDeepReasoning: allowDeepReasoning,
+        effectiveCostPolicy: costPolicy,
+        criticality,
+        fallbackDepth,
+        maxEstimatedCostUnits,
         reasons: ["This endpoint only executes generative model purposes."],
         warnings: []
       };
@@ -130,6 +163,11 @@ export class ModelBudgetPolicyService {
         adjustedMaxTokens: Math.min(requestedMaxTokens, maxOutputTokens),
         effectiveAllowCloud: allowCloud,
         effectiveMaxCostTier: maxCostTier,
+        effectiveAllowDeepReasoning: allowDeepReasoning,
+        effectiveCostPolicy: costPolicy,
+        criticality,
+        fallbackDepth,
+        maxEstimatedCostUnits,
         reasons: [
           `No model in the selected pipeline satisfies maxCostTier=${maxCostTier}, allowCloud=${allowCloud}, allowDeepReasoning=${allowDeepReasoning}.`
         ],
@@ -155,6 +193,11 @@ export class ModelBudgetPolicyService {
       adjustedMaxTokens: Math.min(requestedMaxTokens, maxOutputTokens),
       effectiveAllowCloud: allowCloud,
       effectiveMaxCostTier: maxCostTier,
+      effectiveAllowDeepReasoning: allowDeepReasoning,
+      effectiveCostPolicy: costPolicy,
+      criticality,
+      fallbackDepth,
+      maxEstimatedCostUnits,
       reasons,
       warnings
     };
@@ -168,7 +211,7 @@ export class ModelBudgetPolicyService {
       allowDeepReasoning: boolean;
     }
   ) {
-    if (costRank[model.costTier] > costRank[policy.maxCostTier]) {
+    if (modelCostRank[model.costTier] > modelCostRank[policy.maxCostTier]) {
       return false;
     }
     if (!policy.allowCloud && isCloudOnly(model)) {

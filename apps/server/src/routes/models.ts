@@ -29,7 +29,11 @@ const budgetPolicyRequestSchema = z.object({
   maxOutputTokens: z.number().int().min(32).max(8192).optional(),
   requestedMaxTokens: z.number().int().min(32).max(8192).optional(),
   allowDeepReasoning: z.boolean().optional(),
-  preferredProvider: z.enum(modelProviderKinds).nullable().optional()
+  preferredProvider: z.enum(modelProviderKinds).nullable().optional(),
+  costPolicy: z.enum(["minimize", "balanced", "quality"]).optional(),
+  criticality: z.enum(["low", "normal", "high", "critical"]).optional(),
+  fallbackDepth: z.number().int().min(0).max(5).optional(),
+  maxEstimatedCostUnits: z.number().min(0).nullable().optional()
 });
 
 const modelExecutionPlanRequestSchema = modelSelectionRequestSchema.extend({

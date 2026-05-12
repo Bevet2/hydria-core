@@ -42,6 +42,8 @@ test("model budget policy downgrades deep reasoning when cost is capped", () => 
   assert.equal(plan.budget.downgraded, true);
   assert.equal(plan.budget.selectedModel?.id, "qwen-14b-instruct-main");
   assert.equal(plan.target?.provider, "ollama");
+  assert.equal(plan.orchestration.version, "economic_multi_provider_v2");
+  assert.ok(plan.orchestration.primaryEstimatedCostUnits !== null);
 });
 
 test("model budget policy does not let request body loosen server cloud policy", () => {
@@ -67,6 +69,7 @@ test("model budget policy does not let request body loosen server cloud policy",
   assert.equal(plan.budget.allowed, true);
   assert.equal(plan.budget.selectedModel?.id, "qwen-14b-instruct-main");
   assert.equal(plan.target?.provider, "ollama");
+  assert.equal(plan.targetCandidates.every((target) => target.provider !== "openrouter"), true);
 });
 
 test("model provider executes an OpenRouter-compatible completion with budget caps", async () => {
@@ -119,4 +122,90 @@ test("model provider executes an OpenRouter-compatible completion with budget ca
   assert.equal(result.provider, "openrouter");
   assert.equal(captured.body?.model, "qwen/qwen-2.5-14b-instruct");
   assert.equal(captured.body?.max_tokens, 256);
+  assert.equal(result.plan.orchestration.costPolicy, "balanced");
+  assert.equal(result.attempts[0]?.status, "success");
+});
+
+test("economic model provider v2 falls back to a cheaper local provider after primary failure", async () => {
+  const attempts: string[] = [];
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const url = String(input);
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    attempts.push(`${url}:${String(body.model)}`);
+    if (url.includes("openrouter")) {
+      return new Response("upstream unavailable", { status: 503 });
+    }
+    return new Response(
+      JSON.stringify({
+        response: "Local fallback response"
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json"
+        }
+      }
+    );
+  };
+  const service = new ModelProviderService({
+    fetchImpl,
+    budgetPolicyService: new ModelBudgetPolicyService({
+      executionEnabled: true,
+      allowCloud: true,
+      maxCostTier: "medium",
+      maxOutputTokens: 256
+    })
+  });
+
+  const result = await service.complete({
+    purpose: "main_reasoning",
+    category: "architecture_design",
+    preferredProvider: "openrouter",
+    privacyMode: "cloud_allowed",
+    prompt: "Design a small event bus.",
+    budget: {
+      executionEnabled: true,
+      allowCloud: true,
+      maxCostTier: "medium",
+      fallbackDepth: 2,
+      costPolicy: "balanced"
+    }
+  });
+
+  assert.equal(result.content, "Local fallback response");
+  assert.equal(result.provider, "ollama");
+  assert.equal(result.attempts[0]?.status, "failed");
+  assert.equal(result.attempts[1]?.status, "success");
+  assert.ok(attempts.some((entry) => entry.includes("openrouter")));
+  assert.ok(attempts.some((entry) => entry.includes("/api/generate:qwen2.5:14b")));
+});
+
+test("economic model provider v2 respects maximum estimated cost units", () => {
+  const service = new ModelProviderService({
+    budgetPolicyService: new ModelBudgetPolicyService({
+      executionEnabled: true,
+      allowCloud: true,
+      maxCostTier: "high",
+      maxOutputTokens: 2048
+    })
+  });
+  const plan = service.planExecution({
+    purpose: "main_reasoning",
+    category: "architecture_design",
+    preferredProvider: "openrouter",
+    privacyMode: "cloud_allowed",
+    maxTokens: 256,
+    budget: {
+      executionEnabled: true,
+      allowCloud: true,
+      maxCostTier: "high",
+      costPolicy: "minimize",
+      maxEstimatedCostUnits: 1,
+      fallbackDepth: 3
+    }
+  });
+
+  assert.equal(plan.executable, true);
+  assert.equal(plan.target?.provider, "ollama");
+  assert.ok(plan.targetCandidates.every((target) => target.estimatedCostUnits <= 1));
 });

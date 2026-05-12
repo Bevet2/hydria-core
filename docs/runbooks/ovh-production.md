@@ -116,10 +116,25 @@ curl -fsS https://app.hydria.click/api/models/select \
   -d '{"purpose":"deep_reasoning","category":"mixed_reasoning","latencyPreference":"quality"}'
 curl -fsS https://app.hydria.click/api/models/plan \
   -H 'content-type: application/json' \
-  -d '{"purpose":"main_reasoning","category":"architecture_design","preferredProvider":"ollama"}'
+  -d '{"purpose":"main_reasoning","category":"architecture_design","preferredProvider":"ollama","budget":{"costPolicy":"balanced","fallbackDepth":2,"maxEstimatedCostUnits":8}}'
 ```
 
 The manifest registers Qwen 14B/32B, DeepSeek-Coder-V2, Qwen-Coder, DeepSeek-R1-Distill-Qwen, Mistral/Mixtral, BGE-M3, BGE Reranker, Phi mini, and Qwen 3B as candidate model roles. These entries are routing contracts first; live execution still requires configuring the actual serving backend on OVH or a GPU provider.
+
+The model router returns an economic multi-provider v2 plan. The plan includes the selected model, provider target, fallback candidates, relative estimated cost units, criticality, and cost policy. Request bodies may tighten the policy with:
+
+```json
+{
+  "budget": {
+    "costPolicy": "minimize",
+    "criticality": "normal",
+    "fallbackDepth": 2,
+    "maxEstimatedCostUnits": 8,
+    "allowCloud": false,
+    "maxCostTier": "medium"
+  }
+}
+```
 
 Live `/api/models/complete` is disabled by default. When enabled, it is protected by Hydria API keys and route-level rate limits:
 
@@ -157,7 +172,7 @@ curl -fsS https://app.hydria.click/api/models/complete \
   -d '{"purpose":"main_reasoning","category":"architecture_design","prompt":"Design a small event bus."}'
 ```
 
-Request bodies can only tighten execution policy. They cannot enable model execution, cloud providers, higher cost tiers, or larger token limits beyond the server environment.
+Request bodies can only tighten execution policy. They cannot enable model execution, cloud providers, higher cost tiers, or larger token limits beyond the server environment. If live execution is enabled and a primary provider fails, the v2 router tries the configured fallback targets that still satisfy budget and provider policy.
 
 Current OVH self-hosted Ollama backend:
 

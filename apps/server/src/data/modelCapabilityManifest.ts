@@ -1,6 +1,6 @@
 import type { QuestionCategory } from "../types/arena.js";
 
-export const MODEL_CAPABILITY_MANIFEST_VERSION = "hydria-model-capability-manifest-v1";
+export const MODEL_CAPABILITY_MANIFEST_VERSION = "hydria-model-capability-manifest-v2";
 
 export const modelSelectionPurposes = [
   "main_reasoning",

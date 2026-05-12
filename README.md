@@ -153,6 +153,20 @@ Relevant runtime knobs:
 - `STUDENT_CHAT_LOCAL_TIMEOUT_MS`
 - `npm run student:chat-prod-gate -- --base-url=https://app.hydria.click`
 
+### Economic Multi-Provider Router
+
+`/api/models/plan` exposes the orchestration contract for the multi-provider runtime. It returns an economic v2 plan with selected model, provider target, fallback chain, relative cost units, criticality, and cost policy.
+
+Example:
+
+```bash
+curl -fsS https://app.hydria.click/api/models/plan \
+  -H 'content-type: application/json' \
+  -d '{"purpose":"main_reasoning","category":"architecture_design","budget":{"costPolicy":"balanced","fallbackDepth":2,"maxEstimatedCostUnits":8}}'
+```
+
+Live `/api/models/complete` remains protected and disabled by default in production. Request budgets can tighten cost/cloud/token policy, but cannot loosen server limits.
+
 ### Research / Truth Engine
 
 The research stack is split into explicit layers:
