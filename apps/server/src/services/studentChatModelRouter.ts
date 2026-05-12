@@ -18,6 +18,7 @@ export type StudentChatSpecialistRole =
 export type StudentChatModelRoute = {
   capabilityId:
     | "phi-mini-router"
+    | "qwen-3b-router"
     | "qwen-14b-instruct-main"
     | "qwen-coder-code"
     | "deepseek-r1-distill-qwen-reasoner"
@@ -44,6 +45,7 @@ type StudentChatModelRoutingInput = {
 };
 
 const QWEN_MAIN = "qwen2.5:14b";
+const QWEN_3B = "qwen2.5:3b";
 const QWEN_CODER = "qwen2.5-coder:7b";
 const DEEPSEEK_REASONER = "deepseek-r1:14b";
 const MISTRAL_BUSINESS = "mistral:7b";
@@ -149,7 +151,7 @@ function containsDeepReasoningSignal(input: StudentChatModelRoutingInput, text: 
 function buildFallbacks(primary: string, role: StudentChatSpecialistRole) {
   const roleFallbacks =
     role === "fast_router"
-      ? [PHI_ROUTER, MISTRAL_BUSINESS, QWEN_MAIN]
+      ? [PHI_ROUTER, QWEN_3B, MISTRAL_BUSINESS, QWEN_MAIN]
       : role === "code_specialist"
       ? [QWEN_CODER, QWEN_MAIN, MISTRAL_BUSINESS]
       : role === "deep_reasoner"
@@ -178,6 +180,19 @@ function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: stri
       maxOutputTokens: env.MODEL_RUNTIME_FAST_MAX_OUTPUT_TOKENS,
       maxConcurrent: env.MODEL_RUNTIME_FAST_MAX_CONCURRENCY,
       fallbackDepth: 2,
+      concurrencyKey: "fast_local_chat"
+    };
+  }
+  if (profile === "concise_chat") {
+    return {
+      profile,
+      label: "Concise fast chat",
+      reason,
+      timeoutMs: capTimeout(env.STUDENT_CHAT_LOCAL_TIMEOUT_MS, env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS),
+      maxLatencyMs: env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS,
+      maxOutputTokens: env.MODEL_RUNTIME_FAST_MAX_OUTPUT_TOKENS,
+      maxConcurrent: env.MODEL_RUNTIME_FAST_MAX_CONCURRENCY,
+      fallbackDepth: 1,
       concurrencyKey: "fast_local_chat"
     };
   }
@@ -292,16 +307,16 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
   }
 
   if (containsBrevitySignal(text, input)) {
-    const reason = "Explicit short-answer constraint; use the lighter writing specialist instead of the 14B primary brain.";
-    const budget = buildRuntimeBudget("writing_chat", reason);
+    const reason = "Explicit short-answer constraint; use the fast 3B local chat route instead of heavier specialists.";
+    const budget = buildRuntimeBudget("concise_chat", reason);
     return {
-      capabilityId: "mistral-mixtral-business",
-      displayName: "Mistral/Mixtral",
-      modelName: MISTRAL_BUSINESS,
-      specialistRole: "writing_business",
+      capabilityId: "qwen-3b-router",
+      displayName: "Qwen 3B",
+      modelName: QWEN_3B,
+      specialistRole: "fast_router",
       routingReason: reason,
-      pipeline: [...basePipeline, `concise_answer:${MISTRAL_BUSINESS}`],
-      fallbackModelNames: buildFallbacks(MISTRAL_BUSINESS, "writing_business"),
+      pipeline: [...basePipeline, `concise_answer:${QWEN_3B}`],
+      fallbackModelNames: buildFallbacks(QWEN_3B, "fast_router"),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
     };

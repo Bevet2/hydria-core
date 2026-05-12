@@ -107,7 +107,7 @@ test("student chat adapter routes code questions to the local code specialist", 
   assert.equal(result.specialist.pipeline.some((step) => step.includes("qwen2.5-coder:7b")), true);
 });
 
-test("student chat adapter routes concise direct answers to the writing specialist", async () => {
+test("student chat adapter routes concise direct answers to the fast 3B specialist", async () => {
   let selectedModel = "";
   const input = {
     ...buildInput(),
@@ -141,10 +141,10 @@ test("student chat adapter routes concise direct answers to the writing speciali
 
   const result = await adapter.answer(input);
 
-  assert.equal(selectedModel, "mistral:7b");
-  assert.equal(result.specialist.role, "writing_business");
+  assert.equal(selectedModel, "qwen2.5:3b");
+  assert.equal(result.specialist.role, "fast_router");
   assert.match(result.specialist.routingReason, /short-answer constraint/i);
-  assert.equal(result.runtimeBudget?.profile, "writing_chat");
+  assert.equal(result.runtimeBudget?.profile, "concise_chat");
 });
 
 test("student chat adapter uses fast budget for verified calculator tool answers", async () => {

@@ -269,7 +269,10 @@ export class ModelRuntimeTelemetryService {
         blockers.push("fast_tool_budget_p95_latency_exceeded");
       }
       if (
-        (profile === "standard_chat" || profile === "writing_chat" || profile === "code_chat") &&
+        (profile === "concise_chat" ||
+          profile === "standard_chat" ||
+          profile === "writing_chat" ||
+          profile === "code_chat") &&
         stat.p95LatencyMs > effective.maxStandardP95LatencyMs
       ) {
         blockers.push(`${profile}_budget_p95_latency_exceeded`);
