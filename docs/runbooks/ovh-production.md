@@ -110,6 +110,21 @@ curl -fsS 'https://app.hydria.click/api/models/ops?limit=80&since=<telemetrySinc
 npm run models:ops-gate -- --since=<telemetrySince> --min-events=1
 ```
 
+Stable factual chat gate:
+
+```bash
+npm run prod:stable-factual-gate -- --base-url=https://app.hydria.click --timeout-ms=120000
+```
+
+This writes:
+
+```text
+storage/training/stable-factual-chat-gate-v1.json
+storage/training/stable-factual-chat-diagnostics-v1.json
+```
+
+It checks biographies, history, and stable technical concepts with expected anchors and forbidden confusion claims. Use it after changing `standard_light_chat`, `stable_fact_chat`, Mistral/Qwen routing, or prompt context.
+
 ## Deploy Current Branch
 
 ```bash
@@ -180,12 +195,14 @@ Validation gates:
 ```bash
 npm run models:pretraining-gate
 npm run models:routing-gate
+npm run prod:stable-factual-gate -- --base-url=https://app.hydria.click --limit=4
 npm run models:ops-gate -- --allow-empty
 npm run retrieval:reranker-gate -- --require-runtime
 ```
 
 `retrieval:reranker-gate` without `--require-runtime` validates fallback precision only. Promotion of reranker-dependent retrieval requires the runtime-backed mode.
 `models:routing-gate` writes `storage/training/model-routing-economics-gate-v1.json` and blocks model governance changes when a case selects the wrong specialist, violates local-only policy, over-escalates to DeepSeek, or exceeds the expected relative cost budget.
+`prod:stable-factual-gate` writes stable factual gate and diagnostics reports, blocking anchor misses, known factual confusions, wrong language, static fallbacks, and route drift on stable chat answers.
 `models:ops-gate` writes `storage/training/model-runtime-ops-gate-v1.json` from runtime telemetry. Use `--allow-empty` only before traffic exists; on production, run it after `prod:smoke` or `student:chat-prod-gate` so the gate validates real model events.
 
 The model router returns an economic multi-provider v2 plan. The plan includes the selected model, provider target, fallback candidates, relative estimated cost units, criticality, and cost policy. Request bodies may tighten the policy with:
@@ -367,6 +384,7 @@ After smoke traffic has created model telemetry, check runtime ops without `--al
 
 ```bash
 npm run models:ops-gate
+npm run prod:stable-factual-gate -- --base-url=https://app.hydria.click --limit=4
 curl -fsS https://app.hydria.click/api/models/ops?limit=50
 ```
 

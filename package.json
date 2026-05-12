@@ -30,6 +30,7 @@
     "persistence:postgres:cutover-check": "npm run persistence:postgres:cutover-check -w @hydria-arena/server --",
     "prod:smoke": "npm run prod:smoke -w @hydria-arena/server --",
     "prod:chat-routing-gate": "npm run prod:chat-routing-gate -w @hydria-arena/server --",
+    "prod:stable-factual-gate": "npm run prod:stable-factual-gate -w @hydria-arena/server --",
     "student:chat-prod-gate": "npm run student:chat-prod-gate -w @hydria-arena/server --",
     "models:pretraining-gate": "npm run models:pretraining-gate -w @hydria-arena/server --",
     "models:routing-gate": "npm run models:routing-gate -w @hydria-arena/server --",

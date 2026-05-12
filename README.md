@@ -185,6 +185,7 @@ Relevant runtime knobs:
 - `npm run student:chat-prod-gate -- --base-url=https://app.hydria.click`
 - `npm run models:pretraining-gate`
 - `npm run models:routing-gate`
+- `npm run prod:stable-factual-gate -- --base-url=https://app.hydria.click --limit=4`
 - `npm run models:ops-gate`
 - `npm run retrieval:reranker-gate -- --require-runtime`
 
@@ -313,6 +314,14 @@ npm run models:ops-gate
 ```
 
 This writes `storage/training/model-runtime-ops-gate-v1.json` from `storage/observability/model-runtime-events-v1.jsonl` and blocks runtime changes when latency, retry rate, static fallbacks, cloud runtime use, deep-reasoning escalation, or per-budget p95 latency drifts beyond the configured thresholds. Local environments without runtime traffic can use `npm run models:ops-gate -- --allow-empty`; production should run it after a smoke or chat gate has generated telemetry. The same summary is exposed through `GET /api/models/ops`.
+
+Stable factual chat validation:
+
+```bash
+npm run prod:stable-factual-gate -- --base-url=https://app.hydria.click --timeout-ms=120000
+```
+
+This writes `storage/training/stable-factual-chat-gate-v1.json` and `storage/training/stable-factual-chat-diagnostics-v1.json`. The gate checks stable biographies, history, and technical concepts with expected factual anchors plus forbidden confusion claims, so a route can fail even when the selected model and quality gate look healthy.
 
 ### Learning Governance
 
