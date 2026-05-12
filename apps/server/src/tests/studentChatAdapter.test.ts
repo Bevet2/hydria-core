@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { StudentChatAdapter, type StudentChatAdapterInput } from "../services/studentChatAdapter.js";
+import {
+  buildStudentChatPrompt,
+  StudentChatAdapter,
+  type StudentChatAdapterInput
+} from "../services/studentChatAdapter.js";
 import {
   buildActiveConstraintCapsule,
   createInitialState
@@ -35,6 +39,7 @@ function buildInput(): StudentChatAdapterInput {
 
 test("student chat adapter routes stable biographies through the Mistral factual writing route", async () => {
   let timeoutMs = 0;
+  let numPredict = 0;
   let selectedModel = "";
   const adapter = new StudentChatAdapter({
     getConfiguredModelName() {
@@ -42,6 +47,7 @@ test("student chat adapter routes stable biographies through the Mistral factual
     },
     async testPrompt(_prompt, _system, options) {
       timeoutMs = options?.timeoutMs ?? 0;
+      numPredict = options?.numPredict ?? 0;
       selectedModel = options?.modelName ?? "";
       return {
         provider: "ollama",
@@ -68,7 +74,17 @@ test("student chat adapter routes stable biographies through the Mistral factual
   assert.equal(timeoutMs > 1000, true);
   assert.equal(selectedModel, "mistral:7b");
   assert.equal(result.runtimeBudget?.profile, "stable_fact_chat");
+  assert.equal(result.runtimeBudget?.maxOutputTokens, 120);
+  assert.equal(numPredict, 120);
   assert.match(result.answer.answer, /Charlemagne/);
+});
+
+test("student chat prompt compacts stable factual biographies", () => {
+  const prompt = buildStudentChatPrompt(buildInput());
+
+  assert.match(prompt, /Stable factual answer shape/i);
+  assert.match(prompt, /45-80 words/i);
+  assert.match(prompt, /Do not write a long biography/i);
 });
 
 test("student chat adapter retries stable factual chat on the light local model before static fallback", async () => {

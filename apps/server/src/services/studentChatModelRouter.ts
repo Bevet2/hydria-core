@@ -279,13 +279,14 @@ function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: stri
   }
   if (profile === "stable_fact_chat") {
     const stableFactTimeoutMs = Math.min(env.MODEL_RUNTIME_DEEP_TIMEOUT_MS, 60000);
+    const stableFactMaxOutputTokens = Math.min(env.MODEL_RUNTIME_STANDARD_MAX_OUTPUT_TOKENS, 120);
     return {
       profile,
       label: "Stable factual writing",
       reason,
       timeoutMs: stableFactTimeoutMs,
       maxLatencyMs: stableFactTimeoutMs,
-      maxOutputTokens: env.MODEL_RUNTIME_STANDARD_MAX_OUTPUT_TOKENS,
+      maxOutputTokens: stableFactMaxOutputTokens,
       maxConcurrent: env.MODEL_RUNTIME_STANDARD_MAX_CONCURRENCY,
       fallbackDepth: 1,
       concurrencyKey: "standard_local_chat"

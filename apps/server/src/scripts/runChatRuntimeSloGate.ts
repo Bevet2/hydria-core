@@ -79,6 +79,9 @@ export type ChatRuntimeSloCaseResult = {
 
 export type ChatRuntimeSloThresholds = {
   maxP95LatencyMs: number;
+  maxFastToolP95LatencyMs: number;
+  maxStandardLightP95LatencyMs: number;
+  maxStableFactP95LatencyMs: number;
   maxRetryRate: number;
   maxStaticFallbackRate: number;
   maxCloudRuntimeRate: number;
@@ -175,6 +178,9 @@ function parseArgs(argv = process.argv.slice(2)): Args {
     apiKey: readOption(argv, "--api-key") ?? process.env.HYDRIA_API_KEY ?? process.env.HYDRIA_PROD_API_KEY ?? "",
     thresholds: {
       maxP95LatencyMs: numberOption(argv, "--max-p95-ms", 60000),
+      maxFastToolP95LatencyMs: numberOption(argv, "--max-fast-tool-p95-ms", 1500),
+      maxStandardLightP95LatencyMs: numberOption(argv, "--max-standard-light-p95-ms", 45000),
+      maxStableFactP95LatencyMs: numberOption(argv, "--max-stable-fact-p95-ms", 60000),
       maxRetryRate: numberOption(argv, "--max-retry-rate", 10),
       maxStaticFallbackRate: numberOption(argv, "--max-static-fallback-rate", 0),
       maxCloudRuntimeRate: numberOption(argv, "--max-cloud-runtime-rate", 0),
@@ -249,6 +255,44 @@ function percentile(values: number[], p: number) {
 
 function rate(count: number, total: number) {
   return total === 0 ? 0 : Number(((count / total) * 100).toFixed(1));
+}
+
+function buildBudgetProfileStats(turns: ChatRuntimeSloTurnResult[]) {
+  const grouped = new Map<string, ChatRuntimeSloTurnResult[]>();
+  for (const turn of turns) {
+    const items = grouped.get(turn.budgetProfile) ?? [];
+    items.push(turn);
+    grouped.set(turn.budgetProfile, items);
+  }
+
+  return Object.fromEntries(
+    [...grouped.entries()].map(([profile, items]) => {
+      const durations = items.map((item) => item.durationMs);
+      return [
+        profile,
+        {
+          turns: items.length,
+          p50LatencyMs: percentile(durations, 50),
+          p95LatencyMs: percentile(durations, 95),
+          maxLatencyMs: durations.length > 0 ? Math.max(...durations) : 0,
+          retryRate: rate(items.filter((item) => item.usedRetry).length, items.length),
+          staticFallbackRate: rate(items.filter((item) => item.usedStaticFallback).length, items.length),
+          qualityFailureRate: rate(items.filter((item) => !item.qualityPassed).length, items.length)
+        }
+      ];
+    })
+  ) as Record<
+    string,
+    {
+      turns: number;
+      p50LatencyMs: number;
+      p95LatencyMs: number;
+      maxLatencyMs: number;
+      retryRate: number;
+      staticFallbackRate: number;
+      qualityFailureRate: number;
+    }
+  >;
 }
 
 function inspectTrace(response: ChatResponse, expectedTraceSteps: string[]) {
@@ -369,6 +413,7 @@ export function buildChatRuntimeSloGateReport(args: {
   const wrongLanguageCount = turns.filter((turn) => turn.wrongLanguage).length;
   const qualityFailureCount = turns.filter((turn) => !turn.qualityPassed).length;
   const traceCompleteCount = turns.filter((turn) => turn.traceComplete).length;
+  const byBudgetProfile = buildBudgetProfileStats(turns);
   const summary = {
     totalCases: args.results.length,
     passedCases: args.results.filter((result) => result.passed).length,
@@ -384,12 +429,25 @@ export function buildChatRuntimeSloGateReport(args: {
     wrongLanguageRate: rate(wrongLanguageCount, turns.length),
     qualityFailureRate: rate(qualityFailureCount, turns.length),
     traceCoverageRate: rate(traceCompleteCount, turns.length),
+    byBudgetProfile,
     durationMs: Date.now() - args.startedAt
   };
+  const fastToolP95LatencyMs = summary.byBudgetProfile.fast_tool?.p95LatencyMs ?? 0;
+  const standardLightP95LatencyMs = summary.byBudgetProfile.standard_light_chat?.p95LatencyMs ?? 0;
+  const stableFactP95LatencyMs = summary.byBudgetProfile.stable_fact_chat?.p95LatencyMs ?? 0;
   const blockers = [
     summary.failedCases > 0 ? `failed_cases:${summary.failedCases}` : null,
     summary.p95LatencyMs > args.thresholds.maxP95LatencyMs
       ? `p95_latency:${summary.p95LatencyMs}>${args.thresholds.maxP95LatencyMs}`
+      : null,
+    fastToolP95LatencyMs > args.thresholds.maxFastToolP95LatencyMs
+      ? `fast_tool_p95_latency:${fastToolP95LatencyMs}>${args.thresholds.maxFastToolP95LatencyMs}`
+      : null,
+    standardLightP95LatencyMs > args.thresholds.maxStandardLightP95LatencyMs
+      ? `standard_light_p95_latency:${standardLightP95LatencyMs}>${args.thresholds.maxStandardLightP95LatencyMs}`
+      : null,
+    stableFactP95LatencyMs > args.thresholds.maxStableFactP95LatencyMs
+      ? `stable_fact_p95_latency:${stableFactP95LatencyMs}>${args.thresholds.maxStableFactP95LatencyMs}`
       : null,
     summary.retryRate > args.thresholds.maxRetryRate
       ? `retry_rate:${summary.retryRate}>${args.thresholds.maxRetryRate}`

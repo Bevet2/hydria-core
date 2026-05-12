@@ -209,6 +209,17 @@ function maybeProductGrounding(input: StudentChatAdapterInput) {
   ];
 }
 
+function maybeStableFactCompaction(route: StudentChatModelRoute) {
+  if (route.runtimeBudget.profile !== "stable_fact_chat") {
+    return [];
+  }
+  return [
+    "Stable factual answer shape: answer in 2-4 concise sentences, target 45-80 words.",
+    "Include the central identity, role/domain, and one or two durable dates or legacy facts when relevant.",
+    "Do not write a long biography, timeline, or essay unless the user explicitly asks for it."
+  ];
+}
+
 function formatToolContext(tooling: ChatToolMetadata) {
   if (!tooling.routing.toolRequired && !tooling.routing.toolRecommended && tooling.route === "not_needed") {
     return "";
@@ -263,6 +274,7 @@ export function buildStudentChatPrompt(input: StudentChatAdapterInput, route = s
     `Specialist route reason: ${route.routingReason}`,
     `Local specialist pipeline: ${route.pipeline.join(" -> ")}`,
     "Use the selected specialist capability, but do not mention model routing in the answer.",
+    ...maybeStableFactCompaction(route),
     ...maybeProductGrounding(input),
     ...maybeCurrentDataGuidance(input),
     toolContext,

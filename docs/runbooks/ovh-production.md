@@ -110,6 +110,20 @@ curl -fsS 'https://app.hydria.click/api/models/ops?limit=80&since=<telemetrySinc
 npm run models:ops-gate -- --since=<telemetrySince> --min-events=1
 ```
 
+Chat model warmup:
+
+```bash
+npm run prod:chat-warmup -- --base-url=https://app.hydria.click --timeout-ms=180000
+```
+
+This writes:
+
+```text
+storage/training/chat-model-warmup-v1.json
+```
+
+Run it immediately after deploy and before stricter latency gates. It warms the fast tool path, `qwen2.5:3b` standard-light path, and `mistral:7b` stable factual path, while checking that the route stays local and does not fall back to a static answer.
+
 Stable factual chat gate:
 
 ```bash
@@ -141,6 +155,9 @@ It validates public chat runtime observability and operational SLOs: orchestrati
 
 ```text
 max p95 latency: 60000 ms
+max fast_tool p95 latency: 1500 ms
+max standard_light_chat p95 latency: 45000 ms
+max stable_fact_chat p95 latency: 60000 ms
 max retry rate: 10%
 max static fallback rate: 0%
 max cloud runtime rate: 0%
@@ -152,8 +169,10 @@ min trace coverage: 100%
 Use a stricter latency target while tuning:
 
 ```bash
-npm run prod:chat-slo-gate -- --base-url=https://app.hydria.click --timeout-ms=180000 --max-p95-ms=45000
+npm run prod:chat-slo-gate -- --base-url=https://app.hydria.click --timeout-ms=180000 --max-p95-ms=45000 --max-stable-fact-p95-ms=45000
 ```
+
+The report includes `summary.byBudgetProfile`, which is the first place to inspect when total p95 passes but a specific route drifts.
 
 The Chat UI displays an **Orchestration Trace** panel. It is a runtime trace, not private chain-of-thought: it shows language/context, category, constraints, tool decision, verified facts, model/provider, budget profile, attempts, quality gate, and latency.
 
@@ -166,6 +185,21 @@ git checkout codex/strategic-coherence-gap-v1
 git reset --hard origin/codex/strategic-coherence-gap-v1
 sudo docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.ovh.yml build hydria-core
 sudo docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.ovh.yml up -d
+```
+
+When the reranker runtime is enabled, deploy with the reranker override:
+
+```bash
+sudo docker compose --env-file .env.docker \
+  -f docker-compose.yml \
+  -f docker-compose.ovh.yml \
+  -f docker-compose.reranker.yml \
+  build hydria-core
+sudo docker compose --env-file .env.docker \
+  -f docker-compose.yml \
+  -f docker-compose.ovh.yml \
+  -f docker-compose.reranker.yml \
+  up -d hydria-core bge-reranker
 ```
 
 Then run the health checks.
@@ -227,6 +261,7 @@ Validation gates:
 ```bash
 npm run models:pretraining-gate
 npm run models:routing-gate
+npm run prod:chat-warmup -- --base-url=https://app.hydria.click --timeout-ms=180000
 npm run prod:chat-slo-gate -- --base-url=https://app.hydria.click --timeout-ms=180000
 npm run prod:stable-factual-gate -- --base-url=https://app.hydria.click --limit=4
 npm run models:ops-gate -- --allow-empty
@@ -235,6 +270,7 @@ npm run retrieval:reranker-gate -- --require-runtime
 
 `retrieval:reranker-gate` without `--require-runtime` validates fallback precision only. Promotion of reranker-dependent retrieval requires the runtime-backed mode.
 `models:routing-gate` writes `storage/training/model-routing-economics-gate-v1.json` and blocks model governance changes when a case selects the wrong specialist, violates local-only policy, over-escalates to DeepSeek, or exceeds the expected relative cost budget.
+`prod:chat-warmup` writes `storage/training/chat-model-warmup-v1.json` and verifies that fast tool, standard-light, and stable factual model paths are loaded and routed locally.
 `prod:chat-slo-gate` writes `storage/training/chat-runtime-slo-gate-v1.json` and blocks trace loss, wrong language, static fallback, cloud runtime usage, quality failures, excessive retries, and p95 latency regression.
 `prod:stable-factual-gate` writes stable factual gate and diagnostics reports, blocking anchor misses, known factual confusions, wrong language, static fallbacks, and route drift on stable chat answers.
 `models:ops-gate` writes `storage/training/model-runtime-ops-gate-v1.json` from runtime telemetry. Use `--allow-empty` only before traffic exists; on production, run it after `prod:smoke` or `student:chat-prod-gate` so the gate validates real model events.

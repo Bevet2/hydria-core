@@ -8,6 +8,9 @@ import {
 
 const thresholds: ChatRuntimeSloThresholds = {
   maxP95LatencyMs: 60000,
+  maxFastToolP95LatencyMs: 1500,
+  maxStandardLightP95LatencyMs: 45000,
+  maxStableFactP95LatencyMs: 60000,
   maxRetryRate: 10,
   maxStaticFallbackRate: 0,
   maxCloudRuntimeRate: 0,
@@ -56,6 +59,7 @@ test("chat runtime SLO report passes clean local traced turns", () => {
   assert.equal(report.summary.traceCoverageRate, 100);
   assert.equal(report.summary.staticFallbackRate, 0);
   assert.equal(report.summary.cloudRuntimeRate, 0);
+  assert.equal(report.summary.byBudgetProfile.fast_tool?.turns, 1);
 });
 
 test("chat runtime SLO report blocks fallback, trace loss, and latency regression", () => {
@@ -93,6 +97,7 @@ test("chat runtime SLO report blocks fallback, trace loss, and latency regressio
   assert.equal(report.passed, false);
   assert.equal(report.blockers.some((blocker) => blocker.startsWith("failed_cases:")), true);
   assert.equal(report.blockers.some((blocker) => blocker.startsWith("p95_latency:")), true);
+  assert.equal(report.blockers.some((blocker) => blocker.startsWith("standard_light_p95_latency:")), true);
   assert.equal(report.blockers.some((blocker) => blocker.startsWith("static_fallback_rate:")), true);
   assert.equal(report.blockers.some((blocker) => blocker.startsWith("trace_coverage_rate:")), true);
 });

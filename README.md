@@ -185,6 +185,7 @@ Relevant runtime knobs:
 - `MODEL_RUNTIME_HEAVY_MAX_CONCURRENCY`
 - `MODEL_ROUTER_RERANKER_BASE_URL`
 - `npm run student:chat-prod-gate -- --base-url=https://app.hydria.click`
+- `npm run prod:chat-warmup -- --base-url=https://app.hydria.click --timeout-ms=180000`
 - `npm run models:pretraining-gate`
 - `npm run models:routing-gate`
 - `npm run prod:chat-slo-gate -- --base-url=https://app.hydria.click --timeout-ms=180000`
@@ -317,6 +318,15 @@ npm run models:ops-gate
 ```
 
 This writes `storage/training/model-runtime-ops-gate-v1.json` from `storage/observability/model-runtime-events-v1.jsonl` and blocks runtime changes when latency, retry rate, static fallbacks, cloud runtime use, deep-reasoning escalation, or per-budget p95 latency drifts beyond the configured thresholds. Local environments without runtime traffic can use `npm run models:ops-gate -- --allow-empty`; production should run it after a smoke or chat gate has generated telemetry. The same summary is exposed through `GET /api/models/ops`.
+
+Production chat warmup and SLO validation:
+
+```bash
+npm run prod:chat-warmup -- --base-url=https://app.hydria.click --timeout-ms=180000
+npm run prod:chat-slo-gate -- --base-url=https://app.hydria.click --timeout-ms=180000
+```
+
+The warmup hits the fast tool, standard-light, and stable factual chat paths before stricter SLO gates. The SLO report includes global p50/p95/max latency plus per-budget p95 latency for `fast_tool`, `standard_light_chat`, and `stable_fact_chat`.
 
 Stable factual chat validation:
 
@@ -590,6 +600,9 @@ Workspace-level scripts:
 - `npm run persistence:postgres:smoke`
 - `npm run persistence:postgres:cutover-check`
 - `npm run prod:smoke`
+- `npm run prod:chat-warmup`
+- `npm run prod:chat-slo-gate`
+- `npm run prod:stable-factual-gate`
 - `npm run learning:loop`
 - `npm run student:temporal-eval`
 - `npm run student:temporal-eval:record`
