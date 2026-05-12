@@ -137,16 +137,16 @@ This path is still based on the local student identity and `StudentAnswer` schem
 Local chat specialist routing:
 
 - `phi3:mini`: fast routing trace and verified calculator/time tool answers
-- `qwen2.5:3b`: CPU-aware standard-light route for short stable biographies, definitions, and simple conceptual answers
+- `qwen2.5:3b`: CPU-aware standard-light route for short definitions and simple conceptual answers
 - `qwen2.5:14b`: main reasoning brain for complex standard synthesis and multi-constraint answers
 - `qwen2.5-coder:7b`: code and debug specialist
 - `deepseek-r1:14b`: deep reasoning / conflict arbitration
-- `mistral:7b`: writing, business, and lightweight general answers
+- `mistral:7b`: writing, business, stable biographical/history answers, and lightweight general answers
 
 The public chat path is guarded by **Model Runtime Governor v1**. Each turn receives a runtime budget profile:
 
 - `fast_tool`: verified deterministic tool answers, short timeout, small output budget
-- `standard_light_chat`: CPU-aware stable knowledge answers on the 3B route
+- `standard_light_chat`: CPU-aware stable definitions and simple conceptual answers on the 3B route
 - `standard_chat`: primary-brain chat, capped timeout and serialized heavy-model concurrency
 - `code_chat`: code/debug specialist budget
 - `writing_chat`: business/writing budget
@@ -282,7 +282,7 @@ Registered roles:
 - DeepSeek-R1-Distill-Qwen: deep reasoning escalation
 - Mistral/Mixtral: writing, business, and stakeholder synthesis
 - BGE-M3 and BGE Reranker: memory retrieval and reranking
-- Phi mini and Qwen 3B: fast routing, extraction, and CPU-aware standard-light chat
+- Phi mini and Qwen 3B: fast routing, extraction, and CPU-aware standard-light definitions
 
 The OVH CPU backend currently runs the practical local subset through Ollama: `phi3:mini`, `qwen2.5:3b`, `qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `bge-m3`, and `mistral:7b`. Larger targets such as Qwen 32B and Mixtral are reserved for a GPU/vLLM layer.
 

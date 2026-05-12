@@ -151,6 +151,18 @@ function containsSimpleStableKnowledgeSignal(text: string, input: StudentChatMod
   return text.split(/\s+/).filter(Boolean).length <= 28;
 }
 
+function containsStablePersonFactSignal(text: string, input: StudentChatModelRoutingInput) {
+  if (!["other", "technical_explanation"].includes(input.category)) {
+    return false;
+  }
+  if (!containsStableKnowledgeSignal(text) || containsLiveFreshnessSignal(text)) {
+    return false;
+  }
+  return /\b(?:who is|who was|qui est|qui etait|biographie|biography|son histoire|sa biographie|his biography|her biography|known for|connu pour|roi|king|reine|queen|empereur|emperor|philosophe|scientist|ecrivain|writer)\b/.test(
+    text
+  );
+}
+
 function containsLiveFreshnessSignal(text: string) {
   return /\b(?:today|current|currently|latest|recent|now|2026|aujourd hui|actuel|actuelle|derniere|dernier|recent|recente|maintenant|ceo|president|price|prix|weather|meteo|status)\b/.test(
     text
@@ -394,9 +406,26 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
     };
   }
 
+  if (containsStablePersonFactSignal(text, input)) {
+    const reason =
+      "Stable person, biography, or historical fact question; use Mistral 7B instead of the 3B route for stronger factual prose on CPU.";
+    const budget = buildRuntimeBudget("writing_chat", reason);
+    return {
+      capabilityId: "mistral-mixtral-business",
+      displayName: "Mistral/Mixtral",
+      modelName: MISTRAL_BUSINESS,
+      specialistRole: "writing_business",
+      routingReason: reason,
+      pipeline: [...basePipeline, `stable_fact_writer:${MISTRAL_BUSINESS}`],
+      fallbackModelNames: buildFallbacks(MISTRAL_BUSINESS, "writing_business"),
+      timeoutMs: budget.timeoutMs,
+      runtimeBudget: budget
+    };
+  }
+
   if (containsSimpleStableKnowledgeSignal(text, input)) {
     const reason =
-      "Simple stable educational or biography question; use the CPU-aware 3B route instead of the 14B primary brain.";
+      "Simple stable educational definition or concept question; use the CPU-aware 3B route instead of the 14B primary brain.";
     const budget = buildRuntimeBudget("standard_light_chat", reason);
     return {
       capabilityId: "qwen-3b-standard-light",

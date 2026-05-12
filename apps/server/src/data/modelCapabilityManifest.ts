@@ -381,7 +381,7 @@ export const modelCapabilityManifest = [
     maxContextTokensHint: 32768,
     strengths: [
       "CPU-aware stable knowledge answers",
-      "Short biographies and definitions",
+      "Short definitions and simple concepts",
       "Low-cost public chat default for simple questions"
     ],
     avoidFor: [

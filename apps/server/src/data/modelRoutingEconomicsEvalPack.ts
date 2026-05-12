@@ -52,8 +52,8 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
     id: "chat_stable_biography_primary_brain",
     surface: "chat_route",
     priority: "critical",
-    description: "Simple stable historical/biography questions should use the CPU-aware standard-light brain, not tools or deep reasoning.",
-    tags: ["chat", "stable_knowledge", "cost_control", "standard_light"],
+    description: "Stable historical/biography questions should avoid the 3B factual route and use the local Mistral factual writer.",
+    tags: ["chat", "stable_knowledge", "cost_control", "stable_factual"],
     chat: {
       routingQuestion: "qui est charlemagne ?",
       category: "other",
@@ -62,9 +62,9 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
       requiresExternalGrounding: false
     },
     expected: {
-      capabilityId: "qwen-3b-standard-light",
-      role: "primary_brain",
-      maxCostTier: "low",
+      capabilityId: "mistral-mixtral-business",
+      role: "writing_business",
+      maxCostTier: "medium",
       maxEstimatedCostUnits: 1,
       localOnly: true,
       allowDeepReasoning: false,

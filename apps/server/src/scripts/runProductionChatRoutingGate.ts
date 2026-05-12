@@ -270,10 +270,10 @@ const cases: RoutingGateCase[] = [
   },
   {
     id: "standard_charlemagne_fr",
-    description: "Stable biography should use the CPU-aware standard-light route.",
-    routeFamily: "standard_light_chat",
+    description: "Stable biography should use the Mistral factual writing route, not the 3B definition route.",
+    routeFamily: "stable_factual_chat",
     language: "fr",
-    turns: [{ message: "Qui est Charlemagne ?", expect: standardLightExpectation }],
+    turns: [{ message: "Qui est Charlemagne ?", expect: writingExpectation }],
     expectedFinalTerms: ["Charlemagne"]
   },
   {

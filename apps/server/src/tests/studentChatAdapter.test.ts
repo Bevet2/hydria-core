@@ -33,7 +33,7 @@ function buildInput(): StudentChatAdapterInput {
   };
 }
 
-test("student chat adapter routes simple stable biographies through standard-light chat", async () => {
+test("student chat adapter routes stable biographies through the Mistral factual writing route", async () => {
   let timeoutMs = 0;
   let selectedModel = "";
   const adapter = new StudentChatAdapter({
@@ -61,14 +61,52 @@ test("student chat adapter routes simple stable biographies through standard-lig
   const result = await adapter.answer(buildInput());
 
   assert.equal(result.provider, "ollama");
-  assert.equal(result.model, "qwen2.5:3b");
-  assert.equal(result.specialist.role, "primary_brain");
+  assert.equal(result.model, "mistral:7b");
+  assert.equal(result.specialist.role, "writing_business");
   assert.equal(result.answer.modelRole, "student");
   assert.equal(result.answer.confidence, 95);
   assert.equal(timeoutMs > 1000, true);
-  assert.equal(selectedModel, "qwen2.5:3b");
-  assert.equal(result.runtimeBudget?.profile, "standard_light_chat");
+  assert.equal(selectedModel, "mistral:7b");
+  assert.equal(result.runtimeBudget?.profile, "writing_chat");
   assert.match(result.answer.answer, /Charlemagne/);
+});
+
+test("student chat adapter routes simple stable definitions through standard-light chat", async () => {
+  let selectedModel = "";
+  const input = {
+    ...buildInput(),
+    category: "technical_explanation" as const,
+    routingQuestion: "Explique simplement ce qu'est une API.",
+    userMessage: "Explique simplement ce qu'est une API.",
+    question: "Explique simplement ce qu'est une API.",
+    requiresExternalGrounding: false
+  };
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "phi3:mini";
+    },
+    async testPrompt(_prompt, _system, options) {
+      selectedModel = options?.modelName ?? "";
+      return {
+        provider: "ollama",
+        model: selectedModel,
+        response: JSON.stringify({
+          modelRole: "student",
+          answer: "Une API est une interface qui permet a deux logiciels de communiquer.",
+          key_points: ["API"],
+          assumptions: [],
+          confidence: 91
+        }),
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer(input);
+
+  assert.equal(selectedModel, "qwen2.5:3b");
+  assert.equal(result.specialist.role, "primary_brain");
+  assert.equal(result.runtimeBudget?.profile, "standard_light_chat");
 });
 
 test("student chat adapter reserves qwen 14B for complex standard reasoning", async () => {
@@ -431,7 +469,7 @@ test("student chat adapter does not call cloud fallback when local generation fa
   const result = await adapter.answer(buildInput());
 
   assert.equal(result.provider, "fallback");
-  assert.equal(result.model, "qwen2.5:3b");
-  assert.equal(result.specialist.role, "primary_brain");
+  assert.equal(result.model, "mistral:7b");
+  assert.equal(result.specialist.role, "writing_business");
   assert.equal(result.validationIssues.includes("student_chat_generation_failed"), true);
 });
