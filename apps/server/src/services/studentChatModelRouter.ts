@@ -1,10 +1,15 @@
 import type { QuestionCategory } from "../types/arena.js";
-import type { ChatRuntimeMode } from "../types/chat.js";
+import type { ChatRuntimeMode, ChatToolMetadata } from "../types/chat.js";
 import { env } from "../utils/env.js";
 import type { ActiveConstraintCapsule } from "./context/contextStateTracker.js";
 import type { MultiTurnAnswerPolicyResult } from "./context/multiTurnAnswerPolicy.js";
+import {
+  capTimeout,
+  type ModelRuntimeBudget
+} from "./models/modelRuntimeGovernor.js";
 
 export type StudentChatSpecialistRole =
+  | "fast_router"
   | "primary_brain"
   | "code_specialist"
   | "deep_reasoner"
@@ -12,6 +17,7 @@ export type StudentChatSpecialistRole =
 
 export type StudentChatModelRoute = {
   capabilityId:
+    | "phi-mini-router"
     | "qwen-14b-instruct-main"
     | "qwen-coder-code"
     | "deepseek-r1-distill-qwen-reasoner"
@@ -23,6 +29,7 @@ export type StudentChatModelRoute = {
   pipeline: string[];
   fallbackModelNames: string[];
   timeoutMs: number;
+  runtimeBudget: ModelRuntimeBudget;
 };
 
 type StudentChatModelRoutingInput = {
@@ -33,6 +40,7 @@ type StudentChatModelRoutingInput = {
   activeConstraintCapsule: ActiveConstraintCapsule;
   answerPolicy: MultiTurnAnswerPolicyResult;
   requiresExternalGrounding: boolean;
+  tooling?: ChatToolMetadata;
 };
 
 const QWEN_MAIN = "qwen2.5:14b";
@@ -127,7 +135,9 @@ function containsDeepReasoningSignal(input: StudentChatModelRoutingInput, text: 
 
 function buildFallbacks(primary: string, role: StudentChatSpecialistRole) {
   const roleFallbacks =
-    role === "code_specialist"
+    role === "fast_router"
+      ? [PHI_ROUTER, MISTRAL_BUSINESS, QWEN_MAIN]
+      : role === "code_specialist"
       ? [QWEN_CODER, QWEN_MAIN, MISTRAL_BUSINESS]
       : role === "deep_reasoner"
         ? [DEEPSEEK_REASONER, QWEN_MAIN, MISTRAL_BUSINESS]
@@ -143,34 +153,128 @@ function buildFallbacks(primary: string, role: StudentChatSpecialistRole) {
   ]);
 }
 
+function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: string): ModelRuntimeBudget {
+  const requestedLongTimeoutMs = Math.max(env.STUDENT_CHAT_LOCAL_TIMEOUT_MS, env.MODEL_ROUTER_LOCAL_TIMEOUT_MS);
+  if (profile === "fast_tool") {
+    return {
+      profile,
+      label: "Fast verified-tool answer",
+      reason,
+      timeoutMs: capTimeout(env.STUDENT_CHAT_LOCAL_TIMEOUT_MS, env.MODEL_RUNTIME_FAST_TIMEOUT_MS),
+      maxLatencyMs: env.MODEL_RUNTIME_FAST_TIMEOUT_MS,
+      maxOutputTokens: env.MODEL_RUNTIME_FAST_MAX_OUTPUT_TOKENS,
+      maxConcurrent: env.MODEL_RUNTIME_FAST_MAX_CONCURRENCY,
+      fallbackDepth: 2,
+      concurrencyKey: "fast_local_chat"
+    };
+  }
+  if (profile === "code_chat") {
+    return {
+      profile,
+      label: "Code/debug specialist",
+      reason,
+      timeoutMs: capTimeout(requestedLongTimeoutMs, env.MODEL_RUNTIME_CODE_TIMEOUT_MS),
+      maxLatencyMs: env.MODEL_RUNTIME_CODE_TIMEOUT_MS,
+      maxOutputTokens: env.MODEL_RUNTIME_CODE_MAX_OUTPUT_TOKENS,
+      maxConcurrent: env.MODEL_RUNTIME_HEAVY_MAX_CONCURRENCY,
+      fallbackDepth: 1,
+      concurrencyKey: "code_local_chat"
+    };
+  }
+  if (profile === "deep_reasoning") {
+    return {
+      profile,
+      label: "Deep reasoning escalation",
+      reason,
+      timeoutMs: capTimeout(requestedLongTimeoutMs, env.MODEL_RUNTIME_DEEP_TIMEOUT_MS),
+      maxLatencyMs: env.MODEL_RUNTIME_DEEP_TIMEOUT_MS,
+      maxOutputTokens: env.MODEL_RUNTIME_DEEP_MAX_OUTPUT_TOKENS,
+      maxConcurrent: env.MODEL_RUNTIME_HEAVY_MAX_CONCURRENCY,
+      fallbackDepth: 2,
+      concurrencyKey: "heavy_local_chat"
+    };
+  }
+  if (profile === "writing_chat") {
+    return {
+      profile,
+      label: "Writing/business response",
+      reason,
+      timeoutMs: capTimeout(env.STUDENT_CHAT_LOCAL_TIMEOUT_MS, env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS),
+      maxLatencyMs: env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS,
+      maxOutputTokens: env.MODEL_RUNTIME_STANDARD_MAX_OUTPUT_TOKENS,
+      maxConcurrent: env.MODEL_RUNTIME_STANDARD_MAX_CONCURRENCY,
+      fallbackDepth: 1,
+      concurrencyKey: "standard_local_chat"
+    };
+  }
+  return {
+    profile,
+    label: "Standard primary-brain chat",
+    reason,
+    timeoutMs: capTimeout(requestedLongTimeoutMs, env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS),
+    maxLatencyMs: env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS,
+    maxOutputTokens: env.MODEL_RUNTIME_STANDARD_MAX_OUTPUT_TOKENS,
+    maxConcurrent: env.MODEL_RUNTIME_STANDARD_MAX_CONCURRENCY,
+    fallbackDepth: 1,
+    concurrencyKey: "heavy_local_chat"
+  };
+}
+
+function verifiedToolFastPath(input: StudentChatModelRoutingInput) {
+  if (!input.tooling?.used) {
+    return false;
+  }
+  return input.tooling.routing.toolType === "calculator" || input.tooling.routing.toolType === "time";
+}
+
 export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput): StudentChatModelRoute {
   const text = normalizeText(`${input.routingQuestion}\n${input.userMessage}`);
   const basePipeline = [`fast_router:${PHI_ROUTER}`];
-  const longTimeoutMs = Math.max(env.STUDENT_CHAT_LOCAL_TIMEOUT_MS, env.MODEL_ROUTER_LOCAL_TIMEOUT_MS);
+
+  if (verifiedToolFastPath(input)) {
+    const reason = "Verified calculator/time result can be verbalized through the fast local model budget.";
+    return {
+      capabilityId: "phi-mini-router",
+      displayName: "Phi mini",
+      modelName: PHI_ROUTER,
+      specialistRole: "fast_router",
+      routingReason: reason,
+      pipeline: [...basePipeline, `verified_tool_answer:${PHI_ROUTER}`],
+      fallbackModelNames: buildFallbacks(PHI_ROUTER, "fast_router"),
+      timeoutMs: env.MODEL_RUNTIME_FAST_TIMEOUT_MS,
+      runtimeBudget: buildRuntimeBudget("fast_tool", reason)
+    };
+  }
 
   if (containsCodeSignal(text, input.category)) {
+    const reason = "Code, debugging, repository, or implementation signal detected.";
+    const budget = buildRuntimeBudget("code_chat", reason);
     return {
       capabilityId: "qwen-coder-code",
       displayName: "Qwen-Coder",
       modelName: QWEN_CODER,
       specialistRole: "code_specialist",
-      routingReason: "Code, debugging, repository, or implementation signal detected.",
+      routingReason: reason,
       pipeline: [...basePipeline, `code_specialist:${QWEN_CODER}`],
       fallbackModelNames: buildFallbacks(QWEN_CODER, "code_specialist"),
-      timeoutMs: longTimeoutMs
+      timeoutMs: budget.timeoutMs,
+      runtimeBudget: budget
     };
   }
 
   if (containsDeepReasoningSignal(input, text)) {
+    const reason = "Decision, incident, contradiction, or strategic conflict requires deeper reasoning.";
+    const budget = buildRuntimeBudget("deep_reasoning", reason);
     return {
       capabilityId: "deepseek-r1-distill-qwen-reasoner",
       displayName: "DeepSeek-R1-Distill-Qwen",
       modelName: DEEPSEEK_REASONER,
       specialistRole: "deep_reasoner",
-      routingReason: "Decision, incident, contradiction, or strategic conflict requires deeper reasoning.",
+      routingReason: reason,
       pipeline: [...basePipeline, `deep_reasoner:${DEEPSEEK_REASONER}`, `synthesis_fallback:${QWEN_MAIN}`],
       fallbackModelNames: buildFallbacks(DEEPSEEK_REASONER, "deep_reasoner"),
-      timeoutMs: longTimeoutMs
+      timeoutMs: budget.timeoutMs,
+      runtimeBudget: budget
     };
   }
 
@@ -179,28 +283,34 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
     containsStableKnowledgeSignal(text) &&
     !containsLiveFreshnessSignal(text)
   ) {
+    const reason = "Stable educational, biography, or conceptual knowledge route.";
+    const budget = buildRuntimeBudget("standard_chat", reason);
     return {
       capabilityId: "qwen-14b-instruct-main",
       displayName: "Qwen 14B Instruct",
       modelName: QWEN_MAIN,
       specialistRole: "primary_brain",
-      routingReason: "Stable educational, biography, or conceptual knowledge route.",
+      routingReason: reason,
       pipeline: [...basePipeline, `primary_brain:${QWEN_MAIN}`],
       fallbackModelNames: buildFallbacks(QWEN_MAIN, "primary_brain"),
-      timeoutMs: longTimeoutMs
+      timeoutMs: budget.timeoutMs,
+      runtimeBudget: budget
     };
   }
 
   if (containsWritingSignal(text, input.category)) {
+    const reason = "Writing or business synthesis route.";
+    const budget = buildRuntimeBudget("writing_chat", reason);
     return {
       capabilityId: "mistral-mixtral-business",
       displayName: "Mistral/Mixtral",
       modelName: MISTRAL_BUSINESS,
       specialistRole: "writing_business",
-      routingReason: "Writing or business synthesis route.",
+      routingReason: reason,
       pipeline: [...basePipeline, `writing_business:${MISTRAL_BUSINESS}`],
       fallbackModelNames: buildFallbacks(MISTRAL_BUSINESS, "writing_business"),
-      timeoutMs: env.STUDENT_CHAT_LOCAL_TIMEOUT_MS
+      timeoutMs: budget.timeoutMs,
+      runtimeBudget: budget
     };
   }
 
@@ -209,39 +319,48 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
     input.runtimeMode === "direct" &&
     !input.requiresExternalGrounding
   ) {
+    const reason = "General direct question routed to the local primary brain.";
+    const budget = buildRuntimeBudget("standard_chat", reason);
     return {
       capabilityId: "qwen-14b-instruct-main",
       displayName: "Qwen 14B Instruct",
       modelName: QWEN_MAIN,
       specialistRole: "primary_brain",
-      routingReason: "General direct question routed to the local primary brain.",
+      routingReason: reason,
       pipeline: [...basePipeline, `primary_brain:${QWEN_MAIN}`],
       fallbackModelNames: buildFallbacks(QWEN_MAIN, "primary_brain"),
-      timeoutMs: longTimeoutMs
+      timeoutMs: budget.timeoutMs,
+      runtimeBudget: budget
     };
   }
 
   if (input.category === "other" && input.requiresExternalGrounding) {
+    const reason = "Stable factual/general question routed to the local primary brain.";
+    const budget = buildRuntimeBudget("standard_chat", reason);
     return {
       capabilityId: "qwen-14b-instruct-main",
       displayName: "Qwen 14B Instruct",
       modelName: QWEN_MAIN,
       specialistRole: "primary_brain",
-      routingReason: "Stable factual/general question routed to the local primary brain.",
+      routingReason: reason,
       pipeline: [...basePipeline, `primary_brain:${QWEN_MAIN}`],
       fallbackModelNames: buildFallbacks(QWEN_MAIN, "primary_brain"),
-      timeoutMs: longTimeoutMs
+      timeoutMs: budget.timeoutMs,
+      runtimeBudget: budget
     };
   }
 
+  const reason = "Default local main-reasoning route.";
+  const budget = buildRuntimeBudget("standard_chat", reason);
   return {
     capabilityId: "qwen-14b-instruct-main",
     displayName: "Qwen 14B Instruct",
     modelName: QWEN_MAIN,
     specialistRole: "primary_brain",
-    routingReason: "Default local main-reasoning route.",
+    routingReason: reason,
     pipeline: [...basePipeline, `primary_brain:${QWEN_MAIN}`],
     fallbackModelNames: buildFallbacks(QWEN_MAIN, "primary_brain"),
-    timeoutMs: longTimeoutMs
+    timeoutMs: budget.timeoutMs,
+    runtimeBudget: budget
   };
 }

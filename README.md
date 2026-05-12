@@ -136,11 +136,21 @@ This path is still based on the local student identity and `StudentAnswer` schem
 
 Local chat specialist routing:
 
-- `phi3:mini`: fast routing trace
+- `phi3:mini`: fast routing trace and verified calculator/time tool answers
 - `qwen2.5:14b`: main reasoning brain and stable educational/conceptual answers
 - `qwen2.5-coder:7b`: code and debug specialist
 - `deepseek-r1:14b`: deep reasoning / conflict arbitration
 - `mistral:7b`: writing, business, and lightweight general answers
+
+The public chat path is guarded by **Model Runtime Governor v1**. Each turn receives a runtime budget profile:
+
+- `fast_tool`: verified deterministic tool answers, short timeout, small output budget
+- `standard_chat`: primary-brain chat, capped timeout and serialized heavy-model concurrency
+- `code_chat`: code/debug specialist budget
+- `writing_chat`: business/writing budget
+- `deep_reasoning`: explicit deep-reasoning escalation budget
+
+The governor records profile, timeout, queue time, and budget-exceeded status into the chat trace and model ops telemetry.
 
 Chat tool flow:
 
@@ -161,6 +171,13 @@ Relevant runtime knobs:
 
 - `STUDENT_CHAT_LOCAL_MODEL_NAME`
 - `STUDENT_CHAT_LOCAL_TIMEOUT_MS`
+- `MODEL_RUNTIME_GOVERNOR_ENABLED`
+- `MODEL_RUNTIME_FAST_TIMEOUT_MS`
+- `MODEL_RUNTIME_STANDARD_TIMEOUT_MS`
+- `MODEL_RUNTIME_CODE_TIMEOUT_MS`
+- `MODEL_RUNTIME_DEEP_TIMEOUT_MS`
+- `MODEL_RUNTIME_STANDARD_MAX_CONCURRENCY`
+- `MODEL_RUNTIME_HEAVY_MAX_CONCURRENCY`
 - `MODEL_ROUTER_RERANKER_BASE_URL`
 - `npm run student:chat-prod-gate -- --base-url=https://app.hydria.click`
 - `npm run models:pretraining-gate`
@@ -292,7 +309,7 @@ Model runtime ops validation:
 npm run models:ops-gate
 ```
 
-This writes `storage/training/model-runtime-ops-gate-v1.json` from `storage/observability/model-runtime-events-v1.jsonl` and blocks runtime changes when latency, retry rate, static fallbacks, cloud runtime use, or deep-reasoning escalation drift beyond the configured thresholds. Local environments without runtime traffic can use `npm run models:ops-gate -- --allow-empty`; production should run it after a smoke or chat gate has generated telemetry. The same summary is exposed through `GET /api/models/ops`.
+This writes `storage/training/model-runtime-ops-gate-v1.json` from `storage/observability/model-runtime-events-v1.jsonl` and blocks runtime changes when latency, retry rate, static fallbacks, cloud runtime use, deep-reasoning escalation, or per-budget p95 latency drifts beyond the configured thresholds. Local environments without runtime traffic can use `npm run models:ops-gate -- --allow-empty`; production should run it after a smoke or chat gate has generated telemetry. The same summary is exposed through `GET /api/models/ops`.
 
 ### Learning Governance
 

@@ -148,6 +148,21 @@ const envSchema = z.object({
   MODEL_ROUTER_MAX_COST_TIER: z.enum(["low", "medium", "high"]).default("medium"),
   MODEL_ROUTER_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(32).max(8192).default(900),
   MODEL_ROUTER_LOCAL_TIMEOUT_MS: z.coerce.number().int().min(1000).default(120000),
+  MODEL_RUNTIME_GOVERNOR_ENABLED: z
+    .string()
+    .default("true")
+    .transform((value) => value.toLowerCase() !== "false"),
+  MODEL_RUNTIME_FAST_TIMEOUT_MS: z.coerce.number().int().min(1000).default(12000),
+  MODEL_RUNTIME_STANDARD_TIMEOUT_MS: z.coerce.number().int().min(1000).default(30000),
+  MODEL_RUNTIME_CODE_TIMEOUT_MS: z.coerce.number().int().min(1000).default(45000),
+  MODEL_RUNTIME_DEEP_TIMEOUT_MS: z.coerce.number().int().min(1000).default(90000),
+  MODEL_RUNTIME_FAST_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(32).max(2048).default(96),
+  MODEL_RUNTIME_STANDARD_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(32).max(4096).default(180),
+  MODEL_RUNTIME_CODE_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(32).max(4096).default(240),
+  MODEL_RUNTIME_DEEP_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(32).max(4096).default(260),
+  MODEL_RUNTIME_FAST_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(2),
+  MODEL_RUNTIME_STANDARD_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(1),
+  MODEL_RUNTIME_HEAVY_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(1),
   MODEL_ROUTER_VLLM_BASE_URL: z.string().default(""),
   MODEL_ROUTER_VLLM_API_KEY: z.string().default(""),
   MODEL_ROUTER_OPENAI_COMPAT_BASE_URL: z.string().default(""),

@@ -7,6 +7,7 @@ import type {
   ConversationState
 } from "../services/context/contextStateTracker.js";
 import type { MultiTurnAnswerPolicyResult } from "../services/context/multiTurnAnswerPolicy.js";
+import type { ModelRuntimeBudget } from "../services/models/modelRuntimeGovernor.js";
 
 export const chatMessageRequestSchema = z.object({
   sessionId: z.string().uuid().optional(),
@@ -39,6 +40,9 @@ export type ChatGenerationMetadata = {
     routingReason: string;
     pipeline: string[];
   };
+  runtimeBudget?: ModelRuntimeBudget;
+  queueMs?: number;
+  budgetExceeded?: boolean;
   usedStaticFallback: boolean;
   validationIssues: string[];
 };

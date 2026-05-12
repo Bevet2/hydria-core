@@ -129,3 +129,38 @@ test("model runtime ops gate passes healthy local-only telemetry", async () => {
     assert.deepEqual(report.blockers, []);
   });
 });
+
+test("model runtime ops gate blocks over-budget profile latency", async () => {
+  await withTelemetryFile(async (service) => {
+    await service.writeEventsForTest([
+      {
+        scope: "public_chat",
+        status: "success",
+        provider: "ollama",
+        model: "qwen2.5:14b",
+        capabilityId: "qwen-14b-instruct-main",
+        specialistRole: "primary_brain",
+        category: "other",
+        runtimeMode: "direct",
+        durationMs: 60000,
+        retryUsed: false,
+        attemptCount: 1,
+        staticFallbackUsed: false,
+        toolUsed: false,
+        toolRequired: false,
+        qualityPassed: true,
+        budgetProfile: "standard_chat",
+        timeoutMs: 30000,
+        budgetExceeded: true,
+        issues: []
+      }
+    ]);
+
+    const report = service.buildGateReport(await service.buildSummary(), {
+      maxStandardP95LatencyMs: 45000
+    });
+    assert.equal(report.passed, false);
+    assert.equal(report.blockers.includes("standard_chat_budget_p95_latency_exceeded"), true);
+    assert.equal(report.warnings.includes("recent_model_runtime_budget_exceeded"), true);
+  });
+});

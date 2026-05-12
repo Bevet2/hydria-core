@@ -80,6 +80,9 @@ export function ChatPage() {
       specialist: lastResponse?.generation.specialist?.role ?? "n/a",
       specialistName: lastResponse?.generation.specialist?.displayName ?? "n/a",
       pipeline: lastResponse?.generation.specialist?.pipeline.join(" -> ") ?? "n/a",
+      budgetProfile: lastResponse?.generation.runtimeBudget?.profile ?? "n/a",
+      budgetTimeout: formatDuration(lastResponse?.generation.runtimeBudget?.timeoutMs ?? null),
+      budgetExceeded: lastResponse?.generation.budgetExceeded ? "yes" : "no",
       toolRoute: lastResponse?.tooling.route ?? "n/a",
       toolType: lastResponse?.tooling.routing.toolType ?? "none",
       toolIntent: lastResponse?.tooling.routing.intent ?? "none",
@@ -274,6 +277,18 @@ export function ChatPage() {
               <div>
                 <span>Specialist</span>
                 <strong>{chatMeta.specialist}</strong>
+              </div>
+              <div>
+                <span>Budget</span>
+                <strong>{chatMeta.budgetProfile}</strong>
+              </div>
+              <div>
+                <span>Timeout</span>
+                <strong>{chatMeta.budgetTimeout}</strong>
+              </div>
+              <div>
+                <span>Over budget</span>
+                <strong>{chatMeta.budgetExceeded}</strong>
               </div>
               <div>
                 <span>Route</span>

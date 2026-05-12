@@ -16,12 +16,18 @@ import type {
 } from "../../types/modelOps.js";
 import { logger } from "../../utils/logger.js";
 
-export type ModelRuntimeTelemetryInput = Omit<ModelRuntimeEvent, "id" | "createdAt" | "estimatedCostUnits" | "local" | "cloud"> & {
+export type ModelRuntimeTelemetryInput = Omit<
+  ModelRuntimeEvent,
+  "id" | "createdAt" | "estimatedCostUnits" | "local" | "cloud" | "budgetProfile" | "timeoutMs" | "budgetExceeded"
+> & {
   id?: string;
   createdAt?: string;
   estimatedCostUnits?: number | null;
   local?: boolean | null;
   cloud?: boolean | null;
+  budgetProfile?: ModelRuntimeEvent["budgetProfile"];
+  timeoutMs?: number | null;
+  budgetExceeded?: boolean | null;
 };
 
 export type ModelRuntimeOpsGateThresholds = {
@@ -30,6 +36,9 @@ export type ModelRuntimeOpsGateThresholds = {
   maxRetryRate?: number;
   maxStaticFallbackRate?: number;
   maxDeepReasoningRate?: number;
+  maxFastP95LatencyMs?: number;
+  maxStandardP95LatencyMs?: number;
+  maxDeepP95LatencyMs?: number;
   requireLocalOnly?: boolean;
 };
 
@@ -132,6 +141,9 @@ function normalizeEvent(input: ModelRuntimeTelemetryInput): ModelRuntimeEvent {
           }),
     local: input.local ?? isLocalProvider(provider),
     cloud: input.cloud ?? isCloudProvider(provider),
+    budgetProfile: input.budgetProfile ?? null,
+    timeoutMs: typeof input.timeoutMs === "number" ? input.timeoutMs : null,
+    budgetExceeded: Boolean(input.budgetExceeded),
     issues: input.issues.slice(0, 12)
   };
 }
@@ -210,6 +222,7 @@ export class ModelRuntimeTelemetryService {
       byProvider: groupStats(events, (event) => event.provider),
       byRole: groupStats(events, (event) => event.specialistRole),
       byModel: groupStats(events, (event) => event.model),
+      byBudgetProfile: groupStats(events, (event) => event.budgetProfile ?? "unknown"),
       recentEvents: events.slice(-25).reverse()
     };
   }
@@ -224,6 +237,9 @@ export class ModelRuntimeTelemetryService {
       maxRetryRate: thresholds.maxRetryRate ?? 35,
       maxStaticFallbackRate: thresholds.maxStaticFallbackRate ?? 10,
       maxDeepReasoningRate: thresholds.maxDeepReasoningRate ?? 40,
+      maxFastP95LatencyMs: thresholds.maxFastP95LatencyMs ?? 15000,
+      maxStandardP95LatencyMs: thresholds.maxStandardP95LatencyMs ?? 45000,
+      maxDeepP95LatencyMs: thresholds.maxDeepP95LatencyMs ?? 95000,
       requireLocalOnly: thresholds.requireLocalOnly ?? true
     };
     const blockers: string[] = [];
@@ -247,6 +263,23 @@ export class ModelRuntimeTelemetryService {
     }
     if (totals.deepReasoningRate > effective.maxDeepReasoningRate) {
       blockers.push("deep_reasoning_rate_exceeded");
+    }
+    for (const [profile, stat] of Object.entries(summary.byBudgetProfile)) {
+      if (profile === "fast_tool" && stat.p95LatencyMs > effective.maxFastP95LatencyMs) {
+        blockers.push("fast_tool_budget_p95_latency_exceeded");
+      }
+      if (
+        (profile === "standard_chat" || profile === "writing_chat" || profile === "code_chat") &&
+        stat.p95LatencyMs > effective.maxStandardP95LatencyMs
+      ) {
+        blockers.push(`${profile}_budget_p95_latency_exceeded`);
+      }
+      if (profile === "deep_reasoning" && stat.p95LatencyMs > effective.maxDeepP95LatencyMs) {
+        blockers.push("deep_reasoning_budget_p95_latency_exceeded");
+      }
+    }
+    if (summary.recentEvents.some((event) => event.budgetExceeded)) {
+      warnings.push("recent_model_runtime_budget_exceeded");
     }
 
     if (totals.p95LatencyMs > 120000) {
@@ -281,6 +314,9 @@ export class ModelRuntimeTelemetryService {
     }
     if (blockers.includes("model_runtime_p95_latency_exceeded") || warnings.includes("p95_latency_high_for_cpu_vps")) {
       recommendations.push("Keep Ollama serialized on OVH CPU or move 14B/deep roles to a GPU/vLLM backend.");
+    }
+    if (blockers.some((blocker) => blocker.includes("budget_p95_latency_exceeded"))) {
+      recommendations.push("Tighten Model Runtime Governor budgets or move the over-budget specialist to a faster backend.");
     }
     if (blockers.includes("deep_reasoning_rate_exceeded")) {
       recommendations.push("Tighten deep-reasoning escalation policy before adding watchers.");

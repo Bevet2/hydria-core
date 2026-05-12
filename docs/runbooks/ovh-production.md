@@ -302,6 +302,18 @@ HYDRIA_DOCKER_LOCAL_MODEL_BASE_URL=http://host.docker.internal:11435
 LOCAL_MODEL_TIMEOUT_MS=1000
 STUDENT_CHAT_LOCAL_TIMEOUT_MS=45000
 MODEL_ROUTER_LOCAL_TIMEOUT_MS=120000
+MODEL_RUNTIME_GOVERNOR_ENABLED=true
+MODEL_RUNTIME_FAST_TIMEOUT_MS=12000
+MODEL_RUNTIME_STANDARD_TIMEOUT_MS=30000
+MODEL_RUNTIME_CODE_TIMEOUT_MS=45000
+MODEL_RUNTIME_DEEP_TIMEOUT_MS=90000
+MODEL_RUNTIME_FAST_MAX_OUTPUT_TOKENS=96
+MODEL_RUNTIME_STANDARD_MAX_OUTPUT_TOKENS=180
+MODEL_RUNTIME_CODE_MAX_OUTPUT_TOKENS=240
+MODEL_RUNTIME_DEEP_MAX_OUTPUT_TOKENS=260
+MODEL_RUNTIME_FAST_MAX_CONCURRENCY=2
+MODEL_RUNTIME_STANDARD_MAX_CONCURRENCY=1
+MODEL_RUNTIME_HEAVY_MAX_CONCURRENCY=1
 MODEL_ROUTER_RERANKER_BASE_URL=
 MODEL_ROUTER_RERANKER_TIMEOUT_MS=30000
 HYDRIA_DOCKER_LOCAL_MODEL_OBSERVER_ENABLED=false
@@ -315,7 +327,7 @@ HYDRIA_AUTH_RATE_LIMIT_MAX_REQUESTS=30
 HYDRIA_API_RATE_LIMIT_MAX_REQUESTS=120
 ```
 
-The model router can still route heavier specialist calls to the installed Ollama models (`qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `mistral:7b`). Keep the generic local-student timeout low for non-chat paths, but give runtime chat its own timeout through `STUDENT_CHAT_LOCAL_TIMEOUT_MS`; chat does not fall back to OpenRouter. Public chat is intentionally open but IP-rate-limited. Public OVH must keep `TRAINING_ENDPOINTS_ENABLED=false`; enable it only for controlled training/evaluation sessions and keep API-key protection enabled.
+The model router can still route heavier specialist calls to the installed Ollama models (`qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `mistral:7b`). Keep the generic local-student timeout low for non-chat paths, but let Model Runtime Governor v1 cap runtime chat by profile: fast verified tool answers, standard chat, code, writing, and deep reasoning. Chat does not fall back to OpenRouter. Public chat is intentionally open but IP-rate-limited. Public OVH must keep `TRAINING_ENDPOINTS_ENABLED=false`; enable it only for controlled training/evaluation sessions and keep API-key protection enabled.
 
 Before changing the multi-model runtime, run:
 
@@ -339,7 +351,7 @@ npm run models:ops-gate
 curl -fsS https://app.hydria.click/api/models/ops?limit=50
 ```
 
-The ops gate tracks p95 latency, retry rate, local Ollama usage, static fallbacks, cloud runtime events, deep-reasoning escalation, and tool/model role distribution.
+The ops gate tracks p95 latency, retry rate, local Ollama usage, static fallbacks, cloud runtime events, deep-reasoning escalation, per-budget p95 latency, budget-exceeded events, and tool/model role distribution.
 
 ## Firewall
 

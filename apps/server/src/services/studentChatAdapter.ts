@@ -14,6 +14,11 @@ import {
   selectStudentChatModelRoute,
   type StudentChatModelRoute
 } from "./studentChatModelRouter.js";
+import {
+  defaultModelRuntimeGovernor,
+  type ModelRuntimeBudget,
+  type ModelRuntimeGovernorService
+} from "./models/modelRuntimeGovernor.js";
 
 export type StudentChatAdapterInput = {
   question: string;
@@ -43,11 +48,18 @@ export type StudentChatAdapterResult = {
   };
   raw: string;
   validationIssues: string[];
+  runtimeBudget?: ModelRuntimeBudget;
+  queueMs?: number;
+  budgetExceeded?: boolean;
   latencyMs?: number;
   attempts?: Array<{
     model: string;
     status: "success" | "failed";
     latencyMs: number;
+    timeoutMs?: number;
+    budgetProfile?: ModelRuntimeBudget["profile"];
+    queueMs?: number;
+    budgetExceeded?: boolean;
     error?: string;
   }>;
 };
@@ -292,7 +304,8 @@ function buildFallbackAnswer(input: StudentChatAdapterInput, reason: string): St
 
 export class StudentChatAdapter {
   constructor(
-    private readonly localModelService: Pick<LocalModelService, "testPrompt" | "getConfiguredModelName">
+    private readonly localModelService: Pick<LocalModelService, "testPrompt" | "getConfiguredModelName">,
+    private readonly runtimeGovernor: Pick<ModelRuntimeGovernorService, "run"> = defaultModelRuntimeGovernor
   ) {}
 
   async answer(input: StudentChatAdapterInput): Promise<StudentChatAdapterResult> {
@@ -300,24 +313,38 @@ export class StudentChatAdapter {
     const route = selectStudentChatModelRoute(input);
     const prompt = buildStudentChatPrompt(input, route);
     const localModel = this.localModelService.getConfiguredModelName?.() ?? "local-student";
-    const candidateModels = route.fallbackModelNames.length > 0 ? route.fallbackModelNames : [localModel];
+    const candidateModels = (route.fallbackModelNames.length > 0 ? route.fallbackModelNames : [localModel]).slice(
+      0,
+      route.runtimeBudget.fallbackDepth + 1
+    );
     const validationIssues: string[] = [];
     const attempts: NonNullable<StudentChatAdapterResult["attempts"]> = [];
+    let totalQueueMs = 0;
+    let budgetExceeded = false;
 
     for (const [index, modelName] of candidateModels.entries()) {
       const attemptStartedAt = Date.now();
       try {
-        const response = await this.localModelService.testPrompt(prompt, studentChatSystemPrompt, {
-          format: studentChatAnswerJsonSchema,
-          modelName,
-          numPredict: route.specialistRole === "deep_reasoner" ? 240 : 180,
-          temperature: 0.1,
-          timeoutMs: route.timeoutMs
-        });
+        const governed = await this.runtimeGovernor.run(route.runtimeBudget, () =>
+          this.localModelService.testPrompt(prompt, studentChatSystemPrompt, {
+            format: studentChatAnswerJsonSchema,
+            modelName,
+            numPredict: route.runtimeBudget.maxOutputTokens,
+            temperature: 0.1,
+            timeoutMs: route.runtimeBudget.timeoutMs
+          })
+        );
+        const response = governed.result;
+        totalQueueMs += governed.queueMs;
+        budgetExceeded = budgetExceeded || governed.budgetExceeded;
         attempts.push({
           model: modelName,
           status: "success",
-          latencyMs: Date.now() - attemptStartedAt
+          latencyMs: Date.now() - attemptStartedAt,
+          timeoutMs: route.runtimeBudget.timeoutMs,
+          budgetProfile: route.runtimeBudget.profile,
+          queueMs: governed.queueMs,
+          budgetExceeded: governed.budgetExceeded
         });
         return {
           answer: parseStudentChatAnswer(response.response),
@@ -333,6 +360,9 @@ export class StudentChatAdapter {
           },
           raw: response.response,
           validationIssues: index > 0 ? validationIssues : [],
+          runtimeBudget: route.runtimeBudget,
+          queueMs: totalQueueMs,
+          budgetExceeded,
           latencyMs: Date.now() - startedAt,
           attempts
         };
@@ -342,6 +372,8 @@ export class StudentChatAdapter {
           model: modelName,
           status: "failed",
           latencyMs: Date.now() - attemptStartedAt,
+          timeoutMs: route.runtimeBudget.timeoutMs,
+          budgetProfile: route.runtimeBudget.profile,
           error: reason
         });
         validationIssues.push(`${modelName}: ${reason}`);
@@ -371,6 +403,9 @@ export class StudentChatAdapter {
       },
       raw: answer.answer,
       validationIssues: ["student_chat_generation_failed", ...validationIssues],
+      runtimeBudget: route.runtimeBudget,
+      queueMs: totalQueueMs,
+      budgetExceeded,
       latencyMs: Date.now() - startedAt,
       attempts
     };

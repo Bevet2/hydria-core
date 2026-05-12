@@ -144,6 +144,66 @@ test("student chat adapter routes general direct questions to the local primary 
   assert.equal(selectedModel, "qwen2.5:14b");
   assert.equal(result.specialist.role, "primary_brain");
   assert.match(result.specialist.routingReason, /General direct question/);
+  assert.equal(result.runtimeBudget?.profile, "standard_chat");
+});
+
+test("student chat adapter uses fast budget for verified calculator tool answers", async () => {
+  let selectedModel = "";
+  let timeoutMs = 0;
+  let numPredict = 0;
+  const input = {
+    ...buildInput(),
+    category: "technical_explanation" as const,
+    routingQuestion: "Calcule 12 * 37.",
+    userMessage: "Calcule 12 * 37.",
+    question: "Calcule 12 * 37.",
+    requiresExternalGrounding: true,
+    tooling: {
+      ...defaultChatToolMetadata,
+      route: "used" as const,
+      used: true,
+      routing: {
+        ...defaultChatToolMetadata.routing,
+        toolRequired: true,
+        toolRecommended: true,
+        toolResultUsed: true,
+        toolType: "calculator" as const,
+        intent: "arithmetic",
+        fallbackAllowed: false
+      },
+      verifiedFacts: ["12 * 37 = 444"]
+    }
+  };
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "qwen2.5:14b";
+    },
+    async testPrompt(_prompt, _system, options) {
+      selectedModel = options?.modelName ?? "";
+      timeoutMs = options?.timeoutMs ?? 0;
+      numPredict = options?.numPredict ?? 0;
+      return {
+        provider: "ollama",
+        model: selectedModel,
+        response: JSON.stringify({
+          modelRole: "student",
+          answer: "Le resultat de 12 multiplie par 37 est 444.",
+          key_points: ["Calcul verifie"],
+          assumptions: [],
+          confidence: 96
+        }),
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer(input);
+
+  assert.equal(selectedModel, "phi3:mini");
+  assert.equal(result.specialist.role, "fast_router");
+  assert.equal(result.runtimeBudget?.profile, "fast_tool");
+  assert.equal(timeoutMs <= 12000, true);
+  assert.equal(numPredict <= 96, true);
 });
 
 test("student chat adapter routes strategic decisions to the local deep reasoner", async () => {

@@ -5,6 +5,7 @@ import type {
 } from "../data/modelCapabilityManifest.js";
 import type { QuestionCategory } from "./arena.js";
 import type { ChatRuntimeMode } from "./chat.js";
+import type { ModelRuntimeBudgetProfile } from "../services/models/modelRuntimeGovernor.js";
 
 export type ModelRuntimeScope = "public_chat" | "model_completion";
 export type ModelRuntimeStatus = "success" | "fallback" | "failed" | "blocked";
@@ -31,6 +32,9 @@ export type ModelRuntimeEvent = {
   toolUsed: boolean;
   toolRequired: boolean;
   qualityPassed: boolean | null;
+  budgetProfile: ModelRuntimeBudgetProfile | string | null;
+  timeoutMs: number | null;
+  budgetExceeded: boolean;
   issues: string[];
 };
 
@@ -62,6 +66,7 @@ export type ModelRuntimeOpsSummary = {
   byProvider: Record<string, ModelRuntimeStat>;
   byRole: Record<string, ModelRuntimeStat>;
   byModel: Record<string, ModelRuntimeStat>;
+  byBudgetProfile: Record<string, ModelRuntimeStat>;
   recentEvents: ModelRuntimeEvent[];
 };
 
@@ -75,6 +80,9 @@ export type ModelRuntimeOpsGateReport = {
     maxRetryRate: number;
     maxStaticFallbackRate: number;
     maxDeepReasoningRate: number;
+    maxFastP95LatencyMs: number;
+    maxStandardP95LatencyMs: number;
+    maxDeepP95LatencyMs: number;
     requireLocalOnly: boolean;
   };
   summary: ModelRuntimeOpsSummary;

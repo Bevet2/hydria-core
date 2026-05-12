@@ -1186,6 +1186,14 @@ function buildChatOrchestrationTrace(args: {
           capabilityId: args.generation.specialist.capabilityId,
           routingReason: args.generation.specialist.routingReason,
           pipeline: args.generation.specialist.pipeline,
+          budgetProfile: args.generation.runtimeBudget?.profile ?? null,
+          budgetLabel: args.generation.runtimeBudget?.label ?? null,
+          budgetReason: args.generation.runtimeBudget?.reason ?? null,
+          timeoutMs: args.generation.runtimeBudget?.timeoutMs ?? null,
+          maxLatencyMs: args.generation.runtimeBudget?.maxLatencyMs ?? null,
+          maxOutputTokens: args.generation.runtimeBudget?.maxOutputTokens ?? null,
+          queueMs: args.generation.queueMs ?? 0,
+          budgetExceeded: args.generation.budgetExceeded ?? false,
           usedStaticFallback: args.generation.provider === "fallback",
           validationIssues: args.generation.validationIssues.slice(0, 5)
         }
@@ -1531,6 +1539,11 @@ export class ChatRuntimeService {
       toolUsed: tooling.used,
       toolRequired: tooling.routing.toolRequired,
       qualityPassed: conversationQuality.passed,
+      budgetProfile: draft.generation.runtimeBudget?.profile ?? null,
+      timeoutMs: draft.generation.runtimeBudget?.timeoutMs ?? null,
+      budgetExceeded:
+        draft.generation.budgetExceeded ??
+        (draft.generation.runtimeBudget ? durationMs > draft.generation.runtimeBudget.maxLatencyMs : false),
       issues: [
         ...conversationQuality.issues,
         ...draft.generation.validationIssues
@@ -1553,6 +1566,9 @@ export class ChatRuntimeService {
         provider: draft.generation.provider,
         model: draft.generation.model,
         specialist: draft.generation.specialist,
+        runtimeBudget: draft.generation.runtimeBudget,
+        queueMs: draft.generation.queueMs,
+        budgetExceeded: draft.generation.budgetExceeded,
         usedStaticFallback: draft.generation.provider === "fallback",
         validationIssues: draft.generation.validationIssues
       },

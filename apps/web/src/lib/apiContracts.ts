@@ -183,6 +183,15 @@ export type AppHealth = {
     routing: string;
     specialists: Record<string, string>;
     timeoutMs: number;
+    runtimeGovernor?: {
+      enabled: boolean;
+      fastTimeoutMs: number;
+      standardTimeoutMs: number;
+      codeTimeoutMs: number;
+      deepTimeoutMs: number;
+      standardMaxConcurrency: number;
+      heavyMaxConcurrency: number;
+    };
     cloudFallbackEnabled: boolean;
   };
   trainingEndpoints?: {

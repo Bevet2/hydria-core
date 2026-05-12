@@ -158,6 +158,15 @@ app.get("/api/health", async (_request, response) => {
         fastRouter: "phi3:mini"
       },
       timeoutMs: env.STUDENT_CHAT_LOCAL_TIMEOUT_MS,
+      runtimeGovernor: {
+        enabled: env.MODEL_RUNTIME_GOVERNOR_ENABLED,
+        fastTimeoutMs: env.MODEL_RUNTIME_FAST_TIMEOUT_MS,
+        standardTimeoutMs: env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS,
+        codeTimeoutMs: env.MODEL_RUNTIME_CODE_TIMEOUT_MS,
+        deepTimeoutMs: env.MODEL_RUNTIME_DEEP_TIMEOUT_MS,
+        standardMaxConcurrency: env.MODEL_RUNTIME_STANDARD_MAX_CONCURRENCY,
+        heavyMaxConcurrency: env.MODEL_RUNTIME_HEAVY_MAX_CONCURRENCY
+      },
       cloudFallbackEnabled: false
     },
     localModel: local,

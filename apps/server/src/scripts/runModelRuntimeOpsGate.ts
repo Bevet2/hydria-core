@@ -42,6 +42,9 @@ export async function runModelRuntimeOpsGate(argv = process.argv.slice(2)) {
     maxRetryRate: numberOption(argv, "--max-retry-rate", 35),
     maxStaticFallbackRate: numberOption(argv, "--max-static-fallback-rate", 10),
     maxDeepReasoningRate: numberOption(argv, "--max-deep-rate", 40),
+    maxFastP95LatencyMs: numberOption(argv, "--max-fast-p95-ms", 15000),
+    maxStandardP95LatencyMs: numberOption(argv, "--max-standard-p95-ms", 45000),
+    maxDeepP95LatencyMs: numberOption(argv, "--max-deep-p95-ms", 95000),
     requireLocalOnly: !hasFlag(argv, "--allow-cloud-runtime")
   };
   const service = new ModelRuntimeTelemetryService();

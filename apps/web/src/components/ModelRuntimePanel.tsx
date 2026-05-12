@@ -27,6 +27,11 @@ export function ModelRuntimePanel({ summary, onRefresh }: ModelRuntimePanelProps
   const modelEntries = Object.entries(summary?.byModel ?? {})
     .sort((left, right) => right[1].count - left[1].count)
     .slice(0, 5);
+  const budgetEntries = Object.entries(summary?.byBudgetProfile ?? {})
+    .sort((left, right) => right[1].count - left[1].count)
+    .slice(0, 5);
+  const recentBudgetExceeded =
+    summary?.recentEvents.filter((event) => event.budgetExceeded).length ?? 0;
 
   return (
     <section className="panel">
@@ -63,6 +68,10 @@ export function ModelRuntimePanel({ summary, onRefresh }: ModelRuntimePanelProps
               <span>Deep reasoning</span>
               <strong>{formatRate(totals.deepReasoningRate)}</strong>
             </div>
+            <div className="overview-item">
+              <span>Budget exceeded</span>
+              <strong>{recentBudgetExceeded}</strong>
+            </div>
           </div>
 
           <div className="runtime-mini-table">
@@ -86,6 +95,21 @@ export function ModelRuntimePanel({ summary, onRefresh }: ModelRuntimePanelProps
               modelEntries.map(([model, stat]) => (
                 <div key={model} className="runtime-mini-row">
                   <span>{model}</span>
+                  <strong>{stat.count}</strong>
+                  <span>{formatMs(stat.p95LatencyMs)}</span>
+                </div>
+              ))
+            ) : (
+              <p className="muted">none</p>
+            )}
+          </div>
+
+          <div className="runtime-mini-table">
+            <h3>Budgets</h3>
+            {budgetEntries.length > 0 ? (
+              budgetEntries.map(([profile, stat]) => (
+                <div key={profile} className="runtime-mini-row">
+                  <span>{profile}</span>
                   <strong>{stat.count}</strong>
                   <span>{formatMs(stat.p95LatencyMs)}</span>
                 </div>
