@@ -54,6 +54,14 @@ type ChatResponse = {
       maxLatencyMs?: number;
       maxOutputTokens?: number;
     };
+    attempts?: Array<{
+      model?: string;
+      status?: string;
+      latencyMs?: number;
+      timeoutMs?: number;
+      budgetProfile?: string;
+      error?: string;
+    }>;
     specialist?: {
       role?: string;
       capabilityId?: string;
@@ -91,6 +99,14 @@ type TurnResult = {
   usedStaticFallback: boolean;
   qualityPassed: boolean;
   latencyMs: number;
+  attempts: Array<{
+    model: string;
+    status: string;
+    latencyMs: number;
+    timeoutMs: number | null;
+    budgetProfile: string;
+    error: string | null;
+  }>;
 };
 
 type CaseResult = {
@@ -117,11 +133,11 @@ const currentFilePath = fileURLToPath(import.meta.url);
 const projectRoot = resolve(dirname(currentFilePath), "../../../../");
 const defaultOutput = resolve(projectRoot, "storage", "training", "production-chat-routing-gate-v1.json");
 
-const standardChatExpectation: TurnExpectation = {
+const standardLightExpectation: TurnExpectation = {
   provider: "ollama",
-  model: "qwen2.5:14b",
-  budgetProfile: "standard_chat",
-  maxLatencyMs: 70000
+  model: "qwen2.5:3b",
+  budgetProfile: "standard_light_chat",
+  maxLatencyMs: 45000
 };
 
 const conciseExpectation: TurnExpectation = {
@@ -254,34 +270,34 @@ const cases: RoutingGateCase[] = [
   },
   {
     id: "standard_charlemagne_fr",
-    description: "Stable biography should route to the primary brain.",
-    routeFamily: "standard_chat",
+    description: "Stable biography should use the CPU-aware standard-light route.",
+    routeFamily: "standard_light_chat",
     language: "fr",
-    turns: [{ message: "Qui est Charlemagne ?", expect: standardChatExpectation }],
+    turns: [{ message: "Qui est Charlemagne ?", expect: standardLightExpectation }],
     expectedFinalTerms: ["Charlemagne"]
   },
   {
     id: "standard_eventual_consistency_en",
-    description: "Stable distributed-systems concept should use standard chat.",
-    routeFamily: "standard_chat",
+    description: "Short stable distributed-systems concept should use standard-light chat.",
+    routeFamily: "standard_light_chat",
     language: "en",
-    turns: [{ message: "What is eventual consistency?", expect: standardChatExpectation }],
+    turns: [{ message: "What is eventual consistency?", expect: standardLightExpectation }],
     expectedFinalTerms: ["consistency"]
   },
   {
     id: "standard_rest_api_fr",
-    description: "Conceptual REST API question should not route to code specialist.",
-    routeFamily: "standard_chat",
+    description: "Conceptual REST API question should not route to code specialist or the 14B brain.",
+    routeFamily: "standard_light_chat",
     language: "fr",
-    turns: [{ message: "Explique ce qu'est une API REST.", expect: standardChatExpectation }],
+    turns: [{ message: "Explique ce qu'est une API REST.", expect: standardLightExpectation }],
     expectedFinalTerms: ["API"]
   },
   {
     id: "standard_idempotency_en",
-    description: "Stable definition should stay on primary brain.",
-    routeFamily: "standard_chat",
+    description: "Stable definition should use standard-light chat on CPU.",
+    routeFamily: "standard_light_chat",
     language: "en",
-    turns: [{ message: "Define idempotency in distributed systems.", expect: standardChatExpectation }],
+    turns: [{ message: "Define idempotency in distributed systems.", expect: standardLightExpectation }],
     expectedFinalTerms: ["idempot"]
   },
   {
@@ -534,6 +550,15 @@ function evaluateTurn(args: {
   const toolRequired = Boolean(args.response.tooling?.routing?.toolRequired);
   const usedStaticFallback = Boolean(args.response.generation?.usedStaticFallback || provider === "fallback");
   const qualityPassed = args.response.conversationQuality?.passed !== false;
+  const attempts =
+    args.response.generation?.attempts?.map((attempt) => ({
+      model: attempt.model ?? "unknown",
+      status: attempt.status ?? "unknown",
+      latencyMs: Math.max(0, Math.round(attempt.latencyMs ?? 0)),
+      timeoutMs: typeof attempt.timeoutMs === "number" ? attempt.timeoutMs : null,
+      budgetProfile: attempt.budgetProfile ?? "unknown",
+      error: attempt.error ?? null
+    })) ?? [];
   const issues: string[] = [];
 
   if (expectation.provider && provider !== expectation.provider) {
@@ -589,7 +614,8 @@ function evaluateTurn(args: {
     usedRetry: Boolean(args.response.usedRetry),
     usedStaticFallback,
     qualityPassed,
-    latencyMs: args.durationMs
+    latencyMs: args.durationMs,
+    attempts
   };
 }
 

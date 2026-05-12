@@ -485,6 +485,9 @@ export class ModelProviderService {
     right: ModelProviderTarget & { preferred: boolean; modelOrder: number },
     costPolicy: ModelBudgetPolicyDecision["effectiveCostPolicy"]
   ) {
+    if (left.modelOrder !== right.modelOrder) {
+      return left.modelOrder - right.modelOrder;
+    }
     if (left.preferred !== right.preferred) {
       return left.preferred ? -1 : 1;
     }
@@ -492,7 +495,6 @@ export class ModelProviderService {
       return (
         qualityRank[right.qualityTier] - qualityRank[left.qualityTier] ||
         left.estimatedCostUnits - right.estimatedCostUnits ||
-        left.modelOrder - right.modelOrder ||
         latencyRank[left.latencyTier] - latencyRank[right.latencyTier]
       );
     }
@@ -500,14 +502,12 @@ export class ModelProviderService {
       return (
         left.estimatedCostUnits - right.estimatedCostUnits ||
         latencyRank[left.latencyTier] - latencyRank[right.latencyTier] ||
-        left.modelOrder - right.modelOrder ||
         qualityRank[right.qualityTier] - qualityRank[left.qualityTier]
       );
     }
     return (
       Number(right.local) - Number(left.local) ||
       left.estimatedCostUnits - right.estimatedCostUnits ||
-      left.modelOrder - right.modelOrder ||
       qualityRank[right.qualityTier] - qualityRank[left.qualityTier] ||
       latencyRank[left.latencyTier] - latencyRank[right.latencyTier]
     );

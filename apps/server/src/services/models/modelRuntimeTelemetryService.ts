@@ -316,6 +316,7 @@ export class ModelRuntimeTelemetryService {
       }
       if (
         (profile === "concise_chat" ||
+          profile === "standard_light_chat" ||
           profile === "standard_chat" ||
           profile === "writing_chat" ||
           profile === "code_chat") &&

@@ -45,6 +45,16 @@ export type ChatGenerationMetadata = {
   budgetExceeded?: boolean;
   usedStaticFallback: boolean;
   validationIssues: string[];
+  attempts?: Array<{
+    model: string;
+    status: "success" | "failed";
+    latencyMs: number;
+    timeoutMs?: number;
+    budgetProfile?: ModelRuntimeBudget["profile"];
+    queueMs?: number;
+    budgetExceeded?: boolean;
+    error?: string;
+  }>;
 };
 
 export type ChatToolRoute =

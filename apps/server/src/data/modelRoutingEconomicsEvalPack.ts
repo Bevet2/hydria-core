@@ -52,8 +52,8 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
     id: "chat_stable_biography_primary_brain",
     surface: "chat_route",
     priority: "critical",
-    description: "Stable historical/biography questions should use the local primary brain, not tools or deep reasoning.",
-    tags: ["chat", "stable_knowledge", "cost_control"],
+    description: "Simple stable historical/biography questions should use the CPU-aware standard-light brain, not tools or deep reasoning.",
+    tags: ["chat", "stable_knowledge", "cost_control", "standard_light"],
     chat: {
       routingQuestion: "qui est charlemagne ?",
       category: "other",
@@ -62,9 +62,9 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
       requiresExternalGrounding: false
     },
     expected: {
-      capabilityId: "qwen-14b-instruct-main",
+      capabilityId: "qwen-3b-standard-light",
       role: "primary_brain",
-      maxCostTier: "medium",
+      maxCostTier: "low",
       maxEstimatedCostUnits: 1,
       localOnly: true,
       allowDeepReasoning: false,
@@ -75,8 +75,8 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
     id: "chat_api_definition_primary_brain",
     surface: "chat_route",
     priority: "critical",
-    description: "A conceptual API definition is technical explanation, not code implementation work.",
-    tags: ["chat", "technical_explanation", "anti_overroute_code"],
+    description: "A short conceptual API definition is technical explanation, not code implementation work or a 14B route.",
+    tags: ["chat", "technical_explanation", "anti_overroute_code", "standard_light"],
     chat: {
       routingQuestion: "Explique simplement ce qu'est une API.",
       category: "technical_explanation",
@@ -85,9 +85,9 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
       requiresExternalGrounding: false
     },
     expected: {
-      capabilityId: "qwen-14b-instruct-main",
+      capabilityId: "qwen-3b-standard-light",
       role: "primary_brain",
-      maxCostTier: "medium",
+      maxCostTier: "low",
       maxEstimatedCostUnits: 1,
       localOnly: true,
       allowDeepReasoning: false,

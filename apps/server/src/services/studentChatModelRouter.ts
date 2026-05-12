@@ -19,6 +19,7 @@ export type StudentChatModelRoute = {
   capabilityId:
     | "phi-mini-router"
     | "qwen-3b-router"
+    | "qwen-3b-standard-light"
     | "qwen-14b-instruct-main"
     | "qwen-coder-code"
     | "deepseek-r1-distill-qwen-reasoner"
@@ -129,6 +130,27 @@ function containsStableKnowledgeSignal(text: string) {
   );
 }
 
+function containsSimpleStableKnowledgeSignal(text: string, input: StudentChatModelRoutingInput) {
+  if (!["other", "technical_explanation"].includes(input.category)) {
+    return false;
+  }
+  if (!containsStableKnowledgeSignal(text) || containsLiveFreshnessSignal(text)) {
+    return false;
+  }
+  if (input.runtimeMode === "conversation" && input.activeConstraintCapsule.topConstraints.length > 0) {
+    return false;
+  }
+  if (
+    /\b(?:compare|comparison|versus|vs|tradeoff|compromis|architecture|design|incident|rollback|migration|diagnostic|debug|root cause|cause racine|strategie|strategy|decision|recommande|recommend|plan|checklist)\b/.test(
+      text
+    )
+  ) {
+    return false;
+  }
+
+  return text.split(/\s+/).filter(Boolean).length <= 28;
+}
+
 function containsLiveFreshnessSignal(text: string) {
   return /\b(?:today|current|currently|latest|recent|now|2026|aujourd hui|actuel|actuelle|derniere|dernier|recent|recente|maintenant|ceo|president|price|prix|weather|meteo|status)\b/.test(
     text
@@ -168,12 +190,22 @@ function buildFallbacks(primary: string, role: StudentChatSpecialistRole) {
       : role === "deep_reasoner"
         ? [DEEPSEEK_REASONER, QWEN_MAIN, MISTRAL_BUSINESS]
         : role === "primary_brain"
-          ? [QWEN_MAIN, MISTRAL_BUSINESS]
+          ? [QWEN_MAIN, QWEN_3B, MISTRAL_BUSINESS]
           : [MISTRAL_BUSINESS, QWEN_MAIN];
 
   return unique([
     primary,
     ...roleFallbacks,
+    env.STUDENT_CHAT_LOCAL_MODEL_NAME,
+    env.LOCAL_MODEL_NAME
+  ]);
+}
+
+function buildStandardLightFallbacks(primary: string) {
+  return unique([
+    primary,
+    MISTRAL_BUSINESS,
+    QWEN_MAIN,
     env.STUDENT_CHAT_LOCAL_MODEL_NAME,
     env.LOCAL_MODEL_NAME
   ]);
@@ -205,6 +237,19 @@ function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: stri
       maxConcurrent: env.MODEL_RUNTIME_FAST_MAX_CONCURRENCY,
       fallbackDepth: 1,
       concurrencyKey: "fast_local_chat"
+    };
+  }
+  if (profile === "standard_light_chat") {
+    return {
+      profile,
+      label: "CPU-aware stable knowledge chat",
+      reason,
+      timeoutMs: capTimeout(env.STUDENT_CHAT_LOCAL_TIMEOUT_MS, env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS),
+      maxLatencyMs: env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS,
+      maxOutputTokens: env.MODEL_RUNTIME_STANDARD_MAX_OUTPUT_TOKENS,
+      maxConcurrent: env.MODEL_RUNTIME_STANDARD_MAX_CONCURRENCY,
+      fallbackDepth: 1,
+      concurrencyKey: "standard_light_local_chat"
     };
   }
   if (profile === "code_chat") {
@@ -344,6 +389,23 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
       routingReason: reason,
       pipeline: [...basePipeline, `context_setup:${QWEN_3B}`],
       fallbackModelNames: buildFallbacks(QWEN_3B, "fast_router"),
+      timeoutMs: budget.timeoutMs,
+      runtimeBudget: budget
+    };
+  }
+
+  if (containsSimpleStableKnowledgeSignal(text, input)) {
+    const reason =
+      "Simple stable educational or biography question; use the CPU-aware 3B route instead of the 14B primary brain.";
+    const budget = buildRuntimeBudget("standard_light_chat", reason);
+    return {
+      capabilityId: "qwen-3b-standard-light",
+      displayName: "Qwen 3B Standard Light",
+      modelName: QWEN_3B,
+      specialistRole: "primary_brain",
+      routingReason: reason,
+      pipeline: [...basePipeline, `standard_light:${QWEN_3B}`],
+      fallbackModelNames: buildStandardLightFallbacks(QWEN_3B),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
     };

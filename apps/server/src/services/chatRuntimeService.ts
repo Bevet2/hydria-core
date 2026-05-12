@@ -1373,6 +1373,12 @@ function buildChatOrchestrationTrace(args: {
           maxOutputTokens: args.generation.runtimeBudget?.maxOutputTokens ?? null,
           queueMs: args.generation.queueMs ?? 0,
           budgetExceeded: args.generation.budgetExceeded ?? false,
+          attemptModels: args.generation.attempts?.map((attempt) => attempt.model).slice(0, 5) ?? [],
+          attemptStatuses: args.generation.attempts?.map((attempt) => attempt.status).slice(0, 5) ?? [],
+          attemptErrors: args.generation.attempts
+            ?.map((attempt) => attempt.error ?? "")
+            .filter(Boolean)
+            .slice(0, 5) ?? [],
           usedStaticFallback: args.generation.provider === "fallback",
           validationIssues: args.generation.validationIssues.slice(0, 5)
         }
@@ -1772,7 +1778,8 @@ export class ChatRuntimeService {
         queueMs: draft.generation.queueMs,
         budgetExceeded: draft.generation.budgetExceeded,
         usedStaticFallback: draft.generation.provider === "fallback",
-        validationIssues: draft.generation.validationIssues
+        validationIssues: draft.generation.validationIssues,
+        attempts: draft.generation.attempts
       },
       tooling,
       orchestrationTrace,

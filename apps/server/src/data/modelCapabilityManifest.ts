@@ -32,6 +32,7 @@ export type ModelCapabilityId =
   | "bge-m3-embedding"
   | "bge-reranker-retrieval"
   | "phi-mini-router"
+  | "qwen-3b-standard-light"
   | "qwen-3b-router";
 
 export type ModelCapabilityRole =
@@ -356,6 +357,38 @@ export const modelCapabilityManifest = [
       "Final complex answers",
       "Deep reasoning",
       "Large context synthesis"
+    ]
+  },
+  {
+    id: "qwen-3b-standard-light",
+    displayName: "Qwen 3B Standard Light",
+    family: "Qwen",
+    role: "primary_brain",
+    purposes: ["fast_routing"],
+    categories: allReasoningCategories,
+    providerKinds: ["ollama", "vllm", "openrouter", "openai_compatible"],
+    providerModelIds: {
+      ollama: "qwen2.5:3b",
+      vllm: "Qwen/Qwen2.5-3B-Instruct",
+      openrouter: "qwen/qwen-2.5-3b-instruct"
+    },
+    runtimeStatus: "candidate",
+    priority: 7,
+    latencyTier: "fast",
+    costTier: "low",
+    qualityTier: "standard",
+    privacyTier: "local_first",
+    maxContextTokensHint: 32768,
+    strengths: [
+      "CPU-aware stable knowledge answers",
+      "Short biographies and definitions",
+      "Low-cost public chat default for simple questions"
+    ],
+    avoidFor: [
+      "High-stakes strategy decisions",
+      "Deep reasoning",
+      "Code-heavy answers",
+      "Complex multi-constraint synthesis"
     ]
   },
   {

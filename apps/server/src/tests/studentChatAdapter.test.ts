@@ -33,7 +33,7 @@ function buildInput(): StudentChatAdapterInput {
   };
 }
 
-test("student chat adapter normalizes local student role variations and uses the chat timeout", async () => {
+test("student chat adapter routes simple stable biographies through standard-light chat", async () => {
   let timeoutMs = 0;
   let selectedModel = "";
   const adapter = new StudentChatAdapter({
@@ -61,13 +61,53 @@ test("student chat adapter normalizes local student role variations and uses the
   const result = await adapter.answer(buildInput());
 
   assert.equal(result.provider, "ollama");
-  assert.equal(result.model, "qwen2.5:14b");
+  assert.equal(result.model, "qwen2.5:3b");
   assert.equal(result.specialist.role, "primary_brain");
   assert.equal(result.answer.modelRole, "student");
   assert.equal(result.answer.confidence, 95);
   assert.equal(timeoutMs > 1000, true);
-  assert.equal(selectedModel, "qwen2.5:14b");
+  assert.equal(selectedModel, "qwen2.5:3b");
+  assert.equal(result.runtimeBudget?.profile, "standard_light_chat");
   assert.match(result.answer.answer, /Charlemagne/);
+});
+
+test("student chat adapter reserves qwen 14B for complex standard reasoning", async () => {
+  let selectedModel = "";
+  const input = {
+    ...buildInput(),
+    category: "other" as const,
+    routingQuestion: "Explain consistency model tradeoffs for a payment ledger migration.",
+    userMessage: "Explain consistency model tradeoffs for a payment ledger migration.",
+    question: "Explain consistency model tradeoffs for a payment ledger migration.",
+    runtimeMode: "direct" as const,
+    requiresExternalGrounding: false
+  };
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "phi3:mini";
+    },
+    async testPrompt(_prompt, _system, options) {
+      selectedModel = options?.modelName ?? "";
+      return {
+        provider: "ollama",
+        model: selectedModel,
+        response: JSON.stringify({
+          modelRole: "student",
+          answer: "Use strong consistency for ledger writes and eventual consistency only for derived read models.",
+          key_points: ["Consistency tradeoff"],
+          assumptions: [],
+          confidence: 86
+        }),
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer(input);
+
+  assert.equal(selectedModel, "qwen2.5:14b");
+  assert.equal(result.specialist.role, "primary_brain");
+  assert.equal(result.runtimeBudget?.profile, "standard_chat");
 });
 
 test("student chat adapter routes code questions to the local code specialist", async () => {
@@ -391,7 +431,7 @@ test("student chat adapter does not call cloud fallback when local generation fa
   const result = await adapter.answer(buildInput());
 
   assert.equal(result.provider, "fallback");
-  assert.equal(result.model, "qwen2.5:14b");
+  assert.equal(result.model, "qwen2.5:3b");
   assert.equal(result.specialist.role, "primary_brain");
   assert.equal(result.validationIssues.includes("student_chat_generation_failed"), true);
 });
