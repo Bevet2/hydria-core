@@ -208,11 +208,11 @@ test("chat runtime executes required local tools and injects verified facts into
     ...defaultToolRoutingDecision,
     toolRequired: true,
     toolRecommended: true,
-    toolType: "time" as const,
-    intent: "current_time",
+    toolType: "weather" as const,
+    intent: "current_weather",
     confidence: 0.96,
     fallbackAllowed: false,
-    reason: "Current time requires a time-aware tool path.",
+    reason: "Current weather requires a weather-aware tool path.",
     extractedArgs: {
       location: "Paris",
       language: "fr"
@@ -232,14 +232,71 @@ test("chat runtime executes required local tools and injects verified facts into
     },
     {
       async tryExecute(receivedRouting) {
-        assert.equal(receivedRouting.intent, "current_time");
+        assert.equal(receivedRouting.intent, "current_weather");
+        return {
+          toolType: "weather",
+          intent: "current_weather",
+          summary: ["Weather tool result: Paris -> clear, 18 deg C."],
+          verifiedFacts: ["Current weather in Paris: clear, temperature 18 deg C."],
+          confidenceScore: 1,
+          resultLabel: "Paris -> clear, 18 deg C"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "Quelle est la meteo a Paris ?" });
+
+  assert.equal(calls[0]?.tooling.used, true);
+  assert.equal(calls[0]?.tooling.routing.toolResultUsed, true);
+  assert.equal(calls[0]?.requiresExternalGrounding, true);
+  assert.deepEqual(calls[0]?.tooling.verifiedFacts, ["Current weather in Paris: clear, temperature 18 deg C."]);
+  assert.equal(response.tooling.used, true);
+  assert.equal(response.tooling.routing.toolType, "weather");
+  assert.equal(response.tooling.routing.toolResultUsed, true);
+  assert.equal(
+    response.orchestrationTrace.steps.find((step) => step.id === "tool_routing")?.summary,
+    "Used weather/current_weather."
+  );
+});
+
+test("chat runtime answers current time deterministically from verified tool results", async () => {
+  let adapterCalled = false;
+  const routing = {
+    ...defaultToolRoutingDecision,
+    toolRequired: true,
+    toolRecommended: true,
+    toolType: "time" as const,
+    intent: "current_time",
+    confidence: 0.96,
+    fallbackAllowed: false,
+    reason: "Current time requires a time-aware tool path.",
+    extractedArgs: {
+      location: "Paris",
+      language: "fr"
+    }
+  };
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        adapterCalled = true;
+        return buildAdapterResult("Il est 10:30 a Paris selon le contexte verifie.");
+      }
+    },
+    {
+      route() {
+        return routing;
+      }
+    },
+    {
+      async tryExecute() {
         return {
           toolType: "time",
           intent: "current_time",
-          summary: ["Time tool result: Paris -> 10:30"],
-          verifiedFacts: ["Current time in Paris: 10:30."],
+          summary: ["Time tool result: May 12, 2026 at 10:30:00 PM (Paris)"],
+          verifiedFacts: ["Current time: May 12, 2026 at 10:30:00 PM (Paris)."],
           confidenceScore: 1,
-          resultLabel: "Paris -> 10:30"
+          resultLabel: "May 12, 2026 at 10:30:00 PM (Paris)"
         };
       }
     }
@@ -247,17 +304,12 @@ test("chat runtime executes required local tools and injects verified facts into
 
   const response = await service.sendMessage({ message: "Quelle heure est-il a Paris ?" });
 
-  assert.equal(calls[0]?.tooling.used, true);
-  assert.equal(calls[0]?.tooling.routing.toolResultUsed, true);
-  assert.equal(calls[0]?.requiresExternalGrounding, true);
-  assert.deepEqual(calls[0]?.tooling.verifiedFacts, ["Current time in Paris: 10:30."]);
+  assert.equal(adapterCalled, false);
   assert.equal(response.tooling.used, true);
-  assert.equal(response.tooling.routing.toolType, "time");
-  assert.equal(response.tooling.routing.toolResultUsed, true);
-  assert.equal(
-    response.orchestrationTrace.steps.find((step) => step.id === "tool_routing")?.summary,
-    "Used time/current_time."
-  );
+  assert.equal(response.generation.provider, "tool");
+  assert.equal(response.generation.model, "time");
+  assert.equal(response.conversationQuality.passed, true);
+  assert.match(response.answer.answer, /L'heure actuelle est May 12, 2026 at 10:30:00 PM \(Paris\)\./);
 });
 
 test("chat runtime accepts concise calculator answers from verified tool results", async () => {

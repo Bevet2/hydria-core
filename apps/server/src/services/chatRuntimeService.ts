@@ -1285,13 +1285,90 @@ function extractCalculatorResult(facts: string[], summaries: string[]) {
     : null;
 }
 
+function extractTimeResult(facts: string[], summaries: string[]) {
+  const combined = [...facts, ...summaries].join("\n");
+  const match = combined.match(/Current (time|date):\s*(.+?)\.?$/im);
+  if (!match?.[1] || !match[2]) {
+    return null;
+  }
+  return {
+    kind: match[1].toLowerCase() === "date" ? "date" : "time",
+    label: match[2].trim()
+  };
+}
+
 function buildDeterministicVerifiedToolDraft(args: {
   tooling: ChatToolMetadata;
   category: QuestionCategory;
   language: ConversationState["language"];
   routingQuestion: string;
 }): ChatDraft | null {
-  if (!args.tooling.used || args.tooling.routing.toolType !== "calculator") {
+  if (!args.tooling.used) {
+    return null;
+  }
+
+  if (args.tooling.routing.toolType === "time") {
+    const timeResult = extractTimeResult(args.tooling.verifiedFacts, args.tooling.summary);
+    if (!timeResult) {
+      return null;
+    }
+
+    const effectiveLanguage = extractedToolLanguage(args.tooling) ?? args.language;
+    const isEnglish = effectiveLanguage === "en";
+    const isDate = timeResult.kind === "date";
+    const answerText = isEnglish
+      ? isDate
+        ? `The current date is ${timeResult.label}.`
+        : `The current time is ${timeResult.label}.`
+      : isDate
+        ? `La date actuelle est ${timeResult.label}.`
+        : `L'heure actuelle est ${timeResult.label}.`;
+    const answer: StudentAnswer = {
+      modelRole: "student",
+      answer: answerText,
+      key_points: isEnglish ? ["Verified time tool"] : ["Temps verifie"],
+      assumptions: [],
+      confidence: 100
+    };
+
+    return {
+      answer,
+      category: args.category,
+      routingQuestion: args.routingQuestion,
+      generation: {
+        answer,
+        usedRetry: false,
+        provider: "tool",
+        model: "time",
+        specialist: {
+          capabilityId: "phi-mini-router",
+          role: "fast_router",
+          displayName: "Verified tool answer",
+          routingReason: "Time/date tool returned an exact verified result; no model call was needed.",
+          pipeline: ["tool_routing:time", "deterministic_answer"]
+        },
+        raw: JSON.stringify(answer),
+        validationIssues: [],
+        runtimeBudget: {
+          profile: "fast_tool",
+          label: "Deterministic verified-tool answer",
+          reason: "Time/date tool returned an exact verified result; no model call was needed.",
+          timeoutMs: 0,
+          maxLatencyMs: 0,
+          maxOutputTokens: 0,
+          maxConcurrent: 1,
+          fallbackDepth: 0,
+          concurrencyKey: "deterministic_tool_answer"
+        },
+        queueMs: 0,
+        budgetExceeded: false,
+        latencyMs: 0,
+        attempts: []
+      }
+    };
+  }
+
+  if (args.tooling.routing.toolType !== "calculator") {
     return null;
   }
 

@@ -41,9 +41,9 @@ const defaultOutput = resolve(projectRoot, "storage", "training", "chat-model-wa
 
 const warmupCases: WarmupCase[] = [
   {
-    id: "phi_time_tool",
+    id: "time_tool_deterministic",
     message: "Quelle heure est-il a Paris ?",
-    expectedModel: "phi3:mini",
+    expectedModel: "time",
     expectedBudgetProfile: "fast_tool"
   },
   {
