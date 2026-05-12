@@ -241,8 +241,9 @@ function extractCurrencyArgs(question: string) {
 }
 
 function extractArithmeticExpression(question: string) {
-  const match = question.match(/([-+/*().%\d\s]+)$/);
-  const expression = normalizeSpace(match?.[1] ?? "");
+  const normalizedQuestion = question.replace(/[?!。！？]+$/g, "").trim();
+  const match = normalizedQuestion.match(/([-+/*().%\d\s]+)$/);
+  const expression = normalizeSpace(match?.[1] ?? "").replace(/[.]+$/g, "").trim();
   return expression && /[+\-*/%]/.test(expression) ? expression : null;
 }
 

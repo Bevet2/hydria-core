@@ -157,6 +157,29 @@ test("tool router keeps French language on compact arithmetic requests", () => {
   assert.equal(decision.extractedArgs.language, "fr");
 });
 
+test("tool router extracts arithmetic despite natural punctuation", () => {
+  const frenchDecision = service.route({
+    question: "Combien font 245 + 389 ?",
+    category: "other"
+  });
+  const englishDecision = service.route({
+    question: "Calculate 144 / 12.",
+    category: "other"
+  });
+
+  assert.equal(frenchDecision.toolRequired, true);
+  assert.equal(frenchDecision.toolType, "calculator");
+  assert.equal(frenchDecision.intent, "arithmetic");
+  assert.equal(frenchDecision.extractedArgs.expression, "245 + 389");
+  assert.equal(frenchDecision.extractedArgs.language, "fr");
+
+  assert.equal(englishDecision.toolRequired, true);
+  assert.equal(englishDecision.toolType, "calculator");
+  assert.equal(englishDecision.intent, "arithmetic");
+  assert.equal(englishDecision.extractedArgs.expression, "144 / 12");
+  assert.equal(englishDecision.extractedArgs.language, "en");
+});
+
 test("tool router extracts explicit pair exchange rates", () => {
   const decision = service.route({
     question: "Convert 250 EUR to USD using the explicit exchange rate 1 EUR = 1.08 USD.",

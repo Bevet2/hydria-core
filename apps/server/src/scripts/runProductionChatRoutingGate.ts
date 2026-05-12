@@ -131,6 +131,13 @@ const conciseExpectation: TurnExpectation = {
   maxLatencyMs: 35000
 };
 
+const contextAckExpectation: TurnExpectation = {
+  provider: "tool",
+  model: "context_ack",
+  budgetProfile: "fast_tool",
+  maxLatencyMs: 3000
+};
+
 const writingExpectation: TurnExpectation = {
   provider: "ollama",
   model: "mistral:7b",
@@ -222,7 +229,7 @@ const cases: RoutingGateCase[] = [
     description: "Lightweight context setup should not hit the heavy brain.",
     routeFamily: "context_setup",
     language: "fr",
-    turns: [{ message: "On parle de bases de donnees.", expect: conciseExpectation }],
+    turns: [{ message: "On parle de bases de donnees.", expect: contextAckExpectation }],
     expectedFinalTerms: ["base"]
   },
   {
@@ -230,7 +237,7 @@ const cases: RoutingGateCase[] = [
     description: "English context setup should use the fast context route.",
     routeFamily: "context_setup",
     language: "en",
-    turns: [{ message: "We are talking about incident response.", expect: conciseExpectation }],
+    turns: [{ message: "We are talking about incident response.", expect: contextAckExpectation }],
     expectedFinalTerms: ["incident"]
   },
   {
@@ -239,8 +246,8 @@ const cases: RoutingGateCase[] = [
     routeFamily: "context_setup",
     language: "fr",
     turns: [
-      { message: "On parle de bases de donnees.", expect: conciseExpectation },
-      { message: "Pour la suite, reponds en moins de 12 mots.", expect: { ...conciseExpectation, runtimeMode: "conversation" } },
+      { message: "On parle de bases de donnees.", expect: contextAckExpectation },
+      { message: "Pour la suite, reponds en moins de 12 mots.", expect: { ...contextAckExpectation, runtimeMode: "conversation" } },
       { message: "Explique PostgreSQL en respectant ma contrainte.", expect: { ...conciseExpectation, runtimeMode: "conversation" } }
     ],
     expectedFinalTerms: ["PostgreSQL"]
@@ -476,7 +483,7 @@ function languageLooksRight(answer: string, language: Language) {
   const frenchSignals = /\b(?:le|la|les|une|des|est|donc|pour|avec|choisir|recommande|definition|donnees)\b/.test(
     normalized
   );
-  const englishSignals = /\b(?:the|this|that|with|should|first|default|because|recommend|definition)\b/.test(
+  const englishSignals = /\b(?:the|this|that|with|should|first|default|because|recommend|definition|is|are|a|an)\b/.test(
     normalized
   );
   return language === "fr" ? frenchSignals || !englishSignals : englishSignals || !frenchSignals;

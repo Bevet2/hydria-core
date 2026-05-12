@@ -153,6 +153,11 @@ const DIRECT_ENGLISH_MARKERS = [
   "what",
   "how",
   "why",
+  "calculate",
+  "compute",
+  "briefly",
+  "define",
+  "explain",
   "give",
   "tell",
   "me",
@@ -1095,6 +1100,91 @@ function buildUserFactAcknowledgementAnswer(args: {
   };
 }
 
+function extractContextSetupSubject(message: string) {
+  const match = message.match(
+    /^\s*(?:on parle de|nous parlons de|le sujet est|contexte\s*:|pour contexte|we are talking about|we're talking about|the topic is|context\s*:|for context)\s+(.+?)\s*[.!?]*$/i
+  );
+  return match?.[1]?.trim().replace(/[.!?]+$/g, "") ?? null;
+}
+
+function isPureConstraintSetup(message: string) {
+  return (
+    /\b(?:pour la suite|a partir de maintenant|from now on|for the rest)\b.*\b(?:reponds|answer|contrainte|constraint|moins de|less than|court|short)\b/i.test(
+      message
+    ) && !/[?]/.test(message)
+  );
+}
+
+function buildContextSetupDraft(args: {
+  conversationState: ConversationState;
+  newUserMessage: string;
+  category: QuestionCategory;
+  routingQuestion: string;
+}): ChatDraft | null {
+  const subject = extractContextSetupSubject(args.newUserMessage);
+  const isConstraintSetup = isPureConstraintSetup(args.newUserMessage);
+  if (!subject && !isConstraintSetup) {
+    return null;
+  }
+
+  const isEnglish = args.conversationState.language === "en";
+  const answerText = subject
+    ? isEnglish
+      ? `Noted, we are talking about ${subject}.`
+      : `C'est note, on parle de ${subject}.`
+    : isEnglish
+      ? "Noted, I will keep that constraint for the rest of the conversation."
+      : "C'est note, je garde cette contrainte pour la suite.";
+  const answer: StudentAnswer = {
+    modelRole: "student",
+    answer: answerText,
+    key_points: isEnglish ? ["Context recorded"] : ["Contexte conserve"],
+    assumptions: [],
+    confidence: 92
+  };
+
+  return {
+    answer,
+    category: args.category,
+    routingQuestion: args.routingQuestion,
+    generation: {
+      answer,
+      usedRetry: false,
+      provider: "tool",
+      model: "context_ack",
+      specialist: {
+        capabilityId: "phi-mini-router",
+        role: "fast_router",
+        displayName: "Runtime context acknowledgement",
+        routingReason: "Pure context-setting turn can be acknowledged deterministically without a local model call.",
+        pipeline: ["context_state_tracker", "deterministic_context_ack"]
+      },
+      raw: JSON.stringify(answer),
+      validationIssues: [],
+      runtimeBudget: {
+        profile: "fast_tool",
+        label: "Deterministic context acknowledgement",
+        reason: "Context-only turn does not need model generation.",
+        timeoutMs: 0,
+        maxLatencyMs: 0,
+        maxOutputTokens: 0,
+        maxConcurrent: 1,
+        fallbackDepth: 0,
+        concurrencyKey: "deterministic_context_ack"
+      },
+      queueMs: 0,
+      budgetExceeded: false,
+      latencyMs: 0,
+      attempts: []
+    }
+  };
+}
+
+function extractedToolLanguage(tooling: ChatToolMetadata): "fr" | "en" | null {
+  const language = tooling.routing.extractedArgs?.language;
+  return language === "fr" || language === "en" ? language : null;
+}
+
 function extractCalculatorResult(facts: string[], summaries: string[]) {
   const combined = [...facts, ...summaries].join("\n");
   const match = combined.match(/(?:computed result|calculator result)\s*:\s*(.+?)\s*=\s*([^\n.]+)\.?/i);
@@ -1129,7 +1219,8 @@ function buildDeterministicVerifiedToolDraft(args: {
     return null;
   }
 
-  const isEnglish = args.language === "en";
+  const effectiveLanguage = extractedToolLanguage(args.tooling) ?? args.language;
+  const isEnglish = effectiveLanguage === "en";
   const answerText = calculation.expression
     ? isEnglish
       ? `The result of ${calculation.expression} is ${calculation.result}.`
@@ -1370,6 +1461,12 @@ export class ChatRuntimeService {
         tooling,
         category,
         language: conversationState.language,
+        routingQuestion
+      }) ??
+      buildContextSetupDraft({
+        conversationState,
+        newUserMessage: args.message,
+        category,
         routingQuestion
       }) ??
       (await this.buildDraft({

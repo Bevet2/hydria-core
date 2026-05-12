@@ -322,3 +322,72 @@ test("chat runtime accepts concise calculator answers from verified tool results
     "Used calculator/arithmetic."
   );
 });
+
+test("chat runtime keeps deterministic calculator answers in the tool routing language", async () => {
+  let adapterCalled = false;
+  const routing = {
+    ...defaultToolRoutingDecision,
+    toolRequired: true,
+    toolRecommended: true,
+    toolType: "calculator" as const,
+    intent: "arithmetic",
+    confidence: 0.98,
+    fallbackAllowed: false,
+    reason: "Arithmetic expression should use calculator.",
+    extractedArgs: {
+      expression: "144 / 12",
+      language: "en"
+    }
+  };
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        adapterCalled = true;
+        return buildAdapterResult("Le resultat est 12.");
+      }
+    },
+    {
+      route() {
+        return routing;
+      }
+    },
+    {
+      async tryExecute() {
+        return {
+          toolType: "calculator",
+          intent: "arithmetic",
+          summary: ["Calculator result: 144 / 12 = 12"],
+          verifiedFacts: ["Computed result: 144 / 12 = 12."],
+          confidenceScore: 1,
+          resultLabel: "12"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "Calculate 144 / 12." });
+
+  assert.equal(adapterCalled, false);
+  assert.equal(response.generation.provider, "tool");
+  assert.equal(response.generation.model, "calculator");
+  assert.match(response.answer.answer, /^The result of 144 \/ 12 is 12\./);
+  assert.equal(response.conversationQuality.issues.includes("wrong_language_expected_en"), false);
+});
+
+test("chat runtime acknowledges pure context setup without a model call", async () => {
+  let adapterCalled = false;
+  const service = new ChatRuntimeService({
+    async answer() {
+      adapterCalled = true;
+      return buildAdapterResult("Fallback answer that should not be used.");
+    }
+  });
+
+  const response = await service.sendMessage({ message: "On parle de bases de donnees." });
+
+  assert.equal(adapterCalled, false);
+  assert.equal(response.generation.provider, "tool");
+  assert.equal(response.generation.model, "context_ack");
+  assert.match(response.answer.answer, /bases de donnees/i);
+  assert.equal(response.conversationQuality.passed, true);
+});

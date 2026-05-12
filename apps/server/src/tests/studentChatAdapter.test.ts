@@ -147,6 +147,84 @@ test("student chat adapter routes concise direct answers to the fast 3B speciali
   assert.equal(result.runtimeBudget?.profile, "concise_chat");
 });
 
+test("student chat adapter keeps short conceptual Docker questions on the concise path", async () => {
+  let selectedModel = "";
+  const input = {
+    ...buildInput(),
+    category: "technical_explanation" as const,
+    routingQuestion: "Reponse courte : c'est quoi Docker ?",
+    userMessage: "Reponse courte : c'est quoi Docker ?",
+    question: "Reponse courte : c'est quoi Docker ?",
+    runtimeMode: "direct" as const,
+    requiresExternalGrounding: false
+  };
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "qwen2.5:14b";
+    },
+    async testPrompt(_prompt, _system, options) {
+      selectedModel = options?.modelName ?? "";
+      return {
+        provider: "ollama",
+        model: selectedModel,
+        response: JSON.stringify({
+          modelRole: "student",
+          answer: "Docker isole une application dans des conteneurs portables.",
+          key_points: ["Definition courte"],
+          assumptions: [],
+          confidence: 88
+        }),
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer(input);
+
+  assert.equal(selectedModel, "qwen2.5:3b");
+  assert.equal(result.specialist.role, "fast_router");
+  assert.equal(result.runtimeBudget?.profile, "concise_chat");
+});
+
+test("student chat adapter still routes explicit Docker build errors to code specialist", async () => {
+  let selectedModel = "";
+  const input = {
+    ...buildInput(),
+    category: "debug_diagnostic" as const,
+    routingQuestion: "Debug this Docker build error",
+    userMessage: "Debug this Docker build error",
+    question: "Debug this Docker build error",
+    runtimeMode: "direct" as const,
+    requiresExternalGrounding: false
+  };
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "qwen2.5:14b";
+    },
+    async testPrompt(_prompt, _system, options) {
+      selectedModel = options?.modelName ?? "";
+      return {
+        provider: "ollama",
+        model: selectedModel,
+        response: JSON.stringify({
+          modelRole: "student",
+          answer: "Start by reading the Docker build error and the Dockerfile step that failed.",
+          key_points: ["Docker diagnostic"],
+          assumptions: [],
+          confidence: 85
+        }),
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer(input);
+
+  assert.equal(selectedModel, "qwen2.5-coder:7b");
+  assert.equal(result.specialist.role, "code_specialist");
+  assert.equal(result.runtimeBudget?.profile, "code_chat");
+});
+
 test("student chat adapter routes lightweight context-setting turns to the fast 3B specialist", async () => {
   let selectedModel = "";
   const input = {

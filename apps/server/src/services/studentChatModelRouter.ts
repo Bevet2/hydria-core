@@ -77,7 +77,7 @@ function containsCodeSignal(text: string, category: QuestionCategory) {
     return true;
   }
   const explicitCodeSignal =
-    /\b(?:code|typescript|javascript|python|react|node|stack trace|erreur|error|bug|debug|repo|repository|docker|sql|postgres|schema|test|compile|fonction|function|classe|class|component|composant)\b/.test(
+    /\b(?:code|typescript|javascript|python|react|node|stack trace|erreur|error|bug|debug|repo|repository|dockerfile|docker-compose|compose\.ya?ml|docker build|docker run|container logs?|sql|postgres|schema|test|compile|fonction|function|classe|class|component|composant)\b/.test(
       text
     );
   const apiImplementationSignal =
