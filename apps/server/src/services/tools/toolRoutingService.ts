@@ -34,7 +34,7 @@ const CURRENCY_NAME_PATTERN =
 const TIME_PATTERN =
   /\b(?:what time is it|current time|time now|date today|today'?s date|heure actuelle|quelle heure est-il)\b/i;
 const ARITHMETIC_PATTERN =
-  /\b(?:calculate|compute|what is|combien font)\b[\s:]+[-+/*().%\d\s]+$/i;
+  /\b(?:calculate|compute|what is|calcule|calculer|combien font)\b[\s:]+[-+/*().%\d\s]+$/i;
 
 const CURRENCY_ALIASES: Record<string, string> = {
   usd: "USD",
@@ -109,7 +109,7 @@ function isConversationPlanningCategory(category: QuestionCategory | null | unde
 }
 
 function detectQuestionLanguage(question: string) {
-  return /\b(?:quel|quelle|quels|temps|aujourd|meteo|m(?:e|\u00e9|\u00c3\u00a9|\ufffd)t(?:e|\u00e9|\u00c3\u00a9|\ufffd)o|pluie|vent|neige|fait-il|fait il|qui est|convertis|convertir|euros?|dollars?|taux)\b/i.test(
+  return /\b(?:quel|quelle|quels|temps|aujourd|meteo|m(?:e|\u00e9|\u00c3\u00a9|\ufffd)t(?:e|\u00e9|\u00c3\u00a9|\ufffd)o|pluie|vent|neige|fait-il|fait il|qui est|calcule|calculer|combien|convertis|convertir|euros?|dollars?|taux)\b/i.test(
     question
   )
     ? "fr"
@@ -1002,7 +1002,9 @@ export class ToolRoutingService {
         confidence: 0.9,
         fallbackAllowed: false,
         reason: "Direct arithmetic should use a calculator path rather than a guessed answer.",
-        extractedArgs: arithmeticExpression ? { expression: arithmeticExpression } : {}
+        extractedArgs: arithmeticExpression
+          ? { expression: arithmeticExpression, language: detectQuestionLanguage(question) }
+          : { language: detectQuestionLanguage(question) }
       });
     }
 

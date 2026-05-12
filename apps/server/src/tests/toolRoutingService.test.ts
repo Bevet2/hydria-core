@@ -145,6 +145,18 @@ test("tool router marks currency conversion as required calculator tool use", ()
   assert.equal(decision.extractedArgs.language, "fr");
 });
 
+test("tool router keeps French language on compact arithmetic requests", () => {
+  const decision = service.route({
+    question: "Calcule 12 * 37.",
+    category: "other"
+  });
+
+  assert.equal(decision.toolRequired, true);
+  assert.equal(decision.toolType, "calculator");
+  assert.equal(decision.intent, "arithmetic");
+  assert.equal(decision.extractedArgs.language, "fr");
+});
+
 test("tool router extracts explicit pair exchange rates", () => {
   const decision = service.route({
     question: "Convert 250 EUR to USD using the explicit exchange rate 1 EUR = 1.08 USD.",

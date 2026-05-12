@@ -120,6 +120,12 @@ test("context state tracker keeps French without accents in incident turns", () 
   assert.ok(updated.changedContext.some((item) => /situation evolue/i.test(item)));
 });
 
+test("context state tracker detects short French calculation requests", () => {
+  const updated = updateConversationState(createInitialState(), "Calcule 12 * 37.", "");
+
+  assert.equal(updated.language, "fr");
+});
+
 test("active constraint capsule marks changed budget obsolete and keeps latest budget active", () => {
   const initial = updateConversationState(
     createInitialState(),
