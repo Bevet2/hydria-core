@@ -42,6 +42,7 @@ test("BGE reranker client calls the local runtime and preserves ranked document 
   assert.equal((captured.body?.documents as unknown[]).length, 2);
   assert.deepEqual(result.results.map((entry) => entry.id), ["doc_b", "doc_a"]);
   assert.equal(result.provider, "bge_reranker_runtime");
+  assert.equal(result.backend, "bge");
 });
 
 test("governed reranker uses runtime order when the BGE runtime is configured", async () => {
@@ -51,6 +52,7 @@ test("governed reranker uses runtime order when the BGE runtime is configured", 
       rerank: async () => ({
         provider: "bge_reranker_runtime",
         model: "BAAI/bge-reranker-v2-m3",
+        backend: "bge",
         results: [
           { id: "specific", score: 0.97, rank: 1 },
           { id: "generic", score: 0.12, rank: 2 }
@@ -70,6 +72,33 @@ test("governed reranker uses runtime order when the BGE runtime is configured", 
 
   assert.equal(result.trace.runtimeUsed, true);
   assert.equal(result.documents[0]?.id, "specific");
+});
+
+test("governed reranker does not promote an internal lexical runtime fallback as BGE", async () => {
+  const service = new GovernedRerankerService({
+    client: {
+      isConfigured: () => true,
+      rerank: async () => ({
+        provider: "bge_reranker_runtime",
+        model: "BAAI/bge-reranker-v2-m3",
+        backend: "lexical_fallback",
+        results: [{ id: "generic", score: 0.99, rank: 1 }]
+      })
+    }
+  });
+
+  const result = await service.rerankDocuments({
+    query: "rollback failed deploy",
+    documents: [
+      { id: "generic", text: "Write generic guidance.", baseScore: 20 },
+      { id: "rollback", text: "Rollback the failed deploy and contain impact.", baseScore: 1 }
+    ],
+    topK: 1
+  });
+
+  assert.equal(result.trace.runtimeUsed, false);
+  assert.equal(result.trace.fallbackReason, "runtime_backend_lexical_fallback");
+  assert.equal(result.documents[0]?.id, "rollback");
 });
 
 test("governed reranker falls back to lexical ranking when runtime is unavailable", async () => {

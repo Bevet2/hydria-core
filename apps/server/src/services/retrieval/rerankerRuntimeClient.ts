@@ -23,6 +23,7 @@ export type RerankerRuntimeInput = {
 export type RerankerRuntimeOutput = {
   provider: "bge_reranker_runtime";
   model: string;
+  backend: string;
   results: RerankerResult[];
 };
 
@@ -108,7 +109,7 @@ export class RerankerRuntimeClient {
       throw new Error(`BGE reranker runtime returned ${response.status}: ${await response.text()}`);
     }
 
-    const payload = (await response.json()) as { model?: string };
+    const payload = (await response.json()) as { model?: string; backend?: string };
     const allowedIds = new Set(input.documents.map((document) => document.id));
     const results = parseResults(payload)
       .filter((result) => allowedIds.has(result.id))
@@ -119,6 +120,7 @@ export class RerankerRuntimeClient {
     return {
       provider: "bge_reranker_runtime",
       model: payload.model ?? "BAAI/bge-reranker-v2-m3",
+      backend: payload.backend ?? "bge",
       results
     };
   }

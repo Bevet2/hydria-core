@@ -105,6 +105,15 @@ export class GovernedRerankerService {
           documents: args.documents.map(({ baseScore: _baseScore, ...document }) => document),
           topK
         });
+        if (runtime.backend !== "bge") {
+          return this.lexicalFallback(
+            args.query,
+            args.documents,
+            topK,
+            runtimeConfigured,
+            `runtime_backend_${runtime.backend}`
+          );
+        }
         const applied = applyRuntimeOrder(args.documents, runtime.results, topK);
         if (applied.documents.length > 0) {
           return {
