@@ -59,6 +59,9 @@ export function ChatPage() {
       posture: lastResponse?.answerPolicy.strategicCoherencePolicy.decisionPosture ?? "none",
       provider: lastResponse?.generation.provider ?? "n/a",
       model: lastResponse?.generation.model ?? "n/a",
+      specialist: lastResponse?.generation.specialist?.role ?? "n/a",
+      specialistName: lastResponse?.generation.specialist?.displayName ?? "n/a",
+      pipeline: lastResponse?.generation.specialist?.pipeline.join(" -> ") ?? "n/a",
       duration: formatDuration(lastResponse?.durationMs ?? null),
       quality: issueLabel(lastResponse)
     }),
@@ -233,10 +236,19 @@ export function ChatPage() {
                 <strong>{chatMeta.model}</strong>
               </div>
               <div>
+                <span>Specialist</span>
+                <strong>{chatMeta.specialist}</strong>
+              </div>
+              <div>
+                <span>Route</span>
+                <strong>{chatMeta.specialistName}</strong>
+              </div>
+              <div>
                 <span>Confidence</span>
                 <strong>{lastResponse?.answer.confidence ?? "n/a"}</strong>
               </div>
             </div>
+            <p className="muted chat-route">{chatMeta.pipeline}</p>
           </section>
 
           <section className="panel">

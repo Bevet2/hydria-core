@@ -126,6 +126,14 @@ app.get("/api/health", async (_request, response) => {
     studentChat: {
       provider: "ollama",
       model: env.STUDENT_CHAT_LOCAL_MODEL_NAME,
+      routing: "local_specialist",
+      specialists: {
+        primaryBrain: "qwen2.5:14b",
+        code: "qwen2.5-coder:7b",
+        deepReasoning: "deepseek-r1:14b",
+        writingBusiness: "mistral:7b",
+        fastRouter: "phi3:mini"
+      },
       timeoutMs: env.STUDENT_CHAT_LOCAL_TIMEOUT_MS,
       cloudFallbackEnabled: false
     },

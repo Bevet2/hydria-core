@@ -32,6 +32,13 @@ export type ChatRuntimeMode = "direct" | "conversation";
 export type ChatGenerationMetadata = {
   provider: "ollama" | "fallback";
   model: string;
+  specialist?: {
+    capabilityId: string;
+    role: string;
+    displayName: string;
+    routingReason: string;
+    pipeline: string[];
+  };
   usedStaticFallback: boolean;
   validationIssues: string[];
 };

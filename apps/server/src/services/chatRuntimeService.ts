@@ -51,7 +51,7 @@ const DIRECT_RUNTIME_CATEGORIES = new Set<QuestionCategory>([
   "other"
 ]);
 const INTERNAL_LEAK_PATTERN =
-  /\b(?:ActiveConstraintCapsule|answer policy|StrategicTradeoff|StrategicCoherence|direct chat mode|chat direct|local student answerer|Hydria Core en chat direct)\b/i;
+  /\b(?:ActiveConstraintCapsule|answer policy|StrategicTradeoff|StrategicCoherence|direct chat mode|chat direct|local student answerer|local specialist|specialist pipeline|Hydria Core en chat direct)\b/i;
 const ASSISTANT_SELF_DESCRIPTION_PATTERN =
   /\b(?:je suis\s+(?:hydria|une ia|un assistant)|i am\s+(?:hydria|an ai|an assistant)|hydria core en chat direct)\b/i;
 const FIRST_PERSON_SUBJECT_PATTERN =
@@ -1318,6 +1318,7 @@ export class ChatRuntimeService {
       generation: {
         provider: draft.generation.provider,
         model: draft.generation.model,
+        specialist: draft.generation.specialist,
         usedStaticFallback: draft.generation.provider === "fallback",
         validationIssues: draft.generation.validationIssues
       },

@@ -170,6 +170,19 @@ export type AppHealth = {
     refineFallbackModel: string;
     localStudentFallbackModel: string;
   };
+  studentChat?: {
+    provider: "ollama";
+    model: string;
+    routing: string;
+    specialists: Record<string, string>;
+    timeoutMs: number;
+    cloudFallbackEnabled: boolean;
+  };
+  trainingEndpoints?: {
+    enabled: boolean;
+    requireApiKey: boolean;
+    openRouterScope: string;
+  };
   localModel: LocalModelHealth;
   persistence: PersistenceHealthSummary;
 };

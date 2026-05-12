@@ -56,6 +56,7 @@ type OllamaGenerateFormat = "json" | Record<string, unknown>;
 
 type LocalModelPromptOptions = {
   format?: OllamaGenerateFormat;
+  modelName?: string;
   numPredict?: number;
   temperature?: number;
   timeoutMs?: number;
@@ -1427,13 +1428,14 @@ export class LocalModelService {
   ): Promise<LocalModelTestResponse> {
     const startedAt = Date.now();
     const format = options.format;
+    const modelName = options.modelName ?? this.modelName;
     const response = await fetch(`${env.LOCAL_MODEL_BASE_URL}/api/generate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: this.modelName,
+        model: modelName,
         system,
         prompt,
         stream: false,
@@ -1453,7 +1455,7 @@ export class LocalModelService {
 
     const payload = (await response.json()) as OllamaGenerateResponse;
     return localModelTestResponseSchema.parse({
-      model: this.modelName,
+      model: modelName,
       provider: "ollama",
       response: payload.response?.trim() || "",
       durationMs: Date.now() - startedAt

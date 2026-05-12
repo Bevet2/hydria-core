@@ -20,6 +20,13 @@ function buildAdapterResult(answer: string, usedRetry = false): StudentChatAdapt
     usedRetry,
     provider: "ollama",
     model: "test",
+    specialist: {
+      capabilityId: "mistral-mixtral-business",
+      role: "writing_business",
+      displayName: "Mistral/Mixtral",
+      routingReason: "test route",
+      pipeline: ["fast_router:phi3:mini", "writing_business:test"]
+    },
     raw: "{}",
     validationIssues: []
   };

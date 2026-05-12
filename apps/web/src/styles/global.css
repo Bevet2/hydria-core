@@ -205,6 +205,11 @@ textarea {
   margin-bottom: 4px;
 }
 
+.chat-route {
+  margin: 10px 0 0;
+  overflow-wrap: anywhere;
+}
+
 .chat-list {
   display: grid;
   gap: 8px;

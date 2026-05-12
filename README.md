@@ -130,7 +130,15 @@ It stores:
 
 The web chat uses `ChatRuntimeService` plus a dedicated `StudentChatAdapter`.
 
-This path is still based on the local student identity and `StudentAnswer` schema, but it does not run the full Student Lab preview/analyze/research pipeline. The chat runtime prepares the current message with conversation state, `ActiveConstraintCapsule`, answer policy, recent turns, and resolved follow-up task, then asks the student model directly. Runtime chat is local open-weight only; OpenRouter is reserved for controlled training/evaluation jobs and is not part of the public runtime path.
+This path is still based on the local student identity and `StudentAnswer` schema, but it does not run the full Student Lab preview/analyze/research pipeline. The chat runtime prepares the current message with conversation state, `ActiveConstraintCapsule`, answer policy, recent turns, and resolved follow-up task, then routes to a local specialist model. Runtime chat is local open-weight only; OpenRouter is reserved for controlled training/evaluation jobs and is not part of the public runtime path.
+
+Local chat specialist routing:
+
+- `phi3:mini`: fast routing trace
+- `qwen2.5:14b`: main reasoning brain
+- `qwen2.5-coder:7b`: code and debug specialist
+- `deepseek-r1:14b`: deep reasoning / conflict arbitration
+- `mistral:7b`: writing, business, and lightweight stable factual answers
 
 Relevant runtime knobs:
 

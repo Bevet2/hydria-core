@@ -219,6 +219,31 @@ async function runProductionSmoke(args = parseArgs()): Promise<ProductionSmokeRe
     });
   });
 
+  await runCheck(checks, "student_chat_specialist_routing", async () => {
+    const studentChat = health?.studentChat ?? {};
+    const specialists = studentChat.specialists ?? {};
+    const expectedModels = ["qwen2.5:14b", "qwen2.5-coder:7b", "deepseek-r1:14b", "mistral:7b", "phi3:mini"];
+    const configuredModels = Object.values(specialists).map(String);
+    const missing = expectedModels.filter((model) => !configuredModels.includes(model));
+
+    if (studentChat.provider !== "ollama" || studentChat.cloudFallbackEnabled !== false) {
+      return fail("student chat is not locked to local Ollama runtime", studentChat);
+    }
+    if (studentChat.routing !== "local_specialist") {
+      return fail(`expected local specialist chat routing, got ${studentChat.routing ?? "unknown"}`, studentChat);
+    }
+    if (missing.length > 0) {
+      return fail("student chat specialist model map is incomplete", {
+        missing,
+        specialists
+      });
+    }
+    return pass("student chat is configured for local specialist routing", {
+      routing: studentChat.routing,
+      specialists
+    });
+  });
+
   await runCheck(checks, "persistence_health", async () => {
     persistence = await getJson<Record<string, any>>(args.baseUrl, "/api/health/persistence", args.timeoutMs);
     const database = persistence.database ?? {};

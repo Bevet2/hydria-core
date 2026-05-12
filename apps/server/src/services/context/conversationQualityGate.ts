@@ -49,7 +49,7 @@ const CONSTRAINT_USE_MARKER =
 const FINAL_DECISION_INSTRUCTION_ECHO_PATTERN =
   /\b(?:final decision:\s*recall the strong constraint|decision finale:\s*rappelle la contrainte forte|recall the strong constraint,\s*recent detail,\s*active hypothesis,\s*then recommend|rappelle la contrainte forte,\s*le detail recent,\s*l[' ]?hypothese active,\s*puis recommande)\b/i;
 const PROMPT_POLICY_LEAK_PATTERN =
-  /\b(?:Conversation runtime requirements|ActiveConstraintCapsule|Answer policy|StrategicTradeoffPolicy|StrategicTradeoffPatch|StrategicCoherencePolicy|StrategicCoherencePatch|Detected answer language|Detected category|topConstraints|blockingConstraints|requiredContextItems|forbiddenBehaviors|revisionTrigger|DecisionCommitmentPatch: when)\b/i;
+  /\b(?:Conversation runtime requirements|ActiveConstraintCapsule|Answer policy|StrategicTradeoffPolicy|StrategicTradeoffPatch|StrategicCoherencePolicy|StrategicCoherencePatch|Detected answer language|Detected category|topConstraints|blockingConstraints|requiredContextItems|forbiddenBehaviors|revisionTrigger|local specialist|specialist pipeline|DecisionCommitmentPatch: when)\b/i;
 const STRATEGIC_TRADEOFF_MARKER =
   /\b(?:dominant|dominates|wins|priority|priorite|prioritaire|prime|gagne|defer|deferred|reject|rejected|refuse|differe|differee|tradeoff|compromis|accepted tradeoff|compromis accepte|rather than|au lieu de|pas equivalentes|not equivalent)\b/i;
 const REVISION_CONDITION_MARKER =
