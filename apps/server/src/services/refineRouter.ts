@@ -218,7 +218,8 @@ export class RefineRouterService {
       category,
       activeSignals: globalSignals,
       domains: ["routing", "refine"],
-      limit: 4
+      limit: 4,
+      query: context.question
     });
     const memoryBias = memoryRules.reduce(
       (sum, rule) =>

@@ -13,6 +13,7 @@ import {
 import type { StudentSession } from "../types/student.js";
 import { env } from "../utils/env.js";
 import { knowledgeCategories } from "./knowledge/common.js";
+import { GovernedRerankerService } from "./retrieval/governedRerankerService.js";
 import { listPersistedStudentSessions } from "./storage/studentSessionPersistence.js";
 
 type StudentRuleGroup = {
@@ -445,7 +446,8 @@ export class KnowledgeMemoryService {
     private readonly memoryFile = env.KNOWLEDGE_MEMORY_FILE,
     private readonly studentSessionHistoryFile = env.STUDENT_SESSION_HISTORY_FILE,
     private readonly knowledgeLayerFile = env.KNOWLEDGE_LAYER_FILE,
-    private readonly studentSessionDatabaseFile = env.PERSISTENCE_DB_FILE
+    private readonly studentSessionDatabaseFile = env.PERSISTENCE_DB_FILE,
+    private readonly rerankerService = new GovernedRerankerService()
   ) {}
 
   async loadMemory(): Promise<KnowledgeMemory | null> {
@@ -498,6 +500,7 @@ export class KnowledgeMemoryService {
     activeSignals: string[];
     domains?: Array<KnowledgeMemoryRule["domain"]>;
     limit?: number;
+    query?: string;
   }): Promise<KnowledgeMemoryRule[]> {
     const memory = await this.loadMemory();
     const categoryEntry = memory?.categories.find((entry) => entry.category === args.category);
@@ -510,7 +513,7 @@ export class KnowledgeMemoryService {
       args.domains ? args.domains.includes(rule.domain) : true
     );
 
-    return filtered
+    const ranked = filtered
       .map((rule) => ({
         rule,
         score:
@@ -518,9 +521,43 @@ export class KnowledgeMemoryService {
           Math.round(rule.confidence * 10)
       }))
       .filter((entry) => entry.score > 0 || entry.rule.confidence >= 0.65)
-      .sort((left, right) => right.score - left.score)
-      .slice(0, args.limit ?? 4)
-      .map((entry) => entry.rule);
+      .sort((left, right) => right.score - left.score);
+
+    const limit = args.limit ?? 4;
+    const query = args.query?.trim();
+    if (query && ranked.length > 1) {
+      const candidateWindow = ranked.slice(0, Math.max(limit * 3, limit));
+      const byId = new Map(candidateWindow.map((entry) => [entry.rule.ruleId, entry.rule]));
+      const reranked = await this.rerankerService.rerankDocuments({
+        query,
+        topK: limit,
+        documents: candidateWindow.map((entry) => ({
+          id: entry.rule.ruleId,
+          text: [
+            entry.rule.domain,
+            entry.rule.lesson,
+            entry.rule.recommendedStrategy,
+            entry.rule.conditions.join(" "),
+            entry.rule.conditionSignals.join(" ")
+          ].join(" "),
+          baseScore: entry.score,
+          metadata: {
+            category: entry.rule.category,
+            domain: entry.rule.domain,
+            confidence: entry.rule.confidence,
+            priority: entry.rule.confidence >= 0.75 ? "high" : "medium"
+          }
+        }))
+      });
+      const selected = reranked.documents
+        .map((document) => byId.get(document.id))
+        .filter(Boolean) as KnowledgeMemoryRule[];
+      if (selected.length > 0) {
+        return selected;
+      }
+    }
+
+    return ranked.slice(0, limit).map((entry) => entry.rule);
   }
 
   private async readStudentSessions() {

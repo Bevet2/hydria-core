@@ -151,6 +151,15 @@ export class KnowledgeInjectionService {
         ...activeLearningHints
       ]
     ).slice(0, 8);
+    const selectedMemoryRules = args?.question
+      ? await this.knowledgeMemoryService.getRelevantRules({
+          category,
+          activeSignals: this.buildKnowledgeMemorySignals(runtimeContext),
+          domains: ["routing", "refine", "reasoning", "tool_usage"],
+          limit: 6,
+          query: args.question
+        })
+      : (memoryEntry?.rules ?? []).slice(0, 6);
 
     if (!insight && !memoryEntry && studentMemoryRules.length === 0 && coachingHints.length === 0) {
       return null;
@@ -177,7 +186,7 @@ export class KnowledgeInjectionService {
       memorySummary:
         memoryEntry?.summary ??
         `No knowledge memory summary available yet for ${category}.`,
-      memoryRules: (memoryEntry?.rules ?? []).slice(0, 4).map((rule) => ({
+      memoryRules: selectedMemoryRules.slice(0, 6).map((rule) => ({
         domain: rule.domain,
         lesson: rule.lesson,
         recommendedStrategy: rule.recommendedStrategy,
@@ -381,5 +390,21 @@ export class KnowledgeInjectionService {
       )
       .filter((entry) => entry.active)
       .slice(0, 4);
+  }
+
+  private buildKnowledgeMemorySignals(runtimeContext: StudentRuleImpactContext | null) {
+    if (!runtimeContext) {
+      return ["reasoning_gap"];
+    }
+
+    return uniqueStrings([
+      runtimeContext.questionType === "factual" ? "factual_claims" : "",
+      runtimeContext.questionType === "explanatory" ? "concept_question" : "",
+      runtimeContext.questionType === "strategic" ? "risk_or_tradeoff" : "",
+      runtimeContext.signals.includes("uncertainty") ? "uncertainty" : "",
+      runtimeContext.signals.includes("claims") ? "factual_claims" : "",
+      runtimeContext.signals.includes("abstraction") ? "concept_question" : "",
+      "reasoning_gap"
+    ]);
   }
 }

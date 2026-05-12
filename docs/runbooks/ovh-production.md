@@ -121,6 +121,50 @@ curl -fsS https://app.hydria.click/api/models/plan \
 
 The manifest registers Qwen 14B/32B, DeepSeek-Coder-V2, Qwen-Coder, DeepSeek-R1-Distill-Qwen, Mistral/Mixtral, BGE-M3, BGE Reranker, Phi mini, and Qwen 3B as candidate model roles. These entries are routing contracts first; live execution still requires configuring the actual serving backend on OVH or a GPU provider.
 
+## Local BGE Reranker Runtime
+
+`bge-reranker` is an optional local retrieval service. It is intentionally separated from Hydria Core so the heavy Python/model runtime can be started, stopped, or moved to GPU without changing the Node API container.
+
+Start it with:
+
+```bash
+cd /opt/hydria-core
+sudo docker compose --env-file .env.docker \
+  -f docker-compose.yml \
+  -f docker-compose.ovh.yml \
+  -f docker-compose.reranker.yml \
+  up -d --build bge-reranker hydria-core
+```
+
+Check it from the VPS:
+
+```bash
+sudo docker compose --env-file .env.docker \
+  -f docker-compose.yml \
+  -f docker-compose.ovh.yml \
+  -f docker-compose.reranker.yml \
+  ps
+sudo docker exec hydria-core-hydria-core-1 node -e "fetch('http://bge-reranker:8091/health').then(r=>r.json()).then(console.log)"
+```
+
+Required Hydria env when the reranker is enabled:
+
+```text
+MODEL_ROUTER_RERANKER_BASE_URL=http://bge-reranker:8091
+MODEL_ROUTER_RERANKER_TIMEOUT_MS=30000
+BGE_RERANKER_MODEL=BAAI/bge-reranker-v2-m3
+BGE_RERANKER_DEVICE=cpu
+```
+
+Validation gates:
+
+```bash
+npm run models:pretraining-gate
+npm run retrieval:reranker-gate -- --require-runtime
+```
+
+`retrieval:reranker-gate` without `--require-runtime` validates fallback precision only. Promotion of reranker-dependent retrieval requires the runtime-backed mode.
+
 The model router returns an economic multi-provider v2 plan. The plan includes the selected model, provider target, fallback candidates, relative estimated cost units, criticality, and cost policy. Request bodies may tighten the policy with:
 
 ```json
@@ -146,6 +190,8 @@ MODEL_ROUTER_MAX_OUTPUT_TOKENS=900
 MODEL_ROUTER_VLLM_BASE_URL=
 MODEL_ROUTER_OPENAI_COMPAT_BASE_URL=
 MODEL_ROUTER_EMBEDDING_BASE_URL=
+MODEL_ROUTER_RERANKER_BASE_URL=
+MODEL_ROUTER_RERANKER_TIMEOUT_MS=30000
 HYDRIA_API_KEYS=
 HYDRIA_API_KEY_SHA256_HASHES=
 HYDRIA_PUBLIC_API_AUTH_REQUIRED=true
@@ -246,6 +292,8 @@ HYDRIA_DOCKER_LOCAL_MODEL_BASE_URL=http://host.docker.internal:11435
 LOCAL_MODEL_TIMEOUT_MS=1000
 STUDENT_CHAT_LOCAL_TIMEOUT_MS=45000
 MODEL_ROUTER_LOCAL_TIMEOUT_MS=120000
+MODEL_ROUTER_RERANKER_BASE_URL=
+MODEL_ROUTER_RERANKER_TIMEOUT_MS=30000
 HYDRIA_DOCKER_LOCAL_MODEL_OBSERVER_ENABLED=false
 TRAINING_ENDPOINTS_ENABLED=false
 TRAINING_ENDPOINTS_REQUIRE_API_KEY=true

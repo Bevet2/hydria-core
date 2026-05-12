@@ -61,6 +61,13 @@ type RoleGateReport = {
   recommendations: string[];
 };
 
+type RuntimeEndpointOverrides = {
+  embeddingBaseUrl?: string | null;
+  rerankerBaseUrl?: string | null;
+  vllmBaseUrl?: string | null;
+  ollamaBaseUrl?: string | null;
+};
+
 const currentFilePath = fileURLToPath(import.meta.url);
 const projectRoot = resolve(dirname(currentFilePath), "../../../../");
 const defaultOutput = resolve(projectRoot, "storage", "training", "model-role-pretraining-gate-v1.json");
@@ -80,16 +87,28 @@ function isUrlConfigured(value: string) {
 function dryRunLocalTarget(args: {
   selected: ReturnType<ModelProviderService["planExecution"]>["selection"]["selected"];
   estimatedCostUnits: number | null;
+  runtimeEndpoints?: RuntimeEndpointOverrides;
 }) {
   const selected = args.selected;
-  const embeddingEndpoint = isUrlConfigured(env.MODEL_ROUTER_EMBEDDING_BASE_URL)
-    ? env.MODEL_ROUTER_EMBEDDING_BASE_URL
+  const embeddingBaseUrl = args.runtimeEndpoints?.embeddingBaseUrl ?? env.MODEL_ROUTER_EMBEDDING_BASE_URL;
+  const rerankerBaseUrl = args.runtimeEndpoints?.rerankerBaseUrl ?? env.MODEL_ROUTER_RERANKER_BASE_URL;
+  const vllmBaseUrl = args.runtimeEndpoints?.vllmBaseUrl ?? env.MODEL_ROUTER_VLLM_BASE_URL;
+  const ollamaBaseUrl = args.runtimeEndpoints?.ollamaBaseUrl ?? env.LOCAL_MODEL_BASE_URL;
+  const embeddingEndpoint =
+    selected.role === "reranker"
+      ? isUrlConfigured(rerankerBaseUrl)
+        ? rerankerBaseUrl
+        : isUrlConfigured(embeddingBaseUrl)
+          ? embeddingBaseUrl
+          : null
+      : isUrlConfigured(embeddingBaseUrl)
+        ? embeddingBaseUrl
+        : null;
+  const vllmEndpoint = isUrlConfigured(vllmBaseUrl)
+    ? vllmBaseUrl
     : null;
-  const vllmEndpoint = isUrlConfigured(env.MODEL_ROUTER_VLLM_BASE_URL)
-    ? env.MODEL_ROUTER_VLLM_BASE_URL
-    : null;
-  const ollamaEndpoint = isUrlConfigured(env.LOCAL_MODEL_BASE_URL)
-    ? env.LOCAL_MODEL_BASE_URL
+  const ollamaEndpoint = isUrlConfigured(ollamaBaseUrl)
+    ? ollamaBaseUrl
     : null;
 
   if (selected.providerModelIds.embedding_runtime && embeddingEndpoint) {
@@ -336,12 +355,17 @@ function recommendationFor(status: RoleGateStatus, issues: string[], role: Model
   return "Fix routing or budget policy before training this role.";
 }
 
-function evaluateCase(service: ModelProviderService, gateCase: RoleGateCase): RoleGateResult {
+function evaluateCase(
+  service: ModelProviderService,
+  gateCase: RoleGateCase,
+  runtimeEndpoints: RuntimeEndpointOverrides = {}
+): RoleGateResult {
   const plan = service.planExecution(gateCase.input);
   const plannedTarget = plan.target;
   const dryTarget = plan.target ?? dryRunLocalTarget({
     selected: plan.selection.selected,
-    estimatedCostUnits: plannedTarget ? plannedTarget.estimatedCostUnits : null
+    estimatedCostUnits: plannedTarget ? plannedTarget.estimatedCostUnits : null,
+    runtimeEndpoints
   });
   const issues: string[] = [];
 
@@ -402,9 +426,12 @@ export function buildModelRolePreTrainingGateReport(
       allowCloud: false,
       maxCostTier: "high"
     })
-  })
+  }),
+  runtimeEndpoints: RuntimeEndpointOverrides = {}
 ): RoleGateReport {
-  const results = modelRolePreTrainingGateCases.map((gateCase) => evaluateCase(service, gateCase));
+  const results = modelRolePreTrainingGateCases.map((gateCase) =>
+    evaluateCase(service, gateCase, runtimeEndpoints)
+  );
   const blocked = results.filter((result) => result.status === "blocked").length;
   const warnings = results.filter((result) => result.status === "warning").length;
   const passed = results.filter((result) => result.status === "passed").length;

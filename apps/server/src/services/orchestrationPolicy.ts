@@ -187,7 +187,8 @@ export class OrchestrationPolicyService {
       category,
       activeSignals,
       domains: ["routing", "refine", "reasoning", "tool_usage"],
-      limit: 4
+      limit: 4,
+      query: context.question
     });
     const memoryRoutingBias = memoryRules.reduce(
       (sum, rule) => sum + Math.round(rule.influence.routingBias * rule.confidence),

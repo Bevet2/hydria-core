@@ -154,6 +154,9 @@ const envSchema = z.object({
   MODEL_ROUTER_OPENAI_COMPAT_API_KEY: z.string().default(""),
   MODEL_ROUTER_EMBEDDING_BASE_URL: z.string().default(""),
   MODEL_ROUTER_EMBEDDING_API_KEY: z.string().default(""),
+  MODEL_ROUTER_RERANKER_BASE_URL: z.string().default(""),
+  MODEL_ROUTER_RERANKER_API_KEY: z.string().default(""),
+  MODEL_ROUTER_RERANKER_TIMEOUT_MS: z.coerce.number().int().min(1000).default(30000),
   TRAINING_ENDPOINTS_ENABLED: z
     .string()
     .default("false")

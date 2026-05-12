@@ -224,9 +224,17 @@ export class ModelProviderService {
       },
       {
         provider: "embedding_runtime",
-        configured: isUrlConfigured(env.MODEL_ROUTER_EMBEDDING_BASE_URL),
-        endpoint: env.MODEL_ROUTER_EMBEDDING_BASE_URL || null,
-        notes: ["Reserved for BGE embeddings and reranking runtimes."]
+        configured:
+          isUrlConfigured(env.MODEL_ROUTER_EMBEDDING_BASE_URL) ||
+          isUrlConfigured(env.MODEL_ROUTER_RERANKER_BASE_URL),
+        endpoint:
+          env.MODEL_ROUTER_EMBEDDING_BASE_URL ||
+          env.MODEL_ROUTER_RERANKER_BASE_URL ||
+          null,
+        notes: [
+          "Reserved for BGE embeddings and reranking runtimes.",
+          "Reranking can use MODEL_ROUTER_RERANKER_BASE_URL independently from embeddings."
+        ]
       }
     ];
   }
@@ -370,7 +378,7 @@ export class ModelProviderService {
           continue;
         }
 
-        const endpoint = this.endpointForProvider(provider);
+        const endpoint = this.endpointForProvider(provider, model);
         if (!endpoint) {
           continue;
         }
@@ -457,7 +465,7 @@ export class ModelProviderService {
     );
   }
 
-  private endpointForProvider(provider: ModelProviderKind) {
+  private endpointForProvider(provider: ModelProviderKind, model?: ModelCapabilityManifest) {
     if (provider === "ollama") {
       return isUrlConfigured(env.LOCAL_MODEL_BASE_URL) ? env.LOCAL_MODEL_BASE_URL : null;
     }
@@ -477,9 +485,11 @@ export class ModelProviderService {
         : null;
     }
     if (provider === "embedding_runtime") {
-      return isUrlConfigured(env.MODEL_ROUTER_EMBEDDING_BASE_URL)
-        ? env.MODEL_ROUTER_EMBEDDING_BASE_URL
-        : null;
+      const endpoint =
+        model?.role === "reranker"
+          ? env.MODEL_ROUTER_RERANKER_BASE_URL || env.MODEL_ROUTER_EMBEDDING_BASE_URL
+          : env.MODEL_ROUTER_EMBEDDING_BASE_URL;
+      return isUrlConfigured(endpoint) ? endpoint : null;
     }
     return null;
   }

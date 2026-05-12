@@ -31,3 +31,18 @@ test("model role pre-training gate blocks training when a role has no local runt
   assert.equal(reranker.issues.includes("runtime_target_missing"), true);
   assert.equal(report.summary.trainingAllowed, false);
 });
+
+test("model role pre-training gate accepts a configured local BGE reranker runtime", () => {
+  const report = buildModelRolePreTrainingGateReport(undefined, {
+    rerankerBaseUrl: "http://127.0.0.1:8091"
+  });
+  const reranker = report.results.find((result) => result.id === "reranker_bge");
+
+  assert.ok(reranker);
+  assert.equal(reranker.selectedId, "bge-reranker-retrieval");
+  assert.notEqual(reranker.status, "blocked");
+  assert.equal(reranker.provider, "embedding_runtime");
+  assert.equal(reranker.modelId, "BAAI/bge-reranker-v2-m3");
+  assert.equal(reranker.issues.includes("runtime_target_missing"), false);
+  assert.equal(report.summary.trainingAllowed, true);
+});

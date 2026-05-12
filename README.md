@@ -83,6 +83,8 @@ Repo layout:
 |- docs
 |  `- architecture
 |- models
+|- services
+|  `- bge-reranker
 |- scripts
 |- storage
 |- start.cmd
@@ -147,11 +149,22 @@ Chat tool flow:
 - Hydria injects only verified facts, summaries, and sources into the specialist model prompt.
 - If a required tool result is unavailable, the model is instructed to ask for missing input or state the verification limit instead of inventing.
 
+Retrieval/reranking flow:
+
+- `BGE-M3` remains the embedding/retrieval base model.
+- `bge-reranker` now has a dedicated optional local runtime through `docker-compose.reranker.yml`.
+- `GovernedRerankerService` reranks memory/source candidates before compact prompt injection.
+- If the reranker runtime is unavailable, Hydria falls back to deterministic lexical ranking and records that the BGE runtime was not used.
+- Promotion-sensitive checks should run with `--require-runtime`; fallback mode is only a safety path.
+
 Relevant runtime knobs:
 
 - `STUDENT_CHAT_LOCAL_MODEL_NAME`
 - `STUDENT_CHAT_LOCAL_TIMEOUT_MS`
+- `MODEL_ROUTER_RERANKER_BASE_URL`
 - `npm run student:chat-prod-gate -- --base-url=https://app.hydria.click`
+- `npm run models:pretraining-gate`
+- `npm run retrieval:reranker-gate -- --require-runtime`
 
 ### Economic Multi-Provider Router
 

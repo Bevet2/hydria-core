@@ -1,0 +1,32 @@
+services:
+  hydria-core:
+    environment:
+      MODEL_ROUTER_RERANKER_BASE_URL: http://bge-reranker:8091
+      MODEL_ROUTER_RERANKER_TIMEOUT_MS: ${MODEL_ROUTER_RERANKER_TIMEOUT_MS:-30000}
+    depends_on:
+      bge-reranker:
+        condition: service_healthy
+
+  bge-reranker:
+    build:
+      context: ./services/bge-reranker
+    image: hydria-bge-reranker:local
+    environment:
+      BGE_RERANKER_MODEL: ${BGE_RERANKER_MODEL:-BAAI/bge-reranker-v2-m3}
+      BGE_RERANKER_BACKEND: ${BGE_RERANKER_BACKEND:-bge}
+      BGE_RERANKER_DEVICE: ${BGE_RERANKER_DEVICE:-cpu}
+      BGE_RERANKER_MAX_LENGTH: ${BGE_RERANKER_MAX_LENGTH:-512}
+      BGE_RERANKER_ALLOW_LEXICAL_FALLBACK: ${BGE_RERANKER_ALLOW_LEXICAL_FALLBACK:-true}
+    expose:
+      - "8091"
+    volumes:
+      - bge-reranker-cache:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/health', timeout=5).read()\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  bge-reranker-cache:

@@ -29,6 +29,7 @@ type KnowledgeMemoryRuleLoader = (args: {
   activeSignals: string[];
   domains?: Array<KnowledgeMemoryRule["domain"]>;
   limit?: number;
+  query?: string;
 }) => Promise<KnowledgeMemoryRule[]>;
 
 export type ResearchDecisionPolicyServiceOptions = {
@@ -259,7 +260,8 @@ export class ResearchDecisionPolicyService {
       category: args.category,
       activeSignals: memorySignals,
       domains: ["tool_usage", "reasoning"],
-      limit: 4
+      limit: 4,
+      query: args.question
     });
     const memoryResearchBias = memoryRules.reduce(
       (sum, rule) => sum + Math.round(rule.influence.researchBias * rule.confidence),
