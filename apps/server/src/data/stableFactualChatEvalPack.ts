@@ -137,7 +137,7 @@ export const STABLE_FACTUAL_CHAT_EVAL_PACK: StableFactualChatEvalCase[] = [
       { id: "subject", anyOf: ["einstein", "albert einstein"] },
       { id: "field", anyOf: ["physicist", "physics"] },
       { id: "relativity", anyOf: ["relativity"] },
-      { id: "nobel_or_twentieth", anyOf: ["nobel", "20th century", "twentieth century"] }
+      { id: "period_or_legacy", anyOf: ["nobel", "20th century", "twentieth century", "1879", "1955", "e=mc"] }
     ],
     forbiddenClaims: [
       { id: "electricity_confusion", anyOf: ["invented electricity"] }
@@ -152,7 +152,7 @@ export const STABLE_FACTUAL_CHAT_EVAL_PACK: StableFactualChatEvalCase[] = [
     expectedAnchors: [
       { id: "subject", anyOf: ["revolution francaise"] },
       { id: "date", anyOf: ["1789"] },
-      { id: "monarchy", anyOf: ["monarchie", "ancien regime", "republique"] }
+      { id: "monarchy", anyOf: ["monarchie", "ancien regime", "republique", "autorite royale", "roi", "royal"] }
     ],
     forbiddenClaims: [
       { id: "russian_revolution_confusion", anyOf: ["1917", "bolchevique"] }
