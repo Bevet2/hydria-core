@@ -266,3 +266,54 @@ test("chat runtime executes required local tools and injects verified facts into
     "Used time/current_time."
   );
 });
+
+test("chat runtime accepts concise calculator answers from verified tool results", async () => {
+  const routing = {
+    ...defaultToolRoutingDecision,
+    toolRequired: true,
+    toolRecommended: true,
+    toolType: "calculator" as const,
+    intent: "arithmetic",
+    confidence: 0.98,
+    fallbackAllowed: false,
+    reason: "Arithmetic expression should use calculator.",
+    extractedArgs: {
+      expression: "12 * 37",
+      language: "fr"
+    }
+  };
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult("Le resultat de 12 multiplie par 37 est 444.");
+      }
+    },
+    {
+      route() {
+        return routing;
+      }
+    },
+    {
+      async tryExecute() {
+        return {
+          toolType: "calculator",
+          intent: "arithmetic",
+          summary: ["12 * 37 = 444"],
+          verifiedFacts: ["12 * 37 = 444"],
+          confidenceScore: 1,
+          resultLabel: "444"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "Calcule 12 * 37." });
+
+  assert.equal(response.tooling.used, true);
+  assert.equal(response.conversationQuality.passed, true);
+  assert.equal(response.conversationQuality.issues.includes("off_topic_direct_answer"), false);
+  assert.equal(
+    response.orchestrationTrace.steps.find((step) => step.id === "tool_routing")?.summary,
+    "Used calculator/arithmetic."
+  );
+});

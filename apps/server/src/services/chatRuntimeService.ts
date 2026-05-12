@@ -859,7 +859,16 @@ function analyzeDirectChatQuality(args: {
     .map((message) => message.content)
     .join(" ");
   const salientTerms = extractTerms(`${recentUserText} ${args.newUserMessage}`, 10);
-  if (salientTerms.length >= 1 && answerWordCount >= 4 && !answerMentionsAnyTerm(args.answer, salientTerms)) {
+  const answeredWithRequiredCalculator =
+    args.toolRouting.toolType === "calculator" &&
+    args.toolRouting.toolResultUsed &&
+    /\d/.test(args.answer);
+  if (
+    !answeredWithRequiredCalculator &&
+    salientTerms.length >= 1 &&
+    answerWordCount >= 4 &&
+    !answerMentionsAnyTerm(args.answer, salientTerms)
+  ) {
     issues.push("off_topic_direct_answer");
     penalties.push("answer does not mention the salient topic from the user turn or recent context");
   }
