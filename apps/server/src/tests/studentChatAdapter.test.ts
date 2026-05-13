@@ -641,6 +641,8 @@ test("student chat adapter routes strategic decisions to the CPU-safe local deep
   assert.equal(usedFormat, false);
   assert.match(system, /exact term on-prem/i);
   assert.match(prompt, /exact term on-prem/i);
+  assert.match(system, /smallest reversible option/i);
+  assert.match(prompt, /minimal reversible path/i);
 });
 
 test("student chat adapter does not call cloud fallback when local generation fails", async () => {
