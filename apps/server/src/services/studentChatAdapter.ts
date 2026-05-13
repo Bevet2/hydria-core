@@ -261,6 +261,14 @@ function maybeStableFactCompaction(route: StudentChatModelRoute) {
 
 function maybePlainRouteGuidance(route: StudentChatModelRoute) {
   if (route.runtimeBudget.profile === "writing_chat") {
+    const practicalGuidance = route.pipeline.some((step) => step.startsWith("practical_writer:"))
+      ? [
+          "Practical recipe route: answer like a normal useful cooking assistant, not like a business writer.",
+          "For a named classic dish, use the conventional core ingredients and method for that dish.",
+          "Do not add unusual ingredients, extra liquids, or substitutions unless the user asks.",
+          "Use one compact paragraph with 3 or 4 complete sentences; no bullets, no numbered steps, no orphan step numbers."
+        ]
+      : [];
     return [
       "Writing route: produce the requested user-facing text directly, without JSON or metadata.",
       "Language is binding: French request means French-only final text; English request means English-only final text.",
@@ -268,7 +276,8 @@ function maybePlainRouteGuidance(route: StudentChatModelRoute) {
       "For recipe or practical how-to requests, answer with useful ingredients or steps directly; target 80-120 words and finish a complete sentence.",
       "For recipes, prefer conventional ingredients and do not add unusual substitutions unless the user asks.",
       "For recipes, avoid numbered lists and bullets; use one compact paragraph so the answer does not get cut off.",
-      "Keep it short enough for chat; prefer one compact paragraph unless the user asked for structure."
+      "Keep it short enough for chat; prefer one compact paragraph unless the user asked for structure.",
+      ...practicalGuidance
     ];
   }
   if (route.runtimeBudget.profile === "code_chat") {
@@ -392,6 +401,7 @@ function cleanPlainStableFactAnswer(raw: string) {
     .replace(/^["']|["']$/g, "")
     .replace(/\s+/g, " ")
     .trim();
+  cleaned = cleaned.replace(/\s+\d+\.$/, "").trim();
   if (/(?:^|\s)1\.\s/.test(cleaned) && /\s+\d+\.$/.test(cleaned)) {
     cleaned = cleaned.replace(/\s+\d+\.$/, "").trim();
   }

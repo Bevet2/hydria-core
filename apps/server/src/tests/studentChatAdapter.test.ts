@@ -458,7 +458,7 @@ test("student chat adapter routes French recipe requests through practical writi
         provider: "ollama",
         model: selectedModel,
         response:
-          "Pour un tiramisu, alternez biscuits imbibes de cafe et creme mascarpone, puis laissez prendre au frais.",
+          "Pour un tiramisu, melangez mascarpone, jaunes d'oeufs et sucre, incorporez les blancs montes, puis alternez avec des biscuits imbibes de cafe. 2.",
         durationMs: 12
       };
     }
@@ -466,13 +466,15 @@ test("student chat adapter routes French recipe requests through practical writi
 
   const result = await adapter.answer(input);
 
-  assert.deepEqual(selectedModels, ["mistral:7b"]);
+  assert.deepEqual(selectedModels, ["qwen2.5:14b"]);
   assert.equal(result.specialist.role, "writing_business");
+  assert.match(result.specialist.routingReason, /Practical recipe/i);
   assert.equal(result.runtimeBudget?.profile, "writing_chat");
   assert.equal(result.runtimeBudget?.fallbackDepth, 1);
-  assert.equal(timeoutMs >= 70000, true);
-  assert.equal(numPredict >= 240, true);
+  assert.equal(timeoutMs >= 90000, true);
+  assert.equal(numPredict <= 180, true);
   assert.match(result.answer.answer, /tiramisu/);
+  assert.doesNotMatch(result.answer.answer, /\s2\.$/);
 });
 
 test("student chat adapter routes lightweight context-setting turns to the fast 3B specialist", async () => {

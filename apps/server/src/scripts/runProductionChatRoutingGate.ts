@@ -342,7 +342,7 @@ const cases: RoutingGateCase[] = [
   },
   {
     id: "writing_recipe_fr",
-    description: "Simple recipe requests should use the practical writing route, not the 14B primary brain.",
+    description: "Simple recipe requests should use the practical writing route with the local main model.",
     routeFamily: "writing_chat",
     language: "fr",
     turns: [
@@ -350,6 +350,7 @@ const cases: RoutingGateCase[] = [
         message: "Donne moi une recette de tiramisu.",
         expect: {
           ...writingExpectation,
+          model: ["qwen2.5:14b", "qwen2.5:3b"],
           maxLatencyMs: 150000,
           allowRetry: true
         }

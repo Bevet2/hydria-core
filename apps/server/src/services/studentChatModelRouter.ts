@@ -440,6 +440,30 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
     };
   }
 
+  if (containsPracticalLifestyleSignal(text)) {
+    const reason =
+      "Practical recipe or everyday how-to request; use the local main model as a practical writer for stronger everyday knowledge.";
+    const budget = buildRuntimeBudget("writing_chat", reason);
+    return {
+      capabilityId: "qwen-14b-instruct-main",
+      displayName: "Qwen 14B Practical Writer",
+      modelName: QWEN_MAIN,
+      specialistRole: "writing_business",
+      routingReason: reason,
+      pipeline: [...basePipeline, `practical_writer:${QWEN_MAIN}`, `practical_light_fallback:${QWEN_3B}`],
+      fallbackModelNames: unique([QWEN_MAIN, QWEN_3B]),
+      timeoutMs: Math.max(budget.timeoutMs, 90000),
+      runtimeBudget: {
+        ...budget,
+        timeoutMs: Math.max(budget.timeoutMs, 90000),
+        maxLatencyMs: Math.max(budget.maxLatencyMs, 90000),
+        maxOutputTokens: Math.min(budget.maxOutputTokens, 180),
+        fallbackDepth: 1,
+        concurrencyKey: "heavy_local_chat"
+      }
+    };
+  }
+
   if (containsWritingSignal(text, input.category)) {
     const french = isFrenchWritingRoute(input, text);
     const selectedModel = french ? QWEN_3B : MISTRAL_BUSINESS;
@@ -457,26 +481,6 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
       fallbackModelNames: buildSpecialistOnlyFallbacks(selectedModel),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
-    };
-  }
-
-  if (containsPracticalLifestyleSignal(text)) {
-    const reason =
-      "Practical recipe or everyday how-to request; use the CPU-safe writing model instead of the 14B primary brain.";
-    const budget = buildRuntimeBudget("writing_chat", reason);
-    return {
-      capabilityId: "mistral-mixtral-business",
-      displayName: "Mistral/Mixtral",
-      modelName: MISTRAL_BUSINESS,
-      specialistRole: "writing_business",
-      routingReason: reason,
-      pipeline: [...basePipeline, `practical_writer:${MISTRAL_BUSINESS}`, `practical_light_fallback:${QWEN_3B}`],
-      fallbackModelNames: unique([MISTRAL_BUSINESS, QWEN_3B]),
-      timeoutMs: budget.timeoutMs,
-      runtimeBudget: {
-        ...budget,
-        fallbackDepth: 1
-      }
     };
   }
 
