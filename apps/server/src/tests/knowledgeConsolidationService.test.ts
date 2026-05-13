@@ -86,6 +86,11 @@ test("knowledge consolidation turns interaction learning into canonical objects 
         async buildAndPersist() {
           return buildDigest();
         }
+      },
+      watcherStore: {
+        async load() {
+          return null;
+        }
       }
     });
 
@@ -100,6 +105,93 @@ test("knowledge consolidation turns interaction learning into canonical objects 
     assert.equal(active.length, 1);
     assert.match(index, /Hydria Knowledge Vault/);
     assert.match(index, /ko-interaction/);
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("knowledge consolidation keeps watcher candidates governed and non-active", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "hydria-watcher-objects-"));
+  try {
+    const store = new KnowledgeObjectStore(
+      join(tempRoot, "knowledge-objects.json"),
+      join(tempRoot, "vault")
+    );
+    const service = new KnowledgeConsolidationService({
+      knowledgeObjectStore: store,
+      interactionLearningDigestService: {
+        async load() {
+          return buildDigest();
+        },
+        async buildAndPersist() {
+          return buildDigest();
+        }
+      },
+      watcherStore: {
+        async load() {
+          return {
+            version: "hydria-watchers-v1",
+            generatedAt: "2026-05-13T11:00:00.000Z",
+            sourceStats: {
+              runCount: 1,
+              findingCount: 1,
+              candidateCount: 1,
+              acquisitionTaskCount: 1,
+              activeCandidateCount: 0,
+              guardedCandidateCount: 0,
+              byWatcher: {
+                "external-knowledge-expansion-v1": 1
+              },
+              byKind: {
+                external: 1
+              }
+            },
+            runs: [],
+            findings: [],
+            candidates: [
+              {
+                candidateId: "watcher-candidate::external::ai-release-watch",
+                watcherId: "external-knowledge-expansion-v1",
+                watcherKind: "external",
+                candidateType: "trend_signal",
+                state: "candidate",
+                domain: "ai",
+                category: "technical_explanation",
+                title: "AI model release watcher",
+                claim: "Track current open-weight model releases before treating new model capabilities as known.",
+                summary: "Hydria should acquire fresh model release knowledge from authoritative source streams.",
+                sources: [
+                  {
+                    label: "Hugging Face blog",
+                    url: "https://huggingface.co/blog",
+                    sourceType: "external_source",
+                    retrievedAt: null
+                  }
+                ],
+                evidenceRecordIds: [],
+                confidence: 0.42,
+                freshness: "live",
+                corroborationCount: 0,
+                riskLevel: "medium",
+                tags: ["external-watcher", "ai"],
+                createdAt: "2026-05-13T11:00:00.000Z",
+                updatedAt: "2026-05-13T11:00:00.000Z"
+              }
+            ],
+            acquisitionTasks: []
+          };
+        }
+      }
+    });
+
+    const result = await service.buildAndPersist();
+    const watcherObject = result.file.objects.find((object) => object.sources[0]?.sourceType === "watcher");
+
+    assert.ok(watcherObject);
+    assert.equal(watcherObject.state, "candidate");
+    assert.equal(watcherObject.knowledgeClass, "dynamic");
+    assert.notEqual(watcherObject.state, "active");
+    assert.equal(result.watcherState?.sourceStats.candidateCount, 1);
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }

@@ -171,12 +171,13 @@ npm run learning:interactions -- --limit=1000
 
 This writes `storage/learning/hydria-interaction-learning-v1.json`. It groups chat, Student Lab, Playground, and Benchmark records into guarded candidates such as `answer_pattern`, `supervised_correction`, `reasoning_example`, `tool_routing_signal`, and `repair_signal`. The runtime can use high-confidence hints, but raw answers are not blindly memorized and no model weights are changed.
 
-## Knowledge Objects and Vault
+## Knowledge Objects, Vault, and Watchers
 
-The next memory layer is structured knowledge, not watchers yet:
+The next memory layer is structured knowledge plus governed watcher candidates:
 
 ```text
 interaction learning digest
+-> internal/external watchers
 -> Knowledge Objects
 -> JSON canonical store
 -> Markdown vault projection
@@ -189,15 +190,46 @@ Build or refresh it:
 npm run knowledge:consolidate -- --rebuild-interactions --limit=1000
 ```
 
+Run the watchers before consolidation when you want Hydria to inspect its own gaps and prepare external acquisition tasks:
+
+```bash
+npm run watchers:run -- --scope=all --rebuild-interactions --limit=1000
+npm run knowledge:consolidate -- --rebuild-interactions --limit=1000
+```
+
 This writes:
 
 ```text
+storage/learning/hydria-watchers-v1.json
 storage/knowledge/hydria-knowledge-objects-v1.json
 storage/knowledge/vault/index.md
 storage/knowledge/vault/*.md
 ```
 
-The JSON file is canonical. The Markdown vault is an Obsidian-like readable graph projection with frontmatter, tags, sources, and links. Watchers will later write candidates into the same Knowledge Object format, but they are not active in this phase.
+The JSON file is canonical. The Markdown vault is an Obsidian-like readable graph projection with frontmatter, tags, sources, and links.
+
+Watcher v1 has two roles:
+
+```text
+internal watcher = control knowledge
+external watcher = open knowledge
+```
+
+The internal watcher reads Hydria interaction learning and emits guarded repair/acquisition candidates for recurring failures, missing active knowledge, routing gaps, and quality risks. The external watcher emits source-plan candidates for areas where frozen open-weight models are likely stale: AI model releases, platform/runtime releases, cyber advisories, and stable reasoning archives.
+
+Important production rule: watchers do not fine-tune models, do not directly change runtime behavior, and do not auto-promote dynamic facts to active knowledge. They create governed candidates and acquisition tasks. A candidate must be corroborated, validated, and promoted through the Knowledge Object lifecycle before `KnowledgeInjectionService` can use it as active contextual memory.
+
+The public read endpoint exposes the current watcher state:
+
+```bash
+curl -fsS https://app.hydria.click/api/learning/watchers
+```
+
+External network checks are disabled by default. Enable only when the source-acquisition policy is ready:
+
+```text
+WATCHER_EXTERNAL_NETWORK_ENABLED=false
+```
 
 Full production smoke from any machine with this repo:
 
@@ -552,6 +584,7 @@ MODEL_RUNTIME_STANDARD_MAX_CONCURRENCY=1
 MODEL_RUNTIME_HEAVY_MAX_CONCURRENCY=1
 MODEL_ROUTER_RERANKER_BASE_URL=
 MODEL_ROUTER_RERANKER_TIMEOUT_MS=30000
+WATCHER_EXTERNAL_NETWORK_ENABLED=false
 HYDRIA_DOCKER_LOCAL_MODEL_OBSERVER_ENABLED=false
 TRAINING_ENDPOINTS_ENABLED=true
 TRAINING_ENDPOINTS_REQUIRE_API_KEY=true

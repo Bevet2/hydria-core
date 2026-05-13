@@ -27,6 +27,7 @@ console.log(
       generatedAt: result.file.generatedAt,
       sourceStats: result.file.sourceStats,
       interactionRecordsAnalyzed: result.digest.sourceStats.recordsAnalyzed,
+      watcherCandidatesAnalyzed: result.watcherState?.sourceStats.candidateCount ?? 0,
       consolidatedObjectCount: result.objects.length,
       activeObjects: result.file.objects
         .filter((object) => object.state === "active" || object.state === "guarded")

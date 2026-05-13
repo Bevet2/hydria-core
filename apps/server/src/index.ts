@@ -50,6 +50,7 @@ import { PersistenceHealthService } from "./services/storage/persistenceHealthSe
 import { StudentChatAdapter } from "./services/studentChatAdapter.js";
 import { StudentService } from "./services/studentService.js";
 import { StudentSessionStore } from "./services/studentSessionStore.js";
+import { WatcherStore } from "./services/watchers/watcherStore.js";
 import { defaultArenaModels, env } from "./utils/env.js";
 import { logger } from "./utils/logger.js";
 
@@ -71,8 +72,10 @@ const interactionLogStore = new InteractionLogStore();
 const interactionLearningDigestService = new InteractionLearningDigestService({
   interactionLogStore
 });
+const watcherStore = new WatcherStore();
 const knowledgeConsolidationService = new KnowledgeConsolidationService({
-  interactionLearningDigestService
+  interactionLearningDigestService,
+  watcherStore
 });
 const orchestrationPolicyService = new OrchestrationPolicyService();
 const refineRouterService = new RefineRouterService();
@@ -257,7 +260,8 @@ app.use(
   createLearningRouter(
     learningGovernanceService,
     interactionLearningDigestService,
-    knowledgeConsolidationService
+    knowledgeConsolidationService,
+    watcherStore
   )
 );
 app.use("/api/student", createStudentRouter(studentService));
