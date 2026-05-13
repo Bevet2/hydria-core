@@ -195,12 +195,15 @@ Run the watchers before consolidation when you want Hydria to inspect its own ga
 ```bash
 npm run watchers:run -- --scope=all --rebuild-interactions --limit=1000
 npm run knowledge:consolidate -- --rebuild-interactions --limit=1000
+npm run knowledge:promote -- --mode=dry_run --validation=none
 ```
 
 This writes:
 
 ```text
 storage/learning/hydria-watchers-v1.json
+storage/learning/hydria-knowledge-promotion-v1.json
+storage/learning/hydria-training-candidate-queue-v1.json
 storage/knowledge/hydria-knowledge-objects-v1.json
 storage/knowledge/vault/index.md
 storage/knowledge/vault/*.md
@@ -219,16 +222,45 @@ The internal watcher reads Hydria interaction learning and emits guarded repair/
 
 Important production rule: watchers do not fine-tune models, do not directly change runtime behavior, and do not auto-promote dynamic facts to active knowledge. They create governed candidates and acquisition tasks. A candidate must be corroborated, validated, and promoted through the Knowledge Object lifecycle before `KnowledgeInjectionService` can use it as active contextual memory.
 
+Promotion is a separate governance step:
+
+```text
+watcher candidate
+-> Knowledge Object candidate/guarded
+-> promotion governance dry run
+-> validation/non-regression gates
+-> optional apply to validated/active
+-> training candidate queue
+-> external training job only if explicitly approved
+```
+
+Default promotion is non-mutating:
+
+```bash
+npm run knowledge:promote -- --mode=dry_run --validation=none
+```
+
+Apply is allowed only for lifecycle state changes already cleared by the policy. `active` promotion requires an explicit passed validation flag after benchmark gates:
+
+```bash
+npm run knowledge:promote -- --mode=apply --validation=passed
+```
+
+Without `--validation=passed`, objects can be prepared as `validated`, but they cannot become active runtime memory. Dynamic watcher knowledge and high-risk repair signals are blocked from direct activation and are written into `hydria-training-candidate-queue-v1.json` instead. That queue is a governed pre-training pack, not an SFT execution.
+
 The public read endpoint exposes the current watcher state:
 
 ```bash
 curl -fsS https://app.hydria.click/api/learning/watchers
+curl -fsS https://app.hydria.click/api/learning/promotion
 ```
 
 External network checks are disabled by default. Enable only when the source-acquisition policy is ready:
 
 ```text
 WATCHER_EXTERNAL_NETWORK_ENABLED=false
+KNOWLEDGE_PROMOTION_FILE=/app/storage/learning/hydria-knowledge-promotion-v1.json
+TRAINING_CANDIDATE_QUEUE_FILE=/app/storage/learning/hydria-training-candidate-queue-v1.json
 ```
 
 Full production smoke from any machine with this repo:

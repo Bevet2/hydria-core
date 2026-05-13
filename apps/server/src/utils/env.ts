@@ -106,6 +106,14 @@ const envSchema = z.object({
     .string()
     .min(1)
     .default(projectPath("storage", "learning", "hydria-watchers-v1.json")),
+  KNOWLEDGE_PROMOTION_FILE: z
+    .string()
+    .min(1)
+    .default(projectPath("storage", "learning", "hydria-knowledge-promotion-v1.json")),
+  TRAINING_CANDIDATE_QUEUE_FILE: z
+    .string()
+    .min(1)
+    .default(projectPath("storage", "learning", "hydria-training-candidate-queue-v1.json")),
   WATCHER_EXTERNAL_NETWORK_ENABLED: z
     .string()
     .default("false")

@@ -37,6 +37,7 @@ import { HistoryStore } from "./services/historyStore.js";
 import { InteractionLearningDigestService } from "./services/interactionLearningDigestService.js";
 import { InteractionLogStore } from "./services/interactionLogStore.js";
 import { KnowledgeConsolidationService } from "./services/knowledgeConsolidationService.js";
+import { KnowledgePromotionGovernanceService } from "./services/knowledgePromotionGovernanceService.js";
 import { LearningGovernanceService } from "./services/learningGovernanceService.js";
 import { LocalModelService } from "./services/localModel.js";
 import { ModelCapabilityService } from "./services/models/modelCapabilityService.js";
@@ -77,6 +78,7 @@ const knowledgeConsolidationService = new KnowledgeConsolidationService({
   interactionLearningDigestService,
   watcherStore
 });
+const knowledgePromotionGovernanceService = new KnowledgePromotionGovernanceService();
 const orchestrationPolicyService = new OrchestrationPolicyService();
 const refineRouterService = new RefineRouterService();
 const researchToolService = new ResearchToolService();
@@ -261,7 +263,8 @@ app.use(
     learningGovernanceService,
     interactionLearningDigestService,
     knowledgeConsolidationService,
-    watcherStore
+    watcherStore,
+    knowledgePromotionGovernanceService
   )
 );
 app.use("/api/student", createStudentRouter(studentService));

@@ -12,6 +12,7 @@
     "knowledge:refresh": "tsx src/scripts/refreshKnowledgeLayer.ts",
     "knowledge:consolidate": "tsx src/scripts/runKnowledgeConsolidation.ts",
     "watchers:run": "tsx src/scripts/runWatchers.ts",
+    "knowledge:promote": "tsx src/scripts/runKnowledgePromotionGovernance.ts",
     "learning:loop": "tsx src/scripts/runLearningLoop.ts",
     "learning:interactions": "tsx src/scripts/runInteractionLearningDigest.ts",
     "student:training-pack": "tsx src/scripts/runPrepareLocalStudentTrainingPack.ts",
