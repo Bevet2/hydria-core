@@ -591,6 +591,32 @@ test("conversation quality gate does not treat negated generic wording as generi
   assert.equal(result.issues.includes("generic_answer"), false);
 });
 
+test("conversation quality gate does not require strategic revision condition for writing summaries", () => {
+  const state = stateWithContext({
+    constraints: ["migration: audit, migration, verification"],
+    language: "fr"
+  });
+  const capsule = buildActiveConstraintCapsule(state, "Resume ce plan en trois points: audit, migration, verification.");
+  const policy = decideMultiTurnAnswerPolicy({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    newUserMessage: "Resume ce plan en trois points: audit, migration, verification.",
+    category: "operational_writing",
+    toolRouting: null
+  });
+  const result = analyzeConversationQuality({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    policy,
+    newUserMessage: "Resume ce plan en trois points: audit, migration, verification.",
+    answer:
+      "Le plan tient en trois points: audit initial, migration controlee, puis verification finale avec les equipes concernees.",
+    toolRouting: null
+  });
+
+  assert.equal(result.issues.includes("missing_strategic_revision_condition"), false);
+});
+
 test("conversation quality gate allows contextual answers that only mention best practices as fallback", () => {
   const state = stateWithContext({
     userGoal: "validate Italy export formats",

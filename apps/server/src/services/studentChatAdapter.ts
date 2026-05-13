@@ -129,6 +129,7 @@ const decisionPlainTextSystemPrompt = `You are Hydria Core's local decision and 
 Answer the current user message as plain final text only.
 Do not return JSON, wrapper labels, hidden reasoning, or chain-of-thought.
 Keep the user's language.
+If the user message or Language line is French, answer only in French and start with a French recommendation such as "Je recommande".
 Start with a clear recommendation, then mention the key constraint and condition.
 Reuse the user's concrete decisive terms instead of generic placeholders.`;
 
@@ -266,12 +267,14 @@ function maybePlainRouteGuidance(route: StudentChatModelRoute) {
   if (route.runtimeBudget.profile === "code_chat") {
     return [
       "Code route: answer with the concrete diagnostic or implementation steps first.",
+      "Name the requested technology or domain term from the user once in the first sentence, such as SQL, Node, TypeScript, API, or Docker.",
       "Keep it concise; include code only if it materially helps the current request."
     ];
   }
   if (route.runtimeBudget.profile === "deep_reasoning") {
     return [
       "Decision route: make a recommendation explicitly in the first sentence.",
+      "Language is binding: if Language is French, write the whole final answer in French and begin with 'Je recommande'.",
       "Use the exact active constraint or decisive noun from the user in the decision, such as on-prem, paiement, or audit.",
       "Add a revision condition: say when you would switch, wait, or reconsider."
     ];

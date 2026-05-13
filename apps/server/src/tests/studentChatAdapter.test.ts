@@ -395,7 +395,7 @@ test("student chat adapter routes French writing tasks through plain Qwen 3B wit
   assert.match(result.answer.answer, /retard/);
 });
 
-test("student chat adapter keeps English writing tasks on plain Mistral", async () => {
+test("student chat adapter routes English writing tasks through plain Qwen 3B", async () => {
   let selectedModel = "";
   let usedFormat = false;
   const input = {
@@ -425,7 +425,7 @@ test("student chat adapter keeps English writing tasks on plain Mistral", async 
 
   const result = await adapter.answer(input);
 
-  assert.equal(selectedModel, "mistral:7b");
+  assert.equal(selectedModel, "qwen2.5:3b");
   assert.equal(result.specialist.role, "writing_business");
   assert.equal(result.runtimeBudget?.profile, "writing_chat");
   assert.equal(usedFormat, false);

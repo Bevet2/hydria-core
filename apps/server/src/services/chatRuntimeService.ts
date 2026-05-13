@@ -1297,6 +1297,19 @@ function extractTimeResult(facts: string[], summaries: string[]) {
   };
 }
 
+function buildVerifiedFactAnswer(tooling: ChatToolMetadata) {
+  if (!["weather", "finance", "web"].includes(tooling.routing.toolType)) {
+    return null;
+  }
+
+  const fact = tooling.verifiedFacts[0]?.replace(/\s+/g, " ").trim();
+  if (!fact) {
+    return null;
+  }
+
+  return fact.endsWith(".") ? fact : `${fact}.`;
+}
+
 function buildDeterministicVerifiedToolDraft(args: {
   tooling: ChatToolMetadata;
   category: QuestionCategory;
@@ -1305,6 +1318,28 @@ function buildDeterministicVerifiedToolDraft(args: {
 }): ChatDraft | null {
   if (!args.tooling.used) {
     return null;
+  }
+
+  const verifiedFactAnswer = buildVerifiedFactAnswer(args.tooling);
+  if (verifiedFactAnswer) {
+    const effectiveLanguage = extractedToolLanguage(args.tooling) ?? args.language;
+    const answer: StudentAnswer = {
+      modelRole: "student",
+      answer: verifiedFactAnswer,
+      key_points: effectiveLanguage === "fr" ? ["Fait verifie par outil"] : ["Verified tool fact"],
+      assumptions: [],
+      confidence: 96
+    };
+    const toolType = args.tooling.routing.toolType;
+    return buildDeterministicRuntimeDraft({
+      answer,
+      category: args.category,
+      routingQuestion: args.routingQuestion,
+      model: toolType,
+      displayName: "Verified tool answer",
+      routingReason: `${toolType} returned a verified fact; no model call was needed.`,
+      pipeline: [`tool_routing:${toolType}`, "deterministic_answer"]
+    });
   }
 
   if (args.tooling.routing.toolType === "time") {

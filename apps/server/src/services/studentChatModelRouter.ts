@@ -100,13 +100,6 @@ function containsWritingSignal(text: string, category: QuestionCategory) {
   );
 }
 
-function isFrenchRoute(input: StudentChatModelRoutingInput, text: string) {
-  return (
-    input.activeConstraintCapsule.language === "fr" ||
-    /\b(?:redige|rediger|reecris|resume|synthese|reponse|bonjour|client|retard|livraison|verification)\b/.test(text)
-  );
-}
-
 function containsBrevitySignal(text: string, input: StudentChatModelRoutingInput) {
   if (
     /\b(?:phrase courte|reponse courte|r[eé]ponds? court|moins de\s+\d+\s+mots?|short answer|briefly|less than\s+\d+\s+words?|under\s+\d+\s+words?)\b/.test(
@@ -427,15 +420,13 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
   }
 
   if (containsWritingSignal(text, input.category)) {
-    const french = isFrenchRoute(input, text);
-    const selectedModel = french ? QWEN_3B : MISTRAL_BUSINESS;
-    const reason = french
-      ? "French writing route; use Qwen 3B for stronger language consistency on the CPU public chat path."
-      : "Writing or business synthesis route.";
+    const selectedModel = QWEN_3B;
+    const reason =
+      "Writing or business synthesis route; use Qwen 3B for CPU-stable public chat writing and language consistency.";
     const budget = buildRuntimeBudget("writing_chat", reason);
     return {
-      capabilityId: french ? "qwen-3b-standard-light" : "mistral-mixtral-business",
-      displayName: french ? "Qwen 3B" : "Mistral/Mixtral",
+      capabilityId: "qwen-3b-standard-light",
+      displayName: "Qwen 3B",
       modelName: selectedModel,
       specialistRole: "writing_business",
       routingReason: reason,

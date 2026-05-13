@@ -347,8 +347,15 @@ function leavesStrategicConflictUnresolved(input: ConversationQualityGateInput) 
     input.answer,
     policy.deferredOrSacrificedConstraint
   );
+  const usesDominantConstraintWithBoundedRevision =
+    mentionsDominantConstraint &&
+    answerShowsConstraintUse(input.answer, [policy.dominantConstraint ?? ""]) &&
+    REVISION_CONDITION_MARKER.test(input.answer);
 
-  return !(mentionsStrategicAnchor && (showsArbitration || mentionsRejectedConstraint));
+  return !(
+    usesDominantConstraintWithBoundedRevision ||
+    (mentionsStrategicAnchor && (showsArbitration || mentionsRejectedConstraint))
+  );
 }
 
 function contradictsActiveEnvironmentConstraint(input: ConversationQualityGateInput) {
@@ -383,10 +390,36 @@ function missesStrategicRevisionCondition(input: ConversationQualityGateInput) {
   if (!calibration?.requiresRevisionCondition || !calibration.revisionTrigger) {
     return false;
   }
+  if (!isStrategicRevisionTurn(input)) {
+    return false;
+  }
 
   const answerHasRevisionMarker = REVISION_CONDITION_MARKER.test(input.answer);
   const answerMentionsTrigger = answerMentionsSpecificValue(input.answer, calibration.revisionTrigger);
   return !(answerHasRevisionMarker || answerMentionsTrigger);
+}
+
+function isStrategicRevisionTurn(input: ConversationQualityGateInput) {
+  if (input.policy.strategicTradeoffPolicy?.hasConflict) {
+    return true;
+  }
+  const user = normalizeText(input.newUserMessage);
+  const writingOnlyTurn =
+    /\b(?:write|rewrite|draft|summarize|summary|redige|rediger|reecris|resume|synthese)\b/.test(user) &&
+    !/\b(?:recommend|recommande|choose|choisis|decision|direction|default|tradeoff|compromis|tranche|rollback|incident|architecture|strategy|strategie)\b/.test(
+      user
+    );
+  if (writingOnlyTurn) {
+    return false;
+  }
+  if (input.activeConstraintCapsule?.decisionNeeded || input.policy.activeConstraintCapsule.decisionNeeded) {
+    return true;
+  }
+  const asksStrategicDecision =
+    /\b(?:recommend|recommande|recommander|choose|choisis|choisir|decision|direction|default|tradeoff|compromis|tranche|arbitre|rollback|incident|architecture|strategy|strategie|risk|risque|budget|constraint|contrainte|deadline|audit)\b/.test(
+      user
+    );
+  return (input.policy.answerMode === "recommend" || input.policy.answerMode === "revise") && asksStrategicDecision;
 }
 
 function isOverRigidStrategicAnswer(input: ConversationQualityGateInput) {

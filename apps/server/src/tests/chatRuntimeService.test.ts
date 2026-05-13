@@ -202,8 +202,8 @@ test("chat runtime resolves possessive biography follow-ups to the prior subject
   assert.equal(third.conversationQuality.passed, true);
 });
 
-test("chat runtime executes required local tools and injects verified facts into the adapter", async () => {
-  const calls: StudentChatAdapterInput[] = [];
+test("chat runtime answers weather tool facts deterministically without a model call", async () => {
+  let adapterCalled = false;
   const routing = {
     ...defaultToolRoutingDecision,
     toolRequired: true,
@@ -220,8 +220,8 @@ test("chat runtime executes required local tools and injects verified facts into
   };
   const service = new ChatRuntimeService(
     {
-      async answer(input) {
-        calls.push(input);
+      async answer() {
+        adapterCalled = true;
         return buildAdapterResult("Il est 10:30 a Paris selon le contexte verifie.");
       }
     },
@@ -247,10 +247,10 @@ test("chat runtime executes required local tools and injects verified facts into
 
   const response = await service.sendMessage({ message: "Quelle est la meteo a Paris ?" });
 
-  assert.equal(calls[0]?.tooling.used, true);
-  assert.equal(calls[0]?.tooling.routing.toolResultUsed, true);
-  assert.equal(calls[0]?.requiresExternalGrounding, true);
-  assert.deepEqual(calls[0]?.tooling.verifiedFacts, ["Current weather in Paris: clear, temperature 18 deg C."]);
+  assert.equal(adapterCalled, false);
+  assert.equal(response.generation.provider, "tool");
+  assert.equal(response.generation.model, "weather");
+  assert.match(response.answer.answer, /Paris/);
   assert.equal(response.tooling.used, true);
   assert.equal(response.tooling.routing.toolType, "weather");
   assert.equal(response.tooling.routing.toolResultUsed, true);
@@ -417,6 +417,110 @@ test("chat runtime keeps deterministic calculator answers in the tool routing la
   assert.equal(response.generation.model, "calculator");
   assert.match(response.answer.answer, /^The result of 144 \/ 12 is 12\./);
   assert.equal(response.conversationQuality.issues.includes("wrong_language_expected_en"), false);
+});
+
+test("chat runtime answers finance tool facts deterministically without a model call", async () => {
+  let adapterCalled = false;
+  const routing = {
+    ...defaultToolRoutingDecision,
+    toolRequired: true,
+    toolRecommended: true,
+    toolType: "finance" as const,
+    intent: "current_price",
+    confidence: 0.95,
+    fallbackAllowed: false,
+    reason: "Current crypto price requires finance tooling.",
+    extractedArgs: {
+      asset: "BTC",
+      quoteCurrency: "USD",
+      language: "en"
+    }
+  };
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        adapterCalled = true;
+        return buildAdapterResult("$81,259");
+      }
+    },
+    {
+      route() {
+        return routing;
+      }
+    },
+    {
+      async tryExecute() {
+        return {
+          toolType: "finance",
+          intent: "current_price",
+          summary: ["Finance tool result: Bitcoin (BTC) -> $81,259."],
+          verifiedFacts: ["Current Bitcoin (BTC) price: $81,259 according to CoinGecko, checked at 2026-05-13T10:00:00.000Z."],
+          confidenceScore: 0.96,
+          resultLabel: "Bitcoin (BTC) $81,259"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "What is the current Bitcoin price?" });
+
+  assert.equal(adapterCalled, false);
+  assert.equal(response.generation.provider, "tool");
+  assert.equal(response.generation.model, "finance");
+  assert.match(response.answer.answer, /Bitcoin/);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
+test("chat runtime answers web current-status facts deterministically without a model call", async () => {
+  let adapterCalled = false;
+  const routing = {
+    ...defaultToolRoutingDecision,
+    toolRequired: true,
+    toolRecommended: true,
+    toolType: "web" as const,
+    intent: "current_status",
+    confidence: 0.93,
+    fallbackAllowed: false,
+    reason: "Current executive lookup requires web tooling.",
+    extractedArgs: {
+      subject: "OpenAI",
+      role: "CEO",
+      language: "en"
+    }
+  };
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        adapterCalled = true;
+        return buildAdapterResult("Sam Altman");
+      }
+    },
+    {
+      route() {
+        return routing;
+      }
+    },
+    {
+      async tryExecute() {
+        return {
+          toolType: "web",
+          intent: "current_status",
+          summary: ["Web tool result: Sam Altman confirmed by an official source."],
+          verifiedFacts: ["As of the live OpenAI source check, Sam Altman is the CEO of OpenAI."],
+          confidenceScore: 0.93,
+          resultLabel: "Sam Altman"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "Who is the current CEO of OpenAI?" });
+
+  assert.equal(adapterCalled, false);
+  assert.equal(response.generation.provider, "tool");
+  assert.equal(response.generation.model, "web");
+  assert.match(response.answer.answer, /OpenAI/);
+  assert.equal(response.conversationQuality.passed, true);
 });
 
 test("chat runtime acknowledges pure context setup without a model call", async () => {
