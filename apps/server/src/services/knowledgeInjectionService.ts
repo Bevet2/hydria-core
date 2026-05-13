@@ -11,6 +11,10 @@ import {
   type LearningActiveMemory
 } from "../types/learning.js";
 import {
+  interactionLearningDigestSchema,
+  type InteractionLearningDigest
+} from "../types/interactionLearning.js";
+import {
   type StudentRuleImpactContext,
   type StudentSession
 } from "../types/student.js";
@@ -81,6 +85,7 @@ export class KnowledgeInjectionService {
     Promise<Awaited<ReturnType<StudentStrategyAssetService["listByCategory"]>>>
   >();
   private activeLearningMemoryPromise: Promise<LearningActiveMemory | null> | null = null;
+  private interactionLearningDigestPromise: Promise<InteractionLearningDigest | null> | null = null;
 
   async buildForCategory(
     category: QuestionCategory,
@@ -88,14 +93,15 @@ export class KnowledgeInjectionService {
       question?: string;
     }
   ): Promise<KnowledgeInjection | null> {
-    const [layer, memory, curatedExamples, studentSessions, studentRuleImpact, strategyAssets, activeLearningMemory] = await Promise.all([
+    const [layer, memory, curatedExamples, studentSessions, studentRuleImpact, strategyAssets, activeLearningMemory, interactionLearningDigest] = await Promise.all([
       this.loadKnowledgeLayer(),
       this.loadKnowledgeMemory(),
       this.loadCuratedDataset(),
       this.loadStudentSessions(),
       this.loadStudentRuleImpact(),
       this.loadStudentStrategyAssets(category),
-      this.loadActiveLearningMemory()
+      this.loadActiveLearningMemory(),
+      this.loadInteractionLearningDigest()
     ]);
     const insight = layer?.categories.find((entry) => entry.category === category);
     const memoryEntry = memory?.categories.find((entry) => entry.category === category);
@@ -139,6 +145,18 @@ export class KnowledgeInjectionService {
         (item) =>
           `Active learning policy: ${item.learned} This modifies ${item.modifies}. Conditions: ${item.conditions.join(", ") || "general use"}.`
       );
+    const interactionLearningHints = (interactionLearningDigest?.activeHints ?? [])
+      .filter((item) => item.category === null || item.category === category)
+      .sort(
+        (left, right) =>
+          Number(right.priority === "high") - Number(left.priority === "high") ||
+          right.confidence - left.confidence
+      )
+      .slice(0, 2)
+      .map(
+        (item) =>
+          `Interaction learning signal: ${item.hint} Conditions: ${item.conditions.join(", ") || "general use"}.`
+      );
     const coachingHints = uniqueStrings(
       [
         ...curatedExamples
@@ -148,7 +166,8 @@ export class KnowledgeInjectionService {
           .flatMap((entry) => entry.coachingNotes),
         ...matchingStrategyAssets.map((asset) => `Adopted strategy asset: ${asset.learning.summary}`),
         ...matchingStrategyAssets.map((asset) => `Strategy hint: ${asset.learning.promptHint}`),
-        ...activeLearningHints
+        ...activeLearningHints,
+        ...interactionLearningHints
       ]
     ).slice(0, 8);
     const selectedMemoryRules = args?.question
@@ -203,6 +222,7 @@ export class KnowledgeInjectionService {
     this.studentRuleImpactPromise = null;
     this.studentStrategyAssetsPromises.clear();
     this.activeLearningMemoryPromise = null;
+    this.interactionLearningDigestPromise = null;
   }
 
   private async loadKnowledgeLayer() {
@@ -264,6 +284,14 @@ export class KnowledgeInjectionService {
     return this.activeLearningMemoryPromise;
   }
 
+  private async loadInteractionLearningDigest() {
+    if (!this.interactionLearningDigestPromise) {
+      this.interactionLearningDigestPromise = this.readInteractionLearningDigest();
+    }
+
+    return this.interactionLearningDigestPromise;
+  }
+
   private async readCuratedDataset() {
     try {
       const raw = await readFile(env.STUDENT_CURATED_DATASET_FILE, "utf8");
@@ -288,6 +316,15 @@ export class KnowledgeInjectionService {
     try {
       const raw = await readFile(env.LEARNING_ACTIVE_MEMORY_FILE, "utf8");
       return learningActiveMemorySchema.parse(JSON.parse(raw));
+    } catch {
+      return null;
+    }
+  }
+
+  private async readInteractionLearningDigest() {
+    try {
+      const raw = await readFile(env.INTERACTION_LEARNING_FILE, "utf8");
+      return interactionLearningDigestSchema.parse(JSON.parse(raw));
     } catch {
       return null;
     }

@@ -151,6 +151,26 @@ Each record includes the question, answer, summary, route/provider/model, catego
 
 The persistence health endpoint exposes `database.interactionRecordCount` so a production smoke can verify that interactions are being written.
 
+## Interaction Learning Digest
+
+Hydria does not fine-tune itself automatically from live traffic. The self-learning path is governed:
+
+```text
+interaction_records
+-> hydria-interaction-learning-v1.json
+-> active interaction hints
+-> KnowledgeInjectionService
+-> future answers as contextual guidance
+```
+
+Build or refresh the digest:
+
+```bash
+npm run learning:interactions -- --limit=1000
+```
+
+This writes `storage/learning/hydria-interaction-learning-v1.json`. It groups chat, Student Lab, Playground, and Benchmark records into guarded candidates such as `answer_pattern`, `supervised_correction`, `reasoning_example`, `tool_routing_signal`, and `repair_signal`. The runtime can use high-confidence hints, but raw answers are not blindly memorized and no model weights are changed.
+
 Full production smoke from any machine with this repo:
 
 ```bash

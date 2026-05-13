@@ -15,6 +15,7 @@
     "start": "npm run start -w @hydria-arena/server",
     "knowledge:refresh": "npm run knowledge:refresh -w @hydria-arena/server",
     "learning:loop": "npm run learning:loop -w @hydria-arena/server",
+    "learning:interactions": "npm run learning:interactions -w @hydria-arena/server --",
     "student:training-pack": "npm run student:training-pack -w @hydria-arena/server",
     "student:training-env": "npm run student:training-env -w @hydria-arena/server",
     "student:baseline": "npm run student:baseline -w @hydria-arena/server",

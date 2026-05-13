@@ -4,6 +4,7 @@ import { AgentCandidateService } from "./agents/agentCandidateService.js";
 import { AgentRegistry } from "./agents/agentRegistry.js";
 import { SkillCandidateService } from "./skills/skillCandidateService.js";
 import { SkillRegistry } from "./skills/skillRegistry.js";
+import { InteractionLearningDigestService } from "./interactionLearningDigestService.js";
 import { HistoryStore } from "./historyStore.js";
 import { KnowledgeLayerService } from "./knowledgeLayerService.js";
 import { KnowledgeMemoryService } from "./knowledgeMemoryService.js";
@@ -46,6 +47,7 @@ type LearningLoopServiceOptions = {
   toolRegistry?: Pick<ToolRegistry, "listTools" | "saveTool">;
   toolGapDetectorService?: Pick<ToolGapDetectorService, "detect">;
   toolCandidateService?: Pick<ToolCandidateService, "buildCandidates">;
+  interactionLearningDigestService?: Pick<InteractionLearningDigestService, "buildAndPersist"> | null;
   learningGovernanceService?: Pick<
     LearningGovernanceService,
     | "buildReport"
@@ -78,6 +80,7 @@ export class LearningLoopService {
   private readonly toolRegistry: Pick<ToolRegistry, "listTools" | "saveTool">;
   private readonly toolGapDetectorService: Pick<ToolGapDetectorService, "detect">;
   private readonly toolCandidateService: Pick<ToolCandidateService, "buildCandidates">;
+  private readonly interactionLearningDigestService: Pick<InteractionLearningDigestService, "buildAndPersist"> | null;
   private readonly learningGovernanceService: Pick<
     LearningGovernanceService,
     | "buildReport"
@@ -115,6 +118,10 @@ export class LearningLoopService {
     this.toolRegistry = options.toolRegistry ?? new ToolRegistry();
     this.toolGapDetectorService = options.toolGapDetectorService ?? new ToolGapDetectorService();
     this.toolCandidateService = options.toolCandidateService ?? new ToolCandidateService();
+    this.interactionLearningDigestService =
+      options.interactionLearningDigestService === undefined
+        ? new InteractionLearningDigestService()
+        : options.interactionLearningDigestService;
     this.learningGovernanceService =
       options.learningGovernanceService ?? new LearningGovernanceService();
     this.temporalEvalService = options.temporalEvalService ?? null;
@@ -146,6 +153,7 @@ export class LearningLoopService {
       ]);
 
     await this.knowledgeMemoryService.buildAndPersist(knowledgeLayer);
+    await this.interactionLearningDigestService?.buildAndPersist();
     const validation = await this.runValidation(validationMode, args.validationLimit ?? 8);
     const arenaQuality = new (await import("./arenaQualityAnalyticsService.js")).ArenaQualityAnalyticsService().buildReport(
       rounds,

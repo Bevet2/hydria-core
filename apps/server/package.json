@@ -11,6 +11,7 @@
     "start": "node dist/index.js",
     "knowledge:refresh": "tsx src/scripts/refreshKnowledgeLayer.ts",
     "learning:loop": "tsx src/scripts/runLearningLoop.ts",
+    "learning:interactions": "tsx src/scripts/runInteractionLearningDigest.ts",
     "student:training-pack": "tsx src/scripts/runPrepareLocalStudentTrainingPack.ts",
     "student:training-env": "tsx src/scripts/runCheckLocalStudentTrainingEnv.ts",
     "student:baseline": "tsx src/scripts/runFreezeLocalStudentBaseline.ts",

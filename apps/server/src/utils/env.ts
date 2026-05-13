@@ -90,6 +90,10 @@ const envSchema = z.object({
     .string()
     .min(1)
     .default(projectPath("storage", "history", "hydria-interactions.jsonl")),
+  INTERACTION_LEARNING_FILE: z
+    .string()
+    .min(1)
+    .default(projectPath("storage", "learning", "hydria-interaction-learning-v1.json")),
   STUDENT_RULE_IMPACT_FILE: z
     .string()
     .min(1)
