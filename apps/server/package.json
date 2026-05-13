@@ -14,6 +14,7 @@
     "watchers:run": "tsx src/scripts/runWatchers.ts",
     "knowledge:promote": "tsx src/scripts/runKnowledgePromotionGovernance.ts",
     "training:queue-validate": "tsx src/scripts/runTrainingQueueValidation.ts",
+    "learning:dataset-expansion": "tsx src/scripts/runDatasetExpansionCampaign.ts",
     "learning:loop": "tsx src/scripts/runLearningLoop.ts",
     "learning:interactions": "tsx src/scripts/runInteractionLearningDigest.ts",
     "student:training-pack": "tsx src/scripts/runPrepareLocalStudentTrainingPack.ts",

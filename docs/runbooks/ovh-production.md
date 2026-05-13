@@ -267,6 +267,21 @@ npm run training:queue-validate
 
 It writes `storage/learning/hydria-training-queue-validation-v1.json`. `student_sft` items can become `ready_for_pack`, but training remains blocked until at least `TRAINING_QUEUE_MIN_SFT_READY_ITEMS` entries are ready. `retrieval_knowledge` from external watchers is blocked until at least two sources are corroborated. Runtime memory requires a validated or active Knowledge Object, confidence >= 0.7, stable/non-dynamic knowledge, and repeated evidence.
 
+Dataset expansion campaigns are bounded collection runs, not training:
+
+```bash
+npm run learning:dataset-expansion -- --duration-hours=52 --max-chat-turns=208 --max-student-previews=26
+```
+
+The campaign calls public chat and public Student Lab preview sequentially, with one request in flight, resource-pressure pauses, periodic watcher/consolidation/promotion dry-run, and training queue validation. It writes:
+
+```text
+storage/training/dataset-expansion-campaign-v1.json
+storage/training/dataset-expansion-campaign-v1.jsonl
+```
+
+It does not call `student_session`, does not train a model, does not apply promotion, and does not activate runtime memory. Stop or pause thresholds are controlled by `--pause-memory-pct`, `--stop-memory-pct`, `--pause-load-ratio`, `--pause-ms`, and `--max-consecutive-pauses`.
+
 The public read endpoint exposes the current watcher state:
 
 ```bash
