@@ -186,11 +186,7 @@ app.get("/api/health", async (_request, response) => {
 });
 
 const protectedApiPaths = [
-  ...(env.STUDENT_LAB_PUBLIC_ENABLED ? [] : ["/api/student"]),
-  "/api/arena",
-  "/api/benchmark",
-  "/api/learning",
-  "/api/local-model"
+  ...(env.STUDENT_LAB_PUBLIC_ENABLED ? [] : ["/api/student"])
 ];
 const protectedApiAuthAttemptRateLimit = createRateLimitMiddleware({
   keyPrefix: "protected-api-auth",
