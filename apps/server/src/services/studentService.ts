@@ -23,6 +23,7 @@ import { OpenRouterService } from "./openrouter.js";
 import { OrchestrationPolicyService } from "./orchestrationPolicy.js";
 import { ResearchToolService } from "./researchToolService.js";
 import { StudentSessionStore } from "./studentSessionStore.js";
+import type { InteractionLogStore } from "./interactionLogStore.js";
 import { enrichStudentSession } from "./studentLearning.js";
 import {
   StudentStrategySelectorService
@@ -53,6 +54,11 @@ function uniqueStrings(values: string[]) {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }
 
+function compact(value: string, maxChars = 800) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length <= maxChars ? normalized : `${normalized.slice(0, maxChars - 1).trim()}...`;
+}
+
 export class StudentPreviewNotFoundError extends Error {
   constructor(previewId: string) {
     super(`Student preview ${previewId} was not found or has expired.`);
@@ -75,7 +81,8 @@ export class StudentService {
     private readonly openRouterService: OpenRouterService,
     private readonly orchestrationPolicyService: OrchestrationPolicyService,
     private readonly researchToolService: ResearchToolService,
-    private readonly studentSessionStore: StudentSessionStore
+    private readonly studentSessionStore: StudentSessionStore,
+    private readonly interactionLogStore: Pick<InteractionLogStore, "safeAppend"> | null = null
   ) {
     this.studentStepExecutor = new StudentStepExecutor(this.openRouterService);
     this.preparationService = new StudentPreparationService(
@@ -163,6 +170,33 @@ export class StudentService {
       durationMs: prepared.durationMs
     });
     this.rememberPreview(preview);
+    await this.interactionLogStore?.safeAppend({
+      scope: "student_preview",
+      source: "student_lab",
+      mode: "student_preview",
+      status: "completed",
+      sessionId: null,
+      artifactId: preview.previewId,
+      question,
+      answer: preview.student.draft.answer,
+      summary: compact(preview.student.draft.answer),
+      routing: {
+        orchestrator: "student_preview",
+        provider: preview.trace.student.finalProvider,
+        model: preview.trace.student.finalModel,
+        category: preview.category,
+        toolUsed: preview.student.toolApplied
+      },
+      quality: {
+        passed: null,
+        score: null,
+        issues: []
+      },
+      durationMs: preview.durationMs,
+      payload: {
+        preview
+      }
+    });
     return preview;
   }
 
@@ -362,6 +396,33 @@ export class StudentService {
     );
 
     await this.studentSessionStore.appendSession(session);
+    await this.interactionLogStore?.safeAppend({
+      scope: "student_analysis",
+      source: "student_lab",
+      mode: "student_session",
+      status: "completed",
+      sessionId: session.sessionId,
+      artifactId: session.sessionId,
+      question: session.question,
+      answer: session.student.final.answer,
+      summary: compact(`${session.judge.verdict}: ${session.teacher.improved_answer}`),
+      routing: {
+        orchestrator: "student_learning",
+        provider: session.traces.student.finalProvider,
+        model: session.traces.student.finalModel,
+        category: session.category,
+        toolUsed: session.student.toolApplied
+      },
+      quality: {
+        passed: session.judge.verdict !== "regressed",
+        score: session.progression.sessionScore,
+        issues: session.weakPoints.slice(0, 12)
+      },
+      durationMs: session.durationMs,
+      payload: {
+        session
+      }
+    });
     this.knowledgeInjectionService.invalidateStudentLearningCaches();
     logger.info("Student session completed", {
       sessionId,

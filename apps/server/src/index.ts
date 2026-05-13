@@ -34,6 +34,7 @@ import { BenchmarkStore } from "./services/benchmarkStore.js";
 import { ChatRuntimeService } from "./services/chatRuntimeService.js";
 import { HydriaCoreAskService } from "./services/core/hydriaCoreAskService.js";
 import { HistoryStore } from "./services/historyStore.js";
+import { InteractionLogStore } from "./services/interactionLogStore.js";
 import { LearningGovernanceService } from "./services/learningGovernanceService.js";
 import { LocalModelService } from "./services/localModel.js";
 import { ModelCapabilityService } from "./services/models/modelCapabilityService.js";
@@ -64,6 +65,7 @@ const modelProviderService = new ModelProviderService({
 const openRouterService = new OpenRouterService();
 const benchmarkStore = new BenchmarkStore();
 const studentSessionStore = new StudentSessionStore();
+const interactionLogStore = new InteractionLogStore();
 const orchestrationPolicyService = new OrchestrationPolicyService();
 const refineRouterService = new RefineRouterService();
 const researchToolService = new ResearchToolService();
@@ -76,14 +78,16 @@ const studentService = new StudentService(
   openRouterService,
   orchestrationPolicyService,
   researchToolService,
-  studentSessionStore
+  studentSessionStore,
+  interactionLogStore
 );
 const studentChatAdapter = new StudentChatAdapter(studentChatLocalModelService);
 const chatRuntimeService = new ChatRuntimeService(
   studentChatAdapter,
   undefined,
   undefined,
-  modelRuntimeTelemetryService
+  modelRuntimeTelemetryService,
+  interactionLogStore
 );
 const arenaRunner = new ArenaRunner(
   openRouterService,
@@ -99,7 +103,8 @@ const coreAskService = new HydriaCoreAskService({
   studentService,
   arenaRunner,
   benchmarkService,
-  localModelService
+  localModelService,
+  interactionLogStore
 });
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const webDistDir = join(currentDir, "../../web/dist");
@@ -108,6 +113,7 @@ const hasBuiltWebApp = existsSync(webIndexPath);
 
 await historyStore.ensureReady();
 await benchmarkService.ensureReady();
+await interactionLogStore.ensureReady();
 await studentService.ensureReady();
 
 const app = express();

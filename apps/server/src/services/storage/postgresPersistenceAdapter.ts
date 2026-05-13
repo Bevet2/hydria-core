@@ -7,6 +7,8 @@ import type { SkillDefinition, SkillState } from "../../types/skills.js";
 import { skillDefinitionSchema } from "../../types/skills.js";
 import type { StudentSession } from "../../types/student.js";
 import { studentSessionSchema } from "../../types/student.js";
+import type { HydriaInteractionRecord } from "../../types/interactions.js";
+import { hydriaInteractionRecordSchema } from "../../types/interactions.js";
 import type {
   LocalStudentModelVariant,
   LocalStudentVariantState
@@ -75,6 +77,14 @@ export class PostgresPersistenceAdapter implements PersistenceAdapter {
     await this.ensureReady();
     const result = await this.getPool().query<CountRow>(
       `SELECT COUNT(*) AS count FROM ${this.table("student_sessions")}`
+    );
+    return Number(result.rows[0]?.count ?? 0);
+  }
+
+  async countInteractionRecords() {
+    await this.ensureReady();
+    const result = await this.getPool().query<CountRow>(
+      `SELECT COUNT(*) AS count FROM ${this.table("interaction_records")}`
     );
     return Number(result.rows[0]?.count ?? 0);
   }
@@ -585,6 +595,54 @@ export class PostgresPersistenceAdapter implements PersistenceAdapter {
     });
   }
 
+  async listInteractionRecords(limit = 500) {
+    return this.selectPayloads<HydriaInteractionRecord>(
+      `SELECT payload FROM ${this.table("interaction_records")}
+       ORDER BY created_at DESC
+       LIMIT $1`,
+      [Math.max(1, Math.min(5000, Math.trunc(limit)))],
+      hydriaInteractionRecordSchema
+    );
+  }
+
+  async appendInteractionRecord(record: HydriaInteractionRecord) {
+    await this.ensureReady();
+    const parsed = hydriaInteractionRecordSchema.parse(record);
+    await this.getPool().query(
+      `
+        INSERT INTO ${this.table("interaction_records")} (
+          interaction_id,
+          created_at,
+          scope,
+          source,
+          mode,
+          session_id,
+          artifact_id,
+          payload
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+        ON CONFLICT (interaction_id) DO UPDATE SET
+          created_at = EXCLUDED.created_at,
+          scope = EXCLUDED.scope,
+          source = EXCLUDED.source,
+          mode = EXCLUDED.mode,
+          session_id = EXCLUDED.session_id,
+          artifact_id = EXCLUDED.artifact_id,
+          payload = EXCLUDED.payload
+      `,
+      [
+        parsed.id,
+        parsed.createdAt,
+        parsed.scope,
+        parsed.source,
+        parsed.mode,
+        parsed.sessionId,
+        parsed.artifactId,
+        JSON.stringify(parsed)
+      ]
+    );
+  }
+
   close() {
     const pool = this.pool;
     this.pool = null;
@@ -616,6 +674,7 @@ export class PostgresPersistenceAdapter implements PersistenceAdapter {
     const toolManifests = this.table("tool_manifests");
     const specializedAgents = this.table("specialized_agents");
     const localModelVariants = this.table("local_model_variants");
+    const interactionRecords = this.table("interaction_records");
 
     return `
       CREATE SCHEMA IF NOT EXISTS ${this.schemaSql};
@@ -705,6 +764,26 @@ export class PostgresPersistenceAdapter implements PersistenceAdapter {
 
       CREATE INDEX IF NOT EXISTS ${this.index("idx_local_model_variants_confidence")}
         ON ${localModelVariants} (confidence_score DESC);
+
+      CREATE TABLE IF NOT EXISTS ${interactionRecords} (
+        interaction_id TEXT PRIMARY KEY,
+        created_at TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        source TEXT NOT NULL,
+        mode TEXT NULL,
+        session_id TEXT NULL,
+        artifact_id TEXT NULL,
+        payload JSONB NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS ${this.index("idx_interaction_records_created_at")}
+        ON ${interactionRecords} (created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS ${this.index("idx_interaction_records_scope")}
+        ON ${interactionRecords} (scope, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS ${this.index("idx_interaction_records_session")}
+        ON ${interactionRecords} (session_id, created_at DESC);
     `;
   }
 

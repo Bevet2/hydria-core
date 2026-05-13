@@ -40,6 +40,7 @@ export class PersistenceHealthService {
       databaseFile: report.database.path,
       arenaRoundCount: report.database.arenaRoundCount,
       studentSessionCount: report.database.studentSessionCount,
+      interactionRecordCount: report.database.interactionRecordCount,
       projectionIssues,
       derivedArtifactIssues
     };
@@ -54,6 +55,7 @@ export class PersistenceHealthService {
       await database.ensureReady();
       const arenaRoundCount = await database.countArenaRounds();
       const studentSessionCount = await database.countStudentSessions();
+      const interactionRecordCount = await database.countInteractionRecords();
       const [databaseFile, walFile, shmFile, arenaHistory, studentHistory, knowledgeMemory, studentRuleImpact, studentToolImpact, studentStrategyImpact, studentStrategyDiscovery, studentStrategyAssets] =
         await Promise.all([
           this.inspectFile(this.databaseFile),
@@ -84,7 +86,8 @@ export class PersistenceHealthService {
           walExists: isSqlite ? walFile.exists : false,
           shmExists: isSqlite ? shmFile.exists : false,
           arenaRoundCount,
-          studentSessionCount
+          studentSessionCount,
+          interactionRecordCount
         },
         projections: {
           arenaHistory,

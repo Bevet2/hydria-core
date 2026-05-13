@@ -33,6 +33,7 @@ import {
 } from "./tools/localToolExecutionService.js";
 import { ToolRoutingService } from "./tools/toolRoutingService.js";
 import type { ModelRuntimeTelemetryService } from "./models/modelRuntimeTelemetryService.js";
+import type { InteractionLogStore } from "./interactionLogStore.js";
 
 type ChatRuntimeSession = {
   sessionId: string;
@@ -1607,7 +1608,8 @@ export class ChatRuntimeService {
     private readonly toolRoutingService: Pick<ToolRoutingService, "route"> = new ToolRoutingService(),
     private readonly localToolExecutionService: Pick<LocalToolExecutionService, "tryExecute"> =
       new LocalToolExecutionService(),
-    private readonly modelRuntimeTelemetryService: Pick<ModelRuntimeTelemetryService, "safeRecordEvent"> | null = null
+    private readonly modelRuntimeTelemetryService: Pick<ModelRuntimeTelemetryService, "safeRecordEvent"> | null = null,
+    private readonly interactionLogStore: Pick<InteractionLogStore, "safeAppend"> | null = null
   ) {}
 
   resetSession(sessionId: string) {
@@ -1971,7 +1973,7 @@ export class ChatRuntimeService {
       });
     }
 
-    return {
+    const response: ChatMessageResponse = {
       sessionId: session.sessionId,
       createdAt: assistantMessage.createdAt,
       runtimeMode,
@@ -1999,6 +2001,36 @@ export class ChatRuntimeService {
       usedRetry,
       durationMs
     };
+
+    await this.interactionLogStore?.safeAppend({
+      scope: "chat_turn",
+      source: "chat",
+      mode: "chat",
+      status: "completed",
+      sessionId: response.sessionId,
+      artifactId: response.assistantMessage.id,
+      question: response.userMessage.content,
+      answer: response.assistantMessage.content,
+      summary: response.assistantMessage.content.replace(/\s+/g, " ").trim().slice(0, 800),
+      routing: {
+        orchestrator: "chat_runtime",
+        provider: response.generation.provider,
+        model: response.generation.model,
+        category: response.category,
+        toolUsed: response.tooling.used
+      },
+      quality: {
+        passed: response.conversationQuality.passed,
+        score: null,
+        issues: response.conversationQuality.issues.slice(0, 12)
+      },
+      durationMs: response.durationMs,
+      payload: {
+        response
+      }
+    });
+
+    return response;
   }
 
   private async buildDraft(args: {

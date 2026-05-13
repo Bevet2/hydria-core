@@ -36,6 +36,7 @@ export type PersistenceHealthReport = {
     shmExists: boolean;
     arenaRoundCount: number;
     studentSessionCount: number;
+    interactionRecordCount: number;
   };
   projections: {
     arenaHistory: PersistenceProjectionHealth;
@@ -58,6 +59,7 @@ export type PersistenceHealthSummary = {
   databaseFile: string;
   arenaRoundCount: number;
   studentSessionCount: number;
+  interactionRecordCount: number;
   projectionIssues: number;
   derivedArtifactIssues: number;
 };

@@ -44,7 +44,8 @@ export function PersistenceHealthPanel({
             <span>Database: {health.database.path}</span>
             <span>
               Arena rounds: {health.database.arenaRoundCount} | Student sessions:{" "}
-              {health.database.studentSessionCount}
+              {health.database.studentSessionCount} | Interactions:{" "}
+              {health.database.interactionRecordCount}
             </span>
             <span>
               WAL: {health.database.walExists ? "present" : "missing"} | SHM:{" "}

@@ -9,6 +9,7 @@ export type PersistenceAdapter = Pick<
   | "ensureReady"
   | "countArenaRounds"
   | "countStudentSessions"
+  | "countInteractionRecords"
   | "listSkills"
   | "findSkillsByIntent"
   | "getSkill"
@@ -39,6 +40,8 @@ export type PersistenceAdapter = Pick<
   | "getStudentSession"
   | "appendStudentSession"
   | "replaceStudentSessions"
+  | "listInteractionRecords"
+  | "appendInteractionRecord"
   | "close"
 >;
 

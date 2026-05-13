@@ -19,6 +19,10 @@ import {
 } from "../../types/tools.js";
 import { studentSessionSchema, type StudentSession } from "../../types/student.js";
 import {
+  hydriaInteractionRecordSchema,
+  type HydriaInteractionRecord
+} from "../../types/interactions.js";
+import {
   localStudentModelVariantSchema,
   type LocalStudentModelVariant,
   type LocalStudentVariantState
@@ -64,6 +68,26 @@ export class HydriaStateDatabase {
 
       CREATE INDEX IF NOT EXISTS idx_student_sessions_created_at
         ON student_sessions (created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS interaction_records (
+        interaction_id TEXT PRIMARY KEY,
+        created_at TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        source TEXT NOT NULL,
+        mode TEXT NULL,
+        session_id TEXT NULL,
+        artifact_id TEXT NULL,
+        payload TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_interaction_records_created_at
+        ON interaction_records (created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_interaction_records_scope
+        ON interaction_records (scope, created_at DESC);
+
+      CREATE INDEX IF NOT EXISTS idx_interaction_records_session
+        ON interaction_records (session_id, created_at DESC);
 
       CREATE TABLE IF NOT EXISTS skills (
         skill_id TEXT PRIMARY KEY,
@@ -149,6 +173,14 @@ export class HydriaStateDatabase {
     await this.ensureReady();
     const row = this.getDatabase()
       .prepare("SELECT COUNT(*) AS count FROM student_sessions")
+      .get() as { count: number };
+    return row.count;
+  }
+
+  async countInteractionRecords() {
+    await this.ensureReady();
+    const row = this.getDatabase()
+      .prepare("SELECT COUNT(*) AS count FROM interaction_records")
       .get() as { count: number };
     return row.count;
   }
@@ -659,6 +691,45 @@ export class HydriaStateDatabase {
       database.exec("ROLLBACK");
       throw error;
     }
+  }
+
+  async listInteractionRecords(limit = 500) {
+    await this.ensureReady();
+    const rows = this.getDatabase()
+      .prepare("SELECT payload FROM interaction_records ORDER BY created_at DESC LIMIT ?")
+      .all(Math.max(1, Math.min(5000, Math.trunc(limit)))) as PersistedPayloadRow[];
+    return rows.map((row) => hydriaInteractionRecordSchema.parse(JSON.parse(row.payload)));
+  }
+
+  async appendInteractionRecord(record: HydriaInteractionRecord) {
+    await this.ensureReady();
+    const parsed = hydriaInteractionRecordSchema.parse(record);
+    this.getDatabase()
+      .prepare(
+        `
+          INSERT OR REPLACE INTO interaction_records (
+            interaction_id,
+            created_at,
+            scope,
+            source,
+            mode,
+            session_id,
+            artifact_id,
+            payload
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `
+      )
+      .run(
+        parsed.id,
+        parsed.createdAt,
+        parsed.scope,
+        parsed.source,
+        parsed.mode,
+        parsed.sessionId,
+        parsed.artifactId,
+        JSON.stringify(parsed)
+      );
   }
 
   close() {

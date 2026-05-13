@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { HistoryStore } from "../services/historyStore.js";
+import { InteractionLogStore } from "../services/interactionLogStore.js";
 import { StudentSessionStore } from "../services/studentSessionStore.js";
 import {
   buildArenaRoundFixture,
@@ -98,6 +99,58 @@ test("student session store reloads sessions from sqlite and rewrites the projec
   } finally {
     await writer?.close?.();
     await reader?.close?.();
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("interaction log store persists questions, answers, and analysis metadata", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "hydria-interactions-sqlite-"));
+  let store: InteractionLogStore | null = null;
+  try {
+    const logFile = join(tempRoot, "hydria-interactions.jsonl");
+    const databaseFile = join(tempRoot, "hydria-state.sqlite");
+    store = new InteractionLogStore(logFile, databaseFile);
+
+    await store.append({
+      id: "22222222-2222-4222-8222-222222222222",
+      createdAt: "2026-05-13T10:00:00.000Z",
+      scope: "student_analysis",
+      source: "student_lab",
+      mode: "student_session",
+      status: "completed",
+      sessionId: "session-1",
+      artifactId: "session-1",
+      question: "Explain eventual consistency.",
+      answer: "Replicas converge after a delay.",
+      summary: "teacher improved the answer",
+      routing: {
+        orchestrator: "student_learning",
+        provider: "ollama",
+        model: "qwen2.5:3b",
+        category: "technical_explanation",
+        toolUsed: false
+      },
+      quality: {
+        passed: true,
+        score: 82,
+        issues: []
+      },
+      durationMs: 123,
+      payload: {
+        judge: "improved"
+      }
+    });
+
+    assert.equal(await store.count(), 1);
+    const records = await store.listRecent();
+    assert.equal(records[0]?.question, "Explain eventual consistency.");
+    assert.equal(records[0]?.answer, "Replicas converge after a delay.");
+
+    const projection = await readFile(logFile, "utf8");
+    assert.match(projection, /student_analysis/);
+    assert.match(projection, /teacher improved the answer/);
+  } finally {
+    await store?.close?.();
     await rm(tempRoot, { recursive: true, force: true });
   }
 });

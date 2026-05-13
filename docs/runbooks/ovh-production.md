@@ -35,7 +35,7 @@ curl -fsS https://app.hydria.click/api/health/persistence
 curl -fsS https://app.hydria.click/api/models/capabilities
 ```
 
-Admin, benchmark, arena, learning, and model-execution routes require a Hydria API key in production. The public chat route does not require a key; it is protected by server-side IP rate limits. Student Lab can be opened for browser-driven VPS training without a browser API key when `TRAINING_ENDPOINTS_ENABLED=true` and `STUDENT_LAB_PUBLIC_ENABLED=true`; that exception is scoped to `/api/student/*`.
+Admin execution routes require a Hydria API key in production. Public read dashboards such as health, benchmark summaries, arena history, learning report, and local model health are readable without a key. The public chat route does not require a key; it is protected by server-side IP rate limits. Student Lab can be opened for browser-driven VPS training without a browser API key when `TRAINING_ENDPOINTS_ENABLED=true` and `STUDENT_LAB_PUBLIC_ENABLED=true`; that exception is scoped to `/api/student/*`.
 
 ```bash
 HYDRIA_API_KEY="$(ssh ubuntu@51.210.46.30 'cat /opt/hydria-core/.hydria-api-key')"
@@ -130,6 +130,25 @@ curl -fsS https://app.hydria.click/api/core/ask \
 ```
 
 All responses return the same envelope: `answer`, `display`, `routing`, `artifacts`, `durationMs`, and the raw mode-specific `data` payload.
+
+## Interaction Audit Persistence
+
+Production stores user-facing interactions in PostgreSQL and appends a JSONL audit projection at `storage/history/hydria-interactions.jsonl`.
+
+Recorded scopes:
+
+```text
+chat_turn
+student_preview
+student_analysis
+playground_round
+benchmark_run
+local_model_test
+```
+
+Each record includes the question, answer, summary, route/provider/model, category when available, tool usage, quality issues, duration, and the raw mode-specific payload. Student Lab has two records when the full flow is used: one for the draft and one for `Analyze with teacher`.
+
+The persistence health endpoint exposes `database.interactionRecordCount` so a production smoke can verify that interactions are being written.
 
 Full production smoke from any machine with this repo:
 

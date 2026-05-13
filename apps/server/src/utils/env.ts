@@ -86,6 +86,10 @@ const envSchema = z.object({
     .string()
     .min(1)
     .default(projectPath("storage", "datasets", "student-cycles.jsonl")),
+  INTERACTION_LOG_FILE: z
+    .string()
+    .min(1)
+    .default(projectPath("storage", "history", "hydria-interactions.jsonl")),
   STUDENT_RULE_IMPACT_FILE: z
     .string()
     .min(1)
