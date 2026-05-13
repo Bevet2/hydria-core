@@ -338,12 +338,12 @@ Hydria container URL: http://host.docker.internal:11435
 Firewall: 11435 allowed only from the Hydria Docker subnet
 API key file: /opt/hydria-core/.hydria-api-key
 Systemd drop-in: /etc/systemd/system/ollama.service.d/hydria.conf
-OLLAMA_KEEP_ALIVE=30s
-OLLAMA_MAX_LOADED_MODELS=1
+OLLAMA_KEEP_ALIVE=30m
+OLLAMA_MAX_LOADED_MODELS=2
 OLLAMA_NUM_PARALLEL=1
 ```
 
-The OVH CPU VPS must not keep several 7B/14B runners loaded at once. The single-loaded-model policy avoids memory pressure and timeout cascades during chat smoke gates. If this backend moves to a GPU host, revisit these limits.
+The OVH CPU VPS should keep the two light public-chat runners resident together: `qwen2.5:3b` for standard-light/concise turns and `mistral:7b` for stable factual biographies. Keep `OLLAMA_NUM_PARALLEL=1` to avoid CPU contention, but do not drop `OLLAMA_MAX_LOADED_MODELS` back to `1`; that forces model swapping and makes the strict chat SLO gate fail. If this backend moves to a GPU host, revisit these limits.
 
 Installed open-weight models:
 

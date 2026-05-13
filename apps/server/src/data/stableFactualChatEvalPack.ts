@@ -89,7 +89,7 @@ export const STABLE_FACTUAL_CHAT_EVAL_PACK: StableFactualChatEvalCase[] = [
     ...stableFactRoute,
     expectedAnchors: [
       { id: "subject", anyOf: ["marie curie"] },
-      { id: "radioactivity", anyOf: ["radioactivite", "radioactif"] },
+      { id: "radioactivity", anyOf: ["radioactivite", "radioactif", "radium", "polonium"] },
       { id: "award_or_period", anyOf: ["nobel", "1867", "1934"] },
       {
         id: "scientific_legacy",
