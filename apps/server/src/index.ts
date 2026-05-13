@@ -95,9 +95,10 @@ const arenaRunner = new ArenaRunner(
   historyStore,
   orchestrationPolicyService,
   refineRouterService,
-  researchToolService
+  researchToolService,
+  interactionLogStore
 );
-const benchmarkService = new BenchmarkService(arenaRunner, benchmarkStore);
+const benchmarkService = new BenchmarkService(arenaRunner, benchmarkStore, interactionLogStore);
 const coreAskService = new HydriaCoreAskService({
   chatRuntimeService,
   studentService,

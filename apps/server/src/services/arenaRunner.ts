@@ -2,8 +2,11 @@ import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import {
   type ArenaRunRequest,
+  type ArenaRound,
   type QuestionCategory,
 } from "../types/arena.js";
+import type { HydriaCoreAskMode } from "../types/core.js";
+import type { HydriaInteractionScope, HydriaInteractionSource } from "../types/interactions.js";
 import { logger } from "../utils/logger.js";
 import { HistoryStore } from "./historyStore.js";
 import {
@@ -25,8 +28,25 @@ import {
   type RespondentExecutionResult,
   RespondentStageError
 } from "./arena/arenaExecutionTypes.js";
+import type { InteractionLogStore } from "./interactionLogStore.js";
 
 export { RespondentStageError } from "./arena/arenaExecutionTypes.js";
+
+export type ArenaRunAuditContext = {
+  scope?: Extract<HydriaInteractionScope, "playground_round" | "benchmark_prompt">;
+  source?: Extract<HydriaInteractionSource, "playground" | "benchmark">;
+  mode?: Extract<HydriaCoreAskMode, "playground" | "benchmark">;
+  sessionId?: string | null;
+  artifactId?: string | null;
+  benchmarkRunId?: string | null;
+  benchmarkId?: string | null;
+  promptId?: string | null;
+};
+
+function compact(value: string, maxChars = 360) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length <= maxChars ? normalized : `${normalized.slice(0, maxChars - 1).trim()}...`;
+}
 
 export class ArenaRunner {
   private readonly knowledgeInjectionService = new KnowledgeInjectionService();
@@ -43,7 +63,8 @@ export class ArenaRunner {
     private readonly historyStore: HistoryStore,
     private readonly orchestrationPolicyService: OrchestrationPolicyService,
     private readonly refineRouterService: RefineRouterService,
-    private readonly researchToolService: ResearchToolService
+    private readonly researchToolService: ResearchToolService,
+    private readonly interactionLogStore: Pick<InteractionLogStore, "safeAppend"> | null = null
   ) {
     this.stepExecutor = new ArenaStepExecutor(
       this.openRouterService,
@@ -64,7 +85,7 @@ export class ArenaRunner {
     this.respondentFailureStore = new ArenaRespondentFailureStore();
   }
 
-  async runRound(request: ArenaRunRequest) {
+  async runRound(request: ArenaRunRequest, auditContext: ArenaRunAuditContext = {}) {
     const startedAt = performance.now();
     const roundId = randomUUID();
     const createdAt = new Date().toISOString();
@@ -222,6 +243,7 @@ export class ArenaRunner {
     });
 
     await this.historyStore.appendRound(round);
+    await this.auditRound(round, auditContext);
     logger.info("Arena round completed", {
       roundId,
       durationMs: round.durationMs,
@@ -232,6 +254,45 @@ export class ArenaRunner {
     });
 
     return round;
+  }
+
+  private async auditRound(round: ArenaRound, auditContext: ArenaRunAuditContext) {
+    await this.interactionLogStore?.safeAppend({
+      scope: auditContext.scope ?? "playground_round",
+      source: auditContext.source ?? "playground",
+      mode: auditContext.mode ?? "playground",
+      status: "completed",
+      sessionId: auditContext.sessionId ?? auditContext.benchmarkRunId ?? null,
+      artifactId: auditContext.artifactId ?? round.roundId,
+      question: round.question,
+      answer: round.outputs.synthesizer.final_answer,
+      summary: compact(round.outputs.synthesizer.final_answer),
+      routing: {
+        orchestrator: "arena_runner",
+        provider: "openrouter",
+        model: round.models.synthesizer,
+        category: round.category,
+        toolUsed: round.research.used
+      },
+      quality: {
+        passed: !(
+          round.metrics.refineGain.global < 0 ||
+          round.verdicts.refineA === "degrading" ||
+          round.verdicts.refineB === "degrading"
+        ),
+        score: round.metrics.refineGain.global,
+        issues: [
+          ...(round.verdicts.refineA === "degrading" ? ["refine_a_degrading"] : []),
+          ...(round.verdicts.refineB === "degrading" ? ["refine_b_degrading"] : []),
+          ...(round.metrics.refineGain.global < 0 ? ["negative_global_refine_gain"] : [])
+        ]
+      },
+      durationMs: round.durationMs,
+      payload: {
+        auditContext,
+        round
+      }
+    });
   }
 
   private async recordRespondentStageFailure(args: {

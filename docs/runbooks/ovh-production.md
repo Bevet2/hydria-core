@@ -143,10 +143,11 @@ student_preview
 student_analysis
 playground_round
 benchmark_run
+benchmark_prompt
 local_model_test
 ```
 
-Each record includes the question, answer, summary, route/provider/model, category when available, tool usage, quality issues, duration, and the raw mode-specific payload. Student Lab has two records when the full flow is used: one for the draft and one for `Analyze with teacher`.
+Each record includes the question, answer, summary, route/provider/model, category when available, tool usage, quality issues, duration, and the raw mode-specific payload. Student Lab has two records when the full flow is used: one for the draft and one for `Analyze with teacher`. Playground arena rounds are recorded from `ArenaRunner`, so both `/api/core/ask` and direct `/api/arena/run` executions are covered. Benchmarks record the async run start plus one `benchmark_prompt` record per executed prompt.
 
 The persistence health endpoint exposes `database.interactionRecordCount` so a production smoke can verify that interactions are being written.
 

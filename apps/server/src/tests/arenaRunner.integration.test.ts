@@ -42,6 +42,7 @@ test("arena runner stores a round and reloads it from history", async () => {
         durationMs
       })
     };
+    const auditRecords: any[] = [];
 
     const runner = new ArenaRunner(
       {} as never,
@@ -49,7 +50,13 @@ test("arena runner stores a round and reloads it from history", async () => {
       historyStore,
       {} as never,
       {} as never,
-      researchToolService as never
+      researchToolService as never,
+      {
+        async safeAppend(record: any) {
+          auditRecords.push(record);
+          return null;
+        }
+      }
     );
 
     (runner as any).preparationService = {
@@ -172,6 +179,12 @@ test("arena runner stores a round and reloads it from history", async () => {
     const rounds = await historyStore.listRounds();
     assert.equal(rounds.length, 1);
     assert.equal(rounds[0]?.roundId, round.roundId);
+    assert.equal(auditRecords.length, 1);
+    assert.equal(auditRecords[0]?.scope, "playground_round");
+    assert.equal(auditRecords[0]?.source, "playground");
+    assert.equal(auditRecords[0]?.artifactId, round.roundId);
+    assert.equal(auditRecords[0]?.question, round.question);
+    assert.equal(auditRecords[0]?.answer, round.outputs.synthesizer.final_answer);
   } finally {
     await historyStore?.close?.();
     await rm(tempRoot, { recursive: true, force: true });

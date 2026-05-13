@@ -140,14 +140,45 @@ test("interaction log store persists questions, answers, and analysis metadata",
         judge: "improved"
       }
     });
+    await store.append({
+      id: "33333333-3333-4333-8333-333333333333",
+      createdAt: "2026-05-13T10:01:00.000Z",
+      scope: "benchmark_prompt",
+      source: "benchmark",
+      mode: "benchmark",
+      status: "completed",
+      sessionId: "benchmark-run-1",
+      artifactId: "benchmark-run-1:prompt-1",
+      question: "Explain cache invalidation.",
+      answer: "Invalidate or expire entries when the source changes.",
+      summary: "benchmark prompt completed",
+      routing: {
+        orchestrator: "arena_runner",
+        provider: "openrouter",
+        model: "qwen/qwen3.6-plus",
+        category: "technical_explanation",
+        toolUsed: false
+      },
+      quality: {
+        passed: true,
+        score: 4,
+        issues: []
+      },
+      durationMs: 456,
+      payload: {
+        promptId: "prompt-1"
+      }
+    });
 
-    assert.equal(await store.count(), 1);
+    assert.equal(await store.count(), 2);
     const records = await store.listRecent();
-    assert.equal(records[0]?.question, "Explain eventual consistency.");
-    assert.equal(records[0]?.answer, "Replicas converge after a delay.");
+    assert.equal(records[0]?.scope, "benchmark_prompt");
+    assert.equal(records[1]?.question, "Explain eventual consistency.");
+    assert.equal(records[1]?.answer, "Replicas converge after a delay.");
 
     const projection = await readFile(logFile, "utf8");
     assert.match(projection, /student_analysis/);
+    assert.match(projection, /benchmark_prompt/);
     assert.match(projection, /teacher improved the answer/);
   } finally {
     await store?.close?.();

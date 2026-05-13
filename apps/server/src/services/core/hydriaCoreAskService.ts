@@ -155,7 +155,7 @@ export class HydriaCoreAskService {
         models
       });
 
-      const response = finish({
+      return finish({
         mode: request.mode,
         status: "completed",
         answer: round.outputs.synthesizer.final_answer,
@@ -182,35 +182,6 @@ export class HydriaCoreAskService {
         ],
         data: round
       });
-      await this.deps.interactionLogStore?.safeAppend({
-        scope: "playground_round",
-        source: "playground",
-        mode: request.mode,
-        status: response.status,
-        sessionId: null,
-        artifactId: round.roundId,
-        question: request.question,
-        answer: response.answer,
-        summary: response.display.summary,
-        routing: {
-          orchestrator: response.routing.orchestrator,
-          provider: response.routing.provider,
-          model: response.routing.model,
-          category: round.category,
-          toolUsed: response.routing.toolUsed
-        },
-        quality: {
-          passed: true,
-          score: round.metrics.refineGain.global,
-          issues: []
-        },
-        durationMs: response.durationMs,
-        payload: {
-          request,
-          response
-        }
-      });
-      return response;
     }
 
     if (request.mode === "benchmark") {
@@ -221,7 +192,7 @@ export class HydriaCoreAskService {
         models: request.models
       });
 
-      const response = finish({
+      return finish({
         mode: request.mode,
         status: "accepted",
         answer: `Benchmark ${run.benchmarkName} started with ${run.totalPrompts} prompt(s).`,
@@ -248,35 +219,6 @@ export class HydriaCoreAskService {
         ],
         data: run
       });
-      await this.deps.interactionLogStore?.safeAppend({
-        scope: "benchmark_run",
-        source: "benchmark",
-        mode: request.mode,
-        status: response.status,
-        sessionId: null,
-        artifactId: run.id,
-        question: request.question,
-        answer: response.answer,
-        summary: response.display.summary,
-        routing: {
-          orchestrator: response.routing.orchestrator,
-          provider: response.routing.provider,
-          model: response.routing.model,
-          category: null,
-          toolUsed: response.routing.toolUsed
-        },
-        quality: {
-          passed: null,
-          score: null,
-          issues: []
-        },
-        durationMs: response.durationMs,
-        payload: {
-          request,
-          response
-        }
-      });
-      return response;
     }
 
     const local = await this.deps.localModelService.testPrompt(request.question, request.system);

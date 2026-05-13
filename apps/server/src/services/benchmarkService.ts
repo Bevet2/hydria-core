@@ -11,6 +11,7 @@ import {
   benchmarkPackSchema,
   benchmarkRunSchema,
   type BenchmarkPrompt,
+  type BenchmarkPromptResult,
   type BenchmarkRun,
   type BenchmarkRunRequest
 } from "../types/benchmark.js";
@@ -19,13 +20,25 @@ import { logger } from "../utils/logger.js";
 import { ArenaRunner, RespondentStageError } from "./arenaRunner.js";
 import { buildBenchmarkSummary, buildEmptyBenchmarkSummary } from "./benchmarkAnalytics.js";
 import { BenchmarkStore } from "./benchmarkStore.js";
+import type { InteractionLogStore } from "./interactionLogStore.js";
+
+function compact(value: string, maxChars = 360) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length <= maxChars ? normalized : `${normalized.slice(0, maxChars - 1).trim()}...`;
+}
+
+function benchmarkPromptArtifactId(runId: string, promptId: string) {
+  const full = `${runId}:${promptId}`;
+  return full.length <= 180 ? full : `${runId}:${promptId.slice(0, 143)}`;
+}
 
 export class BenchmarkService {
   private activeRunId: string | null = null;
 
   constructor(
     private readonly arenaRunner: ArenaRunner,
-    private readonly benchmarkStore: BenchmarkStore
+    private readonly benchmarkStore: BenchmarkStore,
+    private readonly interactionLogStore: Pick<InteractionLogStore, "safeAppend"> | null = null
   ) {}
 
   async ensureReady() {
@@ -107,6 +120,7 @@ export class BenchmarkService {
     });
 
     await this.benchmarkStore.upsertRun(run);
+    await this.auditBenchmarkRunStarted(run, `Start benchmark ${pack.name}.`);
     this.activeRunId = run.id;
     void this.executeRun(run.id, prompts).finally(() => {
       this.activeRunId = null;
@@ -176,6 +190,15 @@ export class BenchmarkService {
       const round = await this.arenaRunner.runRound({
         question: prompt.question,
         models: run.models
+      }, {
+        scope: "benchmark_prompt",
+        source: "benchmark",
+        mode: "benchmark",
+        sessionId: run.id,
+        artifactId: benchmarkPromptArtifactId(run.id, prompt.id),
+        benchmarkRunId: run.id,
+        benchmarkId: run.benchmarkId,
+        promptId: prompt.id
       });
       const respondentMetrics = this.buildRespondentMetrics([
         {
@@ -255,7 +278,7 @@ export class BenchmarkService {
             ])
           : this.buildRespondentMetrics([]);
 
-      return {
+      const result = {
         promptId: prompt.id,
         category: prompt.category,
         question: prompt.question,
@@ -294,7 +317,77 @@ export class BenchmarkService {
         createdAt: new Date().toISOString(),
         error: String(error)
       };
+      await this.auditFailedBenchmarkPrompt(run, prompt, result, error);
+      return result;
     }
+  }
+
+  private async auditBenchmarkRunStarted(run: BenchmarkRun, question: string) {
+    await this.interactionLogStore?.safeAppend({
+      scope: "benchmark_run",
+      source: "benchmark",
+      mode: "benchmark",
+      status: "accepted",
+      sessionId: run.id,
+      artifactId: run.id,
+      question,
+      answer: `Benchmark ${run.benchmarkName} started with ${run.totalPrompts} prompt(s).`,
+      summary: `Run ${run.id} is running ${run.totalPrompts} prompt(s).`,
+      routing: {
+        orchestrator: "benchmark_runner",
+        provider: "openrouter",
+        model: null,
+        category: null,
+        toolUsed: false
+      },
+      quality: {
+        passed: null,
+        score: null,
+        issues: []
+      },
+      durationMs: null,
+      payload: {
+        run
+      }
+    });
+  }
+
+  private async auditFailedBenchmarkPrompt(
+    run: BenchmarkRun,
+    prompt: BenchmarkPrompt,
+    result: BenchmarkPromptResult,
+    error: unknown
+  ) {
+    await this.interactionLogStore?.safeAppend({
+      scope: "benchmark_prompt",
+      source: "benchmark",
+      mode: "benchmark",
+      status: "failed",
+      sessionId: run.id,
+      artifactId: benchmarkPromptArtifactId(run.id, prompt.id),
+      question: prompt.question,
+      answer: null,
+      summary: compact(String(error)),
+      routing: {
+        orchestrator: "benchmark_runner",
+        provider: "openrouter",
+        model: null,
+        category: result.detectedCategory,
+        toolUsed: false
+      },
+      quality: {
+        passed: false,
+        score: null,
+        issues: [compact(String(error), 240)]
+      },
+      durationMs: null,
+      payload: {
+        benchmarkRunId: run.id,
+        benchmarkId: run.benchmarkId,
+        promptId: prompt.id,
+        result
+      }
+    });
   }
 
   private async requireRun(runId: string) {

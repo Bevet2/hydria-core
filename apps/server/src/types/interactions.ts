@@ -7,6 +7,7 @@ export const hydriaInteractionScopeSchema = z.enum([
   "student_analysis",
   "playground_round",
   "benchmark_run",
+  "benchmark_prompt",
   "local_model_test"
 ]);
 
@@ -65,3 +66,4 @@ export const hydriaInteractionRecordSchema = z.object({
 
 export type HydriaInteractionRecord = z.infer<typeof hydriaInteractionRecordSchema>;
 export type HydriaInteractionScope = z.infer<typeof hydriaInteractionScopeSchema>;
+export type HydriaInteractionSource = z.infer<typeof hydriaInteractionSourceSchema>;
