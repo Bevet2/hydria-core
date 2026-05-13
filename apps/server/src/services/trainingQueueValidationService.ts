@@ -209,7 +209,7 @@ export class TrainingQueueValidationService {
     const checks = [...commonChecks, ...targetChecks];
     const blockers = [...new Set([...item.blockers, ...blockingFailures(checks)])].slice(0, 12);
     const score = evidenceScore(item, context);
-    const validationStatus = this.statusFor(item, context, checks, score);
+    const validationStatus = this.statusFor(item, context, checks, score, blockers);
     const packEligible = validationStatus === "ready_for_pack";
 
     return trainingQueueValidationDecisionSchema.parse({
@@ -373,7 +373,8 @@ export class TrainingQueueValidationService {
     item: TrainingCandidateQueueItem,
     context: EvidenceContext,
     checks: TrainingQueueValidationCheck[],
-    score: number
+    score: number,
+    blockers: string[]
   ): TrainingQueueValidationDecision["validationStatus"] {
     if (item.status === "rejected" || item.status === "trained") {
       return "rejected";
@@ -382,6 +383,9 @@ export class TrainingQueueValidationService {
       return "rejected";
     }
     if (blockingFailures(checks).length > 0) {
+      return "blocked";
+    }
+    if (blockers.length > 0) {
       return "blocked";
     }
     if (score >= 50) {

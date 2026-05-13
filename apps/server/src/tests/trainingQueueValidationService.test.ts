@@ -214,6 +214,24 @@ test("training queue validation can mark SFT item ready but blocks training belo
   assert.equal(report.sourceStats.sftReadyForPackCount, 1);
 });
 
+test("training queue validation keeps inherited blockers from becoming ready", () => {
+  const service = new TrainingQueueValidationService({ minSftReadyItems: 2 });
+  const report = service.buildReport({
+    queue: queue([
+      queueItem({
+        blockers: ["confidence_below_validation_threshold"]
+      })
+    ]),
+    knowledgeFile: knowledgeFile([object({})]),
+    watcherState: null
+  });
+
+  assert.equal(report.decisions[0]?.validationStatus, "blocked");
+  assert.equal(report.decisions[0]?.packEligible, false);
+  assert.equal(report.sourceStats.sftReadyForPackCount, 0);
+  assert.equal(report.gate.passed, true);
+});
+
 test("training queue validation accepts stable validated runtime memory", () => {
   const service = new TrainingQueueValidationService({ minSftReadyItems: 2 });
   const report = service.buildReport({
