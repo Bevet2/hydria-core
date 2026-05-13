@@ -119,6 +119,7 @@ Keep the user's language.
 If the user writes in French, every final word must be French; use "Objet" and "Bonjour", not English labels or greetings.
 If the user writes in English, every final word must be English; do not use French labels, greetings, or phrasing.
 For summary requests, output the summary itself; do not repeat the instruction.
+For recipe requests, avoid bullets and numbered lists; write one compact paragraph with ingredients and method in at most five complete sentences.
 Write the requested message directly and keep it concise.`;
 
 const codePlainTextSystemPrompt = `You are Hydria Core's local code and debugging specialist.
@@ -266,6 +267,7 @@ function maybePlainRouteGuidance(route: StudentChatModelRoute) {
       "For summary requests, do not echo the instruction; output only the summarized content.",
       "For recipe or practical how-to requests, answer with useful ingredients or steps directly; target 80-120 words and finish a complete sentence.",
       "For recipes, prefer conventional ingredients and do not add unusual substitutions unless the user asks.",
+      "For recipes, avoid numbered lists and bullets; use one compact paragraph so the answer does not get cut off.",
       "Keep it short enough for chat; prefer one compact paragraph unless the user asked for structure."
     ];
   }
@@ -385,11 +387,14 @@ function stripReasoningArtifacts(value: string) {
 }
 
 function cleanPlainStableFactAnswer(raw: string) {
-  const cleaned = stripReasoningArtifacts(stripCodeFences(raw))
+  let cleaned = stripReasoningArtifacts(stripCodeFences(raw))
     .replace(/^\s*(?:answer|reponse|réponse)\s*[:\-]\s*/i, "")
     .replace(/^["']|["']$/g, "")
     .replace(/\s+/g, " ")
     .trim();
+  if (/(?:^|\s)1\.\s/.test(cleaned) && /\s+\d+\.$/.test(cleaned)) {
+    cleaned = cleaned.replace(/\s+\d+\.$/, "").trim();
+  }
   if (/[.!?]$/.test(cleaned)) {
     return cleaned;
   }
