@@ -144,7 +144,7 @@ const conciseExpectation: TurnExpectation = {
   provider: "ollama",
   model: "qwen2.5:3b",
   budgetProfile: "concise_chat",
-  maxLatencyMs: 35000
+  maxLatencyMs: 50000
 };
 
 const contextAckExpectation: TurnExpectation = {

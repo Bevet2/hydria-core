@@ -264,7 +264,8 @@ function maybePlainRouteGuidance(route: StudentChatModelRoute) {
       "Writing route: produce the requested user-facing text directly, without JSON or metadata.",
       "Language is binding: French request means French-only final text; English request means English-only final text.",
       "For summary requests, do not echo the instruction; output only the summarized content.",
-      "For recipe or practical how-to requests, answer with useful ingredients or steps directly.",
+      "For recipe or practical how-to requests, answer with useful ingredients or steps directly; target 80-120 words and finish a complete sentence.",
+      "For recipes, prefer conventional ingredients and do not add unusual substitutions unless the user asks.",
       "Keep it short enough for chat; prefer one compact paragraph unless the user asked for structure."
     ];
   }
@@ -384,11 +385,19 @@ function stripReasoningArtifacts(value: string) {
 }
 
 function cleanPlainStableFactAnswer(raw: string) {
-  return stripReasoningArtifacts(stripCodeFences(raw))
+  const cleaned = stripReasoningArtifacts(stripCodeFences(raw))
     .replace(/^\s*(?:answer|reponse|réponse)\s*[:\-]\s*/i, "")
     .replace(/^["']|["']$/g, "")
     .replace(/\s+/g, " ")
     .trim();
+  if (/[.!?]$/.test(cleaned)) {
+    return cleaned;
+  }
+  const lastSentenceEnd = Math.max(cleaned.lastIndexOf("."), cleaned.lastIndexOf("!"), cleaned.lastIndexOf("?"));
+  if (lastSentenceEnd >= 80) {
+    return cleaned.slice(0, lastSentenceEnd + 1).trim();
+  }
+  return cleaned;
 }
 
 function parseStableFactAnswer(raw: string): StudentAnswer {
@@ -451,6 +460,7 @@ function systemPromptForRoute(route: StudentChatModelRoute) {
 function keepAliveForRoute(route: StudentChatModelRoute) {
   if (
     route.runtimeBudget.profile === "stable_fact_chat" ||
+    route.runtimeBudget.profile === "writing_chat" ||
     route.runtimeBudget.profile === "standard_light_chat" ||
     route.runtimeBudget.profile === "concise_chat"
   ) {

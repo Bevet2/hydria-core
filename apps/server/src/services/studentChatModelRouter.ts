@@ -265,12 +265,16 @@ function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: stri
     };
   }
   if (profile === "concise_chat") {
+    const conciseTimeoutMs = Math.max(
+      capTimeout(env.STUDENT_CHAT_LOCAL_TIMEOUT_MS, env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS),
+      Math.min(env.MODEL_ROUTER_LOCAL_TIMEOUT_MS, 45000)
+    );
     return {
       profile,
       label: "Concise fast chat",
       reason,
-      timeoutMs: capTimeout(env.STUDENT_CHAT_LOCAL_TIMEOUT_MS, env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS),
-      maxLatencyMs: env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS,
+      timeoutMs: conciseTimeoutMs,
+      maxLatencyMs: conciseTimeoutMs,
       maxOutputTokens: env.MODEL_RUNTIME_FAST_MAX_OUTPUT_TOKENS,
       maxConcurrent: env.MODEL_RUNTIME_FAST_MAX_CONCURRENCY,
       fallbackDepth: 1,
