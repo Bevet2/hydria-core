@@ -457,7 +457,7 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
         ...budget,
         timeoutMs: Math.max(budget.timeoutMs, 150000),
         maxLatencyMs: Math.max(budget.maxLatencyMs, 150000),
-        maxOutputTokens: Math.min(budget.maxOutputTokens, 140),
+        maxOutputTokens: Math.min(budget.maxOutputTokens, 220),
         fallbackDepth: 0,
         concurrencyKey: "heavy_local_chat"
       }
