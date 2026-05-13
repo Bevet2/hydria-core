@@ -100,6 +100,13 @@ function containsWritingSignal(text: string, category: QuestionCategory) {
   );
 }
 
+function isFrenchWritingRoute(input: StudentChatModelRoutingInput, text: string) {
+  return (
+    input.activeConstraintCapsule.language === "fr" ||
+    /\b(?:redige|rediger|reecris|resume|synthese|reponse|bonjour|client|retard|livraison|verification)\b/.test(text)
+  );
+}
+
 function containsBrevitySignal(text: string, input: StudentChatModelRoutingInput) {
   if (
     /\b(?:phrase courte|reponse courte|r[eé]ponds? court|moins de\s+\d+\s+mots?|short answer|briefly|less than\s+\d+\s+words?|under\s+\d+\s+words?)\b/.test(
@@ -333,7 +340,7 @@ function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: stri
   if (profile === "writing_chat") {
     const writingTimeoutMs = Math.min(
       env.MODEL_RUNTIME_DEEP_TIMEOUT_MS,
-      Math.max(env.STUDENT_CHAT_LOCAL_TIMEOUT_MS, env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS, 45000)
+      Math.max(env.STUDENT_CHAT_LOCAL_TIMEOUT_MS, env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS, 70000)
     );
     return {
       profile,
@@ -424,13 +431,15 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
   }
 
   if (containsWritingSignal(text, input.category)) {
-    const selectedModel = QWEN_3B;
-    const reason =
-      "Writing or business synthesis route; use Qwen 3B for CPU-stable public chat writing and language consistency.";
+    const french = isFrenchWritingRoute(input, text);
+    const selectedModel = french ? QWEN_3B : MISTRAL_BUSINESS;
+    const reason = french
+      ? "French writing route; use Qwen 3B for stronger language consistency on the CPU public chat path."
+      : "English writing or business synthesis route; use Mistral with a CPU-safe timeout.";
     const budget = buildRuntimeBudget("writing_chat", reason);
     return {
-      capabilityId: "qwen-3b-standard-light",
-      displayName: "Qwen 3B",
+      capabilityId: french ? "qwen-3b-standard-light" : "mistral-mixtral-business",
+      displayName: french ? "Qwen 3B" : "Mistral/Mixtral",
       modelName: selectedModel,
       specialistRole: "writing_business",
       routingReason: reason,
