@@ -371,6 +371,34 @@ test("conversation quality gate accepts natural French constraint-use wording", 
   assert.equal(result.issues.includes("strategic_conflict_not_resolved"), false);
 });
 
+test("conversation quality gate accepts natural French outcome wording", () => {
+  const state = stateFromMessages([
+    "Bonjour, on doit choisir entre AWS et on-prem.",
+    "Finalement contrainte on-prem stricte."
+  ]);
+  const currentUserMessage = "Architecture: on-prem obligatoire, deadline demain, budget bloque. Tu recommandes quoi ?";
+  const capsule = buildActiveConstraintCapsule(state, currentUserMessage);
+  const policy = decideMultiTurnAnswerPolicy({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    newUserMessage: currentUserMessage,
+    category: "architecture_design",
+    toolRouting: null
+  });
+  const result = analyzeConversationQuality({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    policy,
+    newUserMessage: currentUserMessage,
+    answer:
+      "Je recommande d'utiliser une architecture basee sur des conteneurs Docker pour votre application on-prem. Cette solution est simple et reversible, ce qui permet de respecter le delai imminent tout en maintenant un cout minimal dans les limites du budget bloque actuel. Vous pouvez ensuite envisager d'elargir l'architecture si necessaire apres la date limite.",
+    toolRouting: null
+  });
+
+  assert.equal(result.issues.includes("ignored_added_constraint"), false);
+  assert.equal(result.issues.includes("strategic_conflict_not_resolved"), false);
+});
+
 test("conversation quality gate rejects strategic arbitration without revision condition", () => {
   const state = stateFromMessages([
     "New constraint: budget capped at 500 euros per month and team reduced.",

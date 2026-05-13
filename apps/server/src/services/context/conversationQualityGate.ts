@@ -200,7 +200,7 @@ function answerMentionsSpecificValue(answer: string, value: string | null) {
 function hasConstraintUseMarker(answer: string) {
   return (
     CONSTRAINT_USE_MARKER.test(answer) ||
-    /\b(?:afin de|afin d|pour minimiser|pour reduire|pour respecter|pour maintenir|qui respecte|en respectant|to minimize|to reduce|to respect|to satisfy|to keep)\b/.test(
+    /\b(?:afin de|afin d|pour minimiser|pour reduire|pour respecter|pour maintenir|qui respecte|en respectant|permet de respecter|permet de maintenir|to minimize|to reduce|to respect|to satisfy|to keep)\b/.test(
       normalizeText(answer)
     )
   );
