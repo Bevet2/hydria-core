@@ -40,7 +40,9 @@ export function createStudentRouter(studentService: StudentService) {
   router.post("/answer", ...trainingEndpointGuard, async (request, response, next) => {
     try {
       const parsed = studentSessionRequestSchema.parse(request.body);
-      const preview = await studentService.answerOnly(parsed.question);
+      const preview = await studentService.answerOnly(parsed.question, {
+        researchMode: "skip"
+      });
       response.json(preview);
     } catch (error) {
       next(error);
