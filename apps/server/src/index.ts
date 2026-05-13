@@ -7,6 +7,7 @@ import { ZodError } from "zod";
 import { createArenaRouter } from "./routes/arena.js";
 import { createBenchmarkRouter } from "./routes/benchmark.js";
 import { createChatRouter } from "./routes/chat.js";
+import { createCoreRouter } from "./routes/core.js";
 import { createHistoryRouter } from "./routes/history.js";
 import { createLearningRouter } from "./routes/learning.js";
 import { createLocalModelRouter } from "./routes/localModel.js";
@@ -31,6 +32,7 @@ import { ArenaQualityAnalyticsService } from "./services/arenaQualityAnalyticsSe
 import { BenchmarkService } from "./services/benchmarkService.js";
 import { BenchmarkStore } from "./services/benchmarkStore.js";
 import { ChatRuntimeService } from "./services/chatRuntimeService.js";
+import { HydriaCoreAskService } from "./services/core/hydriaCoreAskService.js";
 import { HistoryStore } from "./services/historyStore.js";
 import { LearningGovernanceService } from "./services/learningGovernanceService.js";
 import { LocalModelService } from "./services/localModel.js";
@@ -92,6 +94,13 @@ const arenaRunner = new ArenaRunner(
   researchToolService
 );
 const benchmarkService = new BenchmarkService(arenaRunner, benchmarkStore);
+const coreAskService = new HydriaCoreAskService({
+  chatRuntimeService,
+  studentService,
+  arenaRunner,
+  benchmarkService,
+  localModelService
+});
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const webDistDir = join(currentDir, "../../web/dist");
 const webIndexPath = join(webDistDir, "index.html");
@@ -214,6 +223,8 @@ const publicChatRateLimit = createRateLimitMiddleware({
 });
 const publicChatUsageLogger = createUsageLoggerMiddleware("public-chat");
 app.use("/api/chat", publicChatRateLimit, publicChatUsageLogger);
+const publicCoreUsageLogger = createUsageLoggerMiddleware("core-ask");
+app.use("/api/core", publicChatRateLimit, publicCoreUsageLogger);
 
 app.use(
   "/api/arena",
@@ -227,6 +238,7 @@ app.use(
 app.use("/api/arena/history", createHistoryRouter(historyStore));
 app.use("/api/benchmark", createBenchmarkRouter(benchmarkService));
 app.use("/api/chat", createChatRouter(chatRuntimeService));
+app.use("/api/core", createCoreRouter(coreAskService));
 app.use("/api/local-model", createLocalModelRouter(localModelService));
 app.use("/api/models", createModelsRouter(modelCapabilityService, modelProviderService, modelRuntimeTelemetryService));
 app.use("/api/learning", createLearningRouter(learningGovernanceService));

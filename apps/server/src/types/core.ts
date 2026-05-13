@@ -195,6 +195,71 @@ export const hydriaMemorySnapshotSchema = z.object({
   })
 });
 
+export const hydriaCoreAskModeSchema = z.enum([
+  "chat",
+  "student_preview",
+  "student_session",
+  "playground",
+  "benchmark",
+  "local_model"
+]);
+
+export const hydriaCoreAskStatusSchema = z.enum(["completed", "accepted", "failed"]);
+
+export const hydriaCoreAskModelsSchema = z
+  .object({
+    respondentA: z.string().min(1).optional(),
+    respondentB: z.string().min(1).optional(),
+    redTeam: z.string().min(1).optional(),
+    judge: z.string().min(1).optional(),
+    synthesizer: z.string().min(1).optional()
+  })
+  .partial();
+
+export const hydriaCoreAskRequestSchema = z.object({
+  mode: hydriaCoreAskModeSchema.default("chat"),
+  question: z.string().trim().min(1).max(12000),
+  sessionId: z.string().uuid().optional(),
+  benchmarkId: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  promptIds: z.array(z.string().min(1)).max(100).optional(),
+  models: hydriaCoreAskModelsSchema.optional(),
+  system: z.string().trim().min(1).max(4000).optional()
+});
+
+export const hydriaCoreAskResponseSchema = z.object({
+  requestId: z.string().uuid(),
+  mode: hydriaCoreAskModeSchema,
+  status: hydriaCoreAskStatusSchema,
+  answer: z.string().nullable(),
+  display: z.object({
+    title: z.string().min(1).max(120),
+    summary: z.string().min(1).max(400),
+    primaryText: z.string().nullable(),
+    actionLabel: z.string().min(1).max(80).nullable().default(null)
+  }),
+  routing: z.object({
+    orchestrator: z.string().min(1).max(120),
+    provider: z.string().min(1).max(80).nullable().default(null),
+    model: z.string().min(1).max(160).nullable().default(null),
+    models: z.array(z.string().min(1).max(160)).max(12).default([]),
+    toolUsed: z.boolean().default(false),
+    benchmarkId: z.string().min(1).nullable().default(null)
+  }),
+  artifacts: z
+    .array(
+      z.object({
+        kind: z.string().min(1).max(80),
+        id: z.string().min(1).max(160),
+        label: z.string().min(1).max(160)
+      })
+    )
+    .max(12)
+    .default([]),
+  durationMs: z.number().int().nonnegative(),
+  data: z.unknown().optional()
+});
+
 export type HydriaWorkflowScope = z.infer<typeof hydriaWorkflowScopeSchema>;
 export type HydriaWorkflowStatus = z.infer<typeof hydriaWorkflowStatusSchema>;
 export type HydriaWorkflowDegradationCode = z.infer<typeof hydriaWorkflowDegradationCodeSchema>;
@@ -214,3 +279,7 @@ export type HydriaMemoryLayer = z.infer<typeof hydriaMemoryLayerSchema>;
 export type HydriaMemoryPriority = z.infer<typeof hydriaMemoryPrioritySchema>;
 export type HydriaMemoryItem = z.infer<typeof hydriaMemoryItemSchema>;
 export type HydriaMemorySnapshot = z.infer<typeof hydriaMemorySnapshotSchema>;
+export type HydriaCoreAskMode = z.infer<typeof hydriaCoreAskModeSchema>;
+export type HydriaCoreAskStatus = z.infer<typeof hydriaCoreAskStatusSchema>;
+export type HydriaCoreAskRequest = z.infer<typeof hydriaCoreAskRequestSchema>;
+export type HydriaCoreAskResponse = z.infer<typeof hydriaCoreAskResponseSchema>;

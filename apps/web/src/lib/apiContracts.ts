@@ -60,7 +60,11 @@ export type {
   HydriaWorkflowDegradationReason,
   HydriaWorkflowRun,
   HydriaMemoryItem,
-  HydriaMemorySnapshot
+  HydriaMemorySnapshot,
+  HydriaCoreAskMode,
+  HydriaCoreAskStatus,
+  HydriaCoreAskRequest,
+  HydriaCoreAskResponse
 } from "../../../server/src/types/core.js";
 
 export type {

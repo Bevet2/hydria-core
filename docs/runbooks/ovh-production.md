@@ -91,7 +91,45 @@ curl -fsS https://app.hydria.click/api/chat/message \
   -d '{"message":"Reponds en une phrase : quel est le role de Hydria Core ?"}'
 ```
 
-This validates DNS, TLS, Caddy, API, PostgreSQL, and the direct student chat runtime. Chat is based on the student prompt and `StudentAnswer` schema through `StudentChatAdapter`, but it does not run the full Student Lab benchmark/research/analyze pipeline. Runtime chat must be served by the local Ollama open-weight backend with local specialist routing: `phi3:mini` for routing trace, `qwen2.5:3b` for concise turns, lightweight context turns, CPU-aware standard-light definitions, French writing, and fallback stable factual answers, `qwen2.5:14b` as the main reasoning brain for complex standard synthesis, `qwen2.5-coder:7b` for code/debug, `deepseek-r1:14b` for guarded deep reasoning capacity, and `mistral:7b` for English writing, practical recipe/how-to answers, plus stable biographical/history answers. Public chat also runs governed tool routing before model generation: deterministic local tools can provide verified weather, finance, time/date, calculator/conversion, release/status, and repo facts. Exact verified tool facts can be returned directly; model prompts only receive verified facts/sources when verbalization or synthesis is still needed. OpenRouter is reserved for controlled training/evaluation jobs and is blocked from the public runtime path by default.
+This validates DNS, TLS, Caddy, API, PostgreSQL, and the direct student chat runtime. Chat is based on the student prompt and `StudentAnswer` schema through `StudentChatAdapter`, but it does not run the full Student Lab benchmark/research/analyze pipeline. Runtime chat must be served by the local Ollama open-weight backend with local specialist routing: `phi3:mini` for routing trace, `qwen2.5:3b` for concise turns, lightweight context turns, CPU-aware standard-light definitions, French writing, and fallback stable factual answers, `qwen2.5:14b` as the main reasoning brain for complex standard synthesis and practical recipe/how-to answers, `qwen2.5-coder:7b` for code/debug, `deepseek-r1:14b` for guarded deep reasoning capacity, and `mistral:7b` for English writing plus stable biographical/history answers. Public chat also runs governed tool routing before model generation: deterministic local tools can provide verified weather, finance, time/date, calculator/conversion, release/status, and repo facts. Exact verified tool facts can be returned directly; model prompts only receive verified facts/sources when verbalization or synthesis is still needed. OpenRouter is reserved for controlled training/evaluation jobs and is blocked from the public runtime path by default.
+
+## Unified Core Ask Contract
+
+`POST /api/core/ask` is the shared entrypoint for asking Hydria through a declared runtime mode. The browser actions that ask Hydria or start an execution now use this contract for Chat, Student Lab draft, Playground arena runs, benchmark starts, and local model tests. Legacy read/history/analyze routes remain available for compatibility and detailed inspection.
+
+Public modes:
+
+```text
+chat
+student_preview when STUDENT_LAB_PUBLIC_ENABLED=true
+```
+
+Guarded modes:
+
+```text
+student_session
+playground
+benchmark
+local_model when HYDRIA_PUBLIC_API_AUTH_REQUIRED=true
+```
+
+Example chat request:
+
+```bash
+curl -fsS https://app.hydria.click/api/core/ask \
+  -H 'content-type: application/json' \
+  -d '{"mode":"chat","question":"Donne moi une recette de tiramisu"}'
+```
+
+Example Student Lab draft request:
+
+```bash
+curl -fsS https://app.hydria.click/api/core/ask \
+  -H 'content-type: application/json' \
+  -d '{"mode":"student_preview","question":"Explique Hydria Core en une phrase"}'
+```
+
+All responses return the same envelope: `answer`, `display`, `routing`, `artifacts`, `durationMs`, and the raw mode-specific `data` payload.
 
 Full production smoke from any machine with this repo:
 

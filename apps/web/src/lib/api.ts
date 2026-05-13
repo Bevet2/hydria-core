@@ -9,6 +9,8 @@ import type {
   BenchmarkSummaryResponse,
   ChatMessageResponse,
   ChatResetResponse,
+  HydriaCoreAskRequest,
+  HydriaCoreAskResponse,
   LocalModelHealth,
   LocalModelTestResponse,
   ModelRuntimeOpsSummary,
@@ -53,6 +55,13 @@ async function request<T>(path: string, init?: RequestInit) {
   return (await response.json()) as T;
 }
 
+function unwrapCoreData<T>(response: HydriaCoreAskResponse, mode: HydriaCoreAskRequest["mode"]) {
+  if (response.data === undefined) {
+    throw new Error(`Hydria Core ${mode} response did not include a data payload.`);
+  }
+  return response.data as T;
+}
+
 export function setHydriaApiKey(apiKey: string) {
   window.localStorage.setItem(HYDRIA_API_KEY_STORAGE_KEY, apiKey.trim());
 }
@@ -62,10 +71,8 @@ export function clearHydriaApiKey() {
 }
 
 export async function runArena(question: string, models: ArenaModels) {
-  return request<ArenaRound>("/api/arena/run", {
-    method: "POST",
-    body: JSON.stringify({ question, models })
-  });
+  const response = await askHydriaCore({ mode: "playground", question, models });
+  return unwrapCoreData<ArenaRound>(response, "playground");
 }
 
 export async function fetchHistory() {
@@ -101,20 +108,17 @@ export async function fetchModelRuntimeOps(limit = 500) {
 }
 
 export async function testLocalModel(prompt: string) {
-  return request<LocalModelTestResponse>("/api/local-model/test", {
-    method: "POST",
-    body: JSON.stringify({ prompt })
-  });
+  const response = await askHydriaCore({ mode: "local_model", question: prompt });
+  return unwrapCoreData<LocalModelTestResponse>(response, "local_model");
 }
 
 export async function sendChatMessage(message: string, sessionId?: string) {
-  return request<ChatMessageResponse>("/api/chat/message", {
-    method: "POST",
-    body: JSON.stringify({
-      message,
-      ...(sessionId ? { sessionId } : {})
-    })
+  const response = await askHydriaCore({
+    mode: "chat",
+    question: message,
+    ...(sessionId ? { sessionId } : {})
   });
+  return unwrapCoreData<ChatMessageResponse>(response, "chat");
 }
 
 export async function resetChatSession(sessionId: string) {
@@ -124,18 +128,21 @@ export async function resetChatSession(sessionId: string) {
   });
 }
 
-export async function runStudentSession(question: string) {
-  return request<StudentSession>("/api/student/run", {
+export async function askHydriaCore(input: HydriaCoreAskRequest) {
+  return request<HydriaCoreAskResponse>("/api/core/ask", {
     method: "POST",
-    body: JSON.stringify({ question })
+    body: JSON.stringify(input)
   });
 }
 
+export async function runStudentSession(question: string) {
+  const response = await askHydriaCore({ mode: "student_session", question });
+  return unwrapCoreData<StudentSession>(response, "student_session");
+}
+
 export async function answerStudentQuestion(question: string) {
-  return request<StudentAnswerPreview>("/api/student/answer", {
-    method: "POST",
-    body: JSON.stringify({ question })
-  });
+  const response = await askHydriaCore({ mode: "student_preview", question });
+  return unwrapCoreData<StudentAnswerPreview>(response, "student_preview");
 }
 
 export async function analyzeStudentDraft(previewId: string) {
@@ -159,10 +166,12 @@ export async function startBenchmarkRun(body?: {
   promptIds?: string[];
   models?: Partial<ArenaModels>;
 }) {
-  return request<BenchmarkRun>("/api/benchmark/run", {
-    method: "POST",
-    body: JSON.stringify(body ?? {})
+  const response = await askHydriaCore({
+    mode: "benchmark",
+    question: `Start benchmark ${body?.benchmarkId ?? CORE_BENCHMARK_ID}`,
+    ...(body ?? {})
   });
+  return unwrapCoreData<BenchmarkRun>(response, "benchmark");
 }
 
 export async function fetchBenchmarkSummary(runId?: string, benchmarkId?: string) {
