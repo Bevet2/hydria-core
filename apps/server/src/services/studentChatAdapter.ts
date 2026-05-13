@@ -122,6 +122,13 @@ For summary requests, output the summary itself; do not repeat the instruction.
 For recipe requests, avoid bullets and numbered lists; write one compact paragraph with ingredients and method in at most five complete sentences.
 Write the requested message directly and keep it concise.`;
 
+const practicalPlainTextSystemPrompt = `You are Hydria Core's local practical everyday assistant.
+Answer the current user message as plain final user-facing text only.
+Keep the user's language.
+For recipes, give a conventional useful recipe for the named dish with core ingredients and a complete method.
+Do not return JSON, bullets, numbered lists, hidden reasoning, or chain-of-thought.
+Use one compact paragraph of 3 or 4 complete sentences.`;
+
 const codePlainTextSystemPrompt = `You are Hydria Core's local code and debugging specialist.
 Answer the current user message as plain final text only.
 Do not return JSON, wrapper labels, hidden reasoning, or chain-of-thought.
@@ -261,14 +268,14 @@ function maybeStableFactCompaction(route: StudentChatModelRoute) {
 
 function maybePlainRouteGuidance(route: StudentChatModelRoute) {
   if (route.runtimeBudget.profile === "writing_chat") {
-    const practicalGuidance = route.pipeline.some((step) => step.startsWith("practical_writer:"))
-      ? [
-          "Practical recipe route: answer like a normal useful cooking assistant, not like a business writer.",
-          "For a named classic dish, use the conventional core ingredients and method for that dish.",
-          "Do not add unusual ingredients, extra liquids, or substitutions unless the user asks.",
-          "Use one compact paragraph with 3 or 4 complete sentences; no bullets, no numbered steps, no orphan step numbers."
-        ]
-      : [];
+    if (route.pipeline.some((step) => step.startsWith("practical_writer:"))) {
+      return [
+        "Practical recipe route: answer like a normal useful cooking assistant, not like a business writer.",
+        "For a named classic dish, use the conventional core ingredients and method for that dish.",
+        "Do not add unusual ingredients, extra liquids, or substitutions unless the user asks.",
+        "Use one compact paragraph with 3 or 4 complete sentences; no bullets, no numbered steps, no orphan step numbers."
+      ];
+    }
     return [
       "Writing route: produce the requested user-facing text directly, without JSON or metadata.",
       "Language is binding: French request means French-only final text; English request means English-only final text.",
@@ -276,8 +283,7 @@ function maybePlainRouteGuidance(route: StudentChatModelRoute) {
       "For recipe or practical how-to requests, answer with useful ingredients or steps directly; target 80-120 words and finish a complete sentence.",
       "For recipes, prefer conventional ingredients and do not add unusual substitutions unless the user asks.",
       "For recipes, avoid numbered lists and bullets; use one compact paragraph so the answer does not get cut off.",
-      "Keep it short enough for chat; prefer one compact paragraph unless the user asked for structure.",
-      ...practicalGuidance
+      "Keep it short enough for chat; prefer one compact paragraph unless the user asked for structure."
     ];
   }
   if (route.runtimeBudget.profile === "code_chat") {
@@ -461,6 +467,9 @@ function systemPromptForRoute(route: StudentChatModelRoute) {
     return stableFactPlainTextSystemPrompt;
   }
   if (route.runtimeBudget.profile === "writing_chat") {
+    if (route.pipeline.some((step) => step.startsWith("practical_writer:"))) {
+      return practicalPlainTextSystemPrompt;
+    }
     return writingPlainTextSystemPrompt;
   }
   if (route.runtimeBudget.profile === "code_chat") {

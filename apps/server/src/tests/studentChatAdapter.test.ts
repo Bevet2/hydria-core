@@ -470,9 +470,9 @@ test("student chat adapter routes French recipe requests through practical writi
   assert.equal(result.specialist.role, "writing_business");
   assert.match(result.specialist.routingReason, /Practical recipe/i);
   assert.equal(result.runtimeBudget?.profile, "writing_chat");
-  assert.equal(result.runtimeBudget?.fallbackDepth, 1);
-  assert.equal(timeoutMs >= 90000, true);
-  assert.equal(numPredict <= 180, true);
+  assert.equal(result.runtimeBudget?.fallbackDepth, 0);
+  assert.equal(timeoutMs >= 150000, true);
+  assert.equal(numPredict <= 140, true);
   assert.match(result.answer.answer, /tiramisu/);
   assert.doesNotMatch(result.answer.answer, /\s2\.$/);
 });

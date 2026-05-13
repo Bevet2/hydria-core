@@ -450,15 +450,15 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
       modelName: QWEN_MAIN,
       specialistRole: "writing_business",
       routingReason: reason,
-      pipeline: [...basePipeline, `practical_writer:${QWEN_MAIN}`, `practical_light_fallback:${QWEN_3B}`],
-      fallbackModelNames: unique([QWEN_MAIN, QWEN_3B]),
-      timeoutMs: Math.max(budget.timeoutMs, 90000),
+      pipeline: [...basePipeline, `practical_writer:${QWEN_MAIN}`],
+      fallbackModelNames: buildSpecialistOnlyFallbacks(QWEN_MAIN),
+      timeoutMs: Math.max(budget.timeoutMs, 150000),
       runtimeBudget: {
         ...budget,
-        timeoutMs: Math.max(budget.timeoutMs, 90000),
-        maxLatencyMs: Math.max(budget.maxLatencyMs, 90000),
-        maxOutputTokens: Math.min(budget.maxOutputTokens, 180),
-        fallbackDepth: 1,
+        timeoutMs: Math.max(budget.timeoutMs, 150000),
+        maxLatencyMs: Math.max(budget.maxLatencyMs, 150000),
+        maxOutputTokens: Math.min(budget.maxOutputTokens, 140),
+        fallbackDepth: 0,
         concurrencyKey: "heavy_local_chat"
       }
     };
