@@ -56,6 +56,7 @@ type OllamaGenerateFormat = "json" | Record<string, unknown>;
 
 type LocalModelPromptOptions = {
   format?: OllamaGenerateFormat;
+  keepAlive?: string;
   modelName?: string;
   numPredict?: number;
   temperature?: number;
@@ -1439,6 +1440,7 @@ export class LocalModelService {
         system,
         prompt,
         stream: false,
+        ...(options.keepAlive ? { keep_alive: options.keepAlive } : {}),
         ...(format ? { format } : {}),
         options: {
           temperature: options.temperature ?? 0.2,

@@ -41,24 +41,22 @@ test("student chat adapter routes stable biographies through the Mistral factual
   let timeoutMs = 0;
   let numPredict = 0;
   let selectedModel = "";
+  let usedFormat = false;
+  let usedSystem = "";
   const adapter = new StudentChatAdapter({
     getConfiguredModelName() {
       return "phi3:mini";
     },
-    async testPrompt(_prompt, _system, options) {
+    async testPrompt(_prompt, system, options) {
       timeoutMs = options?.timeoutMs ?? 0;
       numPredict = options?.numPredict ?? 0;
       selectedModel = options?.modelName ?? "";
+      usedFormat = Boolean(options?.format);
+      usedSystem = system ?? "";
       return {
         provider: "ollama",
         model: selectedModel || "phi3:mini",
-        response: JSON.stringify({
-          modelRole: "assistant",
-          answer: "Charlemagne est un roi des Francs et empereur carolingien.",
-          key_points: ["Roi des Francs", "Empereur carolingien"],
-          assumptions: [],
-          confidence: 0.95
-        }),
+        response: "Charlemagne est un roi des Francs et empereur carolingien.",
         durationMs: 12
       };
     }
@@ -70,12 +68,14 @@ test("student chat adapter routes stable biographies through the Mistral factual
   assert.equal(result.model, "mistral:7b");
   assert.equal(result.specialist.role, "writing_business");
   assert.equal(result.answer.modelRole, "student");
-  assert.equal(result.answer.confidence, 95);
+  assert.equal(result.answer.confidence, 82);
   assert.equal(timeoutMs > 1000, true);
   assert.equal(selectedModel, "mistral:7b");
   assert.equal(result.runtimeBudget?.profile, "stable_fact_chat");
-  assert.equal(result.runtimeBudget?.maxOutputTokens, 112);
-  assert.equal(numPredict, 112);
+  assert.equal(result.runtimeBudget?.maxOutputTokens, 80);
+  assert.equal(numPredict, 80);
+  assert.equal(usedFormat, false);
+  assert.match(usedSystem, /plain final text only/i);
   assert.match(result.answer.answer, /Charlemagne/);
 });
 
@@ -107,13 +107,7 @@ test("student chat adapter retries stable factual chat on the light local model 
       return {
         provider: "ollama",
         model: selectedModel,
-        response: JSON.stringify({
-          modelRole: "student",
-          answer: "Charlemagne est un roi des Francs et un empereur carolingien.",
-          key_points: ["Factual fallback"],
-          assumptions: [],
-          confidence: 82
-        }),
+        response: "Charlemagne est un roi des Francs et un empereur carolingien.",
         durationMs: 12
       };
     }

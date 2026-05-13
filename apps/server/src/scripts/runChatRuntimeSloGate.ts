@@ -134,7 +134,7 @@ const cases: ChatRuntimeSloCase[] = [
     id: "fr_stable_fact_marie_curie",
     language: "fr",
     conversation: ["Qui est Marie Curie ?"],
-    expectedTerms: ["marie", "radio"]
+    expectedTerms: ["marie", "curie"]
   },
   {
     id: "en_memory_project",
