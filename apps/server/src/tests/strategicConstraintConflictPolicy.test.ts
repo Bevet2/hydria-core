@@ -343,6 +343,34 @@ test("conversation quality gate accepts dominant constraint use with a bounded r
   assert.equal(result.issues.includes("strategic_conflict_not_resolved"), false);
 });
 
+test("conversation quality gate accepts natural French constraint-use wording", () => {
+  const state = stateFromMessages([
+    "Bonjour, on doit choisir entre AWS et on-prem.",
+    "Finalement contrainte on-prem stricte."
+  ]);
+  const currentUserMessage = "Architecture: on-prem obligatoire, deadline demain, budget bloque. Tu recommandes quoi ?";
+  const capsule = buildActiveConstraintCapsule(state, currentUserMessage);
+  const policy = decideMultiTurnAnswerPolicy({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    newUserMessage: currentUserMessage,
+    category: "architecture_design",
+    toolRouting: null
+  });
+  const result = analyzeConversationQuality({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    policy,
+    newUserMessage: currentUserMessage,
+    answer:
+      "Je recommande de choisir une architecture minimaliste et reversible qui respecte les contraintes budgetaires actuelles tout en assurant la faisabilite pour le delai imperatif de demain. Concentrez-vous sur des solutions on-premises eprouvees. Reconsiderez cette approche si un element cle du budget ou de la deadline change.",
+    toolRouting: null
+  });
+
+  assert.equal(result.issues.includes("ignored_added_constraint"), false);
+  assert.equal(result.issues.includes("strategic_conflict_not_resolved"), false);
+});
+
 test("conversation quality gate rejects strategic arbitration without revision condition", () => {
   const state = stateFromMessages([
     "New constraint: budget capped at 500 euros per month and team reduced.",
