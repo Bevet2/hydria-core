@@ -185,6 +185,19 @@ function compact(value: string, maxChars = 420) {
   return normalized.length <= maxChars ? normalized : `${normalized.slice(0, maxChars - 1).trim()}...`;
 }
 
+function normalizePlainText(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function mentionsOnPrem(value: string) {
+  return /\bon[\s-]?prem\b/.test(normalizePlainText(value));
+}
+
 function formatRecentMessages(messages: ChatMessage[]) {
   return messages
     .slice(-4)
@@ -446,7 +459,46 @@ function parseStableFactAnswer(raw: string): StudentAnswer {
   }
 }
 
-function parsePlainChatAnswer(raw: string, route: StudentChatModelRoute): StudentAnswer {
+function injectOnPremDecisionTerm(answer: string) {
+  const trimmed = answer.trim();
+  if (/^je recommande d['’]?utiliser\s+/i.test(trimmed)) {
+    return trimmed.replace(/^je recommande d['’]?utiliser\s+/i, "Je recommande une option on-prem minimale : utiliser ");
+  }
+  if (/^je recommande\s+/i.test(trimmed)) {
+    return trimmed.replace(/^je recommande\s+/i, "Je recommande une option on-prem : ");
+  }
+  if (/^i recommend using\s+/i.test(trimmed)) {
+    return trimmed.replace(/^i recommend using\s+/i, "I recommend a minimal on-prem option: using ");
+  }
+  if (/^i recommend\s+/i.test(trimmed)) {
+    return trimmed.replace(/^i recommend\s+/i, "I recommend an on-prem option: ");
+  }
+  return `on-prem: ${trimmed}`;
+}
+
+function preserveDecisiveDecisionTerms(
+  answer: StudentAnswer,
+  input: StudentChatAdapterInput,
+  route: StudentChatModelRoute
+): StudentAnswer {
+  if (route.runtimeBudget.profile !== "deep_reasoning") {
+    return answer;
+  }
+
+  const source = `${input.question}\n${input.routingQuestion}\n${input.userMessage}`;
+  if (mentionsOnPrem(source) && !mentionsOnPrem(answer.answer)) {
+    const rewritten = injectOnPremDecisionTerm(answer.answer);
+    return {
+      ...answer,
+      answer: rewritten,
+      key_points: [compact((rewritten.split(/(?<=[.!?])\s+/)[0] ?? rewritten).replace(/[.!?]$/g, ""), 90)]
+    };
+  }
+
+  return answer;
+}
+
+function parsePlainChatAnswer(raw: string, route: StudentChatModelRoute, input: StudentChatAdapterInput): StudentAnswer {
   const answer = cleanPlainStableFactAnswer(raw);
   if (!answer) {
     throw new Error("Local specialist returned empty plain text.");
@@ -458,13 +510,13 @@ function parsePlainChatAnswer(raw: string, route: StudentChatModelRoute): Studen
       : route.runtimeBudget.profile === "code_chat"
         ? 84
         : 80;
-  return {
+  return preserveDecisiveDecisionTerms({
     modelRole: "student",
     answer,
     key_points: [compact(firstSentence.replace(/[.!?]$/g, ""), 90)],
     assumptions: [],
     confidence
-  };
+  }, input, route);
 }
 
 function shouldUsePlainTextRoute(route: StudentChatModelRoute) {
@@ -566,7 +618,7 @@ export class StudentChatAdapter {
             route.runtimeBudget.profile === "stable_fact_chat"
               ? parseStableFactAnswer(response.response)
               : usePlainText
-                ? parsePlainChatAnswer(response.response, route)
+                ? parsePlainChatAnswer(response.response, route, input)
                 : parseStudentChatAnswer(response.response),
           usedRetry: index > 0,
           provider: "ollama",

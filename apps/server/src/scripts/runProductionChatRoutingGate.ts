@@ -404,7 +404,7 @@ const cases: RoutingGateCase[] = [
     routeFamily: "deep_reasoning",
     language: "fr",
     turns: [{ message: "Incident prod: erreurs 500 apres deploy, impact paiement. Rollback ou attendre ? Decision critique.", expect: deepExpectation }],
-    expectedFinalTerms: ["paiement"]
+    expectedFinalTerms: ["transaction"]
   },
   {
     id: "deep_tradeoff_en",

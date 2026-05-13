@@ -613,7 +613,7 @@ test("student chat adapter routes strategic decisions to the CPU-safe local deep
       return {
         provider: "ollama",
         model: selectedModel,
-        response: "Je recommande une option on-prem minimale, car la contrainte bloque AWS et le delai impose un scope reduit.",
+        response: "Je recommande une option minimale, car la contrainte bloque AWS et le delai impose un scope reduit.",
         durationMs: 12
       };
     }
@@ -638,6 +638,7 @@ test("student chat adapter routes strategic decisions to the CPU-safe local deep
   assert.equal(result.runtimeBudget?.profile, "deep_reasoning");
   assert.equal(result.runtimeBudget?.fallbackDepth, 0);
   assert.equal(result.runtimeBudget?.maxOutputTokens, 180);
+  assert.match(result.answer.answer, /on-prem/i);
   assert.equal(usedFormat, false);
   assert.match(system, /exact term on-prem/i);
   assert.match(prompt, /exact term on-prem/i);
