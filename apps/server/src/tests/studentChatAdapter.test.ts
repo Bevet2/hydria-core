@@ -586,6 +586,8 @@ test("student chat adapter uses fast budget for verified calculator tool answers
 test("student chat adapter routes strategic decisions to the CPU-safe local deep reasoner", async () => {
   let selectedModel = "";
   let usedFormat = false;
+  let prompt = "";
+  let system = "";
   const state = createInitialState();
   const capsule = {
     ...buildActiveConstraintCapsule(state, "On-prem strict, deadline demain. Tu recommandes quoi ?"),
@@ -603,7 +605,9 @@ test("student chat adapter routes strategic decisions to the CPU-safe local deep
     getConfiguredModelName() {
       return "phi3:mini";
     },
-    async testPrompt(_prompt, _system, options) {
+    async testPrompt(inputPrompt, inputSystem, options) {
+      prompt = inputPrompt;
+      system = inputSystem ?? "";
       selectedModel = options?.modelName ?? "";
       usedFormat = Boolean(options?.format);
       return {
@@ -635,6 +639,8 @@ test("student chat adapter routes strategic decisions to the CPU-safe local deep
   assert.equal(result.runtimeBudget?.fallbackDepth, 0);
   assert.equal(result.runtimeBudget?.maxOutputTokens, 180);
   assert.equal(usedFormat, false);
+  assert.match(system, /exact term on-prem/i);
+  assert.match(prompt, /exact term on-prem/i);
 });
 
 test("student chat adapter does not call cloud fallback when local generation fails", async () => {

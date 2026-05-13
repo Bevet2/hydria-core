@@ -144,7 +144,8 @@ Do not return JSON, wrapper labels, hidden reasoning, or chain-of-thought.
 Keep the user's language.
 If the user message or Language line is French, answer only in French and start with a French recommendation such as "Je recommande".
 Start with a clear recommendation, then mention the key constraint and condition.
-Reuse the user's concrete decisive terms instead of generic placeholders.`;
+Reuse the user's concrete decisive terms instead of generic placeholders.
+If the user says on-prem, include the exact term on-prem in the first sentence.`;
 
 const studentChatConfidenceSchema = z.preprocess((value) => {
   if (value === null || value === undefined || value === "") {
@@ -303,6 +304,7 @@ function maybePlainRouteGuidance(route: StudentChatModelRoute) {
       "Decision route: make a recommendation explicitly in the first sentence.",
       "Language is binding: if Language is French, write the whole final answer in French and begin with 'Je recommande'.",
       "Use the exact active constraint or decisive noun from the user in the decision, such as on-prem, paiement, or audit.",
+      "If the user says on-prem, include the exact term on-prem in the first sentence.",
       "Add a revision condition: say when you would switch, wait, or reconsider."
     ];
   }
