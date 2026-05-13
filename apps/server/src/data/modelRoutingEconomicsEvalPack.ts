@@ -173,7 +173,7 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
     id: "chat_business_writing_mistral",
     surface: "chat_route",
     priority: "high",
-    description: "Stakeholder-facing writing should use the writing/business specialist.",
+    description: "French stakeholder-facing writing should use the language-stable writing/business specialist.",
     tags: ["chat", "writing_business"],
     chat: {
       routingQuestion: "Redige un mail court pour annoncer un retard de livraison a un client enterprise.",
@@ -183,9 +183,9 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
       requiresExternalGrounding: false
     },
     expected: {
-      capabilityId: "mistral-mixtral-business",
+      capabilityId: "qwen-3b-standard-light",
       role: "writing_business",
-      maxCostTier: "medium",
+      maxCostTier: "low",
       maxEstimatedCostUnits: 1,
       localOnly: true,
       allowDeepReasoning: false,

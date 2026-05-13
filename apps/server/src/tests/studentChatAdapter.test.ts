@@ -354,7 +354,7 @@ test("student chat adapter still routes explicit Docker build errors to code spe
   assert.equal(result.runtimeBudget?.profile, "code_chat");
 });
 
-test("student chat adapter routes writing tasks through plain Mistral without heavy fallback", async () => {
+test("student chat adapter routes French writing tasks through plain Qwen 3B without heavy fallback", async () => {
   let selectedModel = "";
   let usedFormat = false;
   let timeoutMs = 0;
@@ -369,7 +369,7 @@ test("student chat adapter routes writing tasks through plain Mistral without he
   };
   const adapter = new StudentChatAdapter({
     getConfiguredModelName() {
-      return "qwen2.5:14b";
+      return "mistral:7b";
     },
     async testPrompt(_prompt, _system, options) {
       selectedModel = options?.modelName ?? "";
@@ -386,13 +386,50 @@ test("student chat adapter routes writing tasks through plain Mistral without he
 
   const result = await adapter.answer(input);
 
-  assert.equal(selectedModel, "mistral:7b");
+  assert.equal(selectedModel, "qwen2.5:3b");
   assert.equal(result.specialist.role, "writing_business");
   assert.equal(result.runtimeBudget?.profile, "writing_chat");
   assert.equal(result.runtimeBudget?.fallbackDepth, 0);
   assert.equal(usedFormat, false);
   assert.equal(timeoutMs >= 45000, true);
   assert.match(result.answer.answer, /retard/);
+});
+
+test("student chat adapter keeps English writing tasks on plain Mistral", async () => {
+  let selectedModel = "";
+  let usedFormat = false;
+  const input = {
+    ...buildInput(),
+    category: "operational_writing" as const,
+    routingQuestion: "Write a stakeholder update about a delayed migration.",
+    userMessage: "Write a stakeholder update about a delayed migration.",
+    question: "Write a stakeholder update about a delayed migration.",
+    runtimeMode: "direct" as const,
+    requiresExternalGrounding: false
+  };
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "qwen2.5:14b";
+    },
+    async testPrompt(_prompt, _system, options) {
+      selectedModel = options?.modelName ?? "";
+      usedFormat = Boolean(options?.format);
+      return {
+        provider: "ollama",
+        model: selectedModel,
+        response: "The migration is delayed; we will share the updated plan today.",
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer(input);
+
+  assert.equal(selectedModel, "mistral:7b");
+  assert.equal(result.specialist.role, "writing_business");
+  assert.equal(result.runtimeBudget?.profile, "writing_chat");
+  assert.equal(usedFormat, false);
+  assert.match(result.answer.answer, /migration/);
 });
 
 test("student chat adapter routes lightweight context-setting turns to the fast 3B specialist", async () => {

@@ -156,7 +156,7 @@ const contextAckExpectation: TurnExpectation = {
 
 const writingExpectation: TurnExpectation = {
   provider: "ollama",
-  model: "mistral:7b",
+  model: ["mistral:7b", "qwen2.5:3b"],
   budgetProfile: "writing_chat",
   maxLatencyMs: 70000
 };
@@ -318,7 +318,7 @@ const cases: RoutingGateCase[] = [
   },
   {
     id: "writing_stakeholder_update_en",
-    description: "Stakeholder update should use Mistral writing route.",
+    description: "Stakeholder update should use the writing route.",
     routeFamily: "writing_chat",
     language: "en",
     turns: [{ message: "Write a stakeholder update about a delayed database migration.", expect: writingExpectation }],
@@ -409,7 +409,7 @@ const cases: RoutingGateCase[] = [
     description: "Current time should use time tool and fast-tool budget.",
     routeFamily: "live_tool",
     language: "fr",
-    turns: [{ message: "Quelle est l'heure actuelle a Paris ?", expect: { provider: "ollama", model: ["phi3:mini", "qwen2.5:3b"], budgetProfile: "fast_tool", toolType: "time", maxLatencyMs: 45000 } }],
+    turns: [{ message: "Quelle est l'heure actuelle a Paris ?", expect: { provider: "tool", model: "time", budgetProfile: "fast_tool", toolType: "time", maxLatencyMs: 45000 } }],
     expectedFinalTerms: ["Paris"]
   },
   {
@@ -557,6 +557,7 @@ function evaluateTurn(args: {
   const toolUsed = Boolean(args.response.tooling?.used);
   const toolRequired = Boolean(args.response.tooling?.routing?.toolRequired);
   const usedStaticFallback = Boolean(args.response.generation?.usedStaticFallback || provider === "fallback");
+  const usedModelRetry = (provider === "ollama" || provider === "fallback") && Boolean(args.response.usedRetry);
   const qualityPassed = args.response.conversationQuality?.passed !== false;
   const attempts =
     args.response.generation?.attempts?.map((attempt) => ({
@@ -593,7 +594,7 @@ function evaluateTurn(args: {
   if (!expectation.allowFallback && usedStaticFallback) {
     issues.push("static_fallback");
   }
-  if (!expectation.allowRetry && args.response.usedRetry) {
+  if (!expectation.allowRetry && usedModelRetry) {
     issues.push("retry");
   }
   if (!expectation.allowQualityFailure && !qualityPassed) {
@@ -619,7 +620,7 @@ function evaluateTurn(args: {
     toolType,
     toolUsed,
     toolRequired,
-    usedRetry: Boolean(args.response.usedRetry),
+    usedRetry: usedModelRetry,
     usedStaticFallback,
     qualityPassed,
     latencyMs: args.durationMs,

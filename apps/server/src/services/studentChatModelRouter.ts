@@ -100,6 +100,13 @@ function containsWritingSignal(text: string, category: QuestionCategory) {
   );
 }
 
+function isFrenchRoute(input: StudentChatModelRoutingInput, text: string) {
+  return (
+    input.activeConstraintCapsule.language === "fr" ||
+    /\b(?:redige|rediger|reecris|resume|synthese|reponse|bonjour|client|retard|livraison|verification)\b/.test(text)
+  );
+}
+
 function containsBrevitySignal(text: string, input: StudentChatModelRoutingInput) {
   if (
     /\b(?:phrase courte|reponse courte|r[eé]ponds? court|moins de\s+\d+\s+mots?|short answer|briefly|less than\s+\d+\s+words?|under\s+\d+\s+words?)\b/.test(
@@ -297,12 +304,16 @@ function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: stri
     };
   }
   if (profile === "code_chat") {
+    const codeTimeoutMs = Math.min(
+      env.MODEL_RUNTIME_DEEP_TIMEOUT_MS,
+      Math.max(env.MODEL_RUNTIME_CODE_TIMEOUT_MS, 70000)
+    );
     return {
       profile,
       label: "Code/debug specialist",
       reason,
-      timeoutMs: capTimeout(requestedLongTimeoutMs, env.MODEL_RUNTIME_CODE_TIMEOUT_MS),
-      maxLatencyMs: env.MODEL_RUNTIME_CODE_TIMEOUT_MS,
+      timeoutMs: codeTimeoutMs,
+      maxLatencyMs: codeTimeoutMs,
       maxOutputTokens: env.MODEL_RUNTIME_CODE_MAX_OUTPUT_TOKENS,
       maxConcurrent: env.MODEL_RUNTIME_HEAVY_MAX_CONCURRENCY,
       fallbackDepth: 0,
@@ -359,6 +370,10 @@ function verifiedToolFastPath(input: StudentChatModelRoutingInput) {
   return input.tooling.routing.toolType === "calculator" || input.tooling.routing.toolType === "time";
 }
 
+function verifiedExternalContextPath(input: StudentChatModelRoutingInput) {
+  return Boolean(input.tooling?.used);
+}
+
 export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput): StudentChatModelRoute {
   const text = normalizeText(`${input.routingQuestion}\n${input.userMessage}`);
   const basePipeline = [`fast_router:${PHI_ROUTER}`];
@@ -378,6 +393,23 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
     };
   }
 
+  if (verifiedExternalContextPath(input)) {
+    const reason =
+      "Verified external tool facts are already available; use the CPU-aware 3B route to verbalize them without heavy-model fallback.";
+    const budget = buildRuntimeBudget("standard_light_chat", reason);
+    return {
+      capabilityId: "qwen-3b-standard-light",
+      displayName: "Qwen 3B Standard Light",
+      modelName: QWEN_3B,
+      specialistRole: "primary_brain",
+      routingReason: reason,
+      pipeline: [...basePipeline, `verified_context_answer:${QWEN_3B}`],
+      fallbackModelNames: buildSpecialistOnlyFallbacks(QWEN_3B),
+      timeoutMs: budget.timeoutMs,
+      runtimeBudget: budget
+    };
+  }
+
   if (containsCodeSignal(text, input.category)) {
     const reason = "Code, debugging, repository, or implementation signal detected.";
     const budget = buildRuntimeBudget("code_chat", reason);
@@ -389,6 +421,26 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
       routingReason: reason,
       pipeline: [...basePipeline, `code_specialist:${QWEN_CODER}`],
       fallbackModelNames: buildSpecialistOnlyFallbacks(QWEN_CODER),
+      timeoutMs: budget.timeoutMs,
+      runtimeBudget: budget
+    };
+  }
+
+  if (containsWritingSignal(text, input.category)) {
+    const french = isFrenchRoute(input, text);
+    const selectedModel = french ? QWEN_3B : MISTRAL_BUSINESS;
+    const reason = french
+      ? "French writing route; use Qwen 3B for stronger language consistency on the CPU public chat path."
+      : "Writing or business synthesis route.";
+    const budget = buildRuntimeBudget("writing_chat", reason);
+    return {
+      capabilityId: french ? "qwen-3b-standard-light" : "mistral-mixtral-business",
+      displayName: french ? "Qwen 3B" : "Mistral/Mixtral",
+      modelName: selectedModel,
+      specialistRole: "writing_business",
+      routingReason: reason,
+      pipeline: [...basePipeline, `writing_business:${selectedModel}`],
+      fallbackModelNames: buildSpecialistOnlyFallbacks(selectedModel),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
     };
@@ -492,22 +544,6 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
       routingReason: reason,
       pipeline: [...basePipeline, `primary_brain:${QWEN_MAIN}`],
       fallbackModelNames: buildFallbacks(QWEN_MAIN, "primary_brain"),
-      timeoutMs: budget.timeoutMs,
-      runtimeBudget: budget
-    };
-  }
-
-  if (containsWritingSignal(text, input.category)) {
-    const reason = "Writing or business synthesis route.";
-    const budget = buildRuntimeBudget("writing_chat", reason);
-    return {
-      capabilityId: "mistral-mixtral-business",
-      displayName: "Mistral/Mixtral",
-      modelName: MISTRAL_BUSINESS,
-      specialistRole: "writing_business",
-      routingReason: reason,
-      pipeline: [...basePipeline, `writing_business:${MISTRAL_BUSINESS}`],
-      fallbackModelNames: buildSpecialistOnlyFallbacks(MISTRAL_BUSINESS),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
     };

@@ -116,6 +116,7 @@ const writingPlainTextSystemPrompt = `You are Hydria Core's local writing and bu
 Answer the current user message as plain final user-facing text only.
 Do not return JSON, wrapper labels, hidden reasoning, or chain-of-thought.
 Keep the user's language.
+If the user writes in French, every final word must be French; use "Objet" and "Bonjour", not English labels or greetings.
 Write the requested message directly and keep it concise.`;
 
 const codePlainTextSystemPrompt = `You are Hydria Core's local code and debugging specialist.
@@ -128,7 +129,8 @@ const decisionPlainTextSystemPrompt = `You are Hydria Core's local decision and 
 Answer the current user message as plain final text only.
 Do not return JSON, wrapper labels, hidden reasoning, or chain-of-thought.
 Keep the user's language.
-Start with a clear recommendation, then mention the key constraint and condition.`;
+Start with a clear recommendation, then mention the key constraint and condition.
+Reuse the user's concrete decisive terms instead of generic placeholders.`;
 
 const studentChatConfidenceSchema = z.preprocess((value) => {
   if (value === null || value === undefined || value === "") {
@@ -257,6 +259,7 @@ function maybePlainRouteGuidance(route: StudentChatModelRoute) {
   if (route.runtimeBudget.profile === "writing_chat") {
     return [
       "Writing route: produce the requested user-facing text directly, without JSON or metadata.",
+      "Language is binding: French request means French-only final text; English request means English-only final text.",
       "Keep it short enough for chat; prefer one compact paragraph unless the user asked for structure."
     ];
   }
@@ -268,8 +271,9 @@ function maybePlainRouteGuidance(route: StudentChatModelRoute) {
   }
   if (route.runtimeBudget.profile === "deep_reasoning") {
     return [
-      "Decision route: make a recommendation explicitly.",
-      "Use the active constraint in the decision and add the condition under which the recommendation changes."
+      "Decision route: make a recommendation explicitly in the first sentence.",
+      "Use the exact active constraint or decisive noun from the user in the decision, such as on-prem, paiement, or audit.",
+      "Add a revision condition: say when you would switch, wait, or reconsider."
     ];
   }
   return [];
@@ -305,7 +309,10 @@ function formatToolContext(tooling: ChatToolMetadata) {
     ...sources,
     tooling.used
       ? "Use these verified facts. Do not add fresh/current claims that are not supported by them."
-      : "No verified result is available for this route. If the answer depends on current/private data, do not guess."
+      : "No verified result is available for this route. If the answer depends on current/private data, do not guess.",
+    tooling.used
+      ? "Name the requested subject in the final answer before giving the verified value or status."
+      : ""
   ]
     .filter(Boolean)
     .join("\n");

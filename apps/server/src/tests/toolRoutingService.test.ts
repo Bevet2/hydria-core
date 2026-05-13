@@ -242,6 +242,10 @@ test("tool router keeps conceptual repo analysis tool-free but requires attached
     question: "Explain how to analyze an unfamiliar repo efficiently, but do not claim you inspected a repository.",
     category: "technical_explanation"
   });
+  const repositoryTestDecision = service.route({
+    question: "Debug this TypeScript API error from a failing repository test.",
+    category: "debug_diagnostic"
+  });
   const fileDecision = service.route({
     question: "Analyse ce fichier joint.",
     category: "other"
@@ -251,6 +255,8 @@ test("tool router keeps conceptual repo analysis tool-free but requires attached
   assert.equal(repoDecision.toolType, "none");
   assert.equal(hiddenGateDecision.toolRequired, false);
   assert.equal(hiddenGateDecision.toolType, "none");
+  assert.equal(repositoryTestDecision.toolRequired, false);
+  assert.equal(repositoryTestDecision.toolType, "none");
   assert.equal(fileDecision.toolRequired, true);
   assert.equal(fileDecision.toolType, "file");
   assert.equal(fileDecision.intent, "file_analysis");

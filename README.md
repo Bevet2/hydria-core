@@ -290,7 +290,7 @@ Registered roles:
 - BGE-M3 and BGE Reranker: memory retrieval and reranking
 - Phi mini and Qwen 3B: fast routing, extraction, and CPU-aware standard-light definitions
 
-The OVH CPU backend currently runs the practical local subset through Ollama: `phi3:mini`, `qwen2.5:3b`, `qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `bge-m3`, and `mistral:7b`. Public chat uses CPU-safe routing: Mistral for writing/stable factual turns, Qwen-Coder for code/debug, and Qwen 14B for strategic deep reasoning. `deepseek-r1:14b` stays installed but guarded for public chat until a GPU/provider backend makes it reliable enough. Larger targets such as Qwen 32B and Mixtral are reserved for a GPU/vLLM layer.
+The OVH CPU backend currently runs the practical local subset through Ollama: `phi3:mini`, `qwen2.5:3b`, `qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `bge-m3`, and `mistral:7b`. Public chat uses CPU-safe routing: Qwen 3B for verified tool fact verbalization and French writing, Mistral for English writing/stable factual turns, Qwen-Coder for code/debug, and Qwen 14B for strategic deep reasoning. `deepseek-r1:14b` stays installed but guarded for public chat until a GPU/provider backend makes it reliable enough. Larger targets such as Qwen 32B and Mixtral are reserved for a GPU/vLLM layer.
 
 The API exposes:
 

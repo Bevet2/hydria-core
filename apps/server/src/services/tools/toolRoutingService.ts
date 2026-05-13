@@ -565,7 +565,9 @@ function isToolBoundaryStakeholderContext(question: string, category: QuestionCa
 
 function isRepoContextOnly(question: string) {
   return (
-    /\brepo(?:sitory)? access\b/i.test(question) &&
+    (/\brepo(?:sitory)? access\b/i.test(question) ||
+      /\b(?:failing|failed)\s+(?:repo|repository)\s+tests?\b/i.test(question) ||
+      /\b(?:repo|repository)\s+tests?\b/i.test(question)) &&
     !/\b(?:scan(?:ne)?|inspect|analy[sz]e|find|lookup|look up|retourne|retrouve|read|open)\b/i.test(question)
   );
 }
