@@ -88,6 +88,7 @@ test("student chat prompt compacts stable factual biographies", () => {
   assert.match(prompt, /highest title\/role/i);
   assert.match(prompt, /own realm or dynasty/i);
   assert.match(prompt, /anachronistic labels/i);
+  assert.match(prompt, /Saint-Empire romain germanique/i);
   assert.match(prompt, /Do not list extra battles/i);
   assert.match(prompt, /key_points to one short item/i);
   assert.match(prompt, /Do not write a long biography/i);

@@ -225,6 +225,7 @@ function maybeStableFactCompaction(route: StudentChatModelRoute) {
     "For French prompts, every JSON string value must be French; do not mix English phrases.",
     "For biographies, put the highest title/role or signature achievement in the first sentence before minor birth/death details.",
     "For rulers, state titles such as king or emperor and their own realm or dynasty before dates; avoid later successor institutions or anachronistic labels unless the prompt explicitly names them.",
+    "Never use Saint-Empire romain germanique or Holy Roman Empire unless the user explicitly asks about that institution.",
     "For scientists, state field and discovery or award before dates.",
     "Then include one concrete date, reign range, century, or active period and a defining legacy in the answer text.",
     "Finish with complete sentences; prefer dropping birth/death detail over truncating.",
