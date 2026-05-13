@@ -243,7 +243,7 @@ curl -fsS https://app.hydria.click/api/models/plan \
   -d '{"purpose":"main_reasoning","category":"architecture_design","preferredProvider":"ollama","budget":{"costPolicy":"balanced","fallbackDepth":2,"maxEstimatedCostUnits":8}}'
 ```
 
-The manifest registers Qwen 14B/32B, DeepSeek-Coder-V2, Qwen-Coder, DeepSeek-R1-Distill-Qwen, Mistral/Mixtral, BGE-M3, BGE Reranker, Phi mini, and Qwen 3B as candidate model roles. These entries are routing contracts first; live execution still requires configuring the actual serving backend on OVH or a GPU provider.
+The manifest registers Qwen 14B/32B, DeepSeek-Coder-V2, Qwen-Coder, DeepSeek-R1-Distill-Qwen, Mistral/Mixtral, BGE-M3, BGE Reranker, Phi mini, and Qwen 3B as candidate model roles. These entries are routing contracts first; live execution still requires configuring the actual serving backend on OVH or a GPU provider. On the current CPU VPS, public chat keeps DeepSeek-R1 guarded and uses Qwen 14B as the CPU-safe deep-reasoning route.
 
 ## Local BGE Reranker Runtime
 
@@ -293,7 +293,7 @@ npm run retrieval:reranker-gate -- --require-runtime
 ```
 
 `retrieval:reranker-gate` without `--require-runtime` validates fallback precision only. Promotion of reranker-dependent retrieval requires the runtime-backed mode.
-`models:routing-gate` writes `storage/training/model-routing-economics-gate-v1.json` and blocks model governance changes when a case selects the wrong specialist, violates local-only policy, over-escalates to DeepSeek, or exceeds the expected relative cost budget.
+`models:routing-gate` writes `storage/training/model-routing-economics-gate-v1.json` and blocks model governance changes when a case selects the wrong specialist, violates local-only policy, over-escalates to heavy deep reasoning, or exceeds the expected relative cost budget.
 `prod:chat-warmup` writes `storage/training/chat-model-warmup-v1.json` and verifies that fast tool, standard-light, and stable factual model paths are loaded and routed locally.
 `prod:chat-slo-gate` writes `storage/training/chat-runtime-slo-gate-v1.json` and blocks trace loss, wrong language, static fallback, cloud runtime usage, quality failures, excessive retries, and p95 latency regression.
 `prod:stable-factual-gate` writes stable factual gate and diagnostics reports, blocking anchor misses, known factual confusions, wrong language, static fallbacks, and route drift on stable chat answers.
@@ -457,7 +457,7 @@ HYDRIA_AUTH_RATE_LIMIT_MAX_REQUESTS=30
 HYDRIA_API_RATE_LIMIT_MAX_REQUESTS=120
 ```
 
-The model router can still route heavier specialist calls to the installed Ollama models (`qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `mistral:7b`). Keep the generic local-student timeout low for non-chat paths, but let Model Runtime Governor v1 cap runtime chat by profile: fast verified tool answers, standard-light definitions, `stable_fact_chat` factual writing, standard chat, code, writing, and deep reasoning. `stable_fact_chat` intentionally uses Mistral first with one `qwen2.5:3b` retry, without a Qwen 14B fallback, to avoid CPU timeout cascades. Chat does not fall back to OpenRouter. Public chat is intentionally open but IP-rate-limited. Public OVH must keep `TRAINING_ENDPOINTS_ENABLED=false`; enable it only for controlled training/evaluation sessions and keep API-key protection enabled.
+The model router can still route heavier specialist calls to the installed Ollama models (`qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `mistral:7b`). Keep the generic local-student timeout low for non-chat paths, but let Model Runtime Governor v1 cap runtime chat by profile: fast verified tool answers, standard-light definitions, `stable_fact_chat` factual writing, standard chat, code, writing, and deep reasoning. Public chat uses plain final-text generation for writing, code, and deep-reasoning routes; strict JSON wrapping is kept off those CPU-heavy paths to avoid timeout cascades. `stable_fact_chat` intentionally uses Mistral first with one `qwen2.5:3b` retry, without a Qwen 14B fallback. `writing_chat`, `code_chat`, and public `deep_reasoning` use specialist-only attempts. DeepSeek-R1 remains installed but guarded on this CPU VPS because it is too slow/unstable for public chat; public deep reasoning uses Qwen 14B until a GPU/provider backend is available. Chat does not fall back to OpenRouter. Public chat is intentionally open but IP-rate-limited. Public OVH must keep `TRAINING_ENDPOINTS_ENABLED=false`; enable it only for controlled training/evaluation sessions and keep API-key protection enabled.
 
 Before changing the multi-model runtime, run:
 

@@ -208,6 +208,7 @@ test("student chat adapter reserves qwen 14B for complex standard reasoning", as
 
 test("student chat adapter routes code questions to the local code specialist", async () => {
   let selectedModel = "";
+  let usedFormat = false;
   const input = {
     ...buildInput(),
     category: "debug_diagnostic" as const,
@@ -221,16 +222,11 @@ test("student chat adapter routes code questions to the local code specialist", 
     },
     async testPrompt(_prompt, _system, options) {
       selectedModel = options?.modelName ?? "";
+      usedFormat = Boolean(options?.format);
       return {
         provider: "ollama",
         model: selectedModel,
-        response: JSON.stringify({
-          modelRole: "student",
-          answer: "Start by reproducing the TypeScript API error and checking the failing stack trace.",
-          key_points: ["Code diagnostic"],
-          assumptions: [],
-          confidence: 85
-        }),
+        response: "Start by reproducing the TypeScript API error and checking the failing stack trace.",
         durationMs: 12
       };
     }
@@ -241,6 +237,9 @@ test("student chat adapter routes code questions to the local code specialist", 
   assert.equal(selectedModel, "qwen2.5-coder:7b");
   assert.equal(result.specialist.role, "code_specialist");
   assert.equal(result.specialist.pipeline.some((step) => step.includes("qwen2.5-coder:7b")), true);
+  assert.equal(result.runtimeBudget?.fallbackDepth, 0);
+  assert.equal(usedFormat, false);
+  assert.match(result.answer.answer, /TypeScript API error/);
 });
 
 test("student chat adapter routes concise direct answers to the fast 3B specialist", async () => {
@@ -342,13 +341,7 @@ test("student chat adapter still routes explicit Docker build errors to code spe
       return {
         provider: "ollama",
         model: selectedModel,
-        response: JSON.stringify({
-          modelRole: "student",
-          answer: "Start by reading the Docker build error and the Dockerfile step that failed.",
-          key_points: ["Docker diagnostic"],
-          assumptions: [],
-          confidence: 85
-        }),
+        response: "Start by reading the Docker build error and the Dockerfile step that failed.",
         durationMs: 12
       };
     }
@@ -359,6 +352,47 @@ test("student chat adapter still routes explicit Docker build errors to code spe
   assert.equal(selectedModel, "qwen2.5-coder:7b");
   assert.equal(result.specialist.role, "code_specialist");
   assert.equal(result.runtimeBudget?.profile, "code_chat");
+});
+
+test("student chat adapter routes writing tasks through plain Mistral without heavy fallback", async () => {
+  let selectedModel = "";
+  let usedFormat = false;
+  let timeoutMs = 0;
+  const input = {
+    ...buildInput(),
+    category: "operational_writing" as const,
+    routingQuestion: "Redige un message client annoncant un retard.",
+    userMessage: "Redige un message client annoncant un retard.",
+    question: "Redige un message client annoncant un retard.",
+    runtimeMode: "direct" as const,
+    requiresExternalGrounding: false
+  };
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "qwen2.5:14b";
+    },
+    async testPrompt(_prompt, _system, options) {
+      selectedModel = options?.modelName ?? "";
+      usedFormat = Boolean(options?.format);
+      timeoutMs = options?.timeoutMs ?? 0;
+      return {
+        provider: "ollama",
+        model: selectedModel,
+        response: "Bonjour, nous vous informons que la livraison aura un retard.",
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer(input);
+
+  assert.equal(selectedModel, "mistral:7b");
+  assert.equal(result.specialist.role, "writing_business");
+  assert.equal(result.runtimeBudget?.profile, "writing_chat");
+  assert.equal(result.runtimeBudget?.fallbackDepth, 0);
+  assert.equal(usedFormat, false);
+  assert.equal(timeoutMs >= 45000, true);
+  assert.match(result.answer.answer, /retard/);
 });
 
 test("student chat adapter routes lightweight context-setting turns to the fast 3B specialist", async () => {
@@ -460,8 +494,9 @@ test("student chat adapter uses fast budget for verified calculator tool answers
   assert.equal(numPredict <= 96, true);
 });
 
-test("student chat adapter routes strategic decisions to the local deep reasoner", async () => {
+test("student chat adapter routes strategic decisions to the CPU-safe local deep reasoner", async () => {
   let selectedModel = "";
+  let usedFormat = false;
   const state = createInitialState();
   const capsule = {
     ...buildActiveConstraintCapsule(state, "On-prem strict, deadline demain. Tu recommandes quoi ?"),
@@ -481,16 +516,11 @@ test("student chat adapter routes strategic decisions to the local deep reasoner
     },
     async testPrompt(_prompt, _system, options) {
       selectedModel = options?.modelName ?? "";
+      usedFormat = Boolean(options?.format);
       return {
         provider: "ollama",
         model: selectedModel,
-        response: JSON.stringify({
-          modelRole: "student",
-          answer: "Je recommande une option on-prem minimale, car la contrainte bloque AWS et le delai impose un scope reduit.",
-          key_points: ["Decision contextualisee"],
-          assumptions: [],
-          confidence: 84
-        }),
+        response: "Je recommande une option on-prem minimale, car la contrainte bloque AWS et le delai impose un scope reduit.",
         durationMs: 12
       };
     }
@@ -509,9 +539,13 @@ test("student chat adapter routes strategic decisions to the local deep reasoner
     tooling: defaultChatToolMetadata
   });
 
-  assert.equal(selectedModel, "deepseek-r1:14b");
+  assert.equal(selectedModel, "qwen2.5:14b");
   assert.equal(result.specialist.role, "deep_reasoner");
-  assert.equal(result.specialist.pipeline.some((step) => step.includes("deepseek-r1:14b")), true);
+  assert.equal(result.specialist.pipeline.some((step) => step.includes("qwen2.5:14b")), true);
+  assert.equal(result.runtimeBudget?.profile, "deep_reasoning");
+  assert.equal(result.runtimeBudget?.fallbackDepth, 0);
+  assert.equal(result.runtimeBudget?.maxOutputTokens, 180);
+  assert.equal(usedFormat, false);
 });
 
 test("student chat adapter does not call cloud fallback when local generation fails", async () => {

@@ -285,12 +285,12 @@ Registered roles:
 
 - Qwen 14B/32B Instruct: primary reasoning brain
 - DeepSeek-Coder-V2 and Qwen-Coder: code and repo diagnostics
-- DeepSeek-R1-Distill-Qwen: deep reasoning escalation
+- DeepSeek-R1-Distill-Qwen: guarded deep reasoning target for GPU/provider execution
 - Mistral/Mixtral: writing, business, and stakeholder synthesis
 - BGE-M3 and BGE Reranker: memory retrieval and reranking
 - Phi mini and Qwen 3B: fast routing, extraction, and CPU-aware standard-light definitions
 
-The OVH CPU backend currently runs the practical local subset through Ollama: `phi3:mini`, `qwen2.5:3b`, `qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `bge-m3`, and `mistral:7b`. Larger targets such as Qwen 32B and Mixtral are reserved for a GPU/vLLM layer.
+The OVH CPU backend currently runs the practical local subset through Ollama: `phi3:mini`, `qwen2.5:3b`, `qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `bge-m3`, and `mistral:7b`. Public chat uses CPU-safe routing: Mistral for writing/stable factual turns, Qwen-Coder for code/debug, and Qwen 14B for strategic deep reasoning. `deepseek-r1:14b` stays installed but guarded for public chat until a GPU/provider backend makes it reliable enough. Larger targets such as Qwen 32B and Mixtral are reserved for a GPU/vLLM layer.
 
 The API exposes:
 
@@ -309,7 +309,7 @@ Model governance validation:
 npm run models:routing-gate
 ```
 
-This writes `storage/training/model-routing-economics-gate-v1.json` and checks that chat/provider routing selects the expected specialist role, keeps public runtime local-first, avoids unnecessary DeepSeek escalation on simple explanations, keeps conceptual API questions off the code specialist, and respects relative cost budgets. Run it before changing model routing, expanding watchers, or starting role-specific training.
+This writes `storage/training/model-routing-economics-gate-v1.json` and checks that chat/provider routing selects the expected specialist role, keeps public runtime local-first, avoids unnecessary deep-reasoning escalation on simple explanations, keeps conceptual API questions off the code specialist, and respects relative cost budgets. Run it before changing model routing, expanding watchers, or starting role-specific training.
 
 Model runtime ops validation:
 

@@ -197,13 +197,13 @@ function buildFallbacks(primary: string, role: StudentChatSpecialistRole) {
   const roleFallbacks =
     role === "fast_router"
       ? [PHI_ROUTER, QWEN_3B, MISTRAL_BUSINESS, QWEN_MAIN]
-      : role === "code_specialist"
+    : role === "code_specialist"
       ? [QWEN_CODER, QWEN_MAIN, MISTRAL_BUSINESS]
       : role === "deep_reasoner"
         ? [DEEPSEEK_REASONER, QWEN_MAIN, MISTRAL_BUSINESS]
         : role === "primary_brain"
           ? [QWEN_MAIN, QWEN_3B, MISTRAL_BUSINESS]
-          : [MISTRAL_BUSINESS, QWEN_MAIN];
+        : [MISTRAL_BUSINESS, QWEN_MAIN];
 
   return unique([
     primary,
@@ -211,6 +211,10 @@ function buildFallbacks(primary: string, role: StudentChatSpecialistRole) {
     env.STUDENT_CHAT_LOCAL_MODEL_NAME,
     env.LOCAL_MODEL_NAME
   ]);
+}
+
+function buildSpecialistOnlyFallbacks(primary: string) {
+  return unique([primary]);
 }
 
 function buildStandardLightFallbacks(primary: string) {
@@ -301,7 +305,7 @@ function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: stri
       maxLatencyMs: env.MODEL_RUNTIME_CODE_TIMEOUT_MS,
       maxOutputTokens: env.MODEL_RUNTIME_CODE_MAX_OUTPUT_TOKENS,
       maxConcurrent: env.MODEL_RUNTIME_HEAVY_MAX_CONCURRENCY,
-      fallbackDepth: 1,
+      fallbackDepth: 0,
       concurrencyKey: "code_local_chat"
     };
   }
@@ -312,22 +316,26 @@ function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: stri
       reason,
       timeoutMs: capTimeout(requestedLongTimeoutMs, env.MODEL_RUNTIME_DEEP_TIMEOUT_MS),
       maxLatencyMs: env.MODEL_RUNTIME_DEEP_TIMEOUT_MS,
-      maxOutputTokens: env.MODEL_RUNTIME_DEEP_MAX_OUTPUT_TOKENS,
+      maxOutputTokens: Math.min(env.MODEL_RUNTIME_DEEP_MAX_OUTPUT_TOKENS, 180),
       maxConcurrent: env.MODEL_RUNTIME_HEAVY_MAX_CONCURRENCY,
-      fallbackDepth: 2,
+      fallbackDepth: 0,
       concurrencyKey: "heavy_local_chat"
     };
   }
   if (profile === "writing_chat") {
+    const writingTimeoutMs = Math.min(
+      env.MODEL_RUNTIME_DEEP_TIMEOUT_MS,
+      Math.max(env.STUDENT_CHAT_LOCAL_TIMEOUT_MS, env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS, 45000)
+    );
     return {
       profile,
       label: "Writing/business response",
       reason,
-      timeoutMs: capTimeout(env.STUDENT_CHAT_LOCAL_TIMEOUT_MS, env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS),
-      maxLatencyMs: env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS,
+      timeoutMs: writingTimeoutMs,
+      maxLatencyMs: writingTimeoutMs,
       maxOutputTokens: env.MODEL_RUNTIME_STANDARD_MAX_OUTPUT_TOKENS,
       maxConcurrent: env.MODEL_RUNTIME_STANDARD_MAX_CONCURRENCY,
-      fallbackDepth: 1,
+      fallbackDepth: 0,
       concurrencyKey: "standard_local_chat"
     };
   }
@@ -380,23 +388,24 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
       specialistRole: "code_specialist",
       routingReason: reason,
       pipeline: [...basePipeline, `code_specialist:${QWEN_CODER}`],
-      fallbackModelNames: buildFallbacks(QWEN_CODER, "code_specialist"),
+      fallbackModelNames: buildSpecialistOnlyFallbacks(QWEN_CODER),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
     };
   }
 
   if (containsDeepReasoningSignal(input, text)) {
-    const reason = "Decision, incident, contradiction, or strategic conflict requires deeper reasoning.";
+    const reason =
+      "Decision, incident, contradiction, or strategic conflict requires deeper reasoning; use the CPU-safe 14B reasoner while DeepSeek remains guarded on this VPS.";
     const budget = buildRuntimeBudget("deep_reasoning", reason);
     return {
-      capabilityId: "deepseek-r1-distill-qwen-reasoner",
-      displayName: "DeepSeek-R1-Distill-Qwen",
-      modelName: DEEPSEEK_REASONER,
+      capabilityId: "qwen-14b-instruct-main",
+      displayName: "Qwen 14B Instruct",
+      modelName: QWEN_MAIN,
       specialistRole: "deep_reasoner",
       routingReason: reason,
-      pipeline: [...basePipeline, `deep_reasoner:${DEEPSEEK_REASONER}`, `synthesis_fallback:${QWEN_MAIN}`],
-      fallbackModelNames: buildFallbacks(DEEPSEEK_REASONER, "deep_reasoner"),
+      pipeline: [...basePipeline, `deep_reasoner_cpu:${QWEN_MAIN}`],
+      fallbackModelNames: buildSpecialistOnlyFallbacks(QWEN_MAIN),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
     };
@@ -498,7 +507,7 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
       specialistRole: "writing_business",
       routingReason: reason,
       pipeline: [...basePipeline, `writing_business:${MISTRAL_BUSINESS}`],
-      fallbackModelNames: buildFallbacks(MISTRAL_BUSINESS, "writing_business"),
+      fallbackModelNames: buildSpecialistOnlyFallbacks(MISTRAL_BUSINESS),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
     };

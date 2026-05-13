@@ -143,7 +143,7 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
     id: "chat_strategic_conflict_deep_reasoner",
     surface: "chat_route",
     priority: "critical",
-    description: "Strategic conflict with explicit decision pressure should route to DeepSeek R1.",
+    description: "Strategic conflict with explicit decision pressure should route to the CPU-safe local deep reasoner.",
     tags: ["chat", "deep_reasoning", "strategic_conflict"],
     chat: {
       routingQuestion: "On-prem obligatoire, deadline demain, budget bloque. Tu recommandes quoi ?",
@@ -161,9 +161,9 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
       recommendedDirection: "Choisir une option on-prem minimale et reversible."
     },
     expected: {
-      capabilityId: "deepseek-r1-distill-qwen-reasoner",
+      capabilityId: "qwen-14b-instruct-main",
       role: "deep_reasoner",
-      maxCostTier: "high",
+      maxCostTier: "medium",
       maxEstimatedCostUnits: 2,
       localOnly: true,
       allowDeepReasoning: true

@@ -112,6 +112,24 @@ Keep the user's language.
 Use stable model knowledge; do not invent live/current data.
 Return one or two complete concise sentences.`;
 
+const writingPlainTextSystemPrompt = `You are Hydria Core's local writing and business chat runtime.
+Answer the current user message as plain final user-facing text only.
+Do not return JSON, wrapper labels, hidden reasoning, or chain-of-thought.
+Keep the user's language.
+Write the requested message directly and keep it concise.`;
+
+const codePlainTextSystemPrompt = `You are Hydria Core's local code and debugging specialist.
+Answer the current user message as plain final text only.
+Do not return JSON, wrapper labels, hidden reasoning, or chain-of-thought.
+Keep the user's language.
+Give practical debugging steps or minimal code only when useful.`;
+
+const decisionPlainTextSystemPrompt = `You are Hydria Core's local decision and reasoning specialist.
+Answer the current user message as plain final text only.
+Do not return JSON, wrapper labels, hidden reasoning, or chain-of-thought.
+Keep the user's language.
+Start with a clear recommendation, then mention the key constraint and condition.`;
+
 const studentChatConfidenceSchema = z.preprocess((value) => {
   if (value === null || value === undefined || value === "") {
     return 70;
@@ -235,6 +253,28 @@ function maybeStableFactCompaction(route: StudentChatModelRoute) {
   ];
 }
 
+function maybePlainRouteGuidance(route: StudentChatModelRoute) {
+  if (route.runtimeBudget.profile === "writing_chat") {
+    return [
+      "Writing route: produce the requested user-facing text directly, without JSON or metadata.",
+      "Keep it short enough for chat; prefer one compact paragraph unless the user asked for structure."
+    ];
+  }
+  if (route.runtimeBudget.profile === "code_chat") {
+    return [
+      "Code route: answer with the concrete diagnostic or implementation steps first.",
+      "Keep it concise; include code only if it materially helps the current request."
+    ];
+  }
+  if (route.runtimeBudget.profile === "deep_reasoning") {
+    return [
+      "Decision route: make a recommendation explicitly.",
+      "Use the active constraint in the decision and add the condition under which the recommendation changes."
+    ];
+  }
+  return [];
+}
+
 function formatToolContext(tooling: ChatToolMetadata) {
   if (!tooling.routing.toolRequired && !tooling.routing.toolRecommended && tooling.route === "not_needed") {
     return "";
@@ -274,6 +314,7 @@ function formatToolContext(tooling: ChatToolMetadata) {
 export function buildStudentChatPrompt(input: StudentChatAdapterInput, route = selectStudentChatModelRoute(input)) {
   const recentMessages = formatRecentMessages(input.recentMessages);
   const toolContext = formatToolContext(input.tooling);
+  const usePlainText = shouldUsePlainTextRoute(route);
   const retryLines = input.qualityRetry
     ? [
         "Repair signal:",
@@ -290,6 +331,7 @@ export function buildStudentChatPrompt(input: StudentChatAdapterInput, route = s
     `Local specialist pipeline: ${route.pipeline.join(" -> ")}`,
     "Use the selected specialist capability, but do not mention model routing in the answer.",
     ...maybeStableFactCompaction(route),
+    ...maybePlainRouteGuidance(route),
     ...maybeProductGrounding(input),
     ...maybeCurrentDataGuidance(input),
     toolContext,
@@ -306,7 +348,7 @@ export function buildStudentChatPrompt(input: StudentChatAdapterInput, route = s
     input.routingQuestion !== input.userMessage ? input.routingQuestion : "",
     "Current user message:",
     input.userMessage,
-    "Return JSON only."
+    usePlainText ? "Return plain final text only." : "Return JSON only."
   ]
     .filter(Boolean)
     .join("\n");
@@ -351,8 +393,45 @@ function parseStableFactAnswer(raw: string): StudentAnswer {
   }
 }
 
-function shouldUsePlainStableFact(route: StudentChatModelRoute) {
-  return route.runtimeBudget.profile === "stable_fact_chat";
+function parsePlainChatAnswer(raw: string, route: StudentChatModelRoute): StudentAnswer {
+  const answer = cleanPlainStableFactAnswer(raw);
+  if (!answer) {
+    throw new Error("Local specialist returned empty plain text.");
+  }
+  const firstSentence = answer.split(/(?<=[.!?])\s+/)[0] ?? answer;
+  const confidence =
+    route.runtimeBudget.profile === "deep_reasoning"
+      ? 82
+      : route.runtimeBudget.profile === "code_chat"
+        ? 84
+        : 80;
+  return {
+    modelRole: "student",
+    answer,
+    key_points: [compact(firstSentence.replace(/[.!?]$/g, ""), 90)],
+    assumptions: [],
+    confidence
+  };
+}
+
+function shouldUsePlainTextRoute(route: StudentChatModelRoute) {
+  return ["stable_fact_chat", "writing_chat", "code_chat", "deep_reasoning"].includes(route.runtimeBudget.profile);
+}
+
+function systemPromptForRoute(route: StudentChatModelRoute) {
+  if (route.runtimeBudget.profile === "stable_fact_chat") {
+    return stableFactPlainTextSystemPrompt;
+  }
+  if (route.runtimeBudget.profile === "writing_chat") {
+    return writingPlainTextSystemPrompt;
+  }
+  if (route.runtimeBudget.profile === "code_chat") {
+    return codePlainTextSystemPrompt;
+  }
+  if (route.runtimeBudget.profile === "deep_reasoning") {
+    return decisionPlainTextSystemPrompt;
+  }
+  return studentChatSystemPrompt;
 }
 
 function keepAliveForRoute(route: StudentChatModelRoute) {
@@ -402,10 +481,10 @@ export class StudentChatAdapter {
     for (const [index, modelName] of candidateModels.entries()) {
       const attemptStartedAt = Date.now();
       try {
-        const usePlainStableFact = shouldUsePlainStableFact(route);
+        const usePlainText = shouldUsePlainTextRoute(route);
         const governed = await this.runtimeGovernor.run(route.runtimeBudget, () =>
-          this.localModelService.testPrompt(prompt, usePlainStableFact ? stableFactPlainTextSystemPrompt : studentChatSystemPrompt, {
-            ...(usePlainStableFact ? {} : { format: studentChatAnswerJsonSchema }),
+          this.localModelService.testPrompt(prompt, systemPromptForRoute(route), {
+            ...(usePlainText ? {} : { format: studentChatAnswerJsonSchema }),
             keepAlive: keepAliveForRoute(route),
             modelName,
             numPredict: route.runtimeBudget.maxOutputTokens,
@@ -426,7 +505,12 @@ export class StudentChatAdapter {
           budgetExceeded: governed.budgetExceeded
         });
         return {
-          answer: usePlainStableFact ? parseStableFactAnswer(response.response) : parseStudentChatAnswer(response.response),
+          answer:
+            route.runtimeBudget.profile === "stable_fact_chat"
+              ? parseStableFactAnswer(response.response)
+              : usePlainText
+                ? parsePlainChatAnswer(response.response, route)
+                : parseStudentChatAnswer(response.response),
           usedRetry: index > 0,
           provider: "ollama",
           model: response.model || modelName,

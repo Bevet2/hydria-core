@@ -178,7 +178,7 @@ const codeExpectation: TurnExpectation = {
 
 const deepExpectation: TurnExpectation = {
   provider: "ollama",
-  model: "deepseek-r1:14b",
+  model: "qwen2.5:14b",
   budgetProfile: "deep_reasoning",
   maxLatencyMs: 150000
 };
