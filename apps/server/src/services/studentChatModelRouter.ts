@@ -100,6 +100,12 @@ function containsWritingSignal(text: string, category: QuestionCategory) {
   );
 }
 
+function containsPracticalLifestyleSignal(text: string) {
+  return /\b(?:recette|cuisine|cuisiner|ingredients?|ingredient|etapes?|preparation|tiramisu|gateau|dessert|repas|sauce|plat|recipe|cook|cooking|ingredients?|steps?|meal|dinner|dessert|cake|bake)\b/.test(
+    text
+  );
+}
+
 function isFrenchWritingRoute(input: StudentChatModelRoutingInput, text: string) {
   return (
     input.activeConstraintCapsule.language === "fr" ||
@@ -348,7 +354,7 @@ function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: stri
       reason,
       timeoutMs: writingTimeoutMs,
       maxLatencyMs: writingTimeoutMs,
-      maxOutputTokens: env.MODEL_RUNTIME_STANDARD_MAX_OUTPUT_TOKENS,
+      maxOutputTokens: Math.max(env.MODEL_RUNTIME_STANDARD_MAX_OUTPUT_TOKENS, 240),
       maxConcurrent: env.MODEL_RUNTIME_STANDARD_MAX_CONCURRENCY,
       fallbackDepth: 0,
       concurrencyKey: "standard_local_chat"
@@ -447,6 +453,26 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
       fallbackModelNames: buildSpecialistOnlyFallbacks(selectedModel),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
+    };
+  }
+
+  if (containsPracticalLifestyleSignal(text)) {
+    const reason =
+      "Practical recipe or everyday how-to request; use the CPU-safe writing model instead of the 14B primary brain.";
+    const budget = buildRuntimeBudget("writing_chat", reason);
+    return {
+      capabilityId: "mistral-mixtral-business",
+      displayName: "Mistral/Mixtral",
+      modelName: MISTRAL_BUSINESS,
+      specialistRole: "writing_business",
+      routingReason: reason,
+      pipeline: [...basePipeline, `practical_writer:${MISTRAL_BUSINESS}`, `practical_light_fallback:${QWEN_3B}`],
+      fallbackModelNames: unique([MISTRAL_BUSINESS, QWEN_3B]),
+      timeoutMs: budget.timeoutMs,
+      runtimeBudget: {
+        ...budget,
+        fallbackDepth: 1
+      }
     };
   }
 

@@ -137,6 +137,7 @@ app.get("/api/health", async (_request, response) => {
     trainingEndpoints: {
       enabled: env.TRAINING_ENDPOINTS_ENABLED,
       requireApiKey: env.TRAINING_ENDPOINTS_REQUIRE_API_KEY,
+      studentLabPublicEnabled: env.STUDENT_LAB_PUBLIC_ENABLED,
       openRouterScope: "training_evaluation_only"
     },
     publicApi: {
@@ -176,7 +177,7 @@ app.get("/api/health", async (_request, response) => {
 });
 
 const protectedApiPaths = [
-  "/api/student",
+  ...(env.STUDENT_LAB_PUBLIC_ENABLED ? [] : ["/api/student"]),
   "/api/arena",
   "/api/benchmark",
   "/api/learning",

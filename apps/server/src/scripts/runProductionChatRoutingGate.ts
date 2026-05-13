@@ -341,6 +341,23 @@ const cases: RoutingGateCase[] = [
     expectedFinalTerms: ["migration"]
   },
   {
+    id: "writing_recipe_fr",
+    description: "Simple recipe requests should use the practical writing route, not the 14B primary brain.",
+    routeFamily: "writing_chat",
+    language: "fr",
+    turns: [
+      {
+        message: "Donne moi une recette de tiramisu.",
+        expect: {
+          ...writingExpectation,
+          maxLatencyMs: 150000,
+          allowRetry: true
+        }
+      }
+    ],
+    expectedFinalTerms: ["tiramisu"]
+  },
+  {
     id: "code_typescript_api_en",
     description: "Debugging TypeScript API should use code specialist.",
     routeFamily: "code_chat",

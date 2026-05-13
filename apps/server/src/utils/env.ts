@@ -180,6 +180,10 @@ const envSchema = z.object({
     .string()
     .default("true")
     .transform((value) => value.toLowerCase() !== "false"),
+  STUDENT_LAB_PUBLIC_ENABLED: z
+    .string()
+    .default("false")
+    .transform((value) => value.toLowerCase() === "true"),
   HYDRIA_PUBLIC_API_AUTH_REQUIRED: z
     .string()
     .default("false")

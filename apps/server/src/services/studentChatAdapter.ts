@@ -264,6 +264,7 @@ function maybePlainRouteGuidance(route: StudentChatModelRoute) {
       "Writing route: produce the requested user-facing text directly, without JSON or metadata.",
       "Language is binding: French request means French-only final text; English request means English-only final text.",
       "For summary requests, do not echo the instruction; output only the summarized content.",
+      "For recipe or practical how-to requests, answer with useful ingredients or steps directly.",
       "Keep it short enough for chat; prefer one compact paragraph unless the user asked for structure."
     ];
   }

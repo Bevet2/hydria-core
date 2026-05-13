@@ -432,6 +432,49 @@ test("student chat adapter routes English writing tasks through plain Mistral", 
   assert.match(result.answer.answer, /migration/);
 });
 
+test("student chat adapter routes French recipe requests through practical writing path", async () => {
+  const selectedModels: string[] = [];
+  let timeoutMs = 0;
+  let numPredict = 0;
+  const input = {
+    ...buildInput(),
+    category: "other" as const,
+    routingQuestion: "donne moi une recette de tiramisu",
+    userMessage: "donne moi une recette de tiramisu",
+    question: "donne moi une recette de tiramisu",
+    runtimeMode: "direct" as const,
+    requiresExternalGrounding: false
+  };
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "qwen2.5:14b";
+    },
+    async testPrompt(_prompt, _system, options) {
+      const selectedModel = options?.modelName ?? "";
+      selectedModels.push(selectedModel);
+      timeoutMs = options?.timeoutMs ?? 0;
+      numPredict = options?.numPredict ?? 0;
+      return {
+        provider: "ollama",
+        model: selectedModel,
+        response:
+          "Pour un tiramisu, alternez biscuits imbibes de cafe et creme mascarpone, puis laissez prendre au frais.",
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer(input);
+
+  assert.deepEqual(selectedModels, ["mistral:7b"]);
+  assert.equal(result.specialist.role, "writing_business");
+  assert.equal(result.runtimeBudget?.profile, "writing_chat");
+  assert.equal(result.runtimeBudget?.fallbackDepth, 1);
+  assert.equal(timeoutMs >= 70000, true);
+  assert.equal(numPredict >= 240, true);
+  assert.match(result.answer.answer, /tiramisu/);
+});
+
 test("student chat adapter routes lightweight context-setting turns to the fast 3B specialist", async () => {
   let selectedModel = "";
   const input = {

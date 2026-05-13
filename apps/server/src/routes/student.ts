@@ -5,10 +5,13 @@ import {
   studentAnalyzeRequestSchema,
   studentSessionRequestSchema
 } from "../types/student.js";
+import { env } from "../utils/env.js";
 
 export function createStudentRouter(studentService: StudentService) {
   const router = Router();
-  const trainingEndpointGuard = createTrainingEndpointGuard();
+  const trainingEndpointGuard = createTrainingEndpointGuard({
+    publicAccessWhen: () => env.STUDENT_LAB_PUBLIC_ENABLED
+  });
 
   router.get("/history", async (_request, response, next) => {
     try {

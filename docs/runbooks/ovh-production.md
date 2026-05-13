@@ -35,7 +35,7 @@ curl -fsS https://app.hydria.click/api/health/persistence
 curl -fsS https://app.hydria.click/api/models/capabilities
 ```
 
-Admin, benchmark, training, and model-execution routes require a Hydria API key in production. The public chat route does not require a key; it is protected by server-side IP rate limits.
+Admin, benchmark, arena, learning, and model-execution routes require a Hydria API key in production. The public chat route does not require a key; it is protected by server-side IP rate limits. Student Lab can be opened for browser-driven VPS training without a browser API key when `TRAINING_ENDPOINTS_ENABLED=true` and `STUDENT_LAB_PUBLIC_ENABLED=true`; that exception is scoped to `/api/student/*`.
 
 ```bash
 HYDRIA_API_KEY="$(ssh ubuntu@51.210.46.30 'cat /opt/hydria-core/.hydria-api-key')"
@@ -91,7 +91,7 @@ curl -fsS https://app.hydria.click/api/chat/message \
   -d '{"message":"Reponds en une phrase : quel est le role de Hydria Core ?"}'
 ```
 
-This validates DNS, TLS, Caddy, API, PostgreSQL, and the direct student chat runtime. Chat is based on the student prompt and `StudentAnswer` schema through `StudentChatAdapter`, but it does not run the full Student Lab benchmark/research/analyze pipeline. Runtime chat must be served by the local Ollama open-weight backend with local specialist routing: `phi3:mini` for routing trace, `qwen2.5:3b` for concise turns, lightweight context turns, CPU-aware standard-light definitions, French writing, and fallback stable factual answers, `qwen2.5:14b` as the main reasoning brain for complex standard synthesis, `qwen2.5-coder:7b` for code/debug, `deepseek-r1:14b` for guarded deep reasoning capacity, and `mistral:7b` for English writing plus stable biographical/history answers. Public chat also runs governed tool routing before model generation: deterministic local tools can provide verified weather, finance, time/date, calculator/conversion, release/status, and repo facts. Exact verified tool facts can be returned directly; model prompts only receive verified facts/sources when verbalization or synthesis is still needed. OpenRouter is reserved for controlled training/evaluation jobs and is blocked from the public runtime path by default.
+This validates DNS, TLS, Caddy, API, PostgreSQL, and the direct student chat runtime. Chat is based on the student prompt and `StudentAnswer` schema through `StudentChatAdapter`, but it does not run the full Student Lab benchmark/research/analyze pipeline. Runtime chat must be served by the local Ollama open-weight backend with local specialist routing: `phi3:mini` for routing trace, `qwen2.5:3b` for concise turns, lightweight context turns, CPU-aware standard-light definitions, French writing, and fallback stable factual answers, `qwen2.5:14b` as the main reasoning brain for complex standard synthesis, `qwen2.5-coder:7b` for code/debug, `deepseek-r1:14b` for guarded deep reasoning capacity, and `mistral:7b` for English writing, practical recipe/how-to answers, plus stable biographical/history answers. Public chat also runs governed tool routing before model generation: deterministic local tools can provide verified weather, finance, time/date, calculator/conversion, release/status, and repo facts. Exact verified tool facts can be returned directly; model prompts only receive verified facts/sources when verbalization or synthesis is still needed. OpenRouter is reserved for controlled training/evaluation jobs and is blocked from the public runtime path by default.
 
 Full production smoke from any machine with this repo:
 
@@ -367,7 +367,7 @@ OLLAMA_MAX_LOADED_MODELS=2
 OLLAMA_NUM_PARALLEL=1
 ```
 
-The OVH CPU VPS should keep the two light public-chat runners resident together: `qwen2.5:3b` for standard-light/concise/French-writing turns and `mistral:7b` for English writing and stable factual biographies. Keep `OLLAMA_NUM_PARALLEL=1` to avoid CPU contention, but do not drop `OLLAMA_MAX_LOADED_MODELS` back to `1`; that forces model swapping and makes the strict chat SLO gate fail. If this backend moves to a GPU host, revisit these limits.
+The OVH CPU VPS should keep the two light public-chat runners resident together: `qwen2.5:3b` for standard-light/concise/French-writing turns and `mistral:7b` for English writing, recipe/how-to answers, and stable factual biographies. Keep `OLLAMA_NUM_PARALLEL=1` to avoid CPU contention, but do not drop `OLLAMA_MAX_LOADED_MODELS` back to `1`; that forces model swapping and makes the strict chat SLO gate fail. If this backend moves to a GPU host, revisit these limits.
 
 Installed open-weight models:
 
@@ -378,7 +378,7 @@ qwen2.5:14b           main local reasoning brain for complex standard synthesis
 qwen2.5-coder:7b      code specialist
 deepseek-r1:14b       deep reasoning specialist
 bge-m3                embeddings / retrieval base
-mistral:7b            English writing / stable biographical answers
+mistral:7b            English writing / recipe-how-to / stable biographical answers
 ```
 
 Before first production cutover to the dedicated schema:
@@ -447,8 +447,9 @@ MODEL_RUNTIME_HEAVY_MAX_CONCURRENCY=1
 MODEL_ROUTER_RERANKER_BASE_URL=
 MODEL_ROUTER_RERANKER_TIMEOUT_MS=30000
 HYDRIA_DOCKER_LOCAL_MODEL_OBSERVER_ENABLED=false
-TRAINING_ENDPOINTS_ENABLED=false
+TRAINING_ENDPOINTS_ENABLED=true
 TRAINING_ENDPOINTS_REQUIRE_API_KEY=true
+STUDENT_LAB_PUBLIC_ENABLED=true
 HYDRIA_PUBLIC_API_AUTH_REQUIRED=true
 HYDRIA_API_KEY_SHA256_HASHES=<sha256-secret>
 HYDRIA_RATE_LIMIT_WINDOW_MS=60000
@@ -457,7 +458,7 @@ HYDRIA_AUTH_RATE_LIMIT_MAX_REQUESTS=30
 HYDRIA_API_RATE_LIMIT_MAX_REQUESTS=120
 ```
 
-The model router can still route heavier specialist calls to the installed Ollama models (`qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `mistral:7b`). Keep the generic local-student timeout low for non-chat paths, but let Model Runtime Governor v1 cap runtime chat by profile: fast verified tool answers, standard-light definitions, `stable_fact_chat` factual writing, standard chat, code, writing, and deep reasoning. Public chat uses plain final-text generation for writing, code, and deep-reasoning routes; strict JSON wrapping is kept off those CPU-heavy paths to avoid timeout cascades. Exact verified weather/finance/web/time/calculator facts are returned directly from the tool result. Writing uses Qwen 3B for French language stability and Mistral for English stakeholder/business writing. `stable_fact_chat` intentionally uses Mistral first with one `qwen2.5:3b` retry, without a Qwen 14B fallback. `writing_chat`, `code_chat`, and public `deep_reasoning` use specialist-only attempts. DeepSeek-R1 remains installed but guarded on this CPU VPS because it is too slow/unstable for public chat; public deep reasoning uses Qwen 14B until a GPU/provider backend is available. Chat does not fall back to OpenRouter. Public chat is intentionally open but IP-rate-limited. Public OVH must keep `TRAINING_ENDPOINTS_ENABLED=false`; enable it only for controlled training/evaluation sessions and keep API-key protection enabled.
+The model router can still route heavier specialist calls to the installed Ollama models (`qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `mistral:7b`). Keep the generic local-student timeout low for non-chat paths, but let Model Runtime Governor v1 cap runtime chat by profile: fast verified tool answers, standard-light definitions, `stable_fact_chat` factual writing, standard chat, code, writing, and deep reasoning. Public chat uses plain final-text generation for writing, code, and deep-reasoning routes; strict JSON wrapping is kept off those CPU-heavy paths to avoid timeout cascades. Exact verified weather/finance/web/time/calculator facts are returned directly from the tool result. Writing uses Qwen 3B for French language stability, Mistral for English stakeholder/business writing, and Mistral with a light Qwen 3B retry for practical recipe/how-to turns. `stable_fact_chat` intentionally uses Mistral first with one `qwen2.5:3b` retry, without a Qwen 14B fallback. `code_chat` and public `deep_reasoning` use specialist-only attempts. DeepSeek-R1 remains installed but guarded on this CPU VPS because it is too slow/unstable for public chat; public deep reasoning uses Qwen 14B until a GPU/provider backend is available. Chat does not fall back to OpenRouter. Public chat is intentionally open but IP-rate-limited. On the OVH training box, `STUDENT_LAB_PUBLIC_ENABLED=true` lets the browser use Student Lab without pasting an API key while benchmark/arena/model-execution routes keep their own API-key guards.
 
 Before changing the multi-model runtime, run:
 

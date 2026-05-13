@@ -120,6 +120,8 @@ The student flow has two modes:
 - `answer -> analyze`
 - `run` in one shot
 
+On production, Student Lab can be enabled for browser-driven VPS training without asking the user to paste an API key by setting `TRAINING_ENDPOINTS_ENABLED=true` and `STUDENT_LAB_PUBLIC_ENABLED=true`. That exception applies to `/api/student/*`; arena, benchmark, learning, and model-execution routes keep their separate guards.
+
 It stores:
 
 - preview and final draft
@@ -141,7 +143,7 @@ Local chat specialist routing:
 - `qwen2.5:14b`: main reasoning brain for complex standard synthesis and multi-constraint answers
 - `qwen2.5-coder:7b`: code and debug specialist
 - `deepseek-r1:14b`: deep reasoning / conflict arbitration
-- `mistral:7b`: English writing/business and stable biographical/history answers, with Qwen 3B as the stable factual light fallback
+- `mistral:7b`: English writing/business, practical recipe/how-to answers, and stable biographical/history answers, with Qwen 3B as the stable factual light fallback
 
 The public chat path is guarded by **Model Runtime Governor v1**. Each turn receives a runtime budget profile:
 
@@ -150,7 +152,7 @@ The public chat path is guarded by **Model Runtime Governor v1**. Each turn rece
 - `stable_fact_chat`: Mistral factual writing for stable biographies/history, with a CPU-safe `qwen2.5:3b` fallback and no 14B fallback
 - `standard_chat`: primary-brain chat, capped timeout and serialized heavy-model concurrency
 - `code_chat`: code/debug specialist budget
-- `writing_chat`: business/writing budget using Qwen 3B for French and Mistral for English
+- `writing_chat`: business/writing/practical-response budget using Qwen 3B for French writing and Mistral for English or recipe/how-to turns
 - `deep_reasoning`: explicit deep-reasoning escalation budget
 
 The governor records profile, timeout, queue time, budget-exceeded status, and provider/model attempts into the chat trace and model ops telemetry.
