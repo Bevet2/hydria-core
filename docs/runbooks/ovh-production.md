@@ -59,6 +59,30 @@ Expected:
 - Persistence reports `postgresSchema: hydria_prod`.
 - Public `:8080` must not answer from outside the VPS.
 
+## Infrastructure Gate
+
+Run this after any VPS reboot, Ollama/systemd change, Docker redeploy, or model install:
+
+```bash
+npm run prod:infra-gate -- --base-url=https://app.hydria.click --expected-schema=hydria_prod
+```
+
+This writes:
+
+```text
+storage/training/hydria-production-infra-gate-v1.json
+```
+
+The gate verifies the public API, PostgreSQL schema, local Ollama reachability, required local models, Caddy, Docker container health, and the OVH Ollama residency settings:
+
+```text
+OLLAMA_KEEP_ALIVE=30m
+OLLAMA_MAX_LOADED_MODELS=2
+OLLAMA_NUM_PARALLEL=1
+```
+
+These Ollama values are production-critical. `OLLAMA_MAX_LOADED_MODELS=1` forces swapping between `qwen2.5:3b` and `mistral:7b`, which makes the strict chat SLO gate fail even when answer quality is good.
+
 ## Real Chat Smoke
 
 ```bash

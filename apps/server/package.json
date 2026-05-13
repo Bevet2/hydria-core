@@ -26,6 +26,7 @@
     "persistence:postgres:smoke": "tsx src/scripts/runPostgresPersistenceSmoke.ts",
     "persistence:postgres:cutover-check": "tsx src/scripts/runPostgresCutoverCheck.ts",
     "prod:smoke": "tsx src/scripts/runProductionSmoke.ts",
+    "prod:infra-gate": "tsx src/scripts/runProductionInfraGate.ts",
     "prod:chat-warmup": "tsx src/scripts/runChatModelWarmup.ts",
     "prod:chat-routing-gate": "tsx src/scripts/runProductionChatRoutingGate.ts",
     "prod:chat-slo-gate": "tsx src/scripts/runChatRuntimeSloGate.ts",

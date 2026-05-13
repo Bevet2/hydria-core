@@ -29,6 +29,7 @@
     "persistence:migrate:postgres": "npm run persistence:migrate:postgres -w @hydria-arena/server --",
     "persistence:postgres:cutover-check": "npm run persistence:postgres:cutover-check -w @hydria-arena/server --",
     "prod:smoke": "npm run prod:smoke -w @hydria-arena/server --",
+    "prod:infra-gate": "npm run prod:infra-gate -w @hydria-arena/server --",
     "prod:chat-warmup": "npm run prod:chat-warmup -w @hydria-arena/server --",
     "prod:chat-routing-gate": "npm run prod:chat-routing-gate -w @hydria-arena/server --",
     "prod:chat-slo-gate": "npm run prod:chat-slo-gate -w @hydria-arena/server --",
