@@ -227,6 +227,7 @@ function buildStableFactFallbacks(primary: string) {
   return unique([
     primary,
     QWEN_3B,
+    MISTRAL_BUSINESS,
     env.STUDENT_CHAT_LOCAL_MODEL_NAME,
     env.LOCAL_MODEL_NAME
   ]);
@@ -436,16 +437,16 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
 
   if (containsStablePersonFactSignal(text, input)) {
     const reason =
-      "Stable person, biography, or historical fact question; use Mistral 7B instead of the 3B route for stronger factual prose on CPU.";
+      "Stable person, biography, or historical fact question; use the CPU-resident 3B stable fact route first and keep Mistral as factual fallback.";
     const budget = buildRuntimeBudget("stable_fact_chat", reason);
     return {
-      capabilityId: "mistral-mixtral-business",
-      displayName: "Mistral/Mixtral",
-      modelName: MISTRAL_BUSINESS,
-      specialistRole: "writing_business",
+      capabilityId: "qwen-3b-standard-light",
+      displayName: "Qwen 3B Stable Fact",
+      modelName: QWEN_3B,
+      specialistRole: "primary_brain",
       routingReason: reason,
-      pipeline: [...basePipeline, `stable_fact_writer:${MISTRAL_BUSINESS}`, `stable_fact_light_fallback:${QWEN_3B}`],
-      fallbackModelNames: buildStableFactFallbacks(MISTRAL_BUSINESS),
+      pipeline: [...basePipeline, `stable_fact_light:${QWEN_3B}`, `stable_fact_writer_fallback:${MISTRAL_BUSINESS}`],
+      fallbackModelNames: buildStableFactFallbacks(QWEN_3B),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
     };
