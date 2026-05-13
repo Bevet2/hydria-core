@@ -117,6 +117,8 @@ Answer the current user message as plain final user-facing text only.
 Do not return JSON, wrapper labels, hidden reasoning, or chain-of-thought.
 Keep the user's language.
 If the user writes in French, every final word must be French; use "Objet" and "Bonjour", not English labels or greetings.
+If the user writes in English, every final word must be English; do not use French labels, greetings, or phrasing.
+For summary requests, output the summary itself; do not repeat the instruction.
 Write the requested message directly and keep it concise.`;
 
 const codePlainTextSystemPrompt = `You are Hydria Core's local code and debugging specialist.
@@ -261,6 +263,7 @@ function maybePlainRouteGuidance(route: StudentChatModelRoute) {
     return [
       "Writing route: produce the requested user-facing text directly, without JSON or metadata.",
       "Language is binding: French request means French-only final text; English request means English-only final text.",
+      "For summary requests, do not echo the instruction; output only the summarized content.",
       "Keep it short enough for chat; prefer one compact paragraph unless the user asked for structure."
     ];
   }

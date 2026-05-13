@@ -197,12 +197,28 @@ function answerMentionsSpecificValue(answer: string, value: string | null) {
   return covered >= Math.min(2, terms.length);
 }
 
+function hasConstraintUseMarker(answer: string) {
+  return (
+    CONSTRAINT_USE_MARKER.test(answer) ||
+    /\b(?:afin de|pour minimiser|pour reduire|to minimize|to reduce)\b/.test(normalizeText(answer))
+  );
+}
+
+function hasRevisionConditionMarker(answer: string) {
+  return (
+    REVISION_CONDITION_MARKER.test(answer) ||
+    /\b(?:apres|avant de|une fois|after rollback|after the rollback|before redeploy|before redeployment)\b/.test(
+      normalizeText(answer)
+    )
+  );
+}
+
 function answerShowsConstraintUse(answer: string, values: string[]) {
   if (!answerMentionsAny(answer, values)) {
     return false;
   }
 
-  return CONSTRAINT_USE_MARKER.test(answer);
+  return hasConstraintUseMarker(answer);
 }
 
 function expectedLanguageIssue(answer: string, expectedLanguage: ConversationState["language"]) {
@@ -350,7 +366,7 @@ function leavesStrategicConflictUnresolved(input: ConversationQualityGateInput) 
   const usesDominantConstraintWithBoundedRevision =
     mentionsDominantConstraint &&
     answerShowsConstraintUse(input.answer, [policy.dominantConstraint ?? ""]) &&
-    REVISION_CONDITION_MARKER.test(input.answer);
+    hasRevisionConditionMarker(input.answer);
 
   return !(
     usesDominantConstraintWithBoundedRevision ||
@@ -394,7 +410,7 @@ function missesStrategicRevisionCondition(input: ConversationQualityGateInput) {
     return false;
   }
 
-  const answerHasRevisionMarker = REVISION_CONDITION_MARKER.test(input.answer);
+  const answerHasRevisionMarker = hasRevisionConditionMarker(input.answer);
   const answerMentionsTrigger = answerMentionsSpecificValue(input.answer, calibration.revisionTrigger);
   return !(answerHasRevisionMarker || answerMentionsTrigger);
 }
@@ -432,7 +448,7 @@ function isOverRigidStrategicAnswer(input: ConversationQualityGateInput) {
     return false;
   }
 
-  return !REVISION_CONDITION_MARKER.test(input.answer);
+  return !hasRevisionConditionMarker(input.answer);
 }
 
 function chooseAction(issues: string[], policy: MultiTurnAnswerPolicyResult): ConversationQualityGateResult["recommendedAction"] {

@@ -370,6 +370,10 @@ function shouldUseConversationRuntime(args: {
     return true;
   }
 
+  if (!args.hasPriorTurns && args.category === "operational_writing") {
+    return false;
+  }
+
   if (
     args.activeConstraintCapsule.topConstraints.length > 0 ||
     args.activeConstraintCapsule.changedConstraints.length > 0 ||

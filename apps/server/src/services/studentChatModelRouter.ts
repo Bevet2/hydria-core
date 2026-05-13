@@ -314,12 +314,16 @@ function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: stri
     };
   }
   if (profile === "deep_reasoning") {
+    const deepTimeoutMs = Math.max(
+      capTimeout(requestedLongTimeoutMs, env.MODEL_RUNTIME_DEEP_TIMEOUT_MS),
+      Math.min(requestedLongTimeoutMs, 120000)
+    );
     return {
       profile,
       label: "Deep reasoning escalation",
       reason,
-      timeoutMs: capTimeout(requestedLongTimeoutMs, env.MODEL_RUNTIME_DEEP_TIMEOUT_MS),
-      maxLatencyMs: env.MODEL_RUNTIME_DEEP_TIMEOUT_MS,
+      timeoutMs: deepTimeoutMs,
+      maxLatencyMs: deepTimeoutMs,
       maxOutputTokens: Math.min(env.MODEL_RUNTIME_DEEP_MAX_OUTPUT_TOKENS, 180),
       maxConcurrent: env.MODEL_RUNTIME_HEAVY_MAX_CONCURRENCY,
       fallbackDepth: 0,
