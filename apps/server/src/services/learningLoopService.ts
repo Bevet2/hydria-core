@@ -19,6 +19,7 @@ import { ToolRegistry } from "./tools/toolRegistry.js";
 import { ArenaRespondentFailureStore } from "./arenaRespondentFailureStore.js";
 import { listPersistedStudentSessions } from "./storage/studentSessionPersistence.js";
 import { env } from "../utils/env.js";
+import { KnowledgeConsolidationService } from "./knowledgeConsolidationService.js";
 import type {
   StudentTemporalEvalReport,
   StudentTemporalEvalService
@@ -48,6 +49,7 @@ type LearningLoopServiceOptions = {
   toolGapDetectorService?: Pick<ToolGapDetectorService, "detect">;
   toolCandidateService?: Pick<ToolCandidateService, "buildCandidates">;
   interactionLearningDigestService?: Pick<InteractionLearningDigestService, "buildAndPersist"> | null;
+  knowledgeConsolidationService?: Pick<KnowledgeConsolidationService, "buildAndPersist"> | null;
   learningGovernanceService?: Pick<
     LearningGovernanceService,
     | "buildReport"
@@ -81,6 +83,7 @@ export class LearningLoopService {
   private readonly toolGapDetectorService: Pick<ToolGapDetectorService, "detect">;
   private readonly toolCandidateService: Pick<ToolCandidateService, "buildCandidates">;
   private readonly interactionLearningDigestService: Pick<InteractionLearningDigestService, "buildAndPersist"> | null;
+  private readonly knowledgeConsolidationService: Pick<KnowledgeConsolidationService, "buildAndPersist"> | null;
   private readonly learningGovernanceService: Pick<
     LearningGovernanceService,
     | "buildReport"
@@ -122,6 +125,10 @@ export class LearningLoopService {
       options.interactionLearningDigestService === undefined
         ? new InteractionLearningDigestService()
         : options.interactionLearningDigestService;
+    this.knowledgeConsolidationService =
+      options.knowledgeConsolidationService === undefined
+        ? new KnowledgeConsolidationService()
+        : options.knowledgeConsolidationService;
     this.learningGovernanceService =
       options.learningGovernanceService ?? new LearningGovernanceService();
     this.temporalEvalService = options.temporalEvalService ?? null;
@@ -154,6 +161,7 @@ export class LearningLoopService {
 
     await this.knowledgeMemoryService.buildAndPersist(knowledgeLayer);
     await this.interactionLearningDigestService?.buildAndPersist();
+    await this.knowledgeConsolidationService?.buildAndPersist();
     const validation = await this.runValidation(validationMode, args.validationLimit ?? 8);
     const arenaQuality = new (await import("./arenaQualityAnalyticsService.js")).ArenaQualityAnalyticsService().buildReport(
       rounds,

@@ -62,6 +62,14 @@ const envSchema = z.object({
     .string()
     .min(1)
     .default(projectPath("storage", "knowledge", "hydria-memory-v1.json")),
+  KNOWLEDGE_OBJECTS_FILE: z
+    .string()
+    .min(1)
+    .default(projectPath("storage", "knowledge", "hydria-knowledge-objects-v1.json")),
+  KNOWLEDGE_VAULT_DIR: z
+    .string()
+    .min(1)
+    .default(projectPath("storage", "knowledge", "vault")),
   ROUND_DATASET_FILE: z
     .string()
     .min(1)

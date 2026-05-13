@@ -118,6 +118,7 @@ test("learning loop rebuilds governance artifacts and persists active learning m
       activeMemoryFile
     });
     let interactionDigestBuilt = false;
+    let knowledgeConsolidationBuilt = false;
 
     const loop = new LearningLoopService({
       historyStore: {
@@ -175,6 +176,12 @@ test("learning loop rebuilds governance artifacts and persists active learning m
           return null as never;
         }
       },
+      knowledgeConsolidationService: {
+        async buildAndPersist() {
+          knowledgeConsolidationBuilt = true;
+          return null as never;
+        }
+      },
       learningGovernanceService: governanceService,
       temporalEvalService: {
         async run() {
@@ -224,6 +231,7 @@ test("learning loop rebuilds governance artifacts and persists active learning m
 
     assert.equal(result.report.validation.mode, "temporal_replay");
     assert.equal(interactionDigestBuilt, true);
+    assert.equal(knowledgeConsolidationBuilt, true);
     assert.equal(result.report.constitution.version, "hydria-learning-constitution-v1");
     assert.ok(result.report.policies.length > 0);
     assert.ok(result.activeMemory.items.length > 0);

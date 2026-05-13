@@ -171,6 +171,34 @@ npm run learning:interactions -- --limit=1000
 
 This writes `storage/learning/hydria-interaction-learning-v1.json`. It groups chat, Student Lab, Playground, and Benchmark records into guarded candidates such as `answer_pattern`, `supervised_correction`, `reasoning_example`, `tool_routing_signal`, and `repair_signal`. The runtime can use high-confidence hints, but raw answers are not blindly memorized and no model weights are changed.
 
+## Knowledge Objects and Vault
+
+The next memory layer is structured knowledge, not watchers yet:
+
+```text
+interaction learning digest
+-> Knowledge Objects
+-> JSON canonical store
+-> Markdown vault projection
+-> KnowledgeInjectionService active hints
+```
+
+Build or refresh it:
+
+```bash
+npm run knowledge:consolidate -- --rebuild-interactions --limit=1000
+```
+
+This writes:
+
+```text
+storage/knowledge/hydria-knowledge-objects-v1.json
+storage/knowledge/vault/index.md
+storage/knowledge/vault/*.md
+```
+
+The JSON file is canonical. The Markdown vault is an Obsidian-like readable graph projection with frontmatter, tags, sources, and links. Watchers will later write candidates into the same Knowledge Object format, but they are not active in this phase.
+
 Full production smoke from any machine with this repo:
 
 ```bash

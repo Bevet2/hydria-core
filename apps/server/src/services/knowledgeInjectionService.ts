@@ -21,6 +21,7 @@ import {
 import { env } from "../utils/env.js";
 import { KnowledgeLayerService } from "./knowledgeLayerService.js";
 import { KnowledgeMemoryService } from "./knowledgeMemoryService.js";
+import { KnowledgeObjectStore } from "./knowledgeObjectStore.js";
 import { listPersistedStudentSessions } from "./storage/studentSessionPersistence.js";
 import { buildStudentRuleContext, scoreStudentRuleContextMatch } from "./studentRuleContext.js";
 import {
@@ -67,6 +68,7 @@ function summarizeStudentMemory(
 export class KnowledgeInjectionService {
   private readonly knowledgeLayerService = new KnowledgeLayerService();
   private readonly knowledgeMemoryService = new KnowledgeMemoryService();
+  private readonly knowledgeObjectStore = new KnowledgeObjectStore();
   private readonly studentRuleImpactTrackerService = new StudentRuleImpactTrackerService();
   private readonly studentStrategyAssetService = new StudentStrategyAssetService();
   private knowledgeLayerPromise: Promise<
@@ -86,6 +88,10 @@ export class KnowledgeInjectionService {
   >();
   private activeLearningMemoryPromise: Promise<LearningActiveMemory | null> | null = null;
   private interactionLearningDigestPromise: Promise<InteractionLearningDigest | null> | null = null;
+  private readonly activeKnowledgeObjectsPromises = new Map<
+    QuestionCategory,
+    Promise<Awaited<ReturnType<KnowledgeObjectStore["listActive"]>>>
+  >();
 
   async buildForCategory(
     category: QuestionCategory,
@@ -93,7 +99,7 @@ export class KnowledgeInjectionService {
       question?: string;
     }
   ): Promise<KnowledgeInjection | null> {
-    const [layer, memory, curatedExamples, studentSessions, studentRuleImpact, strategyAssets, activeLearningMemory, interactionLearningDigest] = await Promise.all([
+    const [layer, memory, curatedExamples, studentSessions, studentRuleImpact, strategyAssets, activeLearningMemory, interactionLearningDigest, activeKnowledgeObjects] = await Promise.all([
       this.loadKnowledgeLayer(),
       this.loadKnowledgeMemory(),
       this.loadCuratedDataset(),
@@ -101,7 +107,8 @@ export class KnowledgeInjectionService {
       this.loadStudentRuleImpact(),
       this.loadStudentStrategyAssets(category),
       this.loadActiveLearningMemory(),
-      this.loadInteractionLearningDigest()
+      this.loadInteractionLearningDigest(),
+      this.loadActiveKnowledgeObjects(category)
     ]);
     const insight = layer?.categories.find((entry) => entry.category === category);
     const memoryEntry = memory?.categories.find((entry) => entry.category === category);
@@ -157,6 +164,12 @@ export class KnowledgeInjectionService {
         (item) =>
           `Interaction learning signal: ${item.hint} Conditions: ${item.conditions.join(", ") || "general use"}.`
       );
+    const knowledgeObjectHints = activeKnowledgeObjects
+      .slice(0, 2)
+      .map(
+        (object) =>
+          `Knowledge object: ${object.summary} State: ${object.state}. Conditions: ${object.tags.join(", ") || "general use"}.`
+      );
     const coachingHints = uniqueStrings(
       [
         ...curatedExamples
@@ -167,7 +180,8 @@ export class KnowledgeInjectionService {
         ...matchingStrategyAssets.map((asset) => `Adopted strategy asset: ${asset.learning.summary}`),
         ...matchingStrategyAssets.map((asset) => `Strategy hint: ${asset.learning.promptHint}`),
         ...activeLearningHints,
-        ...interactionLearningHints
+        ...interactionLearningHints,
+        ...knowledgeObjectHints
       ]
     ).slice(0, 8);
     const selectedMemoryRules = args?.question
@@ -223,6 +237,7 @@ export class KnowledgeInjectionService {
     this.studentStrategyAssetsPromises.clear();
     this.activeLearningMemoryPromise = null;
     this.interactionLearningDigestPromise = null;
+    this.activeKnowledgeObjectsPromises.clear();
   }
 
   private async loadKnowledgeLayer() {
@@ -290,6 +305,20 @@ export class KnowledgeInjectionService {
     }
 
     return this.interactionLearningDigestPromise;
+  }
+
+  private async loadActiveKnowledgeObjects(category: QuestionCategory) {
+    if (!this.activeKnowledgeObjectsPromises.has(category)) {
+      this.activeKnowledgeObjectsPromises.set(
+        category,
+        this.knowledgeObjectStore.listActive({
+          category,
+          limit: 8
+        })
+      );
+    }
+
+    return this.activeKnowledgeObjectsPromises.get(category)!;
   }
 
   private async readCuratedDataset() {

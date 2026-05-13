@@ -1,11 +1,13 @@
 import { Router } from "express";
 import type { InteractionLearningDigestService } from "../services/interactionLearningDigestService.js";
+import type { KnowledgeConsolidationService } from "../services/knowledgeConsolidationService.js";
 import type { LearningGovernanceService } from "../services/learningGovernanceService.js";
 import { learningGovernanceStateSchema } from "../types/learning.js";
 
 export function createLearningRouter(
   learningGovernanceService: Pick<LearningGovernanceService, "loadReport" | "loadActiveMemory">,
-  interactionLearningDigestService?: Pick<InteractionLearningDigestService, "load">
+  interactionLearningDigestService?: Pick<InteractionLearningDigestService, "load">,
+  knowledgeConsolidationService?: Pick<KnowledgeConsolidationService, "loadObjects">
 ) {
   const router = Router();
 
@@ -30,6 +32,18 @@ export function createLearningRouter(
     try {
       response.json({
         digest: interactionLearningDigestService ? await interactionLearningDigestService.load() : null
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/knowledge-objects", async (_request, response, next) => {
+    try {
+      response.json({
+        knowledgeObjects: knowledgeConsolidationService
+          ? await knowledgeConsolidationService.loadObjects()
+          : null
       });
     } catch (error) {
       next(error);

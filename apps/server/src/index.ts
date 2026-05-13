@@ -36,6 +36,7 @@ import { HydriaCoreAskService } from "./services/core/hydriaCoreAskService.js";
 import { HistoryStore } from "./services/historyStore.js";
 import { InteractionLearningDigestService } from "./services/interactionLearningDigestService.js";
 import { InteractionLogStore } from "./services/interactionLogStore.js";
+import { KnowledgeConsolidationService } from "./services/knowledgeConsolidationService.js";
 import { LearningGovernanceService } from "./services/learningGovernanceService.js";
 import { LocalModelService } from "./services/localModel.js";
 import { ModelCapabilityService } from "./services/models/modelCapabilityService.js";
@@ -69,6 +70,9 @@ const studentSessionStore = new StudentSessionStore();
 const interactionLogStore = new InteractionLogStore();
 const interactionLearningDigestService = new InteractionLearningDigestService({
   interactionLogStore
+});
+const knowledgeConsolidationService = new KnowledgeConsolidationService({
+  interactionLearningDigestService
 });
 const orchestrationPolicyService = new OrchestrationPolicyService();
 const refineRouterService = new RefineRouterService();
@@ -248,7 +252,14 @@ app.use("/api/chat", createChatRouter(chatRuntimeService));
 app.use("/api/core", createCoreRouter(coreAskService));
 app.use("/api/local-model", createLocalModelRouter(localModelService));
 app.use("/api/models", createModelsRouter(modelCapabilityService, modelProviderService, modelRuntimeTelemetryService));
-app.use("/api/learning", createLearningRouter(learningGovernanceService, interactionLearningDigestService));
+app.use(
+  "/api/learning",
+  createLearningRouter(
+    learningGovernanceService,
+    interactionLearningDigestService,
+    knowledgeConsolidationService
+  )
+);
 app.use("/api/student", createStudentRouter(studentService));
 
 if (hasBuiltWebApp) {
