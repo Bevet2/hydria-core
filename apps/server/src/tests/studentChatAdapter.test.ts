@@ -72,8 +72,8 @@ test("student chat adapter routes stable biographies through the Mistral factual
   assert.equal(timeoutMs > 1000, true);
   assert.equal(selectedModel, "mistral:7b");
   assert.equal(result.runtimeBudget?.profile, "stable_fact_chat");
-  assert.equal(result.runtimeBudget?.maxOutputTokens, 80);
-  assert.equal(numPredict, 80);
+  assert.equal(result.runtimeBudget?.maxOutputTokens, 128);
+  assert.equal(numPredict, 128);
   assert.equal(usedFormat, false);
   assert.match(usedSystem, /plain final text only/i);
   assert.match(result.answer.answer, /Charlemagne/);
@@ -88,6 +88,7 @@ test("student chat prompt compacts stable factual biographies", () => {
   assert.match(prompt, /highest title\/role/i);
   assert.match(prompt, /own realm or dynasty/i);
   assert.match(prompt, /anachronistic labels/i);
+  assert.match(prompt, /Do not list extra battles/i);
   assert.match(prompt, /key_points to one short item/i);
   assert.match(prompt, /Do not write a long biography/i);
 });

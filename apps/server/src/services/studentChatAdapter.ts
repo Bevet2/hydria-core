@@ -228,6 +228,7 @@ function maybeStableFactCompaction(route: StudentChatModelRoute) {
     "For scientists, state field and discovery or award before dates.",
     "Then include one concrete date, reign range, century, or active period and a defining legacy in the answer text.",
     "Finish with complete sentences; prefer dropping birth/death detail over truncating.",
+    "Do not list extra battles, collaborators, campaigns, or examples unless needed to identify the person.",
     "Keep key_points to one short item.",
     "Do not write a long biography, timeline, or essay unless the user explicitly asks for it."
   ];
