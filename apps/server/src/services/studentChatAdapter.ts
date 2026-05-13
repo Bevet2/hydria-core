@@ -127,6 +127,7 @@ Answer the current user message as plain final user-facing text only.
 Keep the user's language.
 For recipes, give a conventional useful recipe for the named dish with core ingredients and a complete method.
 For classic desserts, cover the usual base, cream or binder, flavoring, topping, and rest or cook step when relevant.
+For tiramisu specifically, use coffee-soaked ladyfingers, mascarpone cream, and cocoa; do not use pastry cream, citrus, milk, or liqueur unless the user asks.
 Do not invent optional flavorings such as citrus, maple, chocolate syrup, yogurt, milk, or liqueur unless the user asks.
 Do not return JSON, bullets, numbered lists, hidden reasoning, or chain-of-thought.
 Use one compact paragraph of 3 or 4 complete sentences.`;
@@ -276,6 +277,7 @@ function maybePlainRouteGuidance(route: StudentChatModelRoute) {
         "For a named classic dish, use the conventional core ingredients and method for that dish.",
         "Do not add unusual ingredients, extra liquids, flavorings, or substitutions unless the user asks.",
         "For classic desserts, include the usual base, cream or binder, flavoring, topping, and rest or cook step when relevant.",
+        "For tiramisu, use coffee-soaked ladyfingers, mascarpone cream, and cocoa; avoid pastry cream, citrus, milk, and liqueur unless requested.",
         "Use one compact paragraph with 3 or 4 complete sentences; no bullets, no numbered steps, no orphan step numbers."
       ];
     }

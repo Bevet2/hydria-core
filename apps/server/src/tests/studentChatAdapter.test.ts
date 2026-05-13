@@ -436,6 +436,8 @@ test("student chat adapter routes French recipe requests through practical writi
   const selectedModels: string[] = [];
   let timeoutMs = 0;
   let numPredict = 0;
+  let prompt = "";
+  let system = "";
   const input = {
     ...buildInput(),
     category: "other" as const,
@@ -449,7 +451,9 @@ test("student chat adapter routes French recipe requests through practical writi
     getConfiguredModelName() {
       return "qwen2.5:14b";
     },
-    async testPrompt(_prompt, _system, options) {
+    async testPrompt(inputPrompt, inputSystem, options) {
+      prompt = inputPrompt;
+      system = inputSystem ?? "";
       const selectedModel = options?.modelName ?? "";
       selectedModels.push(selectedModel);
       timeoutMs = options?.timeoutMs ?? 0;
@@ -474,6 +478,8 @@ test("student chat adapter routes French recipe requests through practical writi
   assert.equal(timeoutMs >= 150000, true);
   assert.equal(numPredict >= 180, true);
   assert.equal(numPredict <= 220, true);
+  assert.match(system, /coffee-soaked ladyfingers/i);
+  assert.match(prompt, /avoid pastry cream/i);
   assert.match(result.answer.answer, /tiramisu/);
   assert.doesNotMatch(result.answer.answer, /\s2\.$/);
 });
