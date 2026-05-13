@@ -3,6 +3,7 @@ import type { InteractionLearningDigestService } from "../services/interactionLe
 import type { KnowledgeConsolidationService } from "../services/knowledgeConsolidationService.js";
 import type { KnowledgePromotionGovernanceService } from "../services/knowledgePromotionGovernanceService.js";
 import type { LearningGovernanceService } from "../services/learningGovernanceService.js";
+import type { TrainingQueueValidationService } from "../services/trainingQueueValidationService.js";
 import type { WatcherStore } from "../services/watchers/watcherStore.js";
 import { learningGovernanceStateSchema } from "../types/learning.js";
 
@@ -14,7 +15,8 @@ export function createLearningRouter(
   knowledgePromotionGovernanceService?: Pick<
     KnowledgePromotionGovernanceService,
     "loadReport" | "loadTrainingQueue"
-  >
+  >,
+  trainingQueueValidationService?: Pick<TrainingQueueValidationService, "loadReport">
 ) {
   const router = Router();
 
@@ -78,6 +80,23 @@ export function createLearningRouter(
       response.json({
         promotion: report,
         trainingQueue
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/training-queue", async (_request, response, next) => {
+    try {
+      const [queue, validation] = await Promise.all([
+        knowledgePromotionGovernanceService
+          ? knowledgePromotionGovernanceService.loadTrainingQueue()
+          : null,
+        trainingQueueValidationService ? trainingQueueValidationService.loadReport() : null
+      ]);
+      response.json({
+        queue,
+        validation
       });
     } catch (error) {
       next(error);

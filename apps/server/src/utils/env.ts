@@ -114,6 +114,11 @@ const envSchema = z.object({
     .string()
     .min(1)
     .default(projectPath("storage", "learning", "hydria-training-candidate-queue-v1.json")),
+  TRAINING_QUEUE_VALIDATION_FILE: z
+    .string()
+    .min(1)
+    .default(projectPath("storage", "learning", "hydria-training-queue-validation-v1.json")),
+  TRAINING_QUEUE_MIN_SFT_READY_ITEMS: z.coerce.number().int().min(1).default(6),
   WATCHER_EXTERNAL_NETWORK_ENABLED: z
     .string()
     .default("false")

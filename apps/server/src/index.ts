@@ -51,6 +51,7 @@ import { PersistenceHealthService } from "./services/storage/persistenceHealthSe
 import { StudentChatAdapter } from "./services/studentChatAdapter.js";
 import { StudentService } from "./services/studentService.js";
 import { StudentSessionStore } from "./services/studentSessionStore.js";
+import { TrainingQueueValidationService } from "./services/trainingQueueValidationService.js";
 import { WatcherStore } from "./services/watchers/watcherStore.js";
 import { defaultArenaModels, env } from "./utils/env.js";
 import { logger } from "./utils/logger.js";
@@ -79,6 +80,10 @@ const knowledgeConsolidationService = new KnowledgeConsolidationService({
   watcherStore
 });
 const knowledgePromotionGovernanceService = new KnowledgePromotionGovernanceService();
+const trainingQueueValidationService = new TrainingQueueValidationService({
+  promotionGovernanceService: knowledgePromotionGovernanceService,
+  watcherStore
+});
 const orchestrationPolicyService = new OrchestrationPolicyService();
 const refineRouterService = new RefineRouterService();
 const researchToolService = new ResearchToolService();
@@ -264,7 +269,8 @@ app.use(
     interactionLearningDigestService,
     knowledgeConsolidationService,
     watcherStore,
-    knowledgePromotionGovernanceService
+    knowledgePromotionGovernanceService,
+    trainingQueueValidationService
   )
 );
 app.use("/api/student", createStudentRouter(studentService));

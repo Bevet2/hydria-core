@@ -196,6 +196,7 @@ Run the watchers before consolidation when you want Hydria to inspect its own ga
 npm run watchers:run -- --scope=all --rebuild-interactions --limit=1000
 npm run knowledge:consolidate -- --rebuild-interactions --limit=1000
 npm run knowledge:promote -- --mode=dry_run --validation=none
+npm run training:queue-validate
 ```
 
 This writes:
@@ -204,6 +205,7 @@ This writes:
 storage/learning/hydria-watchers-v1.json
 storage/learning/hydria-knowledge-promotion-v1.json
 storage/learning/hydria-training-candidate-queue-v1.json
+storage/learning/hydria-training-queue-validation-v1.json
 storage/knowledge/hydria-knowledge-objects-v1.json
 storage/knowledge/vault/index.md
 storage/knowledge/vault/*.md
@@ -248,11 +250,29 @@ npm run knowledge:promote -- --mode=apply --validation=passed
 
 Without `--validation=passed`, objects can be prepared as `validated`, but they cannot become active runtime memory. Dynamic watcher knowledge and high-risk repair signals are blocked from direct activation and are written into `hydria-training-candidate-queue-v1.json` instead. That queue is a governed pre-training pack, not an SFT execution.
 
+Training queue validation is the next gate:
+
+```text
+training candidate queue
+-> target-specific validation
+-> ready_for_pack | blocked | rejected
+-> training authorization
+```
+
+Run it with:
+
+```bash
+npm run training:queue-validate
+```
+
+It writes `storage/learning/hydria-training-queue-validation-v1.json`. `student_sft` items can become `ready_for_pack`, but training remains blocked until at least `TRAINING_QUEUE_MIN_SFT_READY_ITEMS` entries are ready. `retrieval_knowledge` from external watchers is blocked until at least two sources are corroborated. Runtime memory requires a validated or active Knowledge Object, confidence >= 0.7, stable/non-dynamic knowledge, and repeated evidence.
+
 The public read endpoint exposes the current watcher state:
 
 ```bash
 curl -fsS https://app.hydria.click/api/learning/watchers
 curl -fsS https://app.hydria.click/api/learning/promotion
+curl -fsS https://app.hydria.click/api/learning/training-queue
 ```
 
 External network checks are disabled by default. Enable only when the source-acquisition policy is ready:
@@ -261,6 +281,8 @@ External network checks are disabled by default. Enable only when the source-acq
 WATCHER_EXTERNAL_NETWORK_ENABLED=false
 KNOWLEDGE_PROMOTION_FILE=/app/storage/learning/hydria-knowledge-promotion-v1.json
 TRAINING_CANDIDATE_QUEUE_FILE=/app/storage/learning/hydria-training-candidate-queue-v1.json
+TRAINING_QUEUE_VALIDATION_FILE=/app/storage/learning/hydria-training-queue-validation-v1.json
+TRAINING_QUEUE_MIN_SFT_READY_ITEMS=6
 ```
 
 Full production smoke from any machine with this repo:
