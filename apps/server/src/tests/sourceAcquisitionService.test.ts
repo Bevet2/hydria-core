@@ -93,6 +93,45 @@ test("source acquisition fetches bounded source packs and marks corroborated evi
   }
 });
 
+test("source acquisition truncates long HTML summaries before schema validation", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "hydria-source-acquisition-html-"));
+  try {
+    const longDescription = Array.from({ length: 32 }, () => "Docker runtime release notes and platform updates")
+      .join(" ");
+    const service = new SourceAcquisitionService({
+      fetcher: (async () =>
+        new Response(
+          `<html><head><title>Docker Blog</title><meta name="description" content="${longDescription}" /></head><body><h1>Docker Blog</h1></body></html>`,
+          {
+            status: 200,
+            headers: {
+              "content-type": "text/html"
+            }
+          }
+        )) as typeof fetch,
+      store: new SourceAcquisitionStore(join(tempRoot, "source-acquisition.json")),
+      now: () => new Date("2026-05-18T12:00:00.000Z")
+    });
+    const file = await service.run({
+      networkEnabled: true,
+      persistMode: "replace",
+      maxPacks: 1,
+      maxSourcesPerPack: 1,
+      maxItemsPerSource: 1,
+      timeoutMs: 1000
+    });
+
+    assert.equal(file.sourceStats.failedSourceCount, 0);
+    assert.equal(file.items.length, 1);
+    const [item] = file.items;
+    assert.ok(item);
+    assert.ok(item.summary.length <= 360);
+    assert.ok(item.content.length <= 1200);
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test("knowledge consolidation turns source acquisitions into non-active knowledge objects", async () => {
   const tempRoot = await mkdtemp(join(tmpdir(), "hydria-source-knowledge-"));
   try {

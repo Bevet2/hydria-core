@@ -48,7 +48,14 @@ function stableShortHash(value: string) {
 
 function compact(value: string, maxChars = 360) {
   const normalized = value.replace(/\s+/g, " ").trim();
-  return normalized.length <= maxChars ? normalized : `${normalized.slice(0, maxChars - 1).trim()}...`;
+  if (normalized.length <= maxChars) {
+    return normalized;
+  }
+  if (maxChars <= 3) {
+    return normalized.slice(0, maxChars);
+  }
+
+  return `${normalized.slice(0, maxChars - 3).trim()}...`;
 }
 
 function addDays(date: Date, days: number) {
