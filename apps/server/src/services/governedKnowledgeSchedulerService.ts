@@ -243,7 +243,7 @@ export class GovernedKnowledgeSchedulerService {
       steps.push(await this.runStep("source_acquisition", startedAt, normalized, async () => {
         const result = await this.sourceAcquisitionService.run({
           networkEnabled: normalized.networkEnabled,
-          persistMode: "upsert",
+          persistMode: "replace",
           maxPacks: normalized.sourceBudget.maxPacks,
           maxSourcesPerPack: normalized.sourceBudget.maxSourcesPerPack,
           maxItemsPerSource: normalized.sourceBudget.maxItemsPerSource,

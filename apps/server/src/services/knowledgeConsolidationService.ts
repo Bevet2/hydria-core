@@ -266,6 +266,10 @@ function sourceQualityDecisionMap(report: KnowledgeQualityGateReport | null) {
   return new Map((report?.decisions ?? []).map((decision) => [decision.itemId, decision]));
 }
 
+function sourceAcquisitionSourceId(object: KnowledgeObject) {
+  return object.sources.find((source) => source.sourceType === "source_acquisition")?.sourceId ?? null;
+}
+
 export class KnowledgeConsolidationService {
   private readonly interactionLearningDigestService: Pick<
     InteractionLearningDigestService,
@@ -294,7 +298,14 @@ export class KnowledgeConsolidationService {
     const watcherState = await this.watcherStore.load();
     const sourceAcquisition = await this.sourceAcquisitionStore.load();
     const knowledgeQualityGate = await this.knowledgeQualityGateService.loadReport();
-    const objects = this.buildObjects(digest, watcherState, sourceAcquisition, knowledgeQualityGate);
+    const existingObjects = await this.knowledgeObjectStore.load();
+    const objects = this.buildObjects(
+      digest,
+      watcherState,
+      sourceAcquisition,
+      knowledgeQualityGate,
+      existingObjects?.objects ?? []
+    );
     const file = await this.knowledgeObjectStore.upsertMany(objects);
 
     return {
@@ -315,10 +326,12 @@ export class KnowledgeConsolidationService {
     digest: InteractionLearningDigest,
     watcherState: WatcherState | null,
     sourceAcquisition: SourceAcquisitionFile | null,
-    knowledgeQualityGate: KnowledgeQualityGateReport | null
+    knowledgeQualityGate: KnowledgeQualityGateReport | null,
+    existingObjects: KnowledgeObject[]
   ) {
     const now = new Date().toISOString();
     const qualityByItem = sourceQualityDecisionMap(knowledgeQualityGate);
+    const currentSourceIds = new Set((sourceAcquisition?.items ?? []).map((item) => item.itemId));
     return [
       ...digest.candidates.map((candidate) => this.candidateToObject(candidate, now)),
       ...(watcherState?.candidates ?? []).map((candidate) =>
@@ -331,8 +344,48 @@ export class KnowledgeConsolidationService {
         }
 
         return [this.sourceAcquisitionItemToObject(item, now, qualityDecision)];
+      }),
+      ...this.archiveStaleSourceObjects({
+        existingObjects,
+        currentSourceIds,
+        qualityByItem,
+        sourceAcquisitionLoaded: sourceAcquisition !== null,
+        now
       })
     ];
+  }
+
+  private archiveStaleSourceObjects(args: {
+    existingObjects: KnowledgeObject[];
+    currentSourceIds: Set<string>;
+    qualityByItem: Map<string, KnowledgeQualityGateDecision>;
+    sourceAcquisitionLoaded: boolean;
+    now: string;
+  }) {
+    if (!args.sourceAcquisitionLoaded) {
+      return [];
+    }
+
+    return args.existingObjects.flatMap((object) => {
+      const sourceId = sourceAcquisitionSourceId(object);
+      if (!sourceId || object.state === "archived") {
+        return [];
+      }
+      const qualityDecision = args.qualityByItem.get(sourceId);
+      const shouldArchive =
+        !args.currentSourceIds.has(sourceId) || qualityDecision?.decision === "rejected";
+      if (!shouldArchive) {
+        return [];
+      }
+
+      return [{
+        ...object,
+        state: "archived" as const,
+        confidence: Number(clamp(object.confidence * 0.5, 0, 0.5).toFixed(3)),
+        tags: [...new Set([...object.tags, "quality-archived"])].slice(0, 16),
+        updatedAt: args.now
+      }];
+    });
   }
 
   private candidateToObject(candidate: InteractionLearningCandidate, now: string): KnowledgeObject {

@@ -63,8 +63,8 @@ export const WATCHER_SOURCE_PACKS: WatcherSourcePack[] = [
     summary:
       "Creates acquisition tasks for Node.js, Docker, PostgreSQL, and Kubernetes release knowledge that open-weight models often lack.",
     sources: [
-      { label: "Node.js releases", url: "https://nodejs.org/en/blog/release" },
-      { label: "Docker blog", url: "https://www.docker.com/blog/" },
+      { label: "Node.js release feed", url: "https://nodejs.org/en/feed/blog.xml" },
+      { label: "Docker blog feed", url: "https://www.docker.com/blog/feed/" },
       { label: "PostgreSQL news", url: "https://www.postgresql.org/about/news/" },
       { label: "Kubernetes releases", url: "https://kubernetes.io/releases/" }
     ],
@@ -85,8 +85,11 @@ export const WATCHER_SOURCE_PACKS: WatcherSourcePack[] = [
     summary:
       "Creates a live acquisition path for open-weight model releases, benchmark movement, model cards, and paper signals.",
     sources: [
-      { label: "Hugging Face blog", url: "https://huggingface.co/blog" },
-      { label: "Hugging Face model hub", url: "https://huggingface.co/models" },
+      { label: "Hugging Face blog feed", url: "https://huggingface.co/blog/feed.xml" },
+      {
+        label: "Hugging Face model API",
+        url: "https://huggingface.co/api/models?sort=lastModified&direction=-1&limit=1&full=false"
+      },
       { label: "Papers with Code", url: "https://paperswithcode.com" },
       { label: "arXiv cs.AI recent", url: "https://arxiv.org/list/cs.AI/recent" }
     ],
@@ -107,8 +110,14 @@ export const WATCHER_SOURCE_PACKS: WatcherSourcePack[] = [
     summary:
       "Creates a stable validation path for older durable knowledge where recency matters less than source quality and citation context.",
     sources: [
-      { label: "OpenAlex", url: "https://openalex.org" },
-      { label: "arXiv", url: "https://arxiv.org" },
+      {
+        label: "Crossref relational model DOI",
+        url: "https://api.crossref.org/works/10.1145/362384.362685"
+      },
+      {
+        label: "OpenAlex relational model DOI",
+        url: "https://api.openalex.org/works/doi:10.1145/362384.362685"
+      },
       { label: "Semantic Scholar API", url: "https://www.semanticscholar.org/product/api" },
       {
         label: "Crossref REST API",
@@ -132,8 +141,14 @@ export const WATCHER_SOURCE_PACKS: WatcherSourcePack[] = [
     summary:
       "Creates a structured acquisition path for general facts without copying bulk dumps directly into active runtime memory.",
     sources: [
-      { label: "Wikidata Query Service", url: "https://query.wikidata.org/" },
-      { label: "Wikidata entity dumps", url: "https://dumps.wikimedia.org/wikidatawiki/entities/" },
+      {
+        label: "Wikidata entity Q42 JSON",
+        url: "https://www.wikidata.org/wiki/Special:EntityData/Q42.json"
+      },
+      {
+        label: "Wikipedia summary Douglas Adams",
+        url: "https://en.wikipedia.org/api/rest_v1/page/summary/Douglas_Adams"
+      },
       { label: "Wikipedia dumps", url: "https://dumps.wikimedia.org/" },
       { label: "DBpedia latest core", url: "https://www.dbpedia.org/resources/latest-core/" }
     ],

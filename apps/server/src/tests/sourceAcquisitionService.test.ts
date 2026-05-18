@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { WATCHER_SOURCE_PACKS } from "../data/watcherSourcePacks.js";
 import { KnowledgeConsolidationService } from "../services/knowledgeConsolidationService.js";
 import { KnowledgeObjectStore } from "../services/knowledgeObjectStore.js";
+import { KnowledgeQualityGateService } from "../services/knowledgeQualityGateService.js";
 import { SourceAcquisitionService } from "../services/sourceAcquisitionService.js";
 import { SourceAcquisitionStore } from "../services/sourceAcquisitionStore.js";
 import type { InteractionLearningDigest } from "../types/interactionLearning.js";
@@ -162,6 +163,116 @@ test("source acquisition truncates long HTML summaries before schema validation"
     const [object] = result.file.objects;
     assert.ok(object);
     assert.ok(object.summary.length <= 320);
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("source acquisition extracts corroborated API evidence that can pass quality promotion", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "hydria-source-acquisition-api-quality-"));
+  try {
+    const crossrefUrl = "https://api.crossref.org/works/10.1145/362384.362685";
+    const openAlexUrl = "https://api.openalex.org/works/doi:10.1145/362384.362685";
+    const service = new SourceAcquisitionService({
+      sourcePacks: [
+        {
+          packId: "stable-research-source-pack",
+          domain: "research_archives",
+          category: "mixed_reasoning",
+          candidateType: "source_profile",
+          freshness: "stable",
+          riskLevel: "low",
+          taskType: "validate_candidate",
+          priority: "medium",
+          title: "Stable research archive source pack",
+          claim: "Use stable source APIs for durable research facts.",
+          summary: "Stable research source pack fixture.",
+          sources: [
+            { label: "Crossref relational model DOI", url: crossrefUrl },
+            { label: "OpenAlex relational model DOI", url: openAlexUrl }
+          ],
+          tags: ["source-pack", "stable-research", "citations"]
+        }
+      ],
+      fetcher: (async (url: string) => {
+        if (url === crossrefUrl) {
+          return new Response(
+            JSON.stringify({
+              status: "ok",
+              message: {
+                DOI: "10.1145/362384.362685",
+                title: ["A relational model of data for large shared data banks"],
+                abstract:
+                  "<jats:p>Future users of large data banks must be protected from internal data representation changes.</jats:p>",
+                publisher: "Association for Computing Machinery (ACM)",
+                "container-title": ["Communications of the ACM"],
+                "published-print": {
+                  "date-parts": [[1970, 6]]
+                }
+              }
+            }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" }
+            }
+          );
+        }
+
+        return new Response(
+          JSON.stringify({
+            id: "https://openalex.org/W2185907055",
+            doi: "https://doi.org/10.1145/362384.362685",
+            title: "A relational model of data for large shared data banks",
+            display_name: "A relational model of data for large shared data banks",
+            publication_year: 1970,
+            publication_date: "1970-06-01",
+            cited_by_count: 15000,
+            abstract_inverted_index: {
+              Future: [0],
+              users: [1],
+              of: [2],
+              large: [3],
+              data: [4],
+              banks: [5],
+              must: [6],
+              be: [7],
+              protected: [8]
+            }
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" }
+          }
+        );
+      }) as typeof fetch,
+      store: new SourceAcquisitionStore(join(tempRoot, "source-acquisition.json")),
+      now: () => new Date("2026-05-18T12:00:00.000Z")
+    });
+
+    const file = await service.run({
+      networkEnabled: true,
+      persistMode: "replace",
+      maxPacks: 1,
+      maxSourcesPerPack: 2,
+      maxItemsPerSource: 1,
+      timeoutMs: 1000
+    });
+    const qualityGate = new KnowledgeQualityGateService({
+      reportFile: join(tempRoot, "quality.json"),
+      sourceAcquisitionStore: {
+        async load() {
+          return file;
+        }
+      },
+      now: () => new Date("2026-05-18T12:00:00.000Z")
+    });
+    const report = await qualityGate.evaluateAndPersist();
+
+    assert.equal(file.items.length, 2);
+    assert.ok(file.items.every((item) => item.state === "corroborated"));
+    assert.ok(file.items.every((item) => item.corroboratedSourceCount === 2));
+    assert.equal(report.sourceStats.promotableCount, 2);
+    assert.equal(report.sourceStats.rejectedCount, 0);
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }
