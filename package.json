@@ -18,6 +18,7 @@
     "knowledge:source-acquire": "npm run knowledge:source-acquire -w @hydria-arena/server --",
     "knowledge:source-gate": "npm run knowledge:source-gate -w @hydria-arena/server --",
     "watchers:run": "npm run watchers:run -w @hydria-arena/server --",
+    "knowledge:scheduler": "npm run knowledge:scheduler -w @hydria-arena/server --",
     "knowledge:promote": "npm run knowledge:promote -w @hydria-arena/server --",
     "training:queue-validate": "npm run training:queue-validate -w @hydria-arena/server --",
     "learning:dataset-expansion": "npm run learning:dataset-expansion -w @hydria-arena/server --",

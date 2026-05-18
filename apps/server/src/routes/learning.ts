@@ -1,5 +1,6 @@
 import { Router } from "express";
 import type { InteractionLearningDigestService } from "../services/interactionLearningDigestService.js";
+import type { GovernedKnowledgeSchedulerService } from "../services/governedKnowledgeSchedulerService.js";
 import type { KnowledgeConsolidationService } from "../services/knowledgeConsolidationService.js";
 import type { KnowledgePromotionGovernanceService } from "../services/knowledgePromotionGovernanceService.js";
 import type { LearningGovernanceService } from "../services/learningGovernanceService.js";
@@ -18,7 +19,8 @@ export function createLearningRouter(
     "loadReport" | "loadTrainingQueue"
   >,
   trainingQueueValidationService?: Pick<TrainingQueueValidationService, "loadReport">,
-  sourceAcquisitionStore?: Pick<SourceAcquisitionStore, "load">
+  sourceAcquisitionStore?: Pick<SourceAcquisitionStore, "load">,
+  governedKnowledgeSchedulerService?: Pick<GovernedKnowledgeSchedulerService, "loadReport">
 ) {
   const router = Router();
 
@@ -75,6 +77,18 @@ export function createLearningRouter(
     try {
       response.json({
         sourceAcquisition: sourceAcquisitionStore ? await sourceAcquisitionStore.load() : null
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/knowledge-scheduler", async (_request, response, next) => {
+    try {
+      response.json({
+        scheduler: governedKnowledgeSchedulerService
+          ? await governedKnowledgeSchedulerService.loadReport()
+          : null
       });
     } catch (error) {
       next(error);

@@ -201,6 +201,31 @@ npm run knowledge:promote -- --mode=dry_run --validation=none
 npm run training:queue-validate
 ```
 
+For production, prefer the governed scheduler instead of chaining these commands by hand:
+
+```bash
+npm run knowledge:scheduler -- --network --scope=all --limit=1000 --min-interval-minutes=360 --max-runtime-minutes=20 --max-packs=5 --max-sources-per-pack=2 --max-items-per-source=1 --timeout-ms=7000
+```
+
+This writes:
+
+```text
+storage/learning/hydria-knowledge-scheduler-v1.json
+storage/learning/hydria-knowledge-scheduler-v1.lock.json
+```
+
+The scheduler is intentionally conservative:
+
+```text
+watchers
+-> bounded source acquisition
+-> Knowledge Object consolidation
+-> promotion dry-run only
+-> training queue validation only
+```
+
+It does not call local/cloud LLM generation, does not run SFT, does not apply active promotion, and uses a lock plus cooldown to avoid overlapping runs. The OVH timer runs it every 6 hours with a 30 minute randomized delay and a source budget of 10 remote fetches per run.
+
 This writes:
 
 ```text
@@ -209,6 +234,7 @@ storage/learning/hydria-source-acquisition-v1.json
 storage/learning/hydria-knowledge-promotion-v1.json
 storage/learning/hydria-training-candidate-queue-v1.json
 storage/learning/hydria-training-queue-validation-v1.json
+storage/learning/hydria-knowledge-scheduler-v1.json
 storage/knowledge/hydria-knowledge-objects-v1.json
 storage/knowledge/vault/index.md
 storage/knowledge/vault/*.md
@@ -315,6 +341,7 @@ The public read endpoint exposes the current watcher state:
 ```bash
 curl -fsS https://app.hydria.click/api/learning/watchers
 curl -fsS https://app.hydria.click/api/learning/source-acquisition
+curl -fsS https://app.hydria.click/api/learning/knowledge-scheduler
 curl -fsS https://app.hydria.click/api/learning/promotion
 curl -fsS https://app.hydria.click/api/learning/training-queue
 ```
@@ -329,11 +356,41 @@ SOURCE_ACQUISITION_TIMEOUT_MS=7000
 SOURCE_ACQUISITION_MAX_PACKS=5
 SOURCE_ACQUISITION_MAX_SOURCES_PER_PACK=4
 SOURCE_ACQUISITION_MAX_ITEMS_PER_SOURCE=4
+KNOWLEDGE_SCHEDULER_REPORT_FILE=/app/storage/learning/hydria-knowledge-scheduler-v1.json
+KNOWLEDGE_SCHEDULER_LOCK_FILE=/app/storage/learning/hydria-knowledge-scheduler-v1.lock.json
+KNOWLEDGE_SCHEDULER_MIN_INTERVAL_MINUTES=360
+KNOWLEDGE_SCHEDULER_MAX_RUNTIME_MINUTES=20
+KNOWLEDGE_SCHEDULER_INTERACTION_LIMIT=1000
+KNOWLEDGE_SCHEDULER_SOURCE_MAX_PACKS=5
+KNOWLEDGE_SCHEDULER_SOURCE_MAX_SOURCES_PER_PACK=2
+KNOWLEDGE_SCHEDULER_SOURCE_MAX_ITEMS_PER_SOURCE=1
+KNOWLEDGE_SCHEDULER_SOURCE_TIMEOUT_MS=7000
 KNOWLEDGE_PROMOTION_FILE=/app/storage/learning/hydria-knowledge-promotion-v1.json
 TRAINING_CANDIDATE_QUEUE_FILE=/app/storage/learning/hydria-training-candidate-queue-v1.json
 TRAINING_QUEUE_VALIDATION_FILE=/app/storage/learning/hydria-training-queue-validation-v1.json
 TRAINING_QUEUE_MIN_SFT_READY_ITEMS=6
 ```
+
+Install or refresh the OVH systemd timer:
+
+```bash
+cd /opt/hydria-core
+sudo cp ops/systemd/hydria-knowledge-scheduler.service /etc/systemd/system/
+sudo cp ops/systemd/hydria-knowledge-scheduler.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now hydria-knowledge-scheduler.timer
+systemctl list-timers hydria-knowledge-scheduler.timer
+```
+
+Run one manual, bounded cycle:
+
+```bash
+sudo systemctl start hydria-knowledge-scheduler.service
+journalctl -u hydria-knowledge-scheduler.service -n 120 --no-pager
+curl -fsS https://app.hydria.click/api/learning/source-acquisition
+```
+
+The service uses `MODEL_ROUTER_EXECUTION_ENABLED=false`, `MODEL_ROUTER_ALLOW_CLOUD=false`, and `LOCAL_MODEL_OBSERVER_ENABLED=false` inside `docker compose exec`; it is meant to protect the CPU/GPU layer by avoiding model generation entirely.
 
 Full production smoke from any machine with this repo:
 
@@ -694,6 +751,15 @@ SOURCE_ACQUISITION_TIMEOUT_MS=7000
 SOURCE_ACQUISITION_MAX_PACKS=5
 SOURCE_ACQUISITION_MAX_SOURCES_PER_PACK=4
 SOURCE_ACQUISITION_MAX_ITEMS_PER_SOURCE=4
+KNOWLEDGE_SCHEDULER_REPORT_FILE=/app/storage/learning/hydria-knowledge-scheduler-v1.json
+KNOWLEDGE_SCHEDULER_LOCK_FILE=/app/storage/learning/hydria-knowledge-scheduler-v1.lock.json
+KNOWLEDGE_SCHEDULER_MIN_INTERVAL_MINUTES=360
+KNOWLEDGE_SCHEDULER_MAX_RUNTIME_MINUTES=20
+KNOWLEDGE_SCHEDULER_INTERACTION_LIMIT=1000
+KNOWLEDGE_SCHEDULER_SOURCE_MAX_PACKS=5
+KNOWLEDGE_SCHEDULER_SOURCE_MAX_SOURCES_PER_PACK=2
+KNOWLEDGE_SCHEDULER_SOURCE_MAX_ITEMS_PER_SOURCE=1
+KNOWLEDGE_SCHEDULER_SOURCE_TIMEOUT_MS=7000
 HYDRIA_DOCKER_LOCAL_MODEL_OBSERVER_ENABLED=false
 TRAINING_ENDPOINTS_ENABLED=true
 TRAINING_ENDPOINTS_REQUIRE_API_KEY=true

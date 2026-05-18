@@ -33,6 +33,7 @@ import { BenchmarkService } from "./services/benchmarkService.js";
 import { BenchmarkStore } from "./services/benchmarkStore.js";
 import { ChatRuntimeService } from "./services/chatRuntimeService.js";
 import { HydriaCoreAskService } from "./services/core/hydriaCoreAskService.js";
+import { GovernedKnowledgeSchedulerService } from "./services/governedKnowledgeSchedulerService.js";
 import { HistoryStore } from "./services/historyStore.js";
 import { InteractionLearningDigestService } from "./services/interactionLearningDigestService.js";
 import { InteractionLogStore } from "./services/interactionLogStore.js";
@@ -87,6 +88,7 @@ const trainingQueueValidationService = new TrainingQueueValidationService({
   promotionGovernanceService: knowledgePromotionGovernanceService,
   watcherStore
 });
+const governedKnowledgeSchedulerService = new GovernedKnowledgeSchedulerService();
 const orchestrationPolicyService = new OrchestrationPolicyService();
 const refineRouterService = new RefineRouterService();
 const researchToolService = new ResearchToolService();
@@ -274,7 +276,8 @@ app.use(
     watcherStore,
     knowledgePromotionGovernanceService,
     trainingQueueValidationService,
-    sourceAcquisitionStore
+    sourceAcquisitionStore,
+    governedKnowledgeSchedulerService
   )
 );
 app.use("/api/student", createStudentRouter(studentService));

@@ -130,6 +130,21 @@ const envSchema = z.object({
   SOURCE_ACQUISITION_MAX_PACKS: z.coerce.number().int().min(1).max(20).default(5),
   SOURCE_ACQUISITION_MAX_SOURCES_PER_PACK: z.coerce.number().int().min(1).max(8).default(4),
   SOURCE_ACQUISITION_MAX_ITEMS_PER_SOURCE: z.coerce.number().int().min(1).max(20).default(4),
+  KNOWLEDGE_SCHEDULER_REPORT_FILE: z
+    .string()
+    .min(1)
+    .default(projectPath("storage", "learning", "hydria-knowledge-scheduler-v1.json")),
+  KNOWLEDGE_SCHEDULER_LOCK_FILE: z
+    .string()
+    .min(1)
+    .default(projectPath("storage", "learning", "hydria-knowledge-scheduler-v1.lock.json")),
+  KNOWLEDGE_SCHEDULER_MIN_INTERVAL_MINUTES: z.coerce.number().int().min(0).default(360),
+  KNOWLEDGE_SCHEDULER_MAX_RUNTIME_MINUTES: z.coerce.number().int().min(1).max(120).default(20),
+  KNOWLEDGE_SCHEDULER_INTERACTION_LIMIT: z.coerce.number().int().min(1).max(5000).default(1000),
+  KNOWLEDGE_SCHEDULER_SOURCE_MAX_PACKS: z.coerce.number().int().min(1).max(10).default(5),
+  KNOWLEDGE_SCHEDULER_SOURCE_MAX_SOURCES_PER_PACK: z.coerce.number().int().min(1).max(4).default(2),
+  KNOWLEDGE_SCHEDULER_SOURCE_MAX_ITEMS_PER_SOURCE: z.coerce.number().int().min(1).max(5).default(1),
+  KNOWLEDGE_SCHEDULER_SOURCE_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(7000),
   TRAINING_QUEUE_MIN_SFT_READY_ITEMS: z.coerce.number().int().min(1).default(6),
   WATCHER_EXTERNAL_NETWORK_ENABLED: z
     .string()

@@ -1,0 +1,13 @@
+[Unit]
+Description=Run Hydria governed knowledge scheduler every 6 hours
+
+[Timer]
+OnBootSec=20min
+OnUnitActiveSec=6h
+RandomizedDelaySec=30min
+Persistent=true
+Unit=hydria-knowledge-scheduler.service
+
+[Install]
+WantedBy=timers.target
+

@@ -1,0 +1,14 @@
+[Unit]
+Description=Hydria governed knowledge scheduler
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/hydria-core
+ExecStart=/usr/bin/docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.ovh.yml -f docker-compose.reranker.yml exec -T -e MODEL_ROUTER_EXECUTION_ENABLED=false -e MODEL_ROUTER_ALLOW_CLOUD=false -e LOCAL_MODEL_OBSERVER_ENABLED=false hydria-core node apps/server/dist/scripts/runGovernedKnowledgeScheduler.js --network --scope=all --limit=1000 --min-interval-minutes=360 --max-runtime-minutes=20 --max-packs=5 --max-sources-per-pack=2 --max-items-per-source=1 --timeout-ms=7000
+TimeoutStartSec=1500
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
