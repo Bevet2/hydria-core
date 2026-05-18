@@ -2192,7 +2192,7 @@ export class ChatRuntimeService {
       };
     }
 
-    if (args.tooling.used || args.tooling.routing.toolType !== "none") {
+    if (args.tooling.used || args.tooling.routing.toolRequired) {
       return {
         ...defaultChatKnowledgeRetrievalMetadata,
         route: "skipped_tool_route",

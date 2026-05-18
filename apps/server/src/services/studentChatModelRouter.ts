@@ -1,5 +1,6 @@
 import type { QuestionCategory } from "../types/arena.js";
 import type { ChatRuntimeMode, ChatToolMetadata } from "../types/chat.js";
+import type { ChatKnowledgeRetrievalMetadata } from "../types/knowledgeRetrieval.js";
 import { env } from "../utils/env.js";
 import type { ActiveConstraintCapsule } from "./context/contextStateTracker.js";
 import type { MultiTurnAnswerPolicyResult } from "./context/multiTurnAnswerPolicy.js";
@@ -43,6 +44,7 @@ type StudentChatModelRoutingInput = {
   answerPolicy: MultiTurnAnswerPolicyResult;
   requiresExternalGrounding: boolean;
   tooling?: ChatToolMetadata;
+  knowledgeRetrieval?: ChatKnowledgeRetrievalMetadata;
 };
 
 const QWEN_MAIN = "qwen2.5:14b";
@@ -388,6 +390,10 @@ function verifiedExternalContextPath(input: StudentChatModelRoutingInput) {
   return Boolean(input.tooling?.used);
 }
 
+function governedKnowledgeContextPath(input: StudentChatModelRoutingInput) {
+  return Boolean(input.knowledgeRetrieval?.used);
+}
+
 export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput): StudentChatModelRoute {
   const text = normalizeText(`${input.routingQuestion}\n${input.userMessage}`);
   const basePipeline = [`fast_router:${PHI_ROUTER}`];
@@ -418,6 +424,23 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
       specialistRole: "primary_brain",
       routingReason: reason,
       pipeline: [...basePipeline, `verified_context_answer:${QWEN_3B}`],
+      fallbackModelNames: buildSpecialistOnlyFallbacks(QWEN_3B),
+      timeoutMs: budget.timeoutMs,
+      runtimeBudget: budget
+    };
+  }
+
+  if (governedKnowledgeContextPath(input)) {
+    const reason =
+      "Governed knowledge retrieval hit is available; use the CPU-aware 3B route to answer from injected context without heavy-model fallback.";
+    const budget = buildRuntimeBudget("standard_light_chat", reason);
+    return {
+      capabilityId: "qwen-3b-standard-light",
+      displayName: "Qwen 3B Standard Light",
+      modelName: QWEN_3B,
+      specialistRole: "primary_brain",
+      routingReason: reason,
+      pipeline: [...basePipeline, `knowledge_retrieval_answer:${QWEN_3B}`],
       fallbackModelNames: buildSpecialistOnlyFallbacks(QWEN_3B),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
