@@ -153,7 +153,12 @@ function watcherObjectClassFor(candidate: WatcherKnowledgeCandidate): KnowledgeO
   if (candidate.candidateType === "stable_knowledge" || candidate.freshness === "stable") {
     return "stable";
   }
-  if (candidate.candidateType === "dynamic_knowledge" || candidate.candidateType === "trend_signal") {
+  if (
+    candidate.candidateType === "dynamic_knowledge" ||
+    candidate.candidateType === "trend_signal" ||
+    (candidate.candidateType === "source_profile" &&
+      (candidate.freshness === "live" || candidate.freshness === "recent"))
+  ) {
     return "dynamic";
   }
   return "experimental";

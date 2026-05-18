@@ -118,7 +118,7 @@ test("knowledge promotion blocks dynamic watcher candidates and queues repair si
       category: "technical_explanation",
       confidence: 0.42,
       evidenceCount: 0,
-      tags: ["watcher", "external-watcher", "live"],
+      tags: ["watcher", "external-watcher", "source-pack", "live"],
       sources: [
         {
           sourceType: "watcher",
@@ -164,6 +164,10 @@ test("knowledge promotion blocks dynamic watcher candidates and queues repair si
     assert.equal(report.sourceStats.trainingCandidateCount, 1);
     assert.equal(queue?.sourceStats.readyCount, 1);
     assert.equal(queue?.sourceStats.blockedCount, 1);
+    assert.equal(
+      queue?.items.find((item) => item.sourceObjectId === "ko::watcher::dynamic")?.target,
+      "retrieval_knowledge"
+    );
     assert.equal(stored?.objects.find((entry) => entry.objectId === "ko::watcher::dynamic")?.state, "candidate");
     assert.ok(
       report.decisions

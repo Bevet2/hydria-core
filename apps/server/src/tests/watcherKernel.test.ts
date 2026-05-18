@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { WATCHER_SOURCE_PACKS } from "../data/watcherSourcePacks.js";
 import { ExternalKnowledgeExpansionWatcher } from "../services/watchers/externalKnowledgeExpansionWatcher.js";
 import { InternalGapWatcher } from "../services/watchers/internalGapWatcher.js";
 import { WatcherKernel } from "../services/watchers/watcherKernel.js";
@@ -104,10 +105,18 @@ test("external watcher emits source-plan candidates without network access", asy
   assert.equal(run.status, "completed");
   assert.equal(run.watcherKind, "external");
   assert.equal(run.dryRun, true);
-  assert.ok(run.candidates.length >= 4);
+  assert.equal(run.candidates.length, WATCHER_SOURCE_PACKS.length);
+  assert.equal(run.candidates.length, 5);
+  assert.ok(run.candidates.every((candidate) => candidate.candidateType === "source_profile"));
+  assert.ok(run.candidates.some((candidate) => candidate.tags.includes("cyber-vulnerability-source-pack")));
+  assert.ok(run.candidates.some((candidate) => candidate.tags.includes("wikidata-general-knowledge-source-pack")));
+  assert.ok(run.candidates.some((candidate) => candidate.sources.some((source) => source.label.includes("OSV"))));
+  assert.ok(run.candidates.some((candidate) => candidate.sources.some((source) => source.label.includes("OpenAlex"))));
+  assert.ok(run.candidates.some((candidate) => candidate.sources.some((source) => source.label.includes("Kubernetes"))));
   assert.ok(run.candidates.some((candidate) => candidate.freshness === "live"));
   assert.ok(run.candidates.every((candidate) => candidate.state === "candidate"));
   assert.ok(run.acquisitionTasks.some((task) => task.taskType === "collect_sources"));
+  assert.ok(run.acquisitionTasks.some((task) => task.taskType === "validate_candidate"));
 });
 
 test("watcher kernel persists internal and external runs", async () => {

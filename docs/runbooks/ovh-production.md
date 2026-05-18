@@ -220,7 +220,17 @@ internal watcher = control knowledge
 external watcher = open knowledge
 ```
 
-The internal watcher reads Hydria interaction learning and emits guarded repair/acquisition candidates for recurring failures, missing active knowledge, routing gaps, and quality risks. The external watcher emits source-plan candidates for areas where frozen open-weight models are likely stale: AI model releases, platform/runtime releases, cyber advisories, and stable reasoning archives.
+The internal watcher reads Hydria interaction learning and emits guarded repair/acquisition candidates for recurring failures, missing active knowledge, routing gaps, and quality risks. The external watcher emits governed source-pack candidates for areas where frozen open-weight models are likely stale or incomplete:
+
+```text
+cyber-vulnerability-source-pack = CISA KEV + NVD + OSV
+code-runtime-source-pack = Node.js + Docker + PostgreSQL + Kubernetes
+ai-model-research-source-pack = Hugging Face + Papers with Code + arXiv
+stable-research-source-pack = OpenAlex + arXiv + Semantic Scholar + Crossref
+wikidata-general-knowledge-source-pack = Wikidata + Wikipedia dumps + DBpedia
+```
+
+These packs are acquisition profiles. They do not bulk-import the sources, do not make the claims active, and do not train a model. After consolidation, source packs are routed as `retrieval_knowledge` queue items until enough source evidence has been fetched and corroborated.
 
 Important production rule: watchers do not fine-tune models, do not directly change runtime behavior, and do not auto-promote dynamic facts to active knowledge. They create governed candidates and acquisition tasks. A candidate must be corroborated, validated, and promoted through the Knowledge Object lifecycle before `KnowledgeInjectionService` can use it as active contextual memory.
 
