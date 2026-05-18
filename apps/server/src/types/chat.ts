@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { defaultToolRoutingDecision, type QuestionCategory, type ResearchToolLog, type ToolRoutingDecision } from "./arena.js";
 import type { StudentAnswer } from "./student.js";
+import type { ChatKnowledgeRetrievalMetadata } from "./knowledgeRetrieval.js";
 import type { ConversationQualityGateResult } from "../services/context/conversationQualityGate.js";
 import type {
   ActiveConstraintCapsule,
@@ -112,6 +113,7 @@ export type ChatMessageResponse = {
   conversationQuality: ConversationQualityGateResult;
   generation: ChatGenerationMetadata;
   tooling: ChatToolMetadata;
+  knowledgeRetrieval: ChatKnowledgeRetrievalMetadata;
   orchestrationTrace: ChatOrchestrationTrace;
   usedRetry: boolean;
   durationMs: number;

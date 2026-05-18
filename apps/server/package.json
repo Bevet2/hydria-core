@@ -17,6 +17,7 @@
     "watchers:run": "tsx src/scripts/runWatchers.ts",
     "knowledge:scheduler": "tsx src/scripts/runGovernedKnowledgeScheduler.ts",
     "knowledge:promote": "tsx src/scripts/runKnowledgePromotionGovernance.ts",
+    "knowledge:retrieval-gate": "tsx src/scripts/runKnowledgeRetrievalGate.ts",
     "training:queue-validate": "tsx src/scripts/runTrainingQueueValidation.ts",
     "learning:dataset-expansion": "tsx src/scripts/runDatasetExpansionCampaign.ts",
     "learning:loop": "tsx src/scripts/runLearningLoop.ts",

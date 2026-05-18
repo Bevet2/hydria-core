@@ -11,6 +11,7 @@ import {
 } from "../services/context/contextStateTracker.js";
 import { decideMultiTurnAnswerPolicy } from "../services/context/multiTurnAnswerPolicy.js";
 import { defaultChatToolMetadata } from "../types/chat.js";
+import { defaultChatKnowledgeRetrievalMetadata } from "../types/knowledgeRetrieval.js";
 
 function buildInput(): StudentChatAdapterInput {
   const state = createInitialState();
@@ -33,7 +34,8 @@ function buildInput(): StudentChatAdapterInput {
     activeConstraintCapsule: capsule,
     answerPolicy: policy,
     requiresExternalGrounding: true,
-    tooling: defaultChatToolMetadata
+    tooling: defaultChatToolMetadata,
+    knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata
   };
 }
 
@@ -629,7 +631,8 @@ test("student chat adapter routes strategic decisions to the CPU-safe local deep
     activeConstraintCapsule: capsule,
     answerPolicy: policy,
     requiresExternalGrounding: false,
-    tooling: defaultChatToolMetadata
+    tooling: defaultChatToolMetadata,
+    knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata
   });
 
   assert.equal(selectedModel, "qwen2.5:14b");

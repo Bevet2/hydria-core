@@ -351,6 +351,20 @@ curl -fsS https://app.hydria.click/api/learning/promotion
 curl -fsS https://app.hydria.click/api/learning/training-queue
 ```
 
+Knowledge retrieval is injected into public chat in guarded mode only after tool routing. Verified tool context has priority; live/current tool routes skip static knowledge retrieval. Validate the runtime path with:
+
+```bash
+npm run knowledge:retrieval-gate -- --base-url=https://app.hydria.click --timeout-ms=180000
+```
+
+This writes:
+
+```text
+storage/training/knowledge-retrieval-gate-v1.json
+```
+
+The gate checks that a source-acquired object can be retrieved and traced, that unrelated everyday chat such as a recipe does not receive off-topic knowledge, and that live tool questions keep tool priority. The Chat UI shows the public `Knowledge retrieval` trace step and the injected hit titles/summaries; this is a runtime trace, not private chain-of-thought.
+
 External network checks are disabled by default. Enable only when the source-acquisition policy is ready:
 
 ```text

@@ -40,6 +40,7 @@ import { InteractionLogStore } from "./services/interactionLogStore.js";
 import { KnowledgeConsolidationService } from "./services/knowledgeConsolidationService.js";
 import { KnowledgePromotionGovernanceService } from "./services/knowledgePromotionGovernanceService.js";
 import { KnowledgeQualityGateService } from "./services/knowledgeQualityGateService.js";
+import { KnowledgeRetrievalService } from "./services/knowledgeRetrievalService.js";
 import { LearningGovernanceService } from "./services/learningGovernanceService.js";
 import { LocalModelService } from "./services/localModel.js";
 import { ModelCapabilityService } from "./services/models/modelCapabilityService.js";
@@ -82,6 +83,7 @@ const sourceAcquisitionStore = new SourceAcquisitionStore();
 const knowledgeQualityGateService = new KnowledgeQualityGateService({
   sourceAcquisitionStore
 });
+const knowledgeRetrievalService = new KnowledgeRetrievalService();
 const knowledgeConsolidationService = new KnowledgeConsolidationService({
   interactionLearningDigestService,
   watcherStore,
@@ -118,7 +120,8 @@ const chatRuntimeService = new ChatRuntimeService(
   undefined,
   undefined,
   modelRuntimeTelemetryService,
-  interactionLogStore
+  interactionLogStore,
+  knowledgeRetrievalService
 );
 const arenaRunner = new ArenaRunner(
   openRouterService,

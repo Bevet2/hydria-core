@@ -26,6 +26,10 @@ import type {
   ChatToolMetadata
 } from "../types/chat.js";
 import { defaultChatToolMetadata } from "../types/chat.js";
+import {
+  defaultChatKnowledgeRetrievalMetadata,
+  type ChatKnowledgeRetrievalMetadata
+} from "../types/knowledgeRetrieval.js";
 import type { StudentAnswer } from "../types/student.js";
 import {
   LocalToolExecutionService,
@@ -34,6 +38,7 @@ import {
 import { ToolRoutingService } from "./tools/toolRoutingService.js";
 import type { ModelRuntimeTelemetryService } from "./models/modelRuntimeTelemetryService.js";
 import type { InteractionLogStore } from "./interactionLogStore.js";
+import { KnowledgeRetrievalService } from "./knowledgeRetrievalService.js";
 
 type ChatRuntimeSession = {
   sessionId: string;
@@ -1478,6 +1483,7 @@ function buildChatOrchestrationTrace(args: {
   activeConstraintCapsule: ActiveConstraintCapsule;
   answerPolicy: MultiTurnAnswerPolicyResult;
   tooling: ChatToolMetadata;
+  knowledgeRetrieval: ChatKnowledgeRetrievalMetadata;
   generation: StudentChatAdapterResult;
   conversationQuality: ConversationQualityGateResult;
   usedRetry: boolean;
@@ -1496,6 +1502,12 @@ function buildChatOrchestrationTrace(args: {
       ? "warning"
       : "passed";
   const qualityStatus = args.conversationQuality.passed ? "passed" : "warning";
+  const knowledgeStatus =
+    args.knowledgeRetrieval.route === "used"
+      ? "passed"
+      : args.knowledgeRetrieval.route === "no_match" || args.knowledgeRetrieval.route === "skipped_tool_route"
+        ? "skipped"
+        : "skipped";
 
   return {
     version: "chat_orchestration_trace_v1",
@@ -1549,6 +1561,26 @@ function buildChatOrchestrationTrace(args: {
           resultUsed: args.tooling.used,
           verifiedFacts: args.tooling.verifiedFacts.slice(0, 5),
           failureReason: args.tooling.failureReason
+        }
+      },
+      {
+        id: "knowledge_retrieval",
+        label: "Knowledge retrieval",
+        status: knowledgeStatus,
+        summary: args.knowledgeRetrieval.used
+          ? `Injected ${args.knowledgeRetrieval.hitCount} governed knowledge hit(s).`
+          : args.knowledgeRetrieval.route === "skipped_tool_route"
+            ? "Skipped because tool context has priority."
+            : "No governed knowledge hit was injected.",
+        details: {
+          route: args.knowledgeRetrieval.route,
+          hitCount: args.knowledgeRetrieval.hitCount,
+          query: args.knowledgeRetrieval.query,
+          objectIds: args.knowledgeRetrieval.hits.map((hit) => hit.objectId).slice(0, 5),
+          titles: args.knowledgeRetrieval.hits.map((hit) => hit.title).slice(0, 5),
+          states: args.knowledgeRetrieval.hits.map((hit) => hit.state).slice(0, 5),
+          sourceUris: args.knowledgeRetrieval.hits.flatMap((hit) => hit.sourceUris).slice(0, 5),
+          issues: args.knowledgeRetrieval.issues.slice(0, 5)
         }
       },
       {
@@ -1609,7 +1641,8 @@ export class ChatRuntimeService {
     private readonly localToolExecutionService: Pick<LocalToolExecutionService, "tryExecute"> =
       new LocalToolExecutionService(),
     private readonly modelRuntimeTelemetryService: Pick<ModelRuntimeTelemetryService, "safeRecordEvent"> | null = null,
-    private readonly interactionLogStore: Pick<InteractionLogStore, "safeAppend"> | null = null
+    private readonly interactionLogStore: Pick<InteractionLogStore, "safeAppend"> | null = null,
+    private readonly knowledgeRetrievalService: Pick<KnowledgeRetrievalService, "retrieve"> | null = null
   ) {}
 
   resetSession(sessionId: string) {
@@ -1640,6 +1673,11 @@ export class ChatRuntimeService {
     const tooling = await this.collectTooling({
       question: routingQuestion,
       category
+    });
+    const knowledgeRetrieval = await this.collectKnowledgeRetrieval({
+      question: routingQuestion,
+      category,
+      tooling
     });
     const answerPolicy = decideMultiTurnAnswerPolicy({
       conversationState,
@@ -1694,7 +1732,8 @@ export class ChatRuntimeService {
         activeConstraintCapsule,
         answerPolicy,
         routingQuestion,
-        tooling
+        tooling,
+        knowledgeRetrieval
       }));
     let conversationQuality = this.analyzeQuality({
       runtimeMode,
@@ -1737,7 +1776,8 @@ export class ChatRuntimeService {
         activeConstraintCapsule,
         answerPolicy,
         routingQuestion: draft.routingQuestion,
-        tooling
+        tooling,
+        knowledgeRetrieval
       });
       const resolvedTaskQuality = this.analyzeQuality({
         runtimeMode,
@@ -1778,6 +1818,7 @@ export class ChatRuntimeService {
         answerPolicy,
         routingQuestion,
         tooling,
+        knowledgeRetrieval,
         qualityRetry: conversationQuality
       });
       const repairedQuality = this.analyzeQuality({
@@ -1939,6 +1980,7 @@ export class ChatRuntimeService {
       activeConstraintCapsule,
       answerPolicy,
       tooling,
+      knowledgeRetrieval,
       generation: draft.generation,
       conversationQuality,
       usedRetry,
@@ -1997,6 +2039,7 @@ export class ChatRuntimeService {
         attempts: draft.generation.attempts
       },
       tooling,
+      knowledgeRetrieval,
       orchestrationTrace,
       usedRetry,
       durationMs
@@ -2042,6 +2085,7 @@ export class ChatRuntimeService {
     answerPolicy: MultiTurnAnswerPolicyResult;
     routingQuestion: string;
     tooling: ChatToolMetadata;
+    knowledgeRetrieval: ChatKnowledgeRetrievalMetadata;
     qualityRetry?: ConversationQualityGateResult;
   }): Promise<ChatDraft> {
     const question = buildQuestionForHydria({
@@ -2051,7 +2095,7 @@ export class ChatRuntimeService {
     const shouldUseExternalGrounding = shouldUseExternalGroundingForChat({
       userMessage: args.userMessage,
       routingQuestion: args.routingQuestion
-    }) || args.tooling.routing.toolRequired || args.tooling.routing.toolRecommended;
+    }) || args.tooling.routing.toolRequired || args.tooling.routing.toolRecommended || args.knowledgeRetrieval.used;
     const generation = await this.studentChatAdapter.answer({
       question,
       routingQuestion: args.routingQuestion,
@@ -2063,7 +2107,8 @@ export class ChatRuntimeService {
       answerPolicy: args.answerPolicy,
       qualityRetry: args.qualityRetry,
       requiresExternalGrounding: shouldUseExternalGrounding,
-      tooling: args.tooling
+      tooling: args.tooling,
+      knowledgeRetrieval: args.knowledgeRetrieval
     });
     return {
       answer: generation.answer,
@@ -2132,6 +2177,48 @@ export class ChatRuntimeService {
       sources: [],
       failureReason: null
     };
+  }
+
+  private async collectKnowledgeRetrieval(args: {
+    question: string;
+    category: QuestionCategory;
+    tooling: ChatToolMetadata;
+  }): Promise<ChatKnowledgeRetrievalMetadata> {
+    if (!this.knowledgeRetrievalService) {
+      return {
+        ...defaultChatKnowledgeRetrievalMetadata,
+        query: args.question,
+        category: args.category
+      };
+    }
+
+    if (args.tooling.used || args.tooling.routing.toolType !== "none") {
+      return {
+        ...defaultChatKnowledgeRetrievalMetadata,
+        route: "skipped_tool_route",
+        query: args.question,
+        category: args.category,
+        issues: args.tooling.used
+          ? ["verified_tool_context_has_priority"]
+          : ["tool_route_has_priority"]
+      };
+    }
+
+    try {
+      return await this.knowledgeRetrievalService.retrieve({
+        query: args.question,
+        category: args.category,
+        limit: 3
+      });
+    } catch (error) {
+      return {
+        ...defaultChatKnowledgeRetrievalMetadata,
+        route: "no_match",
+        query: args.question,
+        category: args.category,
+        issues: [error instanceof Error ? error.message : String(error)]
+      };
+    }
   }
 
   private analyzeQuality(args: {

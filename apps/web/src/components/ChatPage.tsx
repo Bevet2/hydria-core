@@ -108,6 +108,8 @@ export function ChatPage() {
       toolRoute: lastResponse?.tooling.route ?? "n/a",
       toolType: lastResponse?.tooling.routing.toolType ?? "none",
       toolIntent: lastResponse?.tooling.routing.intent ?? "none",
+      knowledgeRoute: lastResponse?.knowledgeRetrieval.route ?? "n/a",
+      knowledgeHits: lastResponse?.knowledgeRetrieval.hitCount ?? 0,
       duration: formatDuration(lastResponse?.durationMs ?? null),
       quality: issueLabel(lastResponse)
     }),
@@ -325,6 +327,14 @@ export function ChatPage() {
                 <strong>{chatMeta.toolType}</strong>
               </div>
               <div>
+                <span>Knowledge</span>
+                <strong>{chatMeta.knowledgeRoute}</strong>
+              </div>
+              <div>
+                <span>Knowledge hits</span>
+                <strong>{chatMeta.knowledgeHits}</strong>
+              </div>
+              <div>
                 <span>Confidence</span>
                 <strong>{lastResponse?.answer.confidence ?? "n/a"}</strong>
               </div>
@@ -362,6 +372,25 @@ export function ChatPage() {
                         </dl>
                       ) : null}
                     </div>
+                  </article>
+                ))
+              ) : (
+                <p className="muted">none</p>
+              )}
+            </div>
+          </section>
+
+          <section className="panel">
+            <h2>Knowledge</h2>
+            <div className="chat-list">
+              {(lastResponse?.knowledgeRetrieval.hits ?? []).length > 0 ? (
+                lastResponse?.knowledgeRetrieval.hits.map((hit) => (
+                  <article key={hit.objectId}>
+                    <h3>{hit.title}</h3>
+                    <p>{hit.summary}</p>
+                    <p className="muted">
+                      {hit.state} | {hit.knowledgeClass} | score {hit.score}
+                    </p>
                   </article>
                 ))
               ) : (

@@ -1,5 +1,6 @@
 import type { QuestionCategory } from "../types/arena.js";
 import type { ChatMessage, ChatRuntimeMode, ChatToolMetadata } from "../types/chat.js";
+import type { ChatKnowledgeRetrievalMetadata } from "../types/knowledgeRetrieval.js";
 import type { StudentAnswer } from "../types/student.js";
 import { parseLooseJson, stripCodeFences } from "../utils/jsonRepair.js";
 import { logger } from "../utils/logger.js";
@@ -32,6 +33,7 @@ export type StudentChatAdapterInput = {
   qualityRetry?: ConversationQualityGateResult;
   requiresExternalGrounding: boolean;
   tooling: ChatToolMetadata;
+  knowledgeRetrieval: ChatKnowledgeRetrievalMetadata;
 };
 
 export type StudentChatAdapterResult = {
@@ -365,9 +367,35 @@ function formatToolContext(tooling: ChatToolMetadata) {
     .join("\n");
 }
 
+function formatKnowledgeRetrievalContext(knowledge: ChatKnowledgeRetrievalMetadata) {
+  if (!knowledge.used || knowledge.hits.length === 0) {
+    return "";
+  }
+
+  const hits = knowledge.hits.slice(0, 3).flatMap((hit, index) => [
+    `Hit ${index + 1}: ${compact(hit.title, 120)}`,
+    `state=${hit.state}; class=${hit.knowledgeClass}; confidence=${hit.confidence}; score=${hit.score}`,
+    `summary=${compact(hit.summary, 220)}`,
+    `content=${compact(hit.content, 520)}`,
+    hit.sourceUris.length > 0 ? `sources=${hit.sourceUris.slice(0, 3).join(" | ")}` : "",
+    hit.matchedTerms.length > 0 ? `matched=${hit.matchedTerms.join(", ")}` : ""
+  ]);
+
+  return [
+    "Governed knowledge context:",
+    `route=${knowledge.route}; hitCount=${knowledge.hitCount}; query=${compact(knowledge.query, 180)}`,
+    ...knowledge.guidance.map((item) => `- ${compact(item, 220)}`),
+    ...hits,
+    "Never invent beyond these hits. If they are insufficient or off-topic, answer from stable model knowledge or state the limit."
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 export function buildStudentChatPrompt(input: StudentChatAdapterInput, route = selectStudentChatModelRoute(input)) {
   const recentMessages = formatRecentMessages(input.recentMessages);
   const toolContext = formatToolContext(input.tooling);
+  const knowledgeContext = formatKnowledgeRetrievalContext(input.knowledgeRetrieval);
   const usePlainText = shouldUsePlainTextRoute(route);
   const retryLines = input.qualityRetry
     ? [
@@ -389,6 +417,7 @@ export function buildStudentChatPrompt(input: StudentChatAdapterInput, route = s
     ...maybeProductGrounding(input),
     ...maybeCurrentDataGuidance(input),
     toolContext,
+    knowledgeContext,
     input.runtimeMode === "conversation" ? "Active context:" : "",
     input.runtimeMode === "conversation" ? formatCompactCapsule(input.activeConstraintCapsule) : "",
     input.runtimeMode === "conversation" && recentMessages ? "Recent conversation turns:" : "",
