@@ -3,6 +3,7 @@ import type { InteractionLearningDigestService } from "../services/interactionLe
 import type { GovernedKnowledgeSchedulerService } from "../services/governedKnowledgeSchedulerService.js";
 import type { KnowledgeConsolidationService } from "../services/knowledgeConsolidationService.js";
 import type { KnowledgePromotionGovernanceService } from "../services/knowledgePromotionGovernanceService.js";
+import type { KnowledgeQualityGateService } from "../services/knowledgeQualityGateService.js";
 import type { LearningGovernanceService } from "../services/learningGovernanceService.js";
 import type { SourceAcquisitionStore } from "../services/sourceAcquisitionStore.js";
 import type { TrainingQueueValidationService } from "../services/trainingQueueValidationService.js";
@@ -20,7 +21,8 @@ export function createLearningRouter(
   >,
   trainingQueueValidationService?: Pick<TrainingQueueValidationService, "loadReport">,
   sourceAcquisitionStore?: Pick<SourceAcquisitionStore, "load">,
-  governedKnowledgeSchedulerService?: Pick<GovernedKnowledgeSchedulerService, "loadReport">
+  governedKnowledgeSchedulerService?: Pick<GovernedKnowledgeSchedulerService, "loadReport">,
+  knowledgeQualityGateService?: Pick<KnowledgeQualityGateService, "loadReport">
 ) {
   const router = Router();
 
@@ -89,6 +91,16 @@ export function createLearningRouter(
         scheduler: governedKnowledgeSchedulerService
           ? await governedKnowledgeSchedulerService.loadReport()
           : null
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/knowledge-quality", async (_request, response, next) => {
+    try {
+      response.json({
+        qualityGate: knowledgeQualityGateService ? await knowledgeQualityGateService.loadReport() : null
       });
     } catch (error) {
       next(error);

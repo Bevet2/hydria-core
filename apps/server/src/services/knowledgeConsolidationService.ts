@@ -4,6 +4,10 @@ import type {
   InteractionLearningDigest
 } from "../types/interactionLearning.js";
 import type {
+  KnowledgeQualityGateDecision,
+  KnowledgeQualityGateReport
+} from "../types/knowledgeQualityGate.js";
+import type {
   KnowledgeObject,
   KnowledgeObjectClass,
   KnowledgeObjectState,
@@ -16,6 +20,7 @@ import type {
 import type { WatcherKnowledgeCandidate, WatcherState } from "../types/watchers.js";
 import { InteractionLearningDigestService } from "./interactionLearningDigestService.js";
 import { KnowledgeObjectStore } from "./knowledgeObjectStore.js";
+import { KnowledgeQualityGateService } from "./knowledgeQualityGateService.js";
 import { SourceAcquisitionStore } from "./sourceAcquisitionStore.js";
 import { WatcherStore } from "./watchers/watcherStore.js";
 
@@ -24,6 +29,7 @@ type KnowledgeConsolidationServiceOptions = {
   knowledgeObjectStore?: Pick<KnowledgeObjectStore, "upsertMany" | "load">;
   watcherStore?: Pick<WatcherStore, "load">;
   sourceAcquisitionStore?: Pick<SourceAcquisitionStore, "load">;
+  knowledgeQualityGateService?: Pick<KnowledgeQualityGateService, "loadReport">;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -204,8 +210,11 @@ function watcherTagsFor(candidate: WatcherKnowledgeCandidate, type: KnowledgeObj
   ].filter((value): value is string => Boolean(value)).slice(0, 16);
 }
 
-function sourceAcquisitionClassFor(item: SourceAcquisitionItem): KnowledgeObjectClass {
-  if (item.riskLevel === "high") {
+function sourceAcquisitionClassFor(
+  item: SourceAcquisitionItem,
+  decision: KnowledgeQualityGateDecision | null
+): KnowledgeObjectClass {
+  if (decision?.decision === "guarded" || item.riskLevel === "high") {
     return "guarded";
   }
   if (item.freshness === "live" || item.freshness === "recent") {
@@ -217,9 +226,21 @@ function sourceAcquisitionClassFor(item: SourceAcquisitionItem): KnowledgeObject
   return "experimental";
 }
 
-function sourceAcquisitionStateFor(item: SourceAcquisitionItem): KnowledgeObjectState {
+function sourceAcquisitionStateFor(
+  item: SourceAcquisitionItem,
+  decision: KnowledgeQualityGateDecision | null
+): KnowledgeObjectState {
   if (item.state === "expired") {
     return "archived";
+  }
+  if (decision?.decision === "guarded") {
+    return "guarded";
+  }
+  if (decision?.decision === "candidate") {
+    return "candidate";
+  }
+  if (decision?.decision === "promotable") {
+    return "validated";
   }
   if (item.state === "corroborated" && item.riskLevel !== "high") {
     return "validated";
@@ -227,9 +248,11 @@ function sourceAcquisitionStateFor(item: SourceAcquisitionItem): KnowledgeObject
   return "candidate";
 }
 
-function sourceAcquisitionTagsFor(item: SourceAcquisitionItem) {
+function sourceAcquisitionTagsFor(item: SourceAcquisitionItem, decision: KnowledgeQualityGateDecision | null) {
   return [
     "source-acquisition",
+    decision ? "quality-gated" : null,
+    decision ? `quality-${decision.decision}` : null,
     item.packId,
     item.freshness,
     item.category ?? null,
@@ -237,6 +260,10 @@ function sourceAcquisitionTagsFor(item: SourceAcquisitionItem) {
     item.riskLevel === "high" ? "guarded" : null,
     ...item.tags
   ].filter((value): value is string => Boolean(value)).slice(0, 16);
+}
+
+function sourceQualityDecisionMap(report: KnowledgeQualityGateReport | null) {
+  return new Map((report?.decisions ?? []).map((decision) => [decision.itemId, decision]));
 }
 
 export class KnowledgeConsolidationService {
@@ -247,6 +274,7 @@ export class KnowledgeConsolidationService {
   private readonly knowledgeObjectStore: Pick<KnowledgeObjectStore, "upsertMany" | "load">;
   private readonly watcherStore: Pick<WatcherStore, "load">;
   private readonly sourceAcquisitionStore: Pick<SourceAcquisitionStore, "load">;
+  private readonly knowledgeQualityGateService: Pick<KnowledgeQualityGateService, "loadReport">;
 
   constructor(options: KnowledgeConsolidationServiceOptions = {}) {
     this.interactionLearningDigestService =
@@ -254,6 +282,8 @@ export class KnowledgeConsolidationService {
     this.knowledgeObjectStore = options.knowledgeObjectStore ?? new KnowledgeObjectStore();
     this.watcherStore = options.watcherStore ?? new WatcherStore();
     this.sourceAcquisitionStore = options.sourceAcquisitionStore ?? new SourceAcquisitionStore();
+    this.knowledgeQualityGateService =
+      options.knowledgeQualityGateService ?? new KnowledgeQualityGateService();
   }
 
   async buildAndPersist(args: { rebuildInteractionDigest?: boolean; limit?: number } = {}) {
@@ -263,13 +293,15 @@ export class KnowledgeConsolidationService {
         (await this.interactionLearningDigestService.buildAndPersist({ limit: args.limit }));
     const watcherState = await this.watcherStore.load();
     const sourceAcquisition = await this.sourceAcquisitionStore.load();
-    const objects = this.buildObjects(digest, watcherState, sourceAcquisition);
+    const knowledgeQualityGate = await this.knowledgeQualityGateService.loadReport();
+    const objects = this.buildObjects(digest, watcherState, sourceAcquisition, knowledgeQualityGate);
     const file = await this.knowledgeObjectStore.upsertMany(objects);
 
     return {
       digest,
       watcherState,
       sourceAcquisition,
+      knowledgeQualityGate,
       file,
       objects
     };
@@ -282,17 +314,24 @@ export class KnowledgeConsolidationService {
   private buildObjects(
     digest: InteractionLearningDigest,
     watcherState: WatcherState | null,
-    sourceAcquisition: SourceAcquisitionFile | null
+    sourceAcquisition: SourceAcquisitionFile | null,
+    knowledgeQualityGate: KnowledgeQualityGateReport | null
   ) {
     const now = new Date().toISOString();
+    const qualityByItem = sourceQualityDecisionMap(knowledgeQualityGate);
     return [
       ...digest.candidates.map((candidate) => this.candidateToObject(candidate, now)),
       ...(watcherState?.candidates ?? []).map((candidate) =>
         this.watcherCandidateToObject(candidate, now)
       ),
-      ...(sourceAcquisition?.items ?? []).map((item) =>
-        this.sourceAcquisitionItemToObject(item, now)
-      )
+      ...(sourceAcquisition?.items ?? []).flatMap((item) => {
+        const qualityDecision = qualityByItem.get(item.itemId) ?? null;
+        if (qualityDecision?.decision === "rejected") {
+          return [];
+        }
+
+        return [this.sourceAcquisitionItemToObject(item, now, qualityDecision)];
+      })
     ];
   }
 
@@ -379,13 +418,18 @@ export class KnowledgeConsolidationService {
     };
   }
 
-  private sourceAcquisitionItemToObject(item: SourceAcquisitionItem, now: string): KnowledgeObject {
-    const knowledgeClass = sourceAcquisitionClassFor(item);
-    const state = sourceAcquisitionStateFor(item);
+  private sourceAcquisitionItemToObject(
+    item: SourceAcquisitionItem,
+    now: string,
+    qualityDecision: KnowledgeQualityGateDecision | null
+  ): KnowledgeObject {
+    const knowledgeClass = sourceAcquisitionClassFor(item, qualityDecision);
+    const state = sourceAcquisitionStateFor(item, qualityDecision);
     const objectId = `ko::source-acquisition::${stableShortHash(item.itemId)}`;
     const confidence = Number(
       clamp(
-        item.confidence * (item.corroboratedSourceCount >= 2 ? 1 : 0.88),
+        (qualityDecision?.adjustedConfidence ?? item.confidence) *
+          (item.corroboratedSourceCount >= 2 ? 1 : 0.88),
         0,
         0.9
       ).toFixed(3)
@@ -401,7 +445,7 @@ export class KnowledgeConsolidationService {
       category: item.category,
       content: compact(item.content, 1200),
       summary: compact(item.summary),
-      tags: sourceAcquisitionTagsFor(item),
+      tags: sourceAcquisitionTagsFor(item, qualityDecision),
       confidence,
       riskLevel: item.riskLevel,
       evidenceCount: item.corroboratedSourceCount,

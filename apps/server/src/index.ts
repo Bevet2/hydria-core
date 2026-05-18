@@ -39,6 +39,7 @@ import { InteractionLearningDigestService } from "./services/interactionLearning
 import { InteractionLogStore } from "./services/interactionLogStore.js";
 import { KnowledgeConsolidationService } from "./services/knowledgeConsolidationService.js";
 import { KnowledgePromotionGovernanceService } from "./services/knowledgePromotionGovernanceService.js";
+import { KnowledgeQualityGateService } from "./services/knowledgeQualityGateService.js";
 import { LearningGovernanceService } from "./services/learningGovernanceService.js";
 import { LocalModelService } from "./services/localModel.js";
 import { ModelCapabilityService } from "./services/models/modelCapabilityService.js";
@@ -78,17 +79,24 @@ const interactionLearningDigestService = new InteractionLearningDigestService({
 });
 const watcherStore = new WatcherStore();
 const sourceAcquisitionStore = new SourceAcquisitionStore();
+const knowledgeQualityGateService = new KnowledgeQualityGateService({
+  sourceAcquisitionStore
+});
 const knowledgeConsolidationService = new KnowledgeConsolidationService({
   interactionLearningDigestService,
   watcherStore,
-  sourceAcquisitionStore
+  sourceAcquisitionStore,
+  knowledgeQualityGateService
 });
 const knowledgePromotionGovernanceService = new KnowledgePromotionGovernanceService();
 const trainingQueueValidationService = new TrainingQueueValidationService({
   promotionGovernanceService: knowledgePromotionGovernanceService,
   watcherStore
 });
-const governedKnowledgeSchedulerService = new GovernedKnowledgeSchedulerService();
+const governedKnowledgeSchedulerService = new GovernedKnowledgeSchedulerService({
+  knowledgeQualityGateService,
+  knowledgeConsolidationService
+});
 const orchestrationPolicyService = new OrchestrationPolicyService();
 const refineRouterService = new RefineRouterService();
 const researchToolService = new ResearchToolService();
@@ -277,7 +285,8 @@ app.use(
     knowledgePromotionGovernanceService,
     trainingQueueValidationService,
     sourceAcquisitionStore,
-    governedKnowledgeSchedulerService
+    governedKnowledgeSchedulerService,
+    knowledgeQualityGateService
   )
 );
 app.use("/api/student", createStudentRouter(studentService));

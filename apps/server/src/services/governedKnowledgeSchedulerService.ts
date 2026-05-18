@@ -2,11 +2,13 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { z } from "zod";
 import { KnowledgeConsolidationService } from "./knowledgeConsolidationService.js";
+import { KnowledgeQualityGateService } from "./knowledgeQualityGateService.js";
 import { KnowledgePromotionGovernanceService } from "./knowledgePromotionGovernanceService.js";
 import { SourceAcquisitionService } from "./sourceAcquisitionService.js";
 import { TrainingQueueValidationService } from "./trainingQueueValidationService.js";
 import { WatcherKernel, type WatcherScope } from "./watchers/watcherKernel.js";
 import { env } from "../utils/env.js";
+import type { SourceAcquisitionFile } from "../types/sourceAcquisition.js";
 
 const schedulerStepStatusSchema = z.enum(["passed", "failed", "skipped"]);
 const schedulerStatusSchema = z.enum(["completed", "partial", "failed", "skipped"]);
@@ -15,6 +17,7 @@ export const governedKnowledgeSchedulerStepSchema = z.object({
   stepId: z.enum([
     "watchers",
     "source_acquisition",
+    "knowledge_quality_gate",
     "knowledge_consolidation",
     "promotion_dry_run",
     "training_queue_validation"
@@ -72,6 +75,7 @@ export type GovernedKnowledgeSchedulerReport = z.infer<typeof governedKnowledgeS
 type GovernedKnowledgeSchedulerOptions = {
   watcherKernel?: Pick<WatcherKernel, "run">;
   sourceAcquisitionService?: Pick<SourceAcquisitionService, "run">;
+  knowledgeQualityGateService?: Pick<KnowledgeQualityGateService, "evaluateAndPersist">;
   knowledgeConsolidationService?: Pick<KnowledgeConsolidationService, "buildAndPersist">;
   promotionGovernanceService?: Pick<KnowledgePromotionGovernanceService, "evaluateAndPersist">;
   trainingQueueValidationService?: Pick<TrainingQueueValidationService, "validateAndPersist">;
@@ -160,6 +164,7 @@ function statusFor(steps: SchedulerStep[]): GovernedKnowledgeSchedulerReport["st
 export class GovernedKnowledgeSchedulerService {
   private readonly watcherKernel: Pick<WatcherKernel, "run">;
   private readonly sourceAcquisitionService: Pick<SourceAcquisitionService, "run">;
+  private readonly knowledgeQualityGateService: Pick<KnowledgeQualityGateService, "evaluateAndPersist">;
   private readonly knowledgeConsolidationService: Pick<KnowledgeConsolidationService, "buildAndPersist">;
   private readonly promotionGovernanceService: Pick<KnowledgePromotionGovernanceService, "evaluateAndPersist">;
   private readonly trainingQueueValidationService: Pick<TrainingQueueValidationService, "validateAndPersist">;
@@ -170,6 +175,8 @@ export class GovernedKnowledgeSchedulerService {
   constructor(options: GovernedKnowledgeSchedulerOptions = {}) {
     this.watcherKernel = options.watcherKernel ?? new WatcherKernel();
     this.sourceAcquisitionService = options.sourceAcquisitionService ?? new SourceAcquisitionService();
+    this.knowledgeQualityGateService =
+      options.knowledgeQualityGateService ?? new KnowledgeQualityGateService();
     this.knowledgeConsolidationService =
       options.knowledgeConsolidationService ?? new KnowledgeConsolidationService();
     this.promotionGovernanceService =
@@ -217,6 +224,7 @@ export class GovernedKnowledgeSchedulerService {
     }
 
     const steps: SchedulerStep[] = [];
+    let sourceAcquisition: SourceAcquisitionFile | null = null;
     try {
       steps.push(await this.runStep("watchers", startedAt, normalized, async () => {
         const result = await this.watcherKernel.run({
@@ -241,54 +249,84 @@ export class GovernedKnowledgeSchedulerService {
           maxItemsPerSource: normalized.sourceBudget.maxItemsPerSource,
           timeoutMs: normalized.sourceBudget.timeoutMs
         });
+        sourceAcquisition = result;
         return {
           dryRun: result.dryRun,
           ...result.sourceStats
         };
       }));
 
-      steps.push(await this.runStep("knowledge_consolidation", startedAt, normalized, async () => {
-        const result = await this.knowledgeConsolidationService.buildAndPersist({
-          rebuildInteractionDigest: options.rebuildInteractions ?? true,
-          limit: normalized.interactionLimit
-        });
-        return {
-          objectCount: result.file.sourceStats.objectCount,
-          activeCount: result.file.sourceStats.activeCount,
-          guardedCount: result.file.sourceStats.guardedCount,
-          sourceAcquisitionItemsAnalyzed: result.sourceAcquisition?.sourceStats.itemCount ?? 0
-        };
-      }));
-
+      let downstreamBlocked = false;
       if (steps.at(-1)?.status === "failed") {
-        steps.push(this.skippedStep("promotion_dry_run", "knowledge_consolidation_failed"));
-        steps.push(this.skippedStep("training_queue_validation", "knowledge_consolidation_failed"));
+        steps.push(this.skippedStep("knowledge_quality_gate", "source_acquisition_failed"));
+        downstreamBlocked = true;
       } else {
-        steps.push(await this.runStep("promotion_dry_run", startedAt, normalized, async () => {
-          const report = await this.promotionGovernanceService.evaluateAndPersist({
-            mode: "dry_run",
-            validationMode: "none"
+        steps.push(await this.runStep("knowledge_quality_gate", startedAt, normalized, async () => {
+          const report = await this.knowledgeQualityGateService.evaluateAndPersist({
+            sourceAcquisition
           });
           return {
             gatePassed: report.gate.passed,
-            activePromotionCount: report.sourceStats.activePromotionCount,
-            trainingCandidateCount: report.sourceStats.trainingCandidateCount,
-            retrievalQueueItems: report.trainingQueue.sourceStats.byTarget.retrieval_knowledge ?? 0
+            evaluatedItemCount: report.sourceStats.evaluatedItemCount,
+            rejectedCount: report.sourceStats.rejectedCount,
+            guardedCount: report.sourceStats.guardedCount,
+            promotableCount: report.sourceStats.promotableCount,
+            genericRejectedCount: report.sourceStats.genericRejectedCount,
+            liveGuardedCount: report.sourceStats.liveGuardedCount
+          };
+        }));
+        downstreamBlocked =
+          steps.at(-1)?.status === "failed" || steps.at(-1)?.summary.gatePassed === false;
+      }
+
+      if (downstreamBlocked) {
+        steps.push(this.skippedStep("knowledge_consolidation", "knowledge_quality_gate_failed"));
+        steps.push(this.skippedStep("promotion_dry_run", "knowledge_quality_gate_failed"));
+        steps.push(this.skippedStep("training_queue_validation", "knowledge_quality_gate_failed"));
+      } else {
+        steps.push(await this.runStep("knowledge_consolidation", startedAt, normalized, async () => {
+          const result = await this.knowledgeConsolidationService.buildAndPersist({
+            rebuildInteractionDigest: options.rebuildInteractions ?? true,
+            limit: normalized.interactionLimit
+          });
+          return {
+            objectCount: result.file.sourceStats.objectCount,
+            activeCount: result.file.sourceStats.activeCount,
+            guardedCount: result.file.sourceStats.guardedCount,
+            sourceAcquisitionItemsAnalyzed: result.sourceAcquisition?.sourceStats.itemCount ?? 0
           };
         }));
 
         if (steps.at(-1)?.status === "failed") {
-          steps.push(this.skippedStep("training_queue_validation", "promotion_dry_run_failed"));
+          steps.push(this.skippedStep("promotion_dry_run", "knowledge_consolidation_failed"));
+          steps.push(this.skippedStep("training_queue_validation", "knowledge_consolidation_failed"));
         } else {
-          steps.push(await this.runStep("training_queue_validation", startedAt, normalized, async () => {
-            const report = await this.trainingQueueValidationService.validateAndPersist();
+          steps.push(await this.runStep("promotion_dry_run", startedAt, normalized, async () => {
+            const report = await this.promotionGovernanceService.evaluateAndPersist({
+              mode: "dry_run",
+              validationMode: "none"
+            });
             return {
               gatePassed: report.gate.passed,
-              queueItemCount: report.sourceStats.queueItemCount,
-              readyForPackCount: report.sourceStats.readyForPackCount,
-              studentSftAllowed: report.trainingAuthorization.studentSftAllowed
+              activePromotionCount: report.sourceStats.activePromotionCount,
+              trainingCandidateCount: report.sourceStats.trainingCandidateCount,
+              retrievalQueueItems: report.trainingQueue.sourceStats.byTarget.retrieval_knowledge ?? 0
             };
           }));
+
+          if (steps.at(-1)?.status === "failed") {
+            steps.push(this.skippedStep("training_queue_validation", "promotion_dry_run_failed"));
+          } else {
+            steps.push(await this.runStep("training_queue_validation", startedAt, normalized, async () => {
+              const report = await this.trainingQueueValidationService.validateAndPersist();
+              return {
+                gatePassed: report.gate.passed,
+                queueItemCount: report.sourceStats.queueItemCount,
+                readyForPackCount: report.sourceStats.readyForPackCount,
+                studentSftAllowed: report.trainingAuthorization.studentSftAllowed
+              };
+            }));
+          }
         }
       }
     } finally {

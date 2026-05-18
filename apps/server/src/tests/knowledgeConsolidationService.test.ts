@@ -91,6 +91,16 @@ test("knowledge consolidation turns interaction learning into canonical objects 
         async load() {
           return null;
         }
+      },
+      sourceAcquisitionStore: {
+        async load() {
+          return null;
+        }
+      },
+      knowledgeQualityGateService: {
+        async loadReport() {
+          return null;
+        }
       }
     });
 
@@ -180,6 +190,16 @@ test("knowledge consolidation keeps watcher candidates governed and non-active",
             ],
             acquisitionTasks: []
           };
+        }
+      },
+      sourceAcquisitionStore: {
+        async load() {
+          return null;
+        }
+      },
+      knowledgeQualityGateService: {
+        async loadReport() {
+          return null;
         }
       }
     });

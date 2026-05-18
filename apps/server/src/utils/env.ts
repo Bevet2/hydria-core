@@ -122,6 +122,10 @@ const envSchema = z.object({
     .string()
     .min(1)
     .default(projectPath("storage", "learning", "hydria-source-acquisition-v1.json")),
+  KNOWLEDGE_QUALITY_GATE_FILE: z
+    .string()
+    .min(1)
+    .default(projectPath("storage", "learning", "hydria-knowledge-quality-gate-v1.json")),
   SOURCE_ACQUISITION_NETWORK_ENABLED: z
     .string()
     .default("false")

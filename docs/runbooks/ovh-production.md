@@ -195,6 +195,7 @@ Run the watchers before consolidation when you want Hydria to inspect its own ga
 ```bash
 npm run watchers:run -- --scope=all --rebuild-interactions --limit=1000
 npm run knowledge:source-acquire -- --network --max-packs=5 --max-sources-per-pack=2 --max-items-per-source=2
+npm run knowledge:quality-gate
 npm run knowledge:source-gate
 npm run knowledge:consolidate -- --rebuild-interactions --limit=1000
 npm run knowledge:promote -- --mode=dry_run --validation=none
@@ -219,6 +220,7 @@ The scheduler is intentionally conservative:
 ```text
 watchers
 -> bounded source acquisition
+-> source quality gate
 -> Knowledge Object consolidation
 -> promotion dry-run only
 -> training queue validation only
@@ -231,6 +233,7 @@ This writes:
 ```text
 storage/learning/hydria-watchers-v1.json
 storage/learning/hydria-source-acquisition-v1.json
+storage/learning/hydria-knowledge-quality-gate-v1.json
 storage/learning/hydria-knowledge-promotion-v1.json
 storage/learning/hydria-training-candidate-queue-v1.json
 storage/learning/hydria-training-queue-validation-v1.json
@@ -260,15 +263,16 @@ stable-research-source-pack = OpenAlex + arXiv + Semantic Scholar + Crossref
 wikidata-general-knowledge-source-pack = Wikidata + Wikipedia dumps + DBpedia
 ```
 
-These packs are acquisition profiles. They do not bulk-import the sources, do not make the claims active, and do not train a model. `knowledge:source-acquire` is the next bounded step: it fetches a limited number of sources, parses JSON/HTML into source acquisition items, assigns refresh/expiration policy, groups corroborated evidence, and writes `hydria-source-acquisition-v1.json`. After consolidation, source-acquired items become non-active Knowledge Objects and are routed as `retrieval_knowledge` queue items until promotion and validation gates allow later use.
+These packs are acquisition profiles. They do not bulk-import the sources, do not make the claims active, and do not train a model. `knowledge:source-acquire` fetches a limited number of sources, parses JSON/HTML into source acquisition items, assigns refresh/expiration policy, groups corroborated evidence, and writes `hydria-source-acquisition-v1.json`. `knowledge:quality-gate` then rejects generic landing pages, holds live/high-risk facts in guarded state, and marks only stable corroborated facts as promotable. After consolidation, accepted source-acquired items become non-active Knowledge Objects and are routed as `retrieval_knowledge` queue items until promotion and validation gates allow later use.
 
 Source acquisition is explicit and bounded:
 
 ```bash
 npm run knowledge:source-acquire -- --network --max-packs=5 --max-sources-per-pack=2 --max-items-per-source=2 --timeout-ms=7000
+npm run knowledge:quality-gate
 ```
 
-Without `--network`, the acquisition run records skipped source checks and does not fetch remote content. The offline source gate is deterministic and safe for CI:
+Without `--network`, the acquisition run records skipped source checks and does not fetch remote content. The quality gate is deterministic and rejects poor/generic source items before consolidation. The offline source gate is deterministic and safe for CI:
 
 ```bash
 npm run knowledge:source-gate
@@ -341,6 +345,7 @@ The public read endpoint exposes the current watcher state:
 ```bash
 curl -fsS https://app.hydria.click/api/learning/watchers
 curl -fsS https://app.hydria.click/api/learning/source-acquisition
+curl -fsS https://app.hydria.click/api/learning/knowledge-quality
 curl -fsS https://app.hydria.click/api/learning/knowledge-scheduler
 curl -fsS https://app.hydria.click/api/learning/promotion
 curl -fsS https://app.hydria.click/api/learning/training-queue
@@ -352,6 +357,7 @@ External network checks are disabled by default. Enable only when the source-acq
 WATCHER_EXTERNAL_NETWORK_ENABLED=false
 SOURCE_ACQUISITION_NETWORK_ENABLED=false
 SOURCE_ACQUISITION_FILE=/app/storage/learning/hydria-source-acquisition-v1.json
+KNOWLEDGE_QUALITY_GATE_FILE=/app/storage/learning/hydria-knowledge-quality-gate-v1.json
 SOURCE_ACQUISITION_TIMEOUT_MS=7000
 SOURCE_ACQUISITION_MAX_PACKS=5
 SOURCE_ACQUISITION_MAX_SOURCES_PER_PACK=4
@@ -388,6 +394,7 @@ Run one manual, bounded cycle:
 sudo systemctl start hydria-knowledge-scheduler.service
 journalctl -u hydria-knowledge-scheduler.service -n 120 --no-pager
 curl -fsS https://app.hydria.click/api/learning/source-acquisition
+curl -fsS https://app.hydria.click/api/learning/knowledge-quality
 ```
 
 The service uses `MODEL_ROUTER_EXECUTION_ENABLED=false`, `MODEL_ROUTER_ALLOW_CLOUD=false`, and `LOCAL_MODEL_OBSERVER_ENABLED=false` inside `docker compose exec`; it is meant to protect the CPU/GPU layer by avoiding model generation entirely.
@@ -751,6 +758,7 @@ SOURCE_ACQUISITION_TIMEOUT_MS=7000
 SOURCE_ACQUISITION_MAX_PACKS=5
 SOURCE_ACQUISITION_MAX_SOURCES_PER_PACK=4
 SOURCE_ACQUISITION_MAX_ITEMS_PER_SOURCE=4
+KNOWLEDGE_QUALITY_GATE_FILE=/app/storage/learning/hydria-knowledge-quality-gate-v1.json
 KNOWLEDGE_SCHEDULER_REPORT_FILE=/app/storage/learning/hydria-knowledge-scheduler-v1.json
 KNOWLEDGE_SCHEDULER_LOCK_FILE=/app/storage/learning/hydria-knowledge-scheduler-v1.lock.json
 KNOWLEDGE_SCHEDULER_MIN_INTERVAL_MINUTES=360

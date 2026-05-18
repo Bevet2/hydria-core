@@ -147,6 +147,11 @@ test("source acquisition truncates long HTML summaries before schema validation"
           return null;
         }
       },
+      knowledgeQualityGateService: {
+        async loadReport() {
+          return null;
+        }
+      },
       sourceAcquisitionStore: {
         async load() {
           return file;
@@ -194,6 +199,11 @@ test("knowledge consolidation turns source acquisitions into non-active knowledg
       },
       watcherStore: {
         async load() {
+          return null;
+        }
+      },
+      knowledgeQualityGateService: {
+        async loadReport() {
           return null;
         }
       },

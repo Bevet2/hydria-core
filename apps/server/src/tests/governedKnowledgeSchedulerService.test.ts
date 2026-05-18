@@ -44,6 +44,24 @@ function buildScheduler(tempRoot: string, calls: string[]) {
         } as any;
       }
     },
+    knowledgeQualityGateService: {
+      async evaluateAndPersist() {
+        calls.push("knowledge_quality_gate");
+        return {
+          gate: {
+            passed: true
+          },
+          sourceStats: {
+            evaluatedItemCount: 10,
+            rejectedCount: 2,
+            guardedCount: 2,
+            promotableCount: 4,
+            genericRejectedCount: 2,
+            liveGuardedCount: 2
+          }
+        } as any;
+      }
+    },
     knowledgeConsolidationService: {
       async buildAndPersist() {
         calls.push("knowledge_consolidation");
@@ -130,6 +148,7 @@ test("governed knowledge scheduler runs bounded non-training pipeline", async ()
     assert.deepEqual(calls, [
       "watchers",
       "source_acquisition",
+      "knowledge_quality_gate",
       "knowledge_consolidation",
       "promotion_dry_run",
       "training_queue_validation"
