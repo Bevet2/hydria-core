@@ -173,3 +173,44 @@ test("chat runtime injects governed knowledge into model prompt and public trace
     await rm(tempRoot, { recursive: true, force: true });
   }
 });
+
+test("chat runtime answers from governed knowledge when local model falls back", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "hydria-chat-knowledge-fallback-"));
+  try {
+    const store = new KnowledgeObjectStore(
+      join(tempRoot, "knowledge-objects.json"),
+      join(tempRoot, "vault")
+    );
+    await store.save([buildKnowledgeObject()]);
+    const knowledgeRetrievalService = new KnowledgeRetrievalService({ knowledgeObjectStore: store });
+    const service = new ChatRuntimeService(
+      {
+        async answer() {
+          return {
+            ...buildAdapterResult("Local fallback"),
+            provider: "fallback",
+            model: "qwen2.5:3b",
+            validationIssues: ["local_timeout"]
+          };
+        }
+      },
+      undefined,
+      undefined,
+      null,
+      null,
+      knowledgeRetrievalService
+    );
+
+    const response = await service.sendMessage({
+      message: "What does Codd's relational model paper say about large shared data banks?"
+    });
+
+    assert.equal(response.knowledgeRetrieval.used, true);
+    assert.equal(response.generation.provider, "tool");
+    assert.equal(response.generation.model, "knowledge_retrieval");
+    assert.match(response.answer.answer, /relational model/i);
+    assert.match(response.answer.answer, /10\.1145\/362384\.362685|crossref/i);
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});

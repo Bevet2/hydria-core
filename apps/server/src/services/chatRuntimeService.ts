@@ -1169,6 +1169,53 @@ function buildDeterministicRuntimeDraft(args: {
   };
 }
 
+function sourceCueForKnowledgeHit(hit: ChatKnowledgeRetrievalMetadata["hits"][number]) {
+  const doiSource = hit.sourceUris.find((source) => /doi|crossref|openalex/i.test(source));
+  return doiSource ?? hit.sourceUris[0] ?? hit.title;
+}
+
+function buildKnowledgeRetrievalFallbackDraft(args: {
+  knowledgeRetrieval: ChatKnowledgeRetrievalMetadata;
+  category: QuestionCategory;
+  routingQuestion: string;
+  language: ConversationState["language"];
+}): ChatDraft | null {
+  const hit = args.knowledgeRetrieval.hits[0];
+  if (!hit) {
+    return null;
+  }
+
+  const sourceCue = sourceCueForKnowledgeHit(hit);
+  const summary = compact(hit.summary || hit.content, 360);
+  const title = compact(hit.title, 180);
+  const answer =
+    args.language === "fr"
+      ? `D'apres ${title}, ${summary} Source: ${sourceCue}.`
+      : `According to ${title}, ${summary} Source: ${sourceCue}.`;
+  return buildDeterministicRuntimeDraft({
+    answer: {
+      modelRole: "student",
+      answer,
+      key_points:
+        args.language === "fr"
+          ? ["Connaissance gouvernee utilisee", "Source conservee"]
+          : ["Governed knowledge used", "Source preserved"],
+      assumptions: [
+        args.language === "fr"
+          ? "Reponse deterministe utilisee car la generation locale n'a pas produit de brouillon fiable."
+          : "Deterministic answer used because local generation did not produce a reliable draft."
+      ],
+      confidence: Math.round(Math.max(55, Math.min(88, hit.confidence * 100)))
+    },
+    category: args.category,
+    routingQuestion: args.routingQuestion,
+    model: "knowledge_retrieval",
+    displayName: "Governed knowledge retrieval",
+    routingReason: "A governed retrieval hit was available and model generation fell back; answer from the source-backed hit.",
+    pipeline: ["knowledge_retrieval", "deterministic_source_answer"]
+  });
+}
+
 function buildUserFactSetupDraft(args: {
   conversationState: ConversationState;
   newUserMessage: string;
@@ -1759,6 +1806,30 @@ export class ChatRuntimeService {
       };
     }
     let usedRetry = draft.generation.usedRetry;
+
+    if (draft.generation.provider === "fallback" && knowledgeRetrieval.used) {
+      const retrievalFallbackDraft = buildKnowledgeRetrievalFallbackDraft({
+        knowledgeRetrieval,
+        category,
+        routingQuestion: draft.routingQuestion,
+        language: conversationState.language
+      });
+      if (retrievalFallbackDraft) {
+        draft = retrievalFallbackDraft;
+        conversationQuality = this.analyzeQuality({
+          runtimeMode,
+          conversationState,
+          activeConstraintCapsule,
+          answerPolicy,
+          newUserMessage: args.message,
+          answer: draft.answer.answer,
+          lastAssistantAnswer: session.lastAssistantAnswer,
+          recentMessages: session.messages,
+          toolRouting: tooling.routing
+        });
+        usedRetry = true;
+      }
+    }
 
     if (
       draft.generation.provider === "ollama" &&
