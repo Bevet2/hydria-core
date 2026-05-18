@@ -127,6 +127,36 @@ test("source acquisition truncates long HTML summaries before schema validation"
     assert.ok(item);
     assert.ok(item.summary.length <= 360);
     assert.ok(item.content.length <= 1200);
+
+    const knowledgeStore = new KnowledgeObjectStore(
+      join(tempRoot, "knowledge-objects.json"),
+      join(tempRoot, "vault")
+    );
+    const consolidation = new KnowledgeConsolidationService({
+      knowledgeObjectStore: knowledgeStore,
+      interactionLearningDigestService: {
+        async load() {
+          return emptyDigest();
+        },
+        async buildAndPersist() {
+          return emptyDigest();
+        }
+      },
+      watcherStore: {
+        async load() {
+          return null;
+        }
+      },
+      sourceAcquisitionStore: {
+        async load() {
+          return file;
+        }
+      }
+    });
+    const result = await consolidation.buildAndPersist();
+    const [object] = result.file.objects;
+    assert.ok(object);
+    assert.ok(object.summary.length <= 320);
   } finally {
     await rm(tempRoot, { recursive: true, force: true });
   }
