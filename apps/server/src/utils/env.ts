@@ -118,6 +118,18 @@ const envSchema = z.object({
     .string()
     .min(1)
     .default(projectPath("storage", "learning", "hydria-training-queue-validation-v1.json")),
+  SOURCE_ACQUISITION_FILE: z
+    .string()
+    .min(1)
+    .default(projectPath("storage", "learning", "hydria-source-acquisition-v1.json")),
+  SOURCE_ACQUISITION_NETWORK_ENABLED: z
+    .string()
+    .default("false")
+    .transform((value) => value.toLowerCase() === "true"),
+  SOURCE_ACQUISITION_TIMEOUT_MS: z.coerce.number().int().min(1000).default(7000),
+  SOURCE_ACQUISITION_MAX_PACKS: z.coerce.number().int().min(1).max(20).default(5),
+  SOURCE_ACQUISITION_MAX_SOURCES_PER_PACK: z.coerce.number().int().min(1).max(8).default(4),
+  SOURCE_ACQUISITION_MAX_ITEMS_PER_SOURCE: z.coerce.number().int().min(1).max(20).default(4),
   TRAINING_QUEUE_MIN_SFT_READY_ITEMS: z.coerce.number().int().min(1).default(6),
   WATCHER_EXTERNAL_NETWORK_ENABLED: z
     .string()

@@ -35,7 +35,8 @@ export const knowledgeObjectSourceSchema = z.object({
     "playground",
     "chat",
     "manual",
-    "watcher"
+    "watcher",
+    "source_acquisition"
   ]),
   sourceId: z.string().min(1).max(180),
   sourceUri: z.string().min(1).max(260).nullable().default(null),

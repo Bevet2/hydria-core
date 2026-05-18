@@ -194,6 +194,8 @@ Run the watchers before consolidation when you want Hydria to inspect its own ga
 
 ```bash
 npm run watchers:run -- --scope=all --rebuild-interactions --limit=1000
+npm run knowledge:source-acquire -- --network --max-packs=5 --max-sources-per-pack=2 --max-items-per-source=2
+npm run knowledge:source-gate
 npm run knowledge:consolidate -- --rebuild-interactions --limit=1000
 npm run knowledge:promote -- --mode=dry_run --validation=none
 npm run training:queue-validate
@@ -203,12 +205,14 @@ This writes:
 
 ```text
 storage/learning/hydria-watchers-v1.json
+storage/learning/hydria-source-acquisition-v1.json
 storage/learning/hydria-knowledge-promotion-v1.json
 storage/learning/hydria-training-candidate-queue-v1.json
 storage/learning/hydria-training-queue-validation-v1.json
 storage/knowledge/hydria-knowledge-objects-v1.json
 storage/knowledge/vault/index.md
 storage/knowledge/vault/*.md
+storage/training/source-acquisition-gate-v1.json
 ```
 
 The JSON file is canonical. The Markdown vault is an Obsidian-like readable graph projection with frontmatter, tags, sources, and links.
@@ -230,7 +234,21 @@ stable-research-source-pack = OpenAlex + arXiv + Semantic Scholar + Crossref
 wikidata-general-knowledge-source-pack = Wikidata + Wikipedia dumps + DBpedia
 ```
 
-These packs are acquisition profiles. They do not bulk-import the sources, do not make the claims active, and do not train a model. After consolidation, source packs are routed as `retrieval_knowledge` queue items until enough source evidence has been fetched and corroborated.
+These packs are acquisition profiles. They do not bulk-import the sources, do not make the claims active, and do not train a model. `knowledge:source-acquire` is the next bounded step: it fetches a limited number of sources, parses JSON/HTML into source acquisition items, assigns refresh/expiration policy, groups corroborated evidence, and writes `hydria-source-acquisition-v1.json`. After consolidation, source-acquired items become non-active Knowledge Objects and are routed as `retrieval_knowledge` queue items until promotion and validation gates allow later use.
+
+Source acquisition is explicit and bounded:
+
+```bash
+npm run knowledge:source-acquire -- --network --max-packs=5 --max-sources-per-pack=2 --max-items-per-source=2 --timeout-ms=7000
+```
+
+Without `--network`, the acquisition run records skipped source checks and does not fetch remote content. The offline source gate is deterministic and safe for CI:
+
+```bash
+npm run knowledge:source-gate
+```
+
+It validates the five source packs, bounded parsing, corroboration, high-risk guarding, refresh/decay policy, and retrieval selection against a fixture.
 
 Important production rule: watchers do not fine-tune models, do not directly change runtime behavior, and do not auto-promote dynamic facts to active knowledge. They create governed candidates and acquisition tasks. A candidate must be corroborated, validated, and promoted through the Knowledge Object lifecycle before `KnowledgeInjectionService` can use it as active contextual memory.
 
@@ -296,6 +314,7 @@ The public read endpoint exposes the current watcher state:
 
 ```bash
 curl -fsS https://app.hydria.click/api/learning/watchers
+curl -fsS https://app.hydria.click/api/learning/source-acquisition
 curl -fsS https://app.hydria.click/api/learning/promotion
 curl -fsS https://app.hydria.click/api/learning/training-queue
 ```
@@ -304,6 +323,12 @@ External network checks are disabled by default. Enable only when the source-acq
 
 ```text
 WATCHER_EXTERNAL_NETWORK_ENABLED=false
+SOURCE_ACQUISITION_NETWORK_ENABLED=false
+SOURCE_ACQUISITION_FILE=/app/storage/learning/hydria-source-acquisition-v1.json
+SOURCE_ACQUISITION_TIMEOUT_MS=7000
+SOURCE_ACQUISITION_MAX_PACKS=5
+SOURCE_ACQUISITION_MAX_SOURCES_PER_PACK=4
+SOURCE_ACQUISITION_MAX_ITEMS_PER_SOURCE=4
 KNOWLEDGE_PROMOTION_FILE=/app/storage/learning/hydria-knowledge-promotion-v1.json
 TRAINING_CANDIDATE_QUEUE_FILE=/app/storage/learning/hydria-training-candidate-queue-v1.json
 TRAINING_QUEUE_VALIDATION_FILE=/app/storage/learning/hydria-training-queue-validation-v1.json
@@ -664,6 +689,11 @@ MODEL_RUNTIME_HEAVY_MAX_CONCURRENCY=1
 MODEL_ROUTER_RERANKER_BASE_URL=
 MODEL_ROUTER_RERANKER_TIMEOUT_MS=30000
 WATCHER_EXTERNAL_NETWORK_ENABLED=false
+SOURCE_ACQUISITION_NETWORK_ENABLED=false
+SOURCE_ACQUISITION_TIMEOUT_MS=7000
+SOURCE_ACQUISITION_MAX_PACKS=5
+SOURCE_ACQUISITION_MAX_SOURCES_PER_PACK=4
+SOURCE_ACQUISITION_MAX_ITEMS_PER_SOURCE=4
 HYDRIA_DOCKER_LOCAL_MODEL_OBSERVER_ENABLED=false
 TRAINING_ENDPOINTS_ENABLED=true
 TRAINING_ENDPOINTS_REQUIRE_API_KEY=true

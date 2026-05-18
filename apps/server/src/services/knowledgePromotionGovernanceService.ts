@@ -58,6 +58,10 @@ function isExternalSourcePack(object: KnowledgeObject) {
   return isWatcherObject(object) && object.tags.includes("source-pack");
 }
 
+function isSourceAcquisitionObject(object: KnowledgeObject) {
+  return object.sources.some((source) => source.sourceType === "source_acquisition");
+}
+
 function isDynamicOrLive(object: KnowledgeObject) {
   return (
     object.knowledgeClass === "dynamic" ||
@@ -108,7 +112,7 @@ function validationFor(object: KnowledgeObject) {
 }
 
 function targetForTraining(object: KnowledgeObject): TrainingCandidateQueueItem["target"] {
-  if (isExternalSourcePack(object)) {
+  if (isExternalSourcePack(object) || isSourceAcquisitionObject(object)) {
     return "retrieval_knowledge";
   }
   if (object.type === "tool_rule") {

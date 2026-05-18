@@ -9,15 +9,21 @@ import type {
   KnowledgeObjectState,
   KnowledgeObjectType
 } from "../types/knowledgeObjects.js";
+import type {
+  SourceAcquisitionFile,
+  SourceAcquisitionItem
+} from "../types/sourceAcquisition.js";
 import type { WatcherKnowledgeCandidate, WatcherState } from "../types/watchers.js";
 import { InteractionLearningDigestService } from "./interactionLearningDigestService.js";
 import { KnowledgeObjectStore } from "./knowledgeObjectStore.js";
+import { SourceAcquisitionStore } from "./sourceAcquisitionStore.js";
 import { WatcherStore } from "./watchers/watcherStore.js";
 
 type KnowledgeConsolidationServiceOptions = {
   interactionLearningDigestService?: Pick<InteractionLearningDigestService, "load" | "buildAndPersist">;
   knowledgeObjectStore?: Pick<KnowledgeObjectStore, "upsertMany" | "load">;
   watcherStore?: Pick<WatcherStore, "load">;
+  sourceAcquisitionStore?: Pick<SourceAcquisitionStore, "load">;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -191,6 +197,41 @@ function watcherTagsFor(candidate: WatcherKnowledgeCandidate, type: KnowledgeObj
   ].filter((value): value is string => Boolean(value)).slice(0, 16);
 }
 
+function sourceAcquisitionClassFor(item: SourceAcquisitionItem): KnowledgeObjectClass {
+  if (item.riskLevel === "high") {
+    return "guarded";
+  }
+  if (item.freshness === "live" || item.freshness === "recent") {
+    return "dynamic";
+  }
+  if (item.freshness === "stable") {
+    return "stable";
+  }
+  return "experimental";
+}
+
+function sourceAcquisitionStateFor(item: SourceAcquisitionItem): KnowledgeObjectState {
+  if (item.state === "expired") {
+    return "archived";
+  }
+  if (item.state === "corroborated" && item.riskLevel !== "high") {
+    return "validated";
+  }
+  return "candidate";
+}
+
+function sourceAcquisitionTagsFor(item: SourceAcquisitionItem) {
+  return [
+    "source-acquisition",
+    item.packId,
+    item.freshness,
+    item.category ?? null,
+    item.state,
+    item.riskLevel === "high" ? "guarded" : null,
+    ...item.tags
+  ].filter((value): value is string => Boolean(value)).slice(0, 16);
+}
+
 export class KnowledgeConsolidationService {
   private readonly interactionLearningDigestService: Pick<
     InteractionLearningDigestService,
@@ -198,12 +239,14 @@ export class KnowledgeConsolidationService {
   >;
   private readonly knowledgeObjectStore: Pick<KnowledgeObjectStore, "upsertMany" | "load">;
   private readonly watcherStore: Pick<WatcherStore, "load">;
+  private readonly sourceAcquisitionStore: Pick<SourceAcquisitionStore, "load">;
 
   constructor(options: KnowledgeConsolidationServiceOptions = {}) {
     this.interactionLearningDigestService =
       options.interactionLearningDigestService ?? new InteractionLearningDigestService();
     this.knowledgeObjectStore = options.knowledgeObjectStore ?? new KnowledgeObjectStore();
     this.watcherStore = options.watcherStore ?? new WatcherStore();
+    this.sourceAcquisitionStore = options.sourceAcquisitionStore ?? new SourceAcquisitionStore();
   }
 
   async buildAndPersist(args: { rebuildInteractionDigest?: boolean; limit?: number } = {}) {
@@ -212,12 +255,14 @@ export class KnowledgeConsolidationService {
       : (await this.interactionLearningDigestService.load()) ??
         (await this.interactionLearningDigestService.buildAndPersist({ limit: args.limit }));
     const watcherState = await this.watcherStore.load();
-    const objects = this.buildObjects(digest, watcherState);
+    const sourceAcquisition = await this.sourceAcquisitionStore.load();
+    const objects = this.buildObjects(digest, watcherState, sourceAcquisition);
     const file = await this.knowledgeObjectStore.upsertMany(objects);
 
     return {
       digest,
       watcherState,
+      sourceAcquisition,
       file,
       objects
     };
@@ -227,12 +272,19 @@ export class KnowledgeConsolidationService {
     return this.knowledgeObjectStore.load();
   }
 
-  private buildObjects(digest: InteractionLearningDigest, watcherState: WatcherState | null) {
+  private buildObjects(
+    digest: InteractionLearningDigest,
+    watcherState: WatcherState | null,
+    sourceAcquisition: SourceAcquisitionFile | null
+  ) {
     const now = new Date().toISOString();
     return [
       ...digest.candidates.map((candidate) => this.candidateToObject(candidate, now)),
       ...(watcherState?.candidates ?? []).map((candidate) =>
         this.watcherCandidateToObject(candidate, now)
+      ),
+      ...(sourceAcquisition?.items ?? []).map((item) =>
+        this.sourceAcquisitionItemToObject(item, now)
       )
     ];
   }
@@ -316,6 +368,52 @@ export class KnowledgeConsolidationService {
       relations: [],
       decay: decayFor(knowledgeClass, now),
       createdAt: candidate.createdAt,
+      updatedAt: now
+    };
+  }
+
+  private sourceAcquisitionItemToObject(item: SourceAcquisitionItem, now: string): KnowledgeObject {
+    const knowledgeClass = sourceAcquisitionClassFor(item);
+    const state = sourceAcquisitionStateFor(item);
+    const objectId = `ko::source-acquisition::${stableShortHash(item.itemId)}`;
+    const confidence = Number(
+      clamp(
+        item.confidence * (item.corroboratedSourceCount >= 2 ? 1 : 0.88),
+        0,
+        0.9
+      ).toFixed(3)
+    );
+
+    return {
+      objectId,
+      title: item.title,
+      type: "fact",
+      knowledgeClass,
+      state,
+      domain: item.domain,
+      category: item.category,
+      content: compact(item.content, 1200),
+      summary: compact(item.summary),
+      tags: sourceAcquisitionTagsFor(item),
+      confidence,
+      riskLevel: item.riskLevel,
+      evidenceCount: item.corroboratedSourceCount,
+      sources: [
+        {
+          sourceType: "source_acquisition",
+          sourceId: item.itemId,
+          sourceUri: item.sourceUrl,
+          evidenceRecordIds: []
+        }
+      ],
+      relations: [],
+      decay: {
+        policy: item.decay.policy,
+        validFrom: item.decay.retrievedAt,
+        expiresAt: item.decay.expiresAt,
+        rationale: compact(item.decay.rationale, 240)
+      },
+      createdAt: item.retrievedAt,
       updatedAt: now
     };
   }

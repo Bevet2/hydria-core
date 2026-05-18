@@ -15,6 +15,8 @@
     "start": "npm run start -w @hydria-arena/server",
     "knowledge:refresh": "npm run knowledge:refresh -w @hydria-arena/server",
     "knowledge:consolidate": "npm run knowledge:consolidate -w @hydria-arena/server --",
+    "knowledge:source-acquire": "npm run knowledge:source-acquire -w @hydria-arena/server --",
+    "knowledge:source-gate": "npm run knowledge:source-gate -w @hydria-arena/server --",
     "watchers:run": "npm run watchers:run -w @hydria-arena/server --",
     "knowledge:promote": "npm run knowledge:promote -w @hydria-arena/server --",
     "training:queue-validate": "npm run training:queue-validate -w @hydria-arena/server --",

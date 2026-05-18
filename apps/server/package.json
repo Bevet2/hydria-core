@@ -11,6 +11,8 @@
     "start": "node dist/index.js",
     "knowledge:refresh": "tsx src/scripts/refreshKnowledgeLayer.ts",
     "knowledge:consolidate": "tsx src/scripts/runKnowledgeConsolidation.ts",
+    "knowledge:source-acquire": "tsx src/scripts/runSourceAcquisition.ts",
+    "knowledge:source-gate": "tsx src/scripts/runSourceAcquisitionGate.ts",
     "watchers:run": "tsx src/scripts/runWatchers.ts",
     "knowledge:promote": "tsx src/scripts/runKnowledgePromotionGovernance.ts",
     "training:queue-validate": "tsx src/scripts/runTrainingQueueValidation.ts",
