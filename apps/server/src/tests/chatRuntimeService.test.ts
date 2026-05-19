@@ -282,6 +282,42 @@ test("chat runtime repairs on-prem budget decisions with explicit constraint use
   assert.equal(third.conversationQuality.passed, true);
 });
 
+test("chat runtime repairs single-turn on-prem budget decisions even when category is broad", async () => {
+  const service = new ChatRuntimeService({
+    async answer() {
+      return buildAdapterResult(
+        "Je recommande une option on-prem : faire un rollback pour revenir a la derniere version fonctionnelle."
+      );
+    }
+  });
+
+  const response = await service.sendMessage({
+    message: "Budget bloque, deadline demain, on-prem uniquement. Tu recommandes quoi ?"
+  });
+
+  assert.match(response.answer.answer, /on-prem/i);
+  assert.match(response.answer.answer, /minimale|reversible/i);
+  assert.match(response.answer.answer, /reconsidere|reconsider/i);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
+test("chat runtime preserves mid-market as a decisive product strategy term", async () => {
+  const service = new ChatRuntimeService({
+    async answer() {
+      return buildAdapterResult(
+        "Given the weak market signals and lack of budget, I recommend narrowing the beta launch before expanding."
+      );
+    }
+  });
+
+  const response = await service.sendMessage({
+    message: "No budget for a broad launch, weak mid-market signal only. Should we launch broadly or narrow the beta?"
+  });
+
+  assert.match(response.answer.answer, /mid-market/i);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
 test("chat runtime converts strategic fallback repairs into governed runtime decisions", async () => {
   const service = new ChatRuntimeService({
     async answer() {
@@ -342,6 +378,28 @@ test("chat runtime answers Hydria Core self-knowledge without waiting for model 
   assert.equal(response.generation.provider, "tool");
   assert.equal(response.generation.model, "runtime_product_knowledge");
   assert.equal(response.generation.usedStaticFallback, false);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
+test("chat runtime answers Hydria watcher self-knowledge with watcher-specific facts", async () => {
+  let adapterCalled = false;
+  const service = new ChatRuntimeService({
+    async answer() {
+      adapterCalled = true;
+      return buildAdapterResult("Model answer that should not be needed.");
+    }
+  });
+
+  const response = await service.sendMessage({
+    message: "Explique le role des watchers dans Hydria Core."
+  });
+
+  assert.equal(adapterCalled, false);
+  assert.match(response.answer.answer, /watchers/i);
+  assert.match(response.answer.answer, /connaissance|knowledge/i);
+  assert.equal(response.generation.provider, "tool");
+  assert.equal(response.generation.model, "runtime_product_knowledge");
+  assert.equal(response.evidenceCapsule.answerabilityMode, "knowledge_augmented");
   assert.equal(response.conversationQuality.passed, true);
 });
 

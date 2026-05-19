@@ -154,3 +154,18 @@ test("answerability planner does not force source research for practical everyda
   assert.equal(plan.requiresResearch, false);
   assert.equal(plan.sourceBound, false);
 });
+
+test("answerability planner treats English explain turns as sourceable factual lookups", () => {
+  const plan = planner.planRequirement({
+    question: "Explain eventual consistency with a practical example.",
+    userMessage: "Explain eventual consistency with a practical example.",
+    category: "technical_explanation",
+    toolRouting: route({}),
+    conversationState: createInitialState(),
+    hasPriorConversation: false
+  });
+
+  assert.equal(plan.answerabilityMode, "source_backed");
+  assert.ok(plan.requiredEvidence.includes("source_research"));
+  assert.equal(plan.requiresResearch, true);
+});

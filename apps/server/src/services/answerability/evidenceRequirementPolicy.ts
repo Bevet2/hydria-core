@@ -45,7 +45,7 @@ export type EvidenceRequirementPolicyInput = {
 };
 
 const DIRECT_FACT_LOOKUP_PATTERN =
-  /\b(?:who is|who was|what is|what are|tell me about|biography|history of|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce que|c[' ]?est quoi|biographie|histoire de|explique|define|definition|d[e\u00e9]finis)\b/i;
+  /\b(?:who is|who was|what is|what are|tell me about|biography|history of|explain|describe|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce que|c[' ]?est quoi|biographie|histoire de|explique|define|definition|d[e\u00e9]finis)\b/i;
 const LIVE_OR_CURRENT_PATTERN =
   /\b(?:today|current|currently|latest|recent|this week|now|live|news|weather|price|stock|crypto|release|version|ceo|president|official|source|cite|verify|aujourd'hui|actuel|actuelle|dernier|derniere|derni[e\u00e8]re|r[e\u00e9]cent|cette semaine|maintenant|m[e\u00e9]t[e\u00e9]o|prix|bourse|crypto|version|sortie|pdg|pr[e\u00e9]sident|officiel|source|cite|v[e\u00e9]rifie)\b/i;
 const MEMORY_PATTERN =

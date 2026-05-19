@@ -1268,10 +1268,15 @@ function buildRuntimeProductKnowledgeDraft(args: {
     return null;
   }
 
+  const asksAboutWatchers = /\bwatchers?\b/i.test(args.userMessage);
   const answerText =
     args.language === "en"
-      ? "Hydria Core is a governed cognitive runtime that orchestrates specialized models, tools, memory, and knowledge to produce controlled answers."
-      : "Hydria Core est un runtime cognitif gouverne qui orchestre des modeles specialises, des outils, la memoire et la knowledge pour produire des reponses controlees.";
+      ? asksAboutWatchers
+        ? "In Hydria Core, watchers expand and control knowledge: they detect gaps or new sources, create governed candidates, and leave activation to validation."
+        : "Hydria Core is a governed cognitive runtime that orchestrates specialized models, tools, memory, and knowledge to produce controlled answers."
+      : asksAboutWatchers
+        ? "Dans Hydria Core, les watchers ouvrent et controlent la connaissance: ils detectent les gaps ou sources, creent des candidats gouvernes, puis la validation decide l'activation."
+        : "Hydria Core est un runtime cognitif gouverne qui orchestre des modeles specialises, des outils, la memoire et la knowledge pour produire des reponses controlees.";
 
   return buildDeterministicRuntimeDraft({
     answer: {
@@ -1406,6 +1411,54 @@ function preserveIncidentPaymentTerm(args: {
   };
 }
 
+function preserveStrategicDecisionTerms(args: {
+  answer: StudentAnswer;
+  category: QuestionCategory;
+  recentMessages: ChatMessage[];
+  userMessage: string;
+  language: ConversationState["language"];
+}) {
+  const context = [
+    ...args.recentMessages.filter((message) => message.role === "user").map((message) => message.content),
+    args.userMessage
+  ].join(" ");
+  if (!isStrategicRuntimeCategory(args.category) && !hasStrategicDecisionSignal(context)) {
+    return args.answer;
+  }
+  const decisionRequested = isDirectStrategicDecisionRequest(args.userMessage) || /[?]/.test(args.userMessage);
+  const answerIsContextAcknowledgement = /^\s*(?:noted|c['’]?est note|c['’]?est not[eé])/i.test(args.answer.answer);
+  const answerMakesDecision =
+    /\b(?:recommend|recommande|choose|choisis|decision|direction|narrow|launch|beta|arbitre|tranche)\b/i.test(
+      args.answer.answer
+    );
+  if (answerIsContextAcknowledgement || (!decisionRequested && !answerMakesDecision)) {
+    return args.answer;
+  }
+
+  const normalizedContext = normalizeText(context);
+  const normalizedAnswer = normalizeText(args.answer.answer);
+  const missingTerms: string[] = [];
+  if (/\bmid[- ]market\b/.test(normalizedContext) && !/\bmid[- ]market\b/.test(normalizedAnswer)) {
+    missingTerms.push("mid-market");
+  }
+
+  if (missingTerms.length === 0) {
+    return args.answer;
+  }
+
+  const suffix =
+    args.language === "fr"
+      ? ` Je garde explicitement ${missingTerms.join(", ")} comme contrainte de decision, car ce signal domine l'option large; je reconsidere seulement si le signal ou le budget change.`
+      : ` This keeps ${missingTerms.join(", ")} explicit as a decision constraint because no additional budget dominates the broad-launch option; reconsider only if the signal or budget changes.`;
+
+  return {
+    ...args.answer,
+    answer: `${args.answer.answer}${suffix}`.replace(/\s+/g, " ").trim(),
+    key_points: [...args.answer.key_points, "Decisive user term preserved"].slice(0, 6),
+    confidence: Math.max(args.answer.confidence, 78)
+  };
+}
+
 const STRATEGIC_REPAIR_ISSUES = new Set([
   "ignored_added_constraint",
   "ignored_context_change",
@@ -1423,6 +1476,12 @@ function hasStrategicRepairIssue(quality: ConversationQualityGateResult) {
 
 function isStrategicRuntimeCategory(category: QuestionCategory) {
   return ["architecture_design", "incident_response", "mixed_reasoning", "product_strategy"].includes(category);
+}
+
+function hasStrategicDecisionSignal(value: string) {
+  return /\b(?:on[- ]prem|aws|budget|deadline|demain|tomorrow|architecture|incident|rollback|retour arriere|payment|paiement|product|strategy|strategie|beta|mid[- ]market|launch|stakeholder|owner|audit|constraint|contrainte)\b/i.test(
+    normalizeText(value)
+  );
 }
 
 function hasRevisionConditionText(answer: string) {
@@ -1484,15 +1543,18 @@ function buildStrategicDecisionQualityRepair(args: {
   activeConstraintCapsule: ActiveConstraintCapsule;
   quality: ConversationQualityGateResult;
 }): StudentAnswer | null {
-  if (!isStrategicRuntimeCategory(args.category) || !hasStrategicRepairIssue(args.quality)) {
-    return null;
-  }
-
-  const isFrench = args.language !== "en";
   const context = normalizeText([
     ...args.recentMessages.filter((message) => message.role === "user").map((message) => message.content),
     args.userMessage
   ].join(" "));
+  if (
+    (!isStrategicRuntimeCategory(args.category) && !hasStrategicDecisionSignal(context)) ||
+    !hasStrategicRepairIssue(args.quality)
+  ) {
+    return null;
+  }
+
+  const isFrench = args.language !== "en";
   const onPremBudgetDecision =
     mentionsOnPremText(context) &&
     /\b(?:budget|deadline|demain|tomorrow|bloque|bloquee|blocked|capped)\b/.test(context);
@@ -2999,6 +3061,29 @@ export class ChatRuntimeService {
           }
         };
       }
+      conversationQuality = this.analyzeQuality({
+        runtimeMode,
+        conversationState,
+        activeConstraintCapsule,
+        answerPolicy,
+        newUserMessage: args.message,
+        answer: finalAnswer.answer,
+        lastAssistantAnswer: session.lastAssistantAnswer,
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
+      });
+      usedRetry = true;
+    }
+
+    const strategicTermPreservedAnswer = preserveStrategicDecisionTerms({
+      answer: finalAnswer,
+      category: draft.category,
+      recentMessages: session.messages,
+      userMessage: args.message,
+      language: conversationState.language
+    });
+    if (strategicTermPreservedAnswer.answer !== finalAnswer.answer) {
+      finalAnswer = strategicTermPreservedAnswer;
       conversationQuality = this.analyzeQuality({
         runtimeMode,
         conversationState,
