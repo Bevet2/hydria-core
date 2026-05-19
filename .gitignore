@@ -26,6 +26,7 @@ storage/benchmarks/hydria-core-hidden-generalization-gate-v1.json
 storage/datasets/student-local-sft*.jsonl
 storage/datasets/student-local-sft*-summary*.json
 storage/training/
+storage/observability/
 outputs/
 models/local/ollama-store/
 !apps/server/src/storage/history.json

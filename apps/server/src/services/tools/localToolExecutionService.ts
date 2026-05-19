@@ -1,8 +1,12 @@
+import { randomUUID } from "node:crypto";
 import { readdir } from "node:fs/promises";
 import { relative } from "node:path";
 import { load } from "cheerio";
 import type { ResearchToolLog, ToolRoutingDecision } from "../../types/arena.js";
+import type { ExecutionGovernanceRequestInput } from "../../types/execution.js";
 import { projectRoot } from "../../utils/env.js";
+import { logger } from "../../utils/logger.js";
+import { ExecutionGovernanceService } from "../execution/executionGovernanceService.js";
 
 export type LocalToolExecutionResult = {
   toolType: ToolRoutingDecision["toolType"];
@@ -12,6 +16,11 @@ export type LocalToolExecutionResult = {
   confidenceScore: number;
   resultLabel: string;
   sources?: ResearchToolLog["sources"];
+  executionAuditIds?: string[];
+};
+
+type LocalToolExecutionServiceOptions = {
+  executionGovernanceService?: Pick<ExecutionGovernanceService, "plan"> | null;
 };
 
 type WeatherLanguage = "en" | "fr";
@@ -286,6 +295,120 @@ function extractLanguage(args: ToolRoutingDecision): WeatherLanguage {
 function extractStringArg(args: ToolRoutingDecision, key: string) {
   const value = args.extractedArgs?.[key];
   return typeof value === "string" ? value.trim() : null;
+}
+
+function buildToolExecutionActionId(routing: ToolRoutingDecision) {
+  return `local-tool::${routing.toolType}::${routing.intent}::${randomUUID()}`;
+}
+
+function buildExecutionProvenance(routing: ToolRoutingDecision, actionId: string, reason: string) {
+  return {
+    requestedBy: "core" as const,
+    requestId: actionId,
+    source: "local-tool-execution",
+    parentTraceId: null,
+    reason: `${routing.toolType}/${routing.intent}: ${reason}`
+  };
+}
+
+function hasExplicitCurrencyRate(routing: ToolRoutingDecision) {
+  const rate = routing.extractedArgs?.rate;
+  return typeof rate === "number" && Number.isFinite(rate);
+}
+
+function getRepoHint(routing: ToolRoutingDecision) {
+  return (
+    extractStringArg(routing, "repo") ??
+    extractStringArg(routing, "url") ??
+    extractStringArg(routing, "repository") ??
+    extractStringArg(routing, "fileHint")
+  );
+}
+
+function buildLocalToolGovernanceRequest(
+  routing: ToolRoutingDecision
+): ExecutionGovernanceRequestInput | null {
+  if (!routing.toolRequired) {
+    return null;
+  }
+
+  const actionId = buildToolExecutionActionId(routing);
+  const liveAcquisition = (description: string): ExecutionGovernanceRequestInput => ({
+    actionId,
+    subject: "local_tool",
+    actionKind: "acquisition_fetch",
+    capability: "fetcher_http",
+    description,
+    requestedPermissions: ["network:read"],
+    provenance: buildExecutionProvenance(routing, actionId, description)
+  });
+
+  if (routing.toolType === "weather" || routing.toolType === "finance" || routing.toolType === "sports") {
+    return liveAcquisition("Live data local tool requires bounded external acquisition.");
+  }
+  if (routing.toolType === "web" || routing.toolType === "research") {
+    return liveAcquisition("Source-backed tool requires external acquisition before model synthesis.");
+  }
+  if (routing.toolType === "calculator" && routing.intent === "currency_conversion" && !hasExplicitCurrencyRate(routing)) {
+    return liveAcquisition("Currency conversion without explicit rate requires external rate acquisition.");
+  }
+  if (routing.toolType === "repo" && routing.intent === "repo_analysis") {
+    const repoHint = getRepoHint(routing);
+    if (repoHint && /github\.com/i.test(repoHint)) {
+      return {
+        actionId,
+        subject: "dev_agent_candidate",
+        actionKind: "dev_repo_read",
+        capability: "dev_agent",
+        description: "Public repository structure lookup is audited as a future dev-agent read path.",
+        url: repoHint,
+        requestedPermissions: ["repo:read", "network:read"],
+        provenance: buildExecutionProvenance(routing, actionId, "Public repository read preflight.")
+      };
+    }
+    return {
+      actionId,
+      subject: "filesystem_candidate",
+      actionKind: "filesystem_read",
+      capability: "sandbox_command",
+      description: "Local repository inspection is audited as a filesystem read candidate.",
+      requestedPermissions: ["filesystem:read"],
+      provenance: buildExecutionProvenance(routing, actionId, "Local repository filesystem read preflight.")
+    };
+  }
+  if (routing.toolType === "file") {
+    const writesFile = /generate|write|create|patch|modify|delete/i.test(routing.intent);
+    return {
+      actionId,
+      subject: "filesystem_candidate",
+      actionKind: writesFile ? "filesystem_write" : "filesystem_read",
+      capability: "sandbox_command",
+      description: writesFile
+        ? "File tool candidate would write to the filesystem and must be gated."
+        : "File tool candidate would read user-provided or workspace files and must be audited.",
+      requestedPermissions: [writesFile ? "filesystem:write" : "filesystem:read"],
+      riskHints: {
+        writesFilesystem: writesFile
+      },
+      provenance: buildExecutionProvenance(routing, actionId, writesFile ? "File write preflight." : "File read preflight.")
+    };
+  }
+  if (routing.intent === "run_tests") {
+    return {
+      actionId,
+      subject: "future_tool",
+      actionKind: "command_execution",
+      capability: "sandbox_command",
+      description: "Test execution is a future OS command path and is blocked in Core.",
+      requestedPermissions: ["shell:run"],
+      riskHints: {
+        commandExecution: true
+      },
+      provenance: buildExecutionProvenance(routing, actionId, "Command execution preflight.")
+    };
+  }
+
+  return null;
 }
 
 function extractWeatherLocation(args: ToolRoutingDecision) {
@@ -1681,46 +1804,64 @@ async function tryFetchNodeLatestRelease(args: ToolRoutingDecision): Promise<Loc
 }
 
 export class LocalToolExecutionService {
+  private readonly executionGovernanceService: Pick<ExecutionGovernanceService, "plan"> | null;
+
+  constructor(options: LocalToolExecutionServiceOptions = {}) {
+    this.executionGovernanceService =
+      options.executionGovernanceService === undefined
+        ? ExecutionGovernanceService.persistent()
+        : options.executionGovernanceService;
+  }
+
   async tryExecute(routing: ToolRoutingDecision): Promise<LocalToolExecutionResult | null> {
     if (!routing.toolRequired) {
       return null;
     }
 
+    const executionAuditIds = await this.auditSensitiveRoute(routing);
+    const attachAuditIds = (result: LocalToolExecutionResult | null): LocalToolExecutionResult | null =>
+      result
+        ? {
+            ...result,
+            executionAuditIds
+          }
+        : null;
+
     if (routing.toolType === "weather" && routing.intent === "current_weather") {
-      return tryFetchWeather(routing);
+      return attachAuditIds(await tryFetchWeather(routing));
     }
 
     if (routing.toolType === "finance" && routing.intent === "current_price") {
-      return tryFetchCurrentPrice(routing);
+      return attachAuditIds(await tryFetchCurrentPrice(routing));
     }
 
     if (routing.toolType === "web" && routing.intent === "current_status") {
-      return tryFetchCurrentStatus(routing);
+      return attachAuditIds(await tryFetchCurrentStatus(routing));
     }
 
     if (routing.toolType === "web" && routing.intent === "latest_release") {
-      return tryFetchLatestRelease(routing);
+      return attachAuditIds(await tryFetchLatestRelease(routing));
     }
 
     if (routing.toolType === "research" && routing.intent === "recent_updates") {
-      return tryFetchRecentUpdates(routing);
+      return attachAuditIds(await tryFetchRecentUpdates(routing));
     }
 
     if (routing.toolType === "research" && routing.intent === "fact_check") {
-      return tryFetchGeneralFactResearch(routing);
+      return attachAuditIds(await tryFetchGeneralFactResearch(routing));
     }
 
     if (routing.toolType === "time" && (routing.intent === "current_time" || routing.intent === "current_date")) {
       const location = extractLocation(routing);
       const { label, fact } = formatTimeInLocation(routing.intent, location);
-      return {
+      return attachAuditIds({
         toolType: "time",
         intent: routing.intent,
         summary: [`Time tool result: ${label}`],
         verifiedFacts: [fact],
         confidenceScore: 1,
         resultLabel: label
-      };
+      });
     }
 
     if (routing.toolType === "calculator" && routing.intent === "arithmetic") {
@@ -1732,14 +1873,14 @@ export class LocalToolExecutionService {
       }
 
       const label = `${expression} = ${normalizeNumber(result)}`;
-      return {
+      return attachAuditIds({
         toolType: "calculator",
         intent: routing.intent,
         summary: [`Calculator result: ${label}`],
         verifiedFacts: [`Computed result: ${label}.`],
         confidenceScore: 1,
         resultLabel: label
-      };
+      });
     }
 
     if (routing.toolType === "calculator" && routing.intent === "unit_conversion") {
@@ -1748,24 +1889,45 @@ export class LocalToolExecutionService {
         return null;
       }
 
-      return {
+      return attachAuditIds({
         toolType: "calculator",
         intent: routing.intent,
         summary: [`Unit conversion result: ${label}`],
         verifiedFacts: [`Computed conversion: ${label}.`],
         confidenceScore: 1,
         resultLabel: label
-      };
+      });
     }
 
     if (routing.toolType === "calculator" && routing.intent === "currency_conversion") {
-      return tryConvertCurrency(routing) ?? await tryFetchExchangeRate(routing);
+      return attachAuditIds(tryConvertCurrency(routing) ?? await tryFetchExchangeRate(routing));
     }
 
     if (routing.toolType === "repo" && routing.intent === "repo_analysis") {
-      return tryFetchGitHubRepoStructure(routing);
+      return attachAuditIds(await tryFetchGitHubRepoStructure(routing));
     }
 
     return null;
+  }
+
+  private async auditSensitiveRoute(routing: ToolRoutingDecision): Promise<string[]> {
+    if (!this.executionGovernanceService) {
+      return [];
+    }
+    const request = buildLocalToolGovernanceRequest(routing);
+    if (!request) {
+      return [];
+    }
+    try {
+      const plan = await this.executionGovernanceService.plan(request);
+      return [plan.auditEvent.auditId];
+    } catch (error) {
+      logger.warn("Local tool execution audit failed", {
+        toolType: routing.toolType,
+        intent: routing.intent,
+        error: String(error)
+      });
+      return [];
+    }
   }
 }

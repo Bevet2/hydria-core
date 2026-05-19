@@ -119,6 +119,60 @@ export const executionAuditEventSchema = z.object({
   provenance: executionProvenanceSchema
 });
 
+export const executionGovernanceSubjectSchema = z.enum([
+  "source_acquisition",
+  "local_tool",
+  "future_tool",
+  "browser_candidate",
+  "filesystem_candidate",
+  "dev_agent_candidate"
+]);
+
+export const executionRiskHintsSchema = z.object({
+  readsSecret: z.boolean().default(false),
+  destructive: z.boolean().default(false),
+  writesFilesystem: z.boolean().default(false),
+  commandExecution: z.boolean().default(false),
+  formSubmission: z.boolean().default(false),
+  login: z.boolean().default(false)
+});
+
+const defaultExecutionRiskHints = {
+  readsSecret: false,
+  destructive: false,
+  writesFilesystem: false,
+  commandExecution: false,
+  formSubmission: false,
+  login: false
+};
+
+export const executionGovernanceRequestSchema = z.object({
+  actionId: z.string().min(1).max(160),
+  subject: executionGovernanceSubjectSchema,
+  actionKind: executionActionKindSchema,
+  capability: executionCapabilitySchema,
+  description: z.string().min(1).max(240),
+  url: z.string().min(1).max(500).nullable().default(null),
+  allowedDomains: z.array(z.string().min(1).max(120)).max(24).default([]),
+  blockedDomains: z.array(z.string().min(1).max(120)).max(24).default([]),
+  requestedPermissions: z.array(z.string().min(1).max(120)).max(16).default([]),
+  provenance: executionProvenanceSchema,
+  dynamicBrowserEnabled: z.boolean().default(false),
+  stealthBrowserEnabled: z.boolean().default(false),
+  riskHints: executionRiskHintsSchema.default(defaultExecutionRiskHints),
+  acquisitionScore: acquisitionScoringSchema.nullable().default(null)
+});
+
+export const executionGovernancePlanSchema = z.object({
+  version: z.literal("hydria-execution-governance-plan-v1"),
+  request: executionGovernanceRequestSchema,
+  permissionDecision: executionPermissionDecisionSchema,
+  dryRunPlan: executionDryRunPlanSchema,
+  rollbackHint: executionRollbackHintSchema,
+  auditEvent: executionAuditEventSchema,
+  policyFlags: executionPolicyFlagsSchema
+});
+
 export const executionAuditStatSchema = z.object({
   count: z.number().int().nonnegative(),
   allowedCount: z.number().int().nonnegative(),
@@ -159,5 +213,10 @@ export type ExecutionRollbackHint = z.infer<typeof executionRollbackHintSchema>;
 export type AcquisitionScoring = z.infer<typeof acquisitionScoringSchema>;
 export type ExecutionPermissionDecision = z.infer<typeof executionPermissionDecisionSchema>;
 export type ExecutionAuditEvent = z.infer<typeof executionAuditEventSchema>;
+export type ExecutionGovernanceSubject = z.infer<typeof executionGovernanceSubjectSchema>;
+export type ExecutionRiskHints = z.infer<typeof executionRiskHintsSchema>;
+export type ExecutionGovernanceRequest = z.infer<typeof executionGovernanceRequestSchema>;
+export type ExecutionGovernanceRequestInput = z.input<typeof executionGovernanceRequestSchema>;
+export type ExecutionGovernancePlan = z.infer<typeof executionGovernancePlanSchema>;
 export type ExecutionAuditStat = z.infer<typeof executionAuditStatSchema>;
 export type ExecutionAuditSummary = z.infer<typeof executionAuditSummarySchema>;

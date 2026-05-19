@@ -19,6 +19,7 @@
     "knowledge:source-gate": "npm run knowledge:source-gate -w @hydria-arena/server --",
     "browser:automation-gate": "npm run browser:automation-gate -w @hydria-arena/server --",
     "execution:audit-gate": "npm run execution:audit-gate -w @hydria-arena/server --",
+    "execution:sensitive-gate": "npm run execution:sensitive-gate -w @hydria-arena/server --",
     "knowledge:quality-gate": "npm run knowledge:quality-gate -w @hydria-arena/server --",
     "watchers:run": "npm run watchers:run -w @hydria-arena/server --",
     "knowledge:scheduler": "npm run knowledge:scheduler -w @hydria-arena/server --",
