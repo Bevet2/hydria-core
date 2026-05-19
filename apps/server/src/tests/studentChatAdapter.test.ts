@@ -482,7 +482,7 @@ test("student chat adapter routes French recipe requests through practical writi
   assert.equal(result.specialist.role, "writing_business");
   assert.match(result.specialist.routingReason, /Practical recipe/i);
   assert.equal(result.runtimeBudget?.profile, "writing_chat");
-  assert.equal(result.runtimeBudget?.fallbackDepth, 0);
+  assert.equal(result.runtimeBudget?.fallbackDepth, 1);
   assert.equal(timeoutMs < 150000, true);
   assert.equal(numPredict >= 180, true);
   assert.equal(numPredict <= 220, true);
@@ -495,6 +495,49 @@ test("student chat adapter routes French recipe requests through practical writi
   assert.doesNotMatch(result.answer.answer, /mascarpone cream|ladyfingers/i);
   assert.doesNotMatch(result.answer.answer, /\s2\.$/);
   assert.equal(result.answer.assumptions.includes("practical_recipe_quality_repair"), true);
+});
+
+test("student chat adapter retries practical recipes on Qwen 3B before static fallback", async () => {
+  const selectedModels: string[] = [];
+  const input = {
+    ...buildInput(),
+    category: "other" as const,
+    routingQuestion: "donne moi une recette de tiramisu",
+    userMessage: "donne moi une recette de tiramisu",
+    question: "donne moi une recette de tiramisu",
+    runtimeMode: "direct" as const,
+    requiresExternalGrounding: false
+  };
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "qwen2.5:14b";
+    },
+    async testPrompt(_prompt, _system, options) {
+      const selectedModel = options?.modelName ?? "";
+      selectedModels.push(selectedModel);
+      if (selectedModel === "mistral:7b") {
+        throw new Error("mistral timeout");
+      }
+      return {
+        provider: "ollama",
+        model: selectedModel,
+        response:
+          "Pour un tiramisu classique, utilise du cafe, du mascarpone, des biscuits a la cuillere et du cacao, puis laisse reposer au frais.",
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer(input);
+
+  assert.deepEqual(selectedModels, ["mistral:7b", "qwen2.5:3b"]);
+  assert.equal(result.provider, "ollama");
+  assert.equal(result.model, "qwen2.5:3b");
+  assert.equal(result.usedRetry, true);
+  assert.equal(result.runtimeBudget?.profile, "writing_chat");
+  assert.equal(result.validationIssues.some((issue) => issue.includes("mistral timeout")), true);
+  assert.match(result.answer.answer, /mascarpone/);
+  assert.match(result.answer.answer, /cacao/);
 });
 
 test("student chat adapter routes lightweight context-setting turns to the fast 3B specialist", async () => {

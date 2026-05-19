@@ -243,7 +243,36 @@ test("chat runtime preserves decisive payment terms in incident rollback decisio
     message: "Decision maintenant ?"
   });
 
+  assert.equal(first.conversationQuality.passed, true);
+  assert.equal(second.conversationQuality.passed, true);
   assert.match(third.answer.answer, /paiement client/i);
+  assert.doesNotMatch(third.answer.answer, /customer payment/i);
+  assert.equal(third.conversationQuality.passed, true);
+});
+
+test("chat runtime repairs on-prem budget decisions with explicit constraint use", async () => {
+  const service = new ChatRuntimeService({
+    async answer() {
+      return buildAdapterResult("Je recommande AWS pour garder de la flexibilite.");
+    }
+  });
+
+  const first = await service.sendMessage({
+    message: "On doit choisir une architecture. Au depart je pensais AWS."
+  });
+  const second = await service.sendMessage({
+    sessionId: first.sessionId,
+    message: "Finalement contrainte stricte: on-prem uniquement, budget bloque, deadline demain."
+  });
+  const third = await service.sendMessage({
+    sessionId: second.sessionId,
+    message: "Tu recommandes quoi ?"
+  });
+
+  assert.match(third.answer.answer, /on-prem/i);
+  assert.match(third.answer.answer, /budget bloque/i);
+  assert.match(third.answer.answer, /deadline de demain/i);
+  assert.doesNotMatch(third.answer.answer, /microservices/i);
   assert.equal(third.conversationQuality.passed, true);
 });
 

@@ -232,6 +232,15 @@ function buildSpecialistOnlyFallbacks(primary: string) {
   return unique([primary]);
 }
 
+function buildPracticalWritingFallbacks(primary: string) {
+  return unique([
+    primary,
+    QWEN_3B,
+    env.STUDENT_CHAT_LOCAL_MODEL_NAME,
+    env.LOCAL_MODEL_NAME
+  ]);
+}
+
 function buildStandardLightFallbacks(primary: string) {
   return unique([
     primary,
@@ -508,14 +517,14 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
       specialistRole: "writing_business",
       routingReason: reason,
       pipeline: [...basePipeline, `practical_writer:${MISTRAL_BUSINESS}`],
-      fallbackModelNames: buildSpecialistOnlyFallbacks(MISTRAL_BUSINESS),
+      fallbackModelNames: buildPracticalWritingFallbacks(MISTRAL_BUSINESS),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: {
         ...budget,
         timeoutMs: budget.timeoutMs,
         maxLatencyMs: budget.maxLatencyMs,
         maxOutputTokens: Math.min(budget.maxOutputTokens, 220),
-        fallbackDepth: 0,
+        fallbackDepth: 1,
         concurrencyKey: "standard_local_chat"
       }
     };

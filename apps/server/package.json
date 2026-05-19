@@ -42,6 +42,7 @@
     "prod:chat-warmup": "tsx src/scripts/runChatModelWarmup.ts",
     "prod:chat-routing-gate": "tsx src/scripts/runProductionChatRoutingGate.ts",
     "prod:chat-capability-gate": "tsx src/scripts/runChatCapabilityCoverageGate.ts",
+    "prod:chat-capability-gate:segmented": "tsx src/scripts/runSegmentedChatCapabilityCoverageGate.ts",
     "prod:chat-slo-gate": "tsx src/scripts/runChatRuntimeSloGate.ts",
     "prod:stable-factual-gate": "tsx src/scripts/runStableFactualChatGate.ts",
     "student:chat-prod-gate": "tsx src/scripts/runStudentChatProductionGate.ts",

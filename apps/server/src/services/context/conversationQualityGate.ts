@@ -56,6 +56,7 @@ const REVISION_CONDITION_MARKER =
   /\b(?:if|unless|until|when|only if|threshold|condition|revise|revision|change course|switch|reconsider|si|sauf si|tant que|seuil|condition|reviser|revision|changer de route|bascule|reconsiderer)\b/i;
 const UNBOUNDED_ABSOLUTE_MARKER =
   /\b(?:always|never|permanent|permanently|definitive|definitively|no matter what|quoi qu'il arrive|quoi quil arrive|toujours|jamais|definitif|definitivement|sans condition)\b/i;
+const IMPORTANT_SHORT_TERMS = new Set(["api", "aws", "cpu", "gcp", "gpu", "sql", "sla", "slo", "500"]);
 
 function normalizeText(value: string) {
   return value
@@ -183,7 +184,9 @@ function answerMentionsAny(answer: string, values: string[]) {
     ) {
       return true;
     }
-    const terms = normalizeText(value).match(/[a-z0-9]{4,}/g) ?? [];
+    const terms = (normalizeText(value).match(/[a-z0-9]{3,}/g) ?? []).filter(
+      (term) => term.length >= 4 || IMPORTANT_SHORT_TERMS.has(term)
+    );
     return terms.slice(0, 14).some((term) => normalizedAnswer.includes(term));
   });
 }
@@ -202,8 +205,10 @@ function answerMentionsSpecificValue(answer: string, value: string | null) {
   ) {
     return true;
   }
-  const terms = [...new Set(normalizeText(value).match(/[a-z0-9]{4,}/g) ?? [])].filter(
-    (term) => !["active", "constraint", "option", "team", "policy", "preference"].includes(term)
+  const terms = [...new Set(normalizeText(value).match(/[a-z0-9]{3,}/g) ?? [])].filter(
+    (term) =>
+      (term.length >= 4 || IMPORTANT_SHORT_TERMS.has(term)) &&
+      !["active", "constraint", "option", "team", "policy", "preference"].includes(term)
   );
   if (terms.length === 0) {
     return false;

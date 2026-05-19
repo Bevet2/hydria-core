@@ -471,6 +471,48 @@ curl -fsS 'https://app.hydria.click/api/models/ops?limit=80&since=<telemetrySinc
 npm run models:ops-gate -- --since=<telemetrySince> --min-events=1
 ```
 
+Chat capability coverage gate:
+
+```bash
+npm run prod:chat-capability-gate -- --base-url=https://app.hydria.click --timeout-ms=180000
+```
+
+This writes:
+
+```text
+storage/training/chat-capability-coverage-gate-v1.json
+```
+
+The full capability gate can be slow on the CPU VPS because it intentionally covers tools, source-backed factual answers, code, writing, recipes, memory, context repair, and strategic decisions. Prefer the segmented runner for a complete report that survives local client timeouts:
+
+```bash
+npm run prod:chat-capability-gate:segmented -- --base-url=https://app.hydria.click --segment-size=4 --timeout-ms=180000
+```
+
+This writes:
+
+```text
+storage/training/chat-capability-coverage-gate-full-v1.json
+storage/training/chat-capability-coverage-segments-v1/*.json
+```
+
+The segmented runner resumes completed segment files by default. Use `--no-resume` for a clean run, `--offset`/`--limit` for a slice, and `--case-ids=case_a,case_b` for targeted reruns.
+
+To avoid a local client timeout entirely, run the same gate inside the production container against the local app port:
+
+```bash
+cd /opt/hydria-core
+sudo docker compose --env-file .env.docker \
+  -f docker-compose.yml \
+  -f docker-compose.ovh.yml \
+  -f docker-compose.reranker.yml \
+  exec -T hydria-core \
+  node apps/server/dist/scripts/runSegmentedChatCapabilityCoverageGate.js \
+  --base-url=http://127.0.0.1:8080 \
+  --segment-size=4 \
+  --timeout-ms=180000
+```
+
 Chat model warmup:
 
 ```bash

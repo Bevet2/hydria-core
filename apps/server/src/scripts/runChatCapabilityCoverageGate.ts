@@ -90,7 +90,7 @@ type TurnResult = {
   issues: string[];
 };
 
-type CaseResult = {
+export type ChatCapabilityCoverageCaseResult = {
   id: string;
   capability: CapabilityCase["capability"];
   passed: boolean;
@@ -103,15 +103,19 @@ type Args = {
   baseUrl: string;
   output: string;
   timeoutMs: number;
+  offset: number;
   limit: number | null;
+  caseIds: string[];
   apiKey: string;
 };
+
+export type ChatCapabilityCoverageGateArgs = Args;
 
 const currentFilePath = fileURLToPath(import.meta.url);
 const projectRoot = resolve(dirname(currentFilePath), "../../../../");
 const defaultOutput = resolve(projectRoot, "storage", "training", "chat-capability-coverage-gate-v1.json");
 
-const cases: CapabilityCase[] = [
+export const chatCapabilityCoverageCases: CapabilityCase[] = [
   {
     id: "tool_calculator_fr",
     capability: "calculator_tool",
@@ -291,15 +295,63 @@ function readOption(argv: string[], name: string) {
   return index >= 0 ? argv[index + 1] : undefined;
 }
 
+function readOptions(argv: string[], name: string) {
+  const values: string[] = [];
+  const prefix = `${name}=`;
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg?.startsWith(prefix)) {
+      values.push(arg.slice(prefix.length));
+      continue;
+    }
+    const next = argv[index + 1];
+    if (arg === name && next) {
+      values.push(next);
+    }
+  }
+  return values;
+}
+
+function readCsvOptions(argv: string[], names: string[]) {
+  return names
+    .flatMap((name) => readOptions(argv, name))
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function numberOption(argv: string[], name: string, fallback: number) {
+  const value = Number(readOption(argv, name));
+  return Number.isFinite(value) ? value : fallback;
+}
+
 function parseArgs(argv = process.argv.slice(2)): Args {
   const limit = readOption(argv, "--limit");
   return {
     baseUrl: (readOption(argv, "--base-url") ?? "https://app.hydria.click").replace(/\/+$/g, ""),
     output: resolve(projectRoot, readOption(argv, "--output") ?? defaultOutput),
-    timeoutMs: Number(readOption(argv, "--timeout-ms") ?? "180000"),
-    limit: limit ? Number(limit) : null,
+    timeoutMs: numberOption(argv, "--timeout-ms", 180000),
+    offset: Math.max(0, numberOption(argv, "--offset", 0)),
+    limit: limit ? Math.max(0, Number(limit)) : null,
+    caseIds: readCsvOptions(argv, ["--case-id", "--case-ids"]),
     apiKey: readOption(argv, "--api-key") ?? process.env.HYDRIA_API_KEY ?? process.env.HYDRIA_PROD_API_KEY ?? ""
   };
+}
+
+export function selectChatCapabilityCoverageCases(args: Pick<Args, "caseIds" | "limit" | "offset">) {
+  const availableCases =
+    args.caseIds.length > 0
+      ? args.caseIds.map((id) => {
+          const testCase = chatCapabilityCoverageCases.find((candidate) => candidate.id === id);
+          if (!testCase) {
+            throw new Error(`Unknown chat capability gate case id: ${id}`);
+          }
+          return testCase;
+        })
+      : chatCapabilityCoverageCases;
+  const start = Math.max(0, args.offset);
+  const end = args.limit === null ? undefined : start + Math.max(0, args.limit);
+  return availableCases.slice(start, end);
 }
 
 async function postJson<T>(
@@ -474,7 +526,7 @@ function inspectTurn(args: {
   };
 }
 
-async function runCase(testCase: CapabilityCase, args: Args): Promise<CaseResult> {
+async function runCase(testCase: CapabilityCase, args: Args): Promise<ChatCapabilityCoverageCaseResult> {
   let sessionId: string | undefined;
   let finalAnswer = "";
   const turns: TurnResult[] = [];
@@ -528,7 +580,7 @@ async function runCase(testCase: CapabilityCase, args: Args): Promise<CaseResult
 
 export function buildChatCapabilityCoverageReport(args: {
   baseUrl: string;
-  results: CaseResult[];
+  results: ChatCapabilityCoverageCaseResult[];
   startedAt: number;
 }) {
   const allTurns = args.results.flatMap((result) => result.turns);
@@ -572,8 +624,8 @@ export function buildChatCapabilityCoverageReport(args: {
 
 export async function runChatCapabilityCoverageGate(args = parseArgs()) {
   const startedAt = Date.now();
-  const selectedCases = args.limit ? cases.slice(0, args.limit) : cases;
-  const results: CaseResult[] = [];
+  const selectedCases = selectChatCapabilityCoverageCases(args);
+  const results: ChatCapabilityCoverageCaseResult[] = [];
 
   for (const testCase of selectedCases) {
     try {
@@ -610,6 +662,7 @@ if (currentProcessPath === currentFilePath) {
             passed: report.passed,
             summary: report.summary,
             failedCaseIds: report.failedCaseIds,
+            selectedCaseIds: report.results.map((result) => result.id),
             output: parseArgs().output
           },
           null,
