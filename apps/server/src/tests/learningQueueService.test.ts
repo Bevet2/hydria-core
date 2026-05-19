@@ -60,6 +60,20 @@ function response(overrides: Partial<ChatMessageResponse> = {}): ChatMessageResp
     conversationState: {} as ChatMessageResponse["conversationState"],
     activeConstraintCapsule: {} as ChatMessageResponse["activeConstraintCapsule"],
     answerPolicy: {} as ChatMessageResponse["answerPolicy"],
+    evidenceCapsule: {
+      answerabilityMode: "direct_model",
+      requiredEvidence: [],
+      preferredEvidence: [],
+      usedEvidence: [],
+      missingEvidence: [],
+      sourceBound: false,
+      abstainIfMissing: false,
+      reliabilityLevel: "model_knowledge",
+      synthesisStrategy: "specialist_direct_answer",
+      riskFlags: [],
+      reasons: ["test fixture"],
+      promptGuidance: "Stable test fixture."
+    },
     conversationQuality: {
       passed: false,
       issues: ["wrong_language_expected_fr"],
@@ -192,7 +206,7 @@ test("chat runtime writes model fallback signals to the learning queue", async (
     );
 
     const result = await service.sendMessage({
-      message: "Explique la coherence eventuelle."
+      message: "Redige une phrase courte sur la patience."
     });
     const queue = await learningQueueService.loadQueue();
 

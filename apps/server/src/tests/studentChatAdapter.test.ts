@@ -12,6 +12,25 @@ import {
 import { decideMultiTurnAnswerPolicy } from "../services/context/multiTurnAnswerPolicy.js";
 import { defaultChatToolMetadata } from "../types/chat.js";
 import { defaultChatKnowledgeRetrievalMetadata } from "../types/knowledgeRetrieval.js";
+import { defaultAnswerabilityPlanner } from "../services/answerability/answerabilityPlanner.js";
+
+function buildEvidenceCapsule(args: {
+  question: string;
+  userMessage?: string;
+  category?: StudentChatAdapterInput["category"];
+}) {
+  const state = createInitialState();
+  return defaultAnswerabilityPlanner.buildCapsule({
+    question: args.question,
+    userMessage: args.userMessage ?? args.question,
+    category: args.category ?? "other",
+    toolRouting: defaultChatToolMetadata.routing,
+    tooling: defaultChatToolMetadata,
+    knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata,
+    conversationState: state,
+    hasPriorConversation: false
+  });
+}
 
 function buildInput(): StudentChatAdapterInput {
   const state = createInitialState();
@@ -33,6 +52,7 @@ function buildInput(): StudentChatAdapterInput {
     recentMessages: [],
     activeConstraintCapsule: capsule,
     answerPolicy: policy,
+    evidenceCapsule: buildEvidenceCapsule({ question: "qui est charlemagne" }),
     requiresExternalGrounding: true,
     tooling: defaultChatToolMetadata,
     knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata
@@ -728,6 +748,10 @@ test("student chat adapter routes bounded strategic decisions to the light local
     recentMessages: [],
     activeConstraintCapsule: capsule,
     answerPolicy: policy,
+    evidenceCapsule: buildEvidenceCapsule({
+      question: "On doit choisir une architecture. Au depart je pensais AWS.",
+      category: "architecture_design"
+    }),
     requiresExternalGrounding: false,
     tooling: defaultChatToolMetadata,
     knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata
@@ -789,6 +813,10 @@ test("student chat adapter routes strategic setup turns to the fast local path",
     recentMessages: [],
     activeConstraintCapsule: capsule,
     answerPolicy: policy,
+    evidenceCapsule: buildEvidenceCapsule({
+      question: "On-prem strict, deadline demain. Tu recommandes quoi ?",
+      category: "architecture_design"
+    }),
     requiresExternalGrounding: false,
     tooling: defaultChatToolMetadata,
     knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata

@@ -527,6 +527,20 @@ sudo docker compose --env-file .env.docker \
   --timeout-ms=180000
 ```
 
+General answerability gate:
+
+```bash
+npm run prod:general-answerability-gate -- --base-url=https://app.hydria.click --timeout-ms=180000
+```
+
+This writes:
+
+```text
+storage/training/general-answerability-gate-v1.json
+```
+
+This gate checks the Answerability Orchestrator v1 surface: every chat turn must expose an `EvidenceCapsule`, the orchestration trace must include an `answerability` step, live/current questions must use tools or source-backed research, stable sourceable factual lookups must be source-backed, code and strategic questions must route through specialist synthesis, and direct practical answers must avoid static fallback or generic refusal.
+
 Chat model warmup:
 
 ```bash

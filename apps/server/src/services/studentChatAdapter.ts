@@ -10,6 +10,10 @@ import type {
 } from "./context/contextStateTracker.js";
 import type { ConversationQualityGateResult } from "./context/conversationQualityGate.js";
 import type { MultiTurnAnswerPolicyResult } from "./context/multiTurnAnswerPolicy.js";
+import {
+  formatEvidenceCapsuleForPrompt,
+  type EvidenceCapsule
+} from "./answerability/answerabilityPlanner.js";
 import type { LocalModelService } from "./localModel.js";
 import {
   selectStudentChatModelRoute,
@@ -30,6 +34,7 @@ export type StudentChatAdapterInput = {
   recentMessages: ChatMessage[];
   activeConstraintCapsule: ActiveConstraintCapsule;
   answerPolicy: MultiTurnAnswerPolicyResult;
+  evidenceCapsule: EvidenceCapsule;
   qualityRetry?: ConversationQualityGateResult;
   requiresExternalGrounding: boolean;
   tooling: ChatToolMetadata;
@@ -256,6 +261,16 @@ function expectedLanguage(capsule: ActiveConstraintCapsule) {
 }
 
 function maybeCurrentDataGuidance(input: StudentChatAdapterInput) {
+  if (input.evidenceCapsule.abstainIfMissing && input.evidenceCapsule.missingEvidence.length > 0) {
+    return [
+      "Required evidence is missing according to the EvidenceCapsule. Do not invent the missing fact; state the verification limit briefly."
+    ];
+  }
+  if (input.evidenceCapsule.sourceBound && input.evidenceCapsule.usedEvidence.length > 0) {
+    return [
+      "EvidenceCapsule is source-bound. Use the supplied verified evidence as the boundary for factual/current claims."
+    ];
+  }
   if (input.tooling.used) {
     return [
       "Verified external context is available. Use it as the source of truth for current/tool-dependent facts."
@@ -445,6 +460,8 @@ export function buildStudentChatPrompt(input: StudentChatAdapterInput, route = s
     `Specialist route reason: ${route.routingReason}`,
     `Local specialist pipeline: ${route.pipeline.join(" -> ")}`,
     "Use the selected specialist capability, but do not mention model routing in the answer.",
+    "EvidenceCapsule:",
+    formatEvidenceCapsuleForPrompt(input.evidenceCapsule),
     ...maybeStableFactCompaction(route),
     ...maybePlainRouteGuidance(route),
     ...maybeProductGrounding(input),

@@ -9,6 +9,7 @@ import type {
 } from "../services/context/contextStateTracker.js";
 import type { MultiTurnAnswerPolicyResult } from "../services/context/multiTurnAnswerPolicy.js";
 import type { ModelRuntimeBudget } from "../services/models/modelRuntimeGovernor.js";
+import type { EvidenceCapsule } from "../services/answerability/answerabilityPlanner.js";
 
 export const chatMessageRequestSchema = z.object({
   sessionId: z.string().uuid().optional(),
@@ -110,6 +111,7 @@ export type ChatMessageResponse = {
   conversationState: ConversationState;
   activeConstraintCapsule: ActiveConstraintCapsule;
   answerPolicy: MultiTurnAnswerPolicyResult;
+  evidenceCapsule: EvidenceCapsule;
   conversationQuality: ConversationQualityGateResult;
   generation: ChatGenerationMetadata;
   tooling: ChatToolMetadata;

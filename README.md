@@ -193,6 +193,7 @@ Relevant runtime knobs:
 - `npm run models:routing-gate`
 - `npm run prod:chat-slo-gate -- --base-url=https://app.hydria.click --timeout-ms=180000`
 - `npm run prod:chat-capability-gate:segmented -- --base-url=https://app.hydria.click --segment-size=3 --delay-ms=1000 --timeout-ms=180000`
+- `npm run prod:general-answerability-gate -- --base-url=https://app.hydria.click --timeout-ms=180000`
 - `npm run prod:stable-factual-gate -- --base-url=https://app.hydria.click --limit=4`
 - `npm run models:ops-gate`
 - `npm run retrieval:reranker-gate -- --require-runtime`
@@ -347,6 +348,14 @@ npm run prod:chat-capability-gate:segmented -- --base-url=https://app.hydria.cli
 ```
 
 This writes `storage/training/chat-capability-coverage-gate-full-v1.json` plus one report per segment under `storage/training/chat-capability-coverage-segments-v1/`. The aggregate report is refreshed after every segment, so long CPU-VPS runs can resume without losing completed results.
+
+General answerability validation:
+
+```bash
+npm run prod:general-answerability-gate -- --base-url=https://app.hydria.click --timeout-ms=180000
+```
+
+This writes `storage/training/general-answerability-gate-v1.json`. The gate checks that every public chat turn has an `EvidenceCapsule` and an `answerability` trace step, and that Hydria chooses the correct evidence path before generation: live tool, source-backed research, governed knowledge, conversation state, direct model knowledge, or specialist synthesis.
 
 ### Learning Governance
 

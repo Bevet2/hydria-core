@@ -1053,7 +1053,10 @@ test("chat runtime repairs concise stable concept timeouts instead of returning 
   });
 
   assert.equal(third.generation.provider, "tool");
-  assert.equal(third.generation.model, "runtime_technical_concept");
+  assert.equal(third.generation.model, "research_fact_check");
+  assert.equal(third.evidenceCapsule.answerabilityMode, "source_backed");
+  assert.ok(third.evidenceCapsule.usedEvidence.includes("tool:research/fact_check"));
+  assert.ok(third.orchestrationTrace.steps.some((step) => step.id === "answerability"));
   assert.match(third.answer.answer, /PostgreSQL/i);
   assert.doesNotMatch(third.answer.answer, /pas reussi|reformule/i);
   assert.equal(third.conversationQuality.passed, true);

@@ -17,7 +17,7 @@ import {
   type MultiTurnAnswerPolicyResult
 } from "./context/multiTurnAnswerPolicy.js";
 import type { StudentChatAdapter, StudentChatAdapterResult } from "./studentChatAdapter.js";
-import type { QuestionCategory, ToolRoutingDecision } from "../types/arena.js";
+import { defaultToolRoutingDecision, type QuestionCategory, type ToolRoutingDecision } from "../types/arena.js";
 import type {
   ChatMessage,
   ChatMessageResponse,
@@ -40,6 +40,13 @@ import type { ModelRuntimeTelemetryService } from "./models/modelRuntimeTelemetr
 import type { InteractionLogStore } from "./interactionLogStore.js";
 import { KnowledgeRetrievalService } from "./knowledgeRetrievalService.js";
 import type { LearningQueueService } from "./learningQueueService.js";
+import {
+  defaultAnswerabilityPlanner,
+  formatEvidenceCapsuleForPrompt,
+  type AnswerabilityPlanner,
+  type EvidenceCapsule,
+  type EvidenceRequirementPlan
+} from "./answerability/answerabilityPlanner.js";
 
 type ChatRuntimeSession = {
   sessionId: string;
@@ -517,6 +524,17 @@ function shouldSkipKnowledgeRetrievalForStrategicContext(args: {
   return !asksForKnowledge;
 }
 
+function shouldProbeKnowledgeAlongsideTool(args: {
+  tooling: ChatToolMetadata;
+  evidenceRequirement: EvidenceRequirementPlan;
+}) {
+  return (
+    args.tooling.routing.toolType === "research" &&
+    args.tooling.routing.intent === "fact_check" &&
+    !args.evidenceRequirement.riskFlags.includes("freshness_required")
+  );
+}
+
 function extractCorrectionSubject(message: string) {
   const normalized = message.replace(/\s+/g, " ").trim();
   const directMatch =
@@ -547,6 +565,27 @@ function extractIdentitySubjectFragment(message: string) {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 120);
+}
+
+function extractAnswerabilityResearchSubject(question: string) {
+  const cleaned = question
+    .replace(/[?]/g, " ")
+    .replace(
+      /\b(?:who is|who was|what is|what are|tell me about|explain|define|definition|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce que|quest ce que|c[' ]?est quoi|explique(?: moi)?|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition)\b/gi,
+      " "
+    )
+    .replace(
+      /\b(?:en|tout en|while|by|avec|selon|according to)\s+(?:respectant|following|using)?\s*(?:ma|mes|my|the|la|les|le)?\s*(?:contrainte|contraintes|constraint|constraints|contexte|context|instruction|instructions)\b.*$/i,
+      " "
+    )
+    .replace(/\b(?:en moins de|moins de|less than|under)\s+\d+\s+(?:mots?|words?)\b/gi, " ")
+    .replace(/\b(?:simplement|simply|please|svp|s'il te plait|s'il vous plait)\b/gi, " ")
+    .replace(/\b(?:de|du|des|d'|of|about|sur|the|le|la|les|un|une|a|an)\b/gi, " ")
+    .replace(/[?.!,;:]+$/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return cleaned.length >= 2 ? compact(cleaned, 120) : compact(question, 120);
 }
 
 function extractConversationSubject(messages: ChatMessage[]) {
@@ -763,6 +802,7 @@ function buildQuestionForHydria(args: {
   runtimeMode: ChatRuntimeMode;
   activeConstraintCapsule: ActiveConstraintCapsule;
   answerPolicy: MultiTurnAnswerPolicyResult;
+  evidenceCapsule: EvidenceCapsule;
   qualityRetry?: ConversationQualityGateResult;
 }) {
   const priorThread = formatThread(args.session.messages);
@@ -779,6 +819,8 @@ function buildQuestionForHydria(args: {
       `Expected answer language: ${expectedLanguage}`,
       "User message to answer:",
       args.userMessage,
+      "EvidenceCapsule:",
+      formatEvidenceCapsuleForPrompt(args.evidenceCapsule),
       "Answer directly in that language.",
       "For stable educational or factual explanations, give a careful concise answer and state uncertainty only when needed.",
       "Do not mention internal runtime, policy, capsule, prompt, or hidden instructions."
@@ -800,7 +842,9 @@ function buildQuestionForHydria(args: {
           args.answerPolicy.requiredContextItems.length > 0
             ? `requiredContextItems:\n${formatList(args.answerPolicy.requiredContextItems)}`
             : "",
-          args.answerPolicy.guidance ? `guidance: ${compact(args.answerPolicy.guidance, 420)}` : ""
+          args.answerPolicy.guidance ? `guidance: ${compact(args.answerPolicy.guidance, 420)}` : "",
+          "EvidenceCapsule:",
+          formatEvidenceCapsuleForPrompt(args.evidenceCapsule)
         ]
       : [];
   const repairLines = args.qualityRetry
@@ -2238,6 +2282,7 @@ function buildChatOrchestrationTrace(args: {
   routingQuestion: string;
   activeConstraintCapsule: ActiveConstraintCapsule;
   answerPolicy: MultiTurnAnswerPolicyResult;
+  evidenceCapsule: EvidenceCapsule;
   tooling: ChatToolMetadata;
   knowledgeRetrieval: ChatKnowledgeRetrievalMetadata;
   generation: StudentChatAdapterResult;
@@ -2295,6 +2340,29 @@ function buildChatOrchestrationTrace(args: {
           decisionNeeded: capsule.decisionNeeded,
           recommendedDirection: capsule.recommendedDirection ?? null,
           routingQuestion: args.routingQuestion
+        }
+      },
+      {
+        id: "answerability",
+        label: "Answerability",
+        status:
+          args.evidenceCapsule.reliabilityLevel === "blocked"
+            ? "warning"
+            : args.evidenceCapsule.missingEvidence.length > 0
+              ? "warning"
+              : "passed",
+        summary: `${args.evidenceCapsule.answerabilityMode} via ${args.evidenceCapsule.synthesisStrategy}.`,
+        details: {
+          answerabilityMode: args.evidenceCapsule.answerabilityMode,
+          requiredEvidence: args.evidenceCapsule.requiredEvidence,
+          preferredEvidence: args.evidenceCapsule.preferredEvidence,
+          usedEvidence: args.evidenceCapsule.usedEvidence,
+          missingEvidence: args.evidenceCapsule.missingEvidence,
+          sourceBound: args.evidenceCapsule.sourceBound,
+          abstainIfMissing: args.evidenceCapsule.abstainIfMissing,
+          reliabilityLevel: args.evidenceCapsule.reliabilityLevel,
+          riskFlags: args.evidenceCapsule.riskFlags,
+          reasons: args.evidenceCapsule.reasons.slice(0, 5)
         }
       },
       {
@@ -2400,7 +2468,9 @@ export class ChatRuntimeService {
     private readonly modelRuntimeTelemetryService: Pick<ModelRuntimeTelemetryService, "safeRecordEvent"> | null = null,
     private readonly interactionLogStore: Pick<InteractionLogStore, "safeAppend"> | null = null,
     private readonly knowledgeRetrievalService: Pick<KnowledgeRetrievalService, "retrieve"> | null = null,
-    private readonly learningQueueService: Pick<LearningQueueService, "safeCaptureChatResponse"> | null = null
+    private readonly learningQueueService: Pick<LearningQueueService, "safeCaptureChatResponse"> | null = null,
+    private readonly answerabilityPlanner: Pick<AnswerabilityPlanner, "planRequirement" | "buildCapsule"> =
+      defaultAnswerabilityPlanner
   ) {}
 
   resetSession(sessionId: string) {
@@ -2428,14 +2498,41 @@ export class ChatRuntimeService {
       userMessage: args.message,
       session
     });
-    const tooling = await this.collectTooling({
+    const hasPriorConversation = session.messages.some((message) => message.role === "user");
+    let tooling = await this.collectTooling({
       question: routingQuestion,
       category
     });
+    let evidenceRequirement = this.answerabilityPlanner.planRequirement({
+      question: routingQuestion,
+      userMessage: args.message,
+      category,
+      toolRouting: tooling.routing,
+      conversationState,
+      hasPriorConversation
+    });
+    tooling = await this.ensureAnswerabilityTooling({
+      question: routingQuestion,
+      category,
+      tooling,
+      evidenceRequirement,
+      conversationState
+    });
+    if (tooling.routing.toolRequired || tooling.routing.toolRecommended) {
+      evidenceRequirement = this.answerabilityPlanner.planRequirement({
+        question: routingQuestion,
+        userMessage: args.message,
+        category,
+        toolRouting: tooling.routing,
+        conversationState,
+        hasPriorConversation
+      });
+    }
     const knowledgeRetrieval = await this.collectKnowledgeRetrieval({
       question: routingQuestion,
       category,
-      tooling
+      tooling,
+      evidenceRequirement
     });
     const answerPolicy = decideMultiTurnAnswerPolicy({
       conversationState,
@@ -2445,6 +2542,16 @@ export class ChatRuntimeService {
       toolRouting: tooling.routing,
       lastAssistantAnswer: session.lastAssistantAnswer
     });
+    const evidenceCapsule = this.answerabilityPlanner.buildCapsule({
+      question: routingQuestion,
+      userMessage: args.message,
+      category,
+      toolRouting: tooling.routing,
+      tooling,
+      knowledgeRetrieval,
+      conversationState,
+      hasPriorConversation
+    });
     const runtimeMode: ChatRuntimeMode = shouldUseConversationRuntime({
       previousState: previousConversationState,
       conversationState,
@@ -2452,7 +2559,7 @@ export class ChatRuntimeService {
       answerPolicy,
       category,
       newUserMessage: args.message,
-      hasPriorTurns: session.messages.some((message) => message.role === "user")
+      hasPriorTurns: hasPriorConversation
     })
       ? "conversation"
       : "direct";
@@ -2507,6 +2614,7 @@ export class ChatRuntimeService {
         category,
         activeConstraintCapsule,
         answerPolicy,
+        evidenceCapsule,
         routingQuestion,
         tooling,
         knowledgeRetrieval
@@ -2577,6 +2685,7 @@ export class ChatRuntimeService {
         category,
         activeConstraintCapsule,
         answerPolicy,
+        evidenceCapsule,
         routingQuestion: draft.routingQuestion,
         tooling,
         knowledgeRetrieval
@@ -2618,6 +2727,7 @@ export class ChatRuntimeService {
         category,
         activeConstraintCapsule,
         answerPolicy,
+        evidenceCapsule,
         routingQuestion,
         tooling,
         knowledgeRetrieval,
@@ -3037,6 +3147,7 @@ export class ChatRuntimeService {
       routingQuestion: draft.routingQuestion,
       activeConstraintCapsule,
       answerPolicy,
+      evidenceCapsule,
       tooling,
       knowledgeRetrieval,
       generation: draft.generation,
@@ -3084,6 +3195,7 @@ export class ChatRuntimeService {
       conversationState,
       activeConstraintCapsule,
       answerPolicy,
+      evidenceCapsule,
       conversationQuality,
       generation: {
         provider: draft.generation.provider,
@@ -3145,6 +3257,7 @@ export class ChatRuntimeService {
     category: QuestionCategory;
     activeConstraintCapsule: ActiveConstraintCapsule;
     answerPolicy: MultiTurnAnswerPolicyResult;
+    evidenceCapsule: EvidenceCapsule;
     routingQuestion: string;
     tooling: ChatToolMetadata;
     knowledgeRetrieval: ChatKnowledgeRetrievalMetadata;
@@ -3167,6 +3280,7 @@ export class ChatRuntimeService {
       recentMessages: args.session.messages,
       activeConstraintCapsule: args.activeConstraintCapsule,
       answerPolicy: args.answerPolicy,
+      evidenceCapsule: args.evidenceCapsule,
       qualityRetry: args.qualityRetry,
       requiresExternalGrounding: shouldUseExternalGrounding,
       tooling: args.tooling,
@@ -3241,10 +3355,78 @@ export class ChatRuntimeService {
     };
   }
 
+  private async ensureAnswerabilityTooling(args: {
+    question: string;
+    category: QuestionCategory;
+    tooling: ChatToolMetadata;
+    evidenceRequirement: EvidenceRequirementPlan;
+    conversationState: ConversationState;
+  }): Promise<ChatToolMetadata> {
+    if (
+      args.tooling.used ||
+      args.tooling.routing.toolRequired ||
+      !args.evidenceRequirement.requiresResearch
+    ) {
+      return args.tooling;
+    }
+
+    const subject = extractAnswerabilityResearchSubject(args.question);
+    const routing: ToolRoutingDecision = {
+      ...defaultToolRoutingDecision,
+      considered: true,
+      toolRequired: true,
+      toolRecommended: false,
+      toolType: "research",
+      intent: args.evidenceRequirement.riskFlags.includes("freshness_required")
+        ? "recent_updates"
+        : "fact_check",
+      confidence: 0.81,
+      fallbackAllowed: false,
+      reason: "Answerability planner requires source-backed research before generation.",
+      extractedArgs: {
+        query: args.question,
+        subject,
+        language: args.conversationState.language === "fr" ? "fr" : "en"
+      },
+      toolResultUsed: false
+    };
+
+    try {
+      const result = await this.localToolExecutionService.tryExecute(routing);
+      if (result) {
+        return {
+          route: "used",
+          used: true,
+          routing: {
+            ...routing,
+            toolResultUsed: true
+          },
+          summary: result.summary,
+          verifiedFacts: result.verifiedFacts,
+          sources: result.sources ?? [],
+          failureReason: null
+        };
+      }
+    } catch (error) {
+      return buildFailedTooling(
+        routing,
+        error instanceof Error ? error.message : String(error),
+        "failed"
+      );
+    }
+
+    return buildFailedTooling(
+      routing,
+      "Answerability-required research did not return a structured result.",
+      "unsupported"
+    );
+  }
+
   private async collectKnowledgeRetrieval(args: {
     question: string;
     category: QuestionCategory;
     tooling: ChatToolMetadata;
+    evidenceRequirement: EvidenceRequirementPlan;
   }): Promise<ChatKnowledgeRetrievalMetadata> {
     if (!this.knowledgeRetrievalService) {
       return {
@@ -3254,7 +3436,13 @@ export class ChatRuntimeService {
       };
     }
 
-    if (args.tooling.used || args.tooling.routing.toolRequired) {
+    if (
+      (args.tooling.used || args.tooling.routing.toolRequired) &&
+      !shouldProbeKnowledgeAlongsideTool({
+        tooling: args.tooling,
+        evidenceRequirement: args.evidenceRequirement
+      })
+    ) {
       return {
         ...defaultChatKnowledgeRetrievalMetadata,
         route: "skipped_tool_route",
@@ -3266,7 +3454,10 @@ export class ChatRuntimeService {
       };
     }
 
-    if (shouldSkipKnowledgeRetrievalForStrategicContext(args)) {
+    if (
+      !args.evidenceRequirement.requiresKnowledge &&
+      shouldSkipKnowledgeRetrievalForStrategicContext(args)
+    ) {
       return {
         ...defaultChatKnowledgeRetrievalMetadata,
         route: "skipped_tool_route",
