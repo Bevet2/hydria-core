@@ -192,6 +192,7 @@ Relevant runtime knobs:
 - `npm run models:pretraining-gate`
 - `npm run models:routing-gate`
 - `npm run prod:chat-slo-gate -- --base-url=https://app.hydria.click --timeout-ms=180000`
+- `npm run prod:chat-capability-gate:segmented -- --base-url=https://app.hydria.click --segment-size=3 --delay-ms=1000 --timeout-ms=180000`
 - `npm run prod:stable-factual-gate -- --base-url=https://app.hydria.click --limit=4`
 - `npm run models:ops-gate`
 - `npm run retrieval:reranker-gate -- --require-runtime`
@@ -338,6 +339,14 @@ npm run prod:stable-factual-gate -- --base-url=https://app.hydria.click --timeou
 ```
 
 This writes `storage/training/stable-factual-chat-gate-v1.json` and `storage/training/stable-factual-chat-diagnostics-v1.json`. The gate checks stable biographies, history, and technical concepts with expected factual anchors plus forbidden confusion claims, so a route can fail even when the selected model and quality gate look healthy. Stable factual biographies should use Mistral first and may retry once on `qwen2.5:3b`; they must not fall through to a static fallback.
+
+Full chat capability coverage:
+
+```bash
+npm run prod:chat-capability-gate:segmented -- --base-url=https://app.hydria.click --segment-size=3 --delay-ms=1000 --timeout-ms=180000
+```
+
+This writes `storage/training/chat-capability-coverage-gate-full-v1.json` plus one report per segment under `storage/training/chat-capability-coverage-segments-v1/`. The aggregate report is refreshed after every segment, so long CPU-VPS runs can resume without losing completed results.
 
 ### Learning Governance
 

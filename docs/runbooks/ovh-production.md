@@ -483,10 +483,10 @@ This writes:
 storage/training/chat-capability-coverage-gate-v1.json
 ```
 
-The full capability gate can be slow on the CPU VPS because it intentionally covers tools, source-backed factual answers, code, writing, recipes, memory, context repair, and strategic decisions. Prefer the segmented runner for a complete report that survives local client timeouts:
+The full capability gate can be slow on the CPU VPS because it intentionally covers tools, source-backed factual answers, code, writing, recipes, memory, context repair, and strategic decisions. Prefer the segmented runner for a complete report that survives local client timeouts. It writes each segment report independently and updates the aggregate report after every segment, so an interrupted run still leaves a usable partial report with `runner.complete=false`.
 
 ```bash
-npm run prod:chat-capability-gate:segmented -- --base-url=https://app.hydria.click --segment-size=4 --timeout-ms=180000
+npm run prod:chat-capability-gate:segmented -- --base-url=https://app.hydria.click --segment-size=3 --delay-ms=1000 --timeout-ms=180000
 ```
 
 This writes:
@@ -496,7 +496,20 @@ storage/training/chat-capability-coverage-gate-full-v1.json
 storage/training/chat-capability-coverage-segments-v1/*.json
 ```
 
-The segmented runner resumes completed segment files by default. Use `--no-resume` for a clean run, `--offset`/`--limit` for a slice, and `--case-ids=case_a,case_b` for targeted reruns.
+The segmented runner resumes completed segment files by default. Use `--no-resume` for a clean run, `--offset`/`--limit` for a slice, and `--case-ids=case_a,case_b` for targeted reruns. Segment summaries include passed/failed counts and failed case IDs.
+
+Last full segmented validation on 2026-05-19:
+
+```text
+18/18 cases passed
+qualityFailureRate: 0
+wrongLanguageRate: 0
+genericFailureRate: 0
+staticFallbackRate: 0
+cloudRuntimeRate: 0
+toolExpectedButNotUsed: 0
+providers: tool 14 turns, ollama 13 turns
+```
 
 To avoid a local client timeout entirely, run the same gate inside the production container against the local app port:
 
@@ -509,7 +522,8 @@ sudo docker compose --env-file .env.docker \
   exec -T hydria-core \
   node apps/server/dist/scripts/runSegmentedChatCapabilityCoverageGate.js \
   --base-url=http://127.0.0.1:8080 \
-  --segment-size=4 \
+  --segment-size=3 \
+  --delay-ms=1000 \
   --timeout-ms=180000
 ```
 

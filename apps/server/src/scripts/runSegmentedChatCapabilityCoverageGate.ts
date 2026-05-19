@@ -29,6 +29,9 @@ type SegmentSummary = {
   caseIds: string[];
   resumed: boolean;
   passed: boolean;
+  passedCases: number;
+  failedCases: number;
+  failedCaseIds: string[];
 };
 
 const currentFilePath = fileURLToPath(import.meta.url);
@@ -119,10 +122,18 @@ async function readReusableSegment(output: string, caseIds: string[]) {
   if (!existsSync(output)) {
     return null;
   }
-  const parsed = JSON.parse(await readFile(output, "utf8")) as {
+  let parsed: {
     passed?: boolean;
     results?: ChatCapabilityCoverageCaseResult[];
   };
+  try {
+    parsed = JSON.parse(await readFile(output, "utf8")) as {
+      passed?: boolean;
+      results?: ChatCapabilityCoverageCaseResult[];
+    };
+  } catch {
+    return null;
+  }
   const resultIds = parsed.results?.map((result) => result.id) ?? [];
   if (!arraysEqual(resultIds, caseIds)) {
     return null;
@@ -135,6 +146,63 @@ async function readReusableSegment(output: string, caseIds: string[]) {
 
 function sleep(ms: number) {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
+}
+
+async function writeAggregateReport(args: {
+  baseUrl: string;
+  output: string;
+  results: ChatCapabilityCoverageCaseResult[];
+  startedAt: number;
+  segmentSize: number;
+  segmentCount: number;
+  selectedCaseIds: string[];
+  segmentsDir: string;
+  segmentSummaries: SegmentSummary[];
+  complete: boolean;
+}) {
+  const baseReport = buildChatCapabilityCoverageReport({
+    baseUrl: args.baseUrl,
+    results: args.results,
+    startedAt: args.startedAt
+  });
+  const report = {
+    ...baseReport,
+    runner: {
+      mode: "segmented",
+      complete: args.complete,
+      segmentSize: args.segmentSize,
+      segmentCount: args.segmentCount,
+      completedSegments: args.segmentSummaries.length,
+      resumedSegments: args.segmentSummaries.filter((segment) => segment.resumed).length,
+      selectedCaseIds: args.selectedCaseIds,
+      segmentsDir: args.segmentsDir,
+      segments: args.segmentSummaries
+    }
+  };
+
+  await mkdir(dirname(args.output), { recursive: true });
+  await writeFile(args.output, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  return report;
+}
+
+function summarizeSegment(args: {
+  index: number;
+  output: string;
+  caseIds: string[];
+  resumed: boolean;
+  results: ChatCapabilityCoverageCaseResult[];
+}) {
+  const failedCaseIds = args.results.filter((result) => !result.passed).map((result) => result.id);
+  return {
+    index: args.index,
+    output: args.output,
+    caseIds: args.caseIds,
+    resumed: args.resumed,
+    passed: failedCaseIds.length === 0,
+    passedCases: args.results.length - failedCaseIds.length,
+    failedCases: failedCaseIds.length,
+    failedCaseIds
+  };
 }
 
 export async function runSegmentedChatCapabilityCoverageGate(args = parseArgs()) {
@@ -157,12 +225,24 @@ export async function runSegmentedChatCapabilityCoverageGate(args = parseArgs())
 
     if (reusable) {
       results.push(...reusable.results);
-      segmentSummaries.push({
+      segmentSummaries.push(summarizeSegment({
         index,
         output,
         caseIds,
         resumed: true,
-        passed: reusable.passed
+        results: reusable.results
+      }));
+      await writeAggregateReport({
+        baseUrl: args.baseUrl,
+        output: args.output,
+        results,
+        startedAt,
+        segmentSize: args.segmentSize,
+        segmentCount: segments.length,
+        selectedCaseIds,
+        segmentsDir: args.segmentsDir,
+        segmentSummaries,
+        complete: index === segments.length - 1
       });
       continue;
     }
@@ -177,12 +257,25 @@ export async function runSegmentedChatCapabilityCoverageGate(args = parseArgs())
       apiKey: args.apiKey
     });
     results.push(...segmentReport.results);
-    segmentSummaries.push({
+    segmentSummaries.push(summarizeSegment({
       index,
       output,
       caseIds,
       resumed: false,
-      passed: segmentReport.passed
+      results: segmentReport.results
+    }));
+
+    await writeAggregateReport({
+      baseUrl: args.baseUrl,
+      output: args.output,
+      results,
+      startedAt,
+      segmentSize: args.segmentSize,
+      segmentCount: segments.length,
+      selectedCaseIds,
+      segmentsDir: args.segmentsDir,
+      segmentSummaries,
+      complete: index === segments.length - 1
     });
 
     if (args.delayMs > 0 && index < segments.length - 1) {
@@ -190,27 +283,18 @@ export async function runSegmentedChatCapabilityCoverageGate(args = parseArgs())
     }
   }
 
-  const baseReport = buildChatCapabilityCoverageReport({
+  return writeAggregateReport({
     baseUrl: args.baseUrl,
+    output: args.output,
     results,
-    startedAt
+    startedAt,
+    segmentSize: args.segmentSize,
+    segmentCount: segments.length,
+    selectedCaseIds,
+    segmentsDir: args.segmentsDir,
+    segmentSummaries,
+    complete: true
   });
-  const report = {
-    ...baseReport,
-    runner: {
-      mode: "segmented",
-      segmentSize: args.segmentSize,
-      segmentCount: segments.length,
-      resumedSegments: segmentSummaries.filter((segment) => segment.resumed).length,
-      selectedCaseIds,
-      segmentsDir: args.segmentsDir,
-      segments: segmentSummaries
-    }
-  };
-
-  await mkdir(dirname(args.output), { recursive: true });
-  await writeFile(args.output, `${JSON.stringify(report, null, 2)}\n`, "utf8");
-  return report;
 }
 
 const currentProcessPath = process.argv[1] ? resolve(process.argv[1]) : "";
