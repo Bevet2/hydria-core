@@ -1022,6 +1022,7 @@ function isStaticGenerationFailureAnswer(answer: string) {
 function buildSourceBackedFactualRepair(args: {
   answer: StudentAnswer;
   tooling: ChatToolMetadata;
+  force?: boolean;
 }): StudentAnswer | null {
   if (
     !args.tooling.used ||
@@ -1063,7 +1064,7 @@ function buildSourceBackedFactualRepair(args: {
   const sourceTermsMissing = sourceTerms.length - sourceTermsUsed;
   const isStaticGenerationFailure = isStaticGenerationFailureAnswer(args.answer.answer);
 
-  if ((!isStaticGenerationFailure && countWords(args.answer.answer) > 22) || sourceTermsMissing < 3) {
+  if (!args.force && ((!isStaticGenerationFailure && countWords(args.answer.answer) > 22) || sourceTermsMissing < 3)) {
     return null;
   }
 
@@ -1075,7 +1076,10 @@ function buildSourceBackedFactualRepair(args: {
       normalizeText(sentences[0] ?? "")
     );
   const informativeSentences = firstSentenceIsMostlyDates ? sentences.slice(1, 3) : sentences.slice(0, 2);
-  const shouldKeepModelLead = countWords(args.answer.answer) >= 8 && answerMentionsAnyTerm(args.answer.answer, subjectTerms.size > 0 ? [...subjectTerms] : extractTerms(fact, 4));
+  const shouldKeepModelLead =
+    !args.force &&
+    countWords(args.answer.answer) >= 8 &&
+    answerMentionsAnyTerm(args.answer.answer, subjectTerms.size > 0 ? [...subjectTerms] : extractTerms(fact, 4));
   const repaired = [
     shouldKeepModelLead ? args.answer.answer : "",
     ...informativeSentences
@@ -2823,7 +2827,11 @@ export class ChatRuntimeService {
       runtimeMode === "direct" || draft.generation.provider === "fallback"
         ? buildSourceBackedFactualRepair({
             answer: finalAnswer,
-            tooling
+            tooling,
+            force:
+              conversationQuality.issues.includes("wrong_language_expected_en") ||
+              conversationQuality.issues.includes("wrong_language_expected_fr") ||
+              conversationQuality.issues.includes("off_topic_direct_answer")
           })
         : null;
     if (sourceBackedFactualRepair) {

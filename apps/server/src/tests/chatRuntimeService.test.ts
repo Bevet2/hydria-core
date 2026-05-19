@@ -156,6 +156,31 @@ test("chat runtime synthesizes from source-backed facts when the local model fal
   assert.equal(response.conversationQuality.passed, true);
 });
 
+test("chat runtime repairs wrong-language source-backed concept answers from verified facts", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult(
+          "En pratique, la coherence eventuelle signifie que les donnees finissent par converger plus tard."
+        );
+      }
+    },
+    undefined,
+    buildFactCheckToolResult(
+      "Eventual consistency: Eventual consistency means replicas can temporarily diverge but converge after propagation, such as a multi-region shopping cart that synchronizes after a short delay."
+    )
+  );
+
+  const response = await service.sendMessage({
+    message: "Explain eventual consistency with a practical example."
+  });
+
+  assert.match(response.answer.answer, /Eventual consistency/i);
+  assert.match(response.answer.answer, /replicas|shopping cart/i);
+  assert.doesNotMatch(response.answer.answer, /En pratique/i);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
 test("chat runtime repairs source-backed factual fallbacks inside a conversation", async () => {
   const service = new ChatRuntimeService(
     {
