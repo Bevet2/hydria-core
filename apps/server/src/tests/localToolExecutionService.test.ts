@@ -156,6 +156,25 @@ function buildPublicRepoRouting(): ToolRoutingDecision {
   };
 }
 
+function buildAiRecentUpdatesRouting(): ToolRoutingDecision {
+  return {
+    considered: true,
+    toolRequired: true,
+    toolRecommended: false,
+    toolType: "research",
+    intent: "recent_updates",
+    confidence: 0.91,
+    fallbackAllowed: false,
+    reason: "Recent AI updates require fresh source retrieval.",
+    extractedArgs: {
+      subject: "nouveautes IA cette semaine",
+      temporalFocus: "this_week",
+      language: "fr"
+    },
+    toolResultUsed: false
+  };
+}
+
 test("local tool execution resolves current weather through Open-Meteo", async (t) => {
   const originalFetch = globalThis.fetch;
   const requestedUrls: string[] = [];
@@ -403,5 +422,41 @@ test("local repo tool resolves public GitHub root structure", async (t) => {
 
   assert.equal(result?.toolType, "repo");
   assert.match(result?.verifiedFacts[0] ?? "", /packages/);
+  assert.equal(result?.sources?.[0]?.retrievalOrigin, "known_endpoint");
+});
+
+test("local research tool resolves recent AI updates from official feeds", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const today = new Date();
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    if (url.includes("openai.com/news/rss.xml")) {
+      return new Response(
+        `<?xml version="1.0"?><rss><channel><item><title>OpenAI ships a new agents update</title><link>https://openai.com/news/agents-update</link><pubDate>${yesterday.toUTCString()}</pubDate><description>Official OpenAI agents product update.</description></item></channel></rss>`,
+        { status: 200, headers: { "Content-Type": "application/rss+xml" } }
+      );
+    }
+    if (url.includes("huggingface.co/blog/feed.xml")) {
+      return new Response(
+        `<?xml version="1.0"?><rss><channel><item><title>New open model leaderboard</title><link>https://huggingface.co/blog/leaderboard</link><pubDate>${today.toUTCString()}</pubDate><description>Official Hugging Face update.</description></item></channel></rss>`,
+        { status: 200, headers: { "Content-Type": "application/rss+xml" } }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const service = new LocalToolExecutionService();
+  const result = await service.tryExecute(buildAiRecentUpdatesRouting());
+
+  assert.equal(result?.toolType, "research");
+  assert.equal(result?.intent, "recent_updates");
+  assert.match(result?.verifiedFacts.join(" "), /OpenAI ships a new agents update/);
+  assert.match(result?.verifiedFacts.join(" "), /New open model leaderboard/);
   assert.equal(result?.sources?.[0]?.retrievalOrigin, "known_endpoint");
 });

@@ -1058,7 +1058,8 @@ export class ToolRoutingService {
         reason: "Recent or this-week updates need a fresh external retrieval path.",
         extractedArgs: {
           subject: extractEntitySubject(question),
-          temporalFocus: temporalProfile.focus
+          temporalFocus: temporalProfile.focus,
+          language: detectQuestionLanguage(question)
         }
       });
     }

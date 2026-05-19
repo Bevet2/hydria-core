@@ -523,6 +523,115 @@ test("chat runtime answers web current-status facts deterministically without a 
   assert.equal(response.conversationQuality.passed, true);
 });
 
+test("chat runtime answers recent AI updates from verified research tool facts without a model call", async () => {
+  let adapterCalled = false;
+  const routing = {
+    ...defaultToolRoutingDecision,
+    toolRequired: true,
+    toolRecommended: false,
+    toolType: "research" as const,
+    intent: "recent_updates",
+    confidence: 0.92,
+    fallbackAllowed: false,
+    reason: "Recent AI updates require source retrieval.",
+    extractedArgs: {
+      subject: "nouveautes IA cette semaine",
+      temporalFocus: "this_week",
+      language: "fr"
+    }
+  };
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        adapterCalled = true;
+        return buildAdapterResult("Model answer that should not be needed.");
+      }
+    },
+    {
+      route() {
+        return routing;
+      }
+    },
+    {
+      async tryExecute() {
+        return {
+          toolType: "research",
+          intent: "recent_updates",
+          summary: ["Recherche IA recente: 2 entrees datees trouvees."],
+          verifiedFacts: [
+            "OpenAI News a publie \"Agents update\" le 2026-05-18.",
+            "Hugging Face Blog a publie \"New model leaderboard\" le 2026-05-17."
+          ],
+          confidenceScore: 0.84,
+          resultLabel: "2 recent AI updates",
+          sources: []
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({
+    message: "Fais-moi un recap de toutes les nouveautes IA sorties cette semaine."
+  });
+
+  assert.equal(adapterCalled, false);
+  assert.equal(response.generation.provider, "tool");
+  assert.equal(response.generation.model, "research_recent_updates");
+  assert.equal(response.tooling.used, true);
+  assert.match(response.answer.answer, /recap IA source/i);
+  assert.match(response.answer.answer, /OpenAI News/);
+  assert.equal(response.conversationQuality.issues.includes("tool_required_but_not_used"), false);
+});
+
+test("chat runtime source-safe abstains when required research tool is unavailable", async () => {
+  let adapterCalled = false;
+  const routing = {
+    ...defaultToolRoutingDecision,
+    toolRequired: true,
+    toolRecommended: false,
+    toolType: "research" as const,
+    intent: "recent_updates",
+    confidence: 0.92,
+    fallbackAllowed: false,
+    reason: "Recent AI updates require source retrieval.",
+    extractedArgs: {
+      subject: "nouveautes IA cette semaine",
+      temporalFocus: "this_week",
+      language: "fr"
+    }
+  };
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        adapterCalled = true;
+        return buildAdapterResult("Model answer that should not be needed.");
+      }
+    },
+    {
+      route() {
+        return routing;
+      }
+    },
+    {
+      async tryExecute() {
+        return null;
+      }
+    }
+  );
+
+  const response = await service.sendMessage({
+    message: "Fais-moi un recap de toutes les nouveautes IA sorties cette semaine."
+  });
+
+  assert.equal(adapterCalled, false);
+  assert.equal(response.generation.provider, "tool");
+  assert.equal(response.generation.model, "required_tool_unavailable");
+  assert.equal(response.tooling.route, "unsupported");
+  assert.match(response.answer.answer, /recap de nouveautes recentes cette semaine/i);
+  assert.match(response.answer.answer, /source exploitable/i);
+  assert.equal(response.conversationQuality.issues.includes("tool_required_but_not_used"), false);
+});
+
 test("chat runtime acknowledges pure context setup without a model call", async () => {
   let adapterCalled = false;
   const service = new ChatRuntimeService({

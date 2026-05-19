@@ -1368,6 +1368,110 @@ function buildVerifiedFactAnswer(tooling: ChatToolMetadata) {
   return fact.endsWith(".") ? fact : `${fact}.`;
 }
 
+function buildRecentUpdatesToolDraft(args: {
+  tooling: ChatToolMetadata;
+  category: QuestionCategory;
+  language: ConversationState["language"];
+  routingQuestion: string;
+}): ChatDraft | null {
+  if (
+    !args.tooling.used ||
+    args.tooling.routing.toolType !== "research" ||
+    args.tooling.routing.intent !== "recent_updates" ||
+    args.tooling.verifiedFacts.length === 0
+  ) {
+    return null;
+  }
+
+  const effectiveLanguage = extractedToolLanguage(args.tooling) ?? args.language;
+  const isEnglish = effectiveLanguage === "en";
+  const lines = args.tooling.verifiedFacts.slice(0, 6).map((fact) => `- ${fact}`);
+  const sourceLimit = isEnglish
+    ? "Scope: these are the dated official feeds available to this runtime, not an exhaustive map of every AI release on the web."
+    : "Limite : ce sont les flux officiels dates disponibles dans ce runtime, pas une carte exhaustive de toutes les sorties IA du web.";
+  const answerText = [
+    isEnglish
+      ? "Here is the source-backed AI update recap I can verify for this week:"
+      : "Voici le recap IA source que je peux verifier pour cette semaine :",
+    ...lines,
+    sourceLimit
+  ].join("\n");
+  const answer: StudentAnswer = {
+    modelRole: "student",
+    answer: answerText,
+    key_points: isEnglish
+      ? ["Official feed facts", "Bounded weekly recap"]
+      : ["Faits issus de flux officiels", "Recap hebdomadaire borne"],
+    assumptions: [],
+    confidence: 84
+  };
+
+  return buildDeterministicRuntimeDraft({
+    answer,
+    category: args.category,
+    routingQuestion: args.routingQuestion,
+    model: "research_recent_updates",
+    displayName: "Verified research feed answer",
+    routingReason: "Recent-updates research returned dated official feed entries; no local model call was needed.",
+    pipeline: ["tool_routing:research", "official_feed_retrieval", "deterministic_recap"]
+  });
+}
+
+function buildRequiredToolUnavailableDraft(args: {
+  tooling: ChatToolMetadata;
+  category: QuestionCategory;
+  language: ConversationState["language"];
+  routingQuestion: string;
+}): ChatDraft | null {
+  if (
+    args.tooling.used ||
+    !args.tooling.routing.toolRequired ||
+    args.tooling.routing.fallbackAllowed !== false ||
+    (args.tooling.route !== "failed" && args.tooling.route !== "unsupported")
+  ) {
+    return null;
+  }
+
+  const effectiveLanguage = extractedToolLanguage(args.tooling) ?? args.language;
+  const isEnglish = effectiveLanguage === "en";
+  const routeLabel = `${args.tooling.routing.toolType}/${args.tooling.routing.intent}`;
+  const taskLabel =
+    args.tooling.routing.intent === "recent_updates"
+      ? isEnglish
+        ? "this recent updates recap"
+        : "ce recap de nouveautes recentes cette semaine"
+      : isEnglish
+        ? "this request"
+        : "cette demande";
+  const missingInput = /\b(?:missing|required input|which|quelle|quel|precise|preciser|ville|city|location|private|access|not provided|no accessible)\b/i.test(
+    args.tooling.failureReason ?? ""
+  );
+  const answerText = isEnglish
+    ? missingInput
+      ? `I need one missing input before I can use the required ${routeLabel} tool safely for ${taskLabel}. ${args.tooling.failureReason ?? "Please provide the missing detail."}`
+      : `I cannot answer ${taskLabel} reliably without a verified ${routeLabel} result. The required tool path did not return a usable source, so I will not invent current or external facts.`
+    : missingInput
+      ? `Il me manque une information avant d'utiliser correctement l'outil requis ${routeLabel} pour ${taskLabel}. ${args.tooling.failureReason ?? "Precise la donnee manquante."}`
+      : `Je ne peux pas traiter ${taskLabel} de facon fiable sans resultat verifie ${routeLabel}. Le chemin d'outil requis n'a pas retourne de source exploitable, donc je n'invente pas de fait actuel ou externe.`;
+  const answer: StudentAnswer = {
+    modelRole: "student",
+    answer: answerText,
+    key_points: isEnglish ? ["Required tool unavailable"] : ["Outil requis indisponible"],
+    assumptions: args.tooling.failureReason ? [args.tooling.failureReason] : [],
+    confidence: 38
+  };
+
+  return buildDeterministicRuntimeDraft({
+    answer,
+    category: args.category,
+    routingQuestion: args.routingQuestion,
+    model: "required_tool_unavailable",
+    displayName: "Required tool unavailable",
+    routingReason: "A required external/tool route failed; answer with a bounded source-safe limit instead of calling a model.",
+    pipeline: [`tool_routing:${args.tooling.routing.toolType}`, "source_safe_abstention"]
+  });
+}
+
 function buildDeterministicVerifiedToolDraft(args: {
   tooling: ChatToolMetadata;
   category: QuestionCategory;
@@ -1376,6 +1480,11 @@ function buildDeterministicVerifiedToolDraft(args: {
 }): ChatDraft | null {
   if (!args.tooling.used) {
     return null;
+  }
+
+  const recentUpdatesDraft = buildRecentUpdatesToolDraft(args);
+  if (recentUpdatesDraft) {
+    return recentUpdatesDraft;
   }
 
   const verifiedFactAnswer = buildVerifiedFactAnswer(args.tooling);
@@ -1750,6 +1859,12 @@ export class ChatRuntimeService {
 
     let draft =
       buildDeterministicVerifiedToolDraft({
+        tooling,
+        category,
+        language: conversationState.language,
+        routingQuestion
+      }) ??
+      buildRequiredToolUnavailableDraft({
         tooling,
         category,
         language: conversationState.language,

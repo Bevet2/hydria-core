@@ -100,6 +100,8 @@ const studentChatSystemPrompt = `You are Hydria Core's local student chat runtim
 Answer the current user message directly.
 Use the active conversation context when provided.
 Keep the user's language.
+The language instruction is binding: answer only in the current user message language unless the user explicitly asks otherwise.
+For French prompts, every final answer word must be French except proper nouns, code, and quoted source titles.
 Stable historical, educational, conceptual, coding, product, and architecture questions can be answered from model knowledge.
 Only abstain for truly live/current/private/external data that is missing.
 When asked about Hydria Core, use this product truth: Hydria Core is a governed cognitive runtime that orchestrates specialized models, tools, context, governance, memory, and knowledge. It is not an operating system for virtual capsules.
@@ -111,6 +113,8 @@ const stableFactPlainTextSystemPrompt = `You are Hydria Core's local stable fact
 Answer the current user message as plain final text only.
 Do not return JSON, markdown, bullets, labels, or chain-of-thought.
 Keep the user's language.
+If the user writes in French, answer only in French; do not switch to English.
+If the user writes in English, answer only in English; do not switch to French.
 Use stable model knowledge; do not invent live/current data.
 Return one or two complete concise sentences.`;
 
@@ -407,6 +411,7 @@ export function buildStudentChatPrompt(input: StudentChatAdapterInput, route = s
 
   return [
     `Language: ${expectedLanguage(input.activeConstraintCapsule)}`,
+    `Language rule: answer only in ${expectedLanguage(input.activeConstraintCapsule)} unless the user explicitly asks for another language.`,
     `Mode: ${input.runtimeMode}; category: ${input.category}`,
     `Local specialist: ${route.displayName} (${route.specialistRole}).`,
     `Specialist route reason: ${route.routingReason}`,
@@ -472,19 +477,41 @@ function cleanPlainStableFactAnswer(raw: string) {
   return cleaned;
 }
 
-function parseStableFactAnswer(raw: string): StudentAnswer {
+function looksLikeWrongStableFactLanguage(answer: string, input: StudentChatAdapterInput) {
+  const normalized = normalizePlainText(answer);
+  if (input.activeConstraintCapsule.language === "fr") {
+    const englishSignals = (normalized.match(/\b(?:the|and|was|were|king|emperor|writer|known|born|died|his|her|their|published)\b/g) ?? []).length;
+    const frenchSignals = (normalized.match(/\b(?:est|et|roi|empereur|ecrivain|connu|nee|mort|publie|france|francs)\b/g) ?? []).length;
+    return englishSignals >= 2 && frenchSignals === 0;
+  }
+  if (input.activeConstraintCapsule.language === "en") {
+    const frenchSignals = (normalized.match(/\b(?:est|et|roi|empereur|ecrivain|connu|nee|mort|publie|france|francs)\b/g) ?? []).length;
+    const englishSignals = (normalized.match(/\b(?:the|and|was|were|king|emperor|writer|known|born|died|his|her|their|published)\b/g) ?? []).length;
+    return frenchSignals >= 3 && englishSignals === 0;
+  }
+  return false;
+}
+
+function assertStableFactLanguage(answer: StudentAnswer, input: StudentChatAdapterInput) {
+  if (looksLikeWrongStableFactLanguage(answer.answer, input)) {
+    throw new Error(`Stable fact answer used the wrong language for ${input.activeConstraintCapsule.language}.`);
+  }
+  return answer;
+}
+
+function parseStableFactAnswer(raw: string, input: StudentChatAdapterInput): StudentAnswer {
   try {
-    return parseStudentChatAnswer(raw);
+    return assertStableFactLanguage(parseStudentChatAnswer(raw), input);
   } catch {
     const answer = cleanPlainStableFactAnswer(raw);
     const firstSentence = answer.split(/(?<=[.!?])\s+/)[0] ?? answer;
-    return {
+    return assertStableFactLanguage({
       modelRole: "student",
       answer,
       key_points: [compact(firstSentence.replace(/[.!?]$/g, ""), 90)],
       assumptions: [],
       confidence: 82
-    };
+    }, input);
   }
 }
 
@@ -645,7 +672,7 @@ export class StudentChatAdapter {
         return {
           answer:
             route.runtimeBudget.profile === "stable_fact_chat"
-              ? parseStableFactAnswer(response.response)
+              ? parseStableFactAnswer(response.response, input)
               : usePlainText
                 ? parsePlainChatAnswer(response.response, route, input)
                 : parseStudentChatAnswer(response.response),

@@ -1,5 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { relative } from "node:path";
+import { load } from "cheerio";
 import type { ResearchToolLog, ToolRoutingDecision } from "../../types/arena.js";
 import { projectRoot } from "../../utils/env.js";
 
@@ -96,6 +97,20 @@ type CurrentStatusMatch = {
   sources: ResearchToolLog["sources"];
 };
 
+type RecentUpdateFeed = {
+  id: string;
+  title: string;
+  url: string;
+};
+
+type RecentUpdateEntry = {
+  feed: RecentUpdateFeed;
+  title: string;
+  url: string;
+  summary: string;
+  publishedAt: string | null;
+};
+
 const CITY_TIMEZONES: Record<string, string> = {
   paris: "Europe/Paris",
   london: "Europe/London",
@@ -163,6 +178,29 @@ const EQUITY_ASSETS: Record<string, { symbol: string; stooqSymbol: string; label
   MSFT: { symbol: "MSFT", stooqSymbol: "msft.us", label: "Microsoft" },
   MICROSOFT: { symbol: "MSFT", stooqSymbol: "msft.us", label: "Microsoft" }
 };
+
+const AI_RECENT_UPDATE_FEEDS: RecentUpdateFeed[] = [
+  {
+    id: "openai-news",
+    title: "OpenAI News",
+    url: "https://openai.com/news/rss.xml"
+  },
+  {
+    id: "huggingface-blog",
+    title: "Hugging Face Blog",
+    url: "https://huggingface.co/blog/feed.xml"
+  },
+  {
+    id: "google-ai-blog",
+    title: "Google AI Blog",
+    url: "https://blog.google/technology/ai/rss/"
+  },
+  {
+    id: "google-research-blog",
+    title: "Google Research Blog",
+    url: "https://research.google/blog/rss/"
+  }
+];
 
 const WEATHER_CODE_LABELS: Record<number, { en: string; fr: string }> = {
   0: { en: "clear sky", fr: "ciel d\u00e9gag\u00e9" },
@@ -326,7 +364,7 @@ async function fetchText(url: string): Promise<string | null> {
   try {
     const response = await fetch(url, {
       headers: {
-        Accept: "text/html,text/plain"
+        Accept: "application/rss+xml,application/xml,text/xml,text/html,text/plain"
       },
       signal: AbortSignal.timeout(8000)
     });
@@ -381,6 +419,147 @@ function stripHtml(value: string) {
     .replace(/&quot;/g, '"')
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function normalizeLoose(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeSpaces(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function isAiRecentUpdatesRoute(args: ToolRoutingDecision) {
+  const subject = [
+    extractStringArg(args, "subject"),
+    extractStringArg(args, "topic"),
+    extractStringArg(args, "rawQuestion")
+  ].filter(Boolean).join(" ");
+  return /\b(?:ai|ia|llm|openai|anthropic|hugging\s*face|deepmind|google\s+ai|intelligence artificielle|artificial intelligence|modeles?\s+ia|mod[eè]les?\s+ia)\b/i.test(
+    normalizeLoose(subject)
+  );
+}
+
+function parseRecentFeedEntries(feed: RecentUpdateFeed, body: string): RecentUpdateEntry[] {
+  const $ = load(body, { xml: true });
+  const entries: RecentUpdateEntry[] = [];
+
+  $("item, entry").slice(0, 10).each((_index, element) => {
+    const node = $(element);
+    const title = normalizeSpaces(node.find("title").first().text());
+    const linkNode = node.find("link").first();
+    const url = normalizeSpaces(linkNode.attr("href") ?? linkNode.text() ?? feed.url);
+    const summary = stripHtml(
+      node.find("description").first().text() ||
+        node.find("summary").first().text() ||
+        node.find("content").first().text() ||
+        node.find("content\\:encoded").first().text()
+    );
+    const rawDate = normalizeSpaces(
+      node.find("updated").first().text() ||
+        node.find("published").first().text() ||
+        node.find("pubDate").first().text()
+    );
+    const parsedDate = rawDate ? new Date(rawDate) : null;
+    entries.push({
+      feed,
+      title,
+      url: url || feed.url,
+      summary,
+      publishedAt: parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate.toISOString() : null
+    });
+  });
+
+  return entries.filter((entry) => entry.title.length > 0);
+}
+
+function isRecentEnoughForThisWeek(entry: RecentUpdateEntry, now = new Date()) {
+  if (!entry.publishedAt) {
+    return false;
+  }
+  const publishedAt = new Date(entry.publishedAt).getTime();
+  if (!Number.isFinite(publishedAt)) {
+    return false;
+  }
+  const maxAgeMs = 8 * 24 * 60 * 60 * 1000;
+  return publishedAt >= now.getTime() - maxAgeMs && publishedAt <= now.getTime() + 24 * 60 * 60 * 1000;
+}
+
+function formatRecentUpdateDate(value: string | null) {
+  if (!value) {
+    return "date non precisee";
+  }
+  return value.slice(0, 10);
+}
+
+async function tryFetchRecentUpdates(args: ToolRoutingDecision): Promise<LocalToolExecutionResult | null> {
+  if (!isAiRecentUpdatesRoute(args)) {
+    return null;
+  }
+
+  const language = extractLanguage(args);
+  const fetchedFeeds = await Promise.allSettled(
+    AI_RECENT_UPDATE_FEEDS.map(async (feed) => ({
+      feed,
+      body: await fetchText(feed.url)
+    }))
+  );
+  const allEntries = fetchedFeeds.flatMap((outcome) => {
+    if (outcome.status !== "fulfilled" || !outcome.value.body) {
+      return [];
+    }
+    return parseRecentFeedEntries(outcome.value.feed, outcome.value.body);
+  });
+  const recentEntries = allEntries
+    .filter((entry) => isRecentEnoughForThisWeek(entry))
+    .sort((left, right) => (right.publishedAt ?? "").localeCompare(left.publishedAt ?? ""))
+    .filter((entry, index, list) => {
+      const key = `${entry.title.toLowerCase()}|${entry.url.toLowerCase()}`;
+      return list.findIndex((candidate) => `${candidate.title.toLowerCase()}|${candidate.url.toLowerCase()}` === key) === index;
+    })
+    .slice(0, 6);
+
+  if (recentEntries.length === 0) {
+    return null;
+  }
+
+  const verifiedFacts = recentEntries.map((entry) => {
+    const date = formatRecentUpdateDate(entry.publishedAt);
+    return language === "fr"
+      ? `${entry.feed.title} a publie "${entry.title}" le ${date}.`
+      : `${entry.feed.title} published "${entry.title}" on ${date}.`;
+  });
+  const summary =
+    language === "fr"
+      ? [`Recherche IA recente: ${recentEntries.length} entree(s) datee(s) trouvee(s) dans des flux officiels.`]
+      : [`Recent AI research/news: ${recentEntries.length} dated entries found in official feeds.`];
+
+  return {
+    toolType: "research",
+    intent: args.intent,
+    summary,
+    verifiedFacts,
+    confidenceScore: 0.84,
+    resultLabel: `${recentEntries.length} recent AI updates`,
+    sources: recentEntries.map((entry) => ({
+      title: `${entry.feed.title}: ${entry.title}`,
+      url: entry.url,
+      snippet: entry.summary || `RSS entry from ${entry.feed.title}.`,
+      excerpt: entry.summary || entry.title,
+      publishedAt: entry.publishedAt,
+      modifiedAt: entry.publishedAt,
+      effectiveDate: entry.publishedAt,
+      dateSource: entry.publishedAt ? "text" : "unknown",
+      retrievalChannel: "live",
+      retrievalOrigin: "known_endpoint",
+      retrievalEngine: "known_endpoint"
+    }))
+  };
 }
 
 function sourceTimestamp() {
@@ -1307,6 +1486,10 @@ export class LocalToolExecutionService {
 
     if (routing.toolType === "web" && routing.intent === "latest_release") {
       return tryFetchLatestRelease(routing);
+    }
+
+    if (routing.toolType === "research" && routing.intent === "recent_updates") {
+      return tryFetchRecentUpdates(routing);
     }
 
     if (routing.toolType === "time" && (routing.intent === "current_time" || routing.intent === "current_date")) {

@@ -27,9 +27,14 @@ const STOPWORDS = new Set([
   "after",
   "avec",
   "avoir",
+  "biographie",
   "cette",
   "comment",
+  "connais",
+  "connait",
+  "contexte",
   "dans",
+  "dire",
   "does",
   "donc",
   "donne",
@@ -38,6 +43,44 @@ const STOPWORDS = new Set([
   "fait",
   "give",
   "how",
+  "les",
+  "moi",
+  "nouveaute",
+  "nouveautes",
+  "peux",
+  "plutot",
+  "plus",
+  "pour",
+  "quoi",
+  "recap",
+  "recent",
+  "recente",
+  "recentes",
+  "semaine",
+  "sorties",
+  "sont",
+  "sur",
+  "that",
+  "the",
+  "this",
+  "toutes",
+  "tous",
+  "une",
+  "what",
+  "with",
+  "who",
+  "qui",
+  "est",
+  "son",
+  "ses",
+  "suis",
+  "sait",
+  "savoir",
+  "raconte",
+  "detail",
+  "details",
+  "more",
+  "tell",
   "les",
   "leur",
   "moi",
@@ -159,6 +202,13 @@ function scoreObject(args: {
   const titleMatches = matchedTerms.filter((term) => textContainsTerm(title, term)).length;
   const summaryMatches = matchedTerms.filter((term) => textContainsTerm(summary, term)).length;
   const coverage = matchedTerms.length / Math.max(1, Math.min(args.terms.length, 8));
+  const hasStrongSingleEntityMatch = args.terms.length === 1 && titleMatches >= 1;
+  const hasDirectTitleMatch = titleMatches >= 1;
+  const hasEnoughTermCoverage =
+    args.terms.length >= 2 && matchedTerms.length >= Math.min(2, args.terms.length) && coverage >= 0.45;
+  if (!hasStrongSingleEntityMatch && !hasDirectTitleMatch && !hasEnoughTermCoverage) {
+    return null;
+  }
   const sourceAcquisitionBoost = args.object.sources.some((source) => source.sourceType === "source_acquisition")
     ? 1.2
     : 0;
@@ -245,7 +295,7 @@ export class KnowledgeRetrievalService {
     limit?: number;
   }): Promise<ChatKnowledgeRetrievalMetadata> {
     const terms = queryTerms(args.query);
-    if (terms.length < 2) {
+    if (terms.length < 1) {
       return {
         route: "no_match",
         used: false,

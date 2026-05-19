@@ -130,6 +130,93 @@ test("knowledge retrieval does not inject unrelated knowledge into ordinary chat
   }
 });
 
+test("knowledge retrieval blocks weak follow-up terms from pulling unrelated sources", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "hydria-knowledge-retrieval-relevance-"));
+  try {
+    const store = new KnowledgeObjectStore(
+      join(tempRoot, "knowledge-objects.json"),
+      join(tempRoot, "vault")
+    );
+    await store.save([
+      buildKnowledgeObject({
+        objectId: "ko::source-acquisition::douglas-adams",
+        title: "Douglas Adams",
+        category: "other",
+        content:
+          "Douglas Adams was an English writer and humourist, known for The Hitchhiker's Guide to the Galaxy.",
+        summary: "Douglas Adams was an English writer and humourist.",
+        tags: ["source-acquisition", "wikipedia", "biography"],
+        sources: [
+          {
+            sourceType: "source_acquisition",
+            sourceId: "source-item::douglas-adams",
+            sourceUri: "https://en.wikipedia.org/api/rest_v1/page/summary/Douglas_Adams",
+            evidenceRecordIds: []
+          }
+        ]
+      })
+    ]);
+    const service = new KnowledgeRetrievalService({ knowledgeObjectStore: store });
+
+    const result = await service.retrieve({
+      query: "qui est charlemagne biographie contexte",
+      category: "other"
+    });
+    const weakFollowUp = await service.retrieve({
+      query: "tu peux m'en dire plus",
+      category: "other"
+    });
+
+    assert.equal(result.route, "no_match");
+    assert.equal(result.used, false);
+    assert.equal(weakFollowUp.route, "no_match");
+    assert.equal(weakFollowUp.used, false);
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("knowledge retrieval still allows a single strong entity title match", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "hydria-knowledge-retrieval-title-"));
+  try {
+    const store = new KnowledgeObjectStore(
+      join(tempRoot, "knowledge-objects.json"),
+      join(tempRoot, "vault")
+    );
+    await store.save([
+      buildKnowledgeObject({
+        objectId: "ko::manual::charlemagne",
+        title: "Charlemagne",
+        category: "other",
+        content:
+          "Charlemagne was king of the Franks and emperor in western Europe, associated with the Carolingian Renaissance.",
+        summary: "Charlemagne was a Frankish king and Carolingian emperor.",
+        tags: ["manual", "history"],
+        sources: [
+          {
+            sourceType: "manual",
+            sourceId: "manual::charlemagne",
+            sourceUri: "https://example.org/charlemagne",
+            evidenceRecordIds: []
+          }
+        ]
+      })
+    ]);
+    const service = new KnowledgeRetrievalService({ knowledgeObjectStore: store });
+
+    const result = await service.retrieve({
+      query: "qui est Charlemagne",
+      category: "other"
+    });
+
+    assert.equal(result.route, "used");
+    assert.equal(result.hits[0]?.objectId, "ko::manual::charlemagne");
+    assert.deepEqual(result.hits[0]?.matchedTerms, ["charlemagne"]);
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test("chat runtime injects governed knowledge into model prompt and public trace", async () => {
   const tempRoot = await mkdtemp(join(tmpdir(), "hydria-chat-knowledge-retrieval-"));
   try {
