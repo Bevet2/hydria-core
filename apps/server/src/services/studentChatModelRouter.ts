@@ -245,7 +245,6 @@ function buildStandardLightFallbacks(primary: string) {
 function buildStableFactFallbacks(primary: string) {
   return unique([
     primary,
-    MISTRAL_BUSINESS,
     QWEN_3B,
     env.STUDENT_CHAT_LOCAL_MODEL_NAME,
     env.LOCAL_MODEL_NAME
@@ -302,7 +301,7 @@ function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: stri
     };
   }
   if (profile === "stable_fact_chat") {
-    const stableFactTimeoutMs = Math.max(env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS, 30000);
+    const stableFactTimeoutMs = Math.min(env.MODEL_RUNTIME_DEEP_TIMEOUT_MS, 60000);
     const stableFactMaxOutputTokens = Math.min(env.MODEL_RUNTIME_STANDARD_MAX_OUTPUT_TOKENS, 104);
     return {
       profile,
@@ -466,16 +465,16 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
 
   if (containsPracticalLifestyleSignal(text)) {
     const reason =
-      "Practical recipe or everyday how-to request; use the CPU-safe 3B practical writer instead of a heavy model.";
+      "Practical recipe or everyday how-to request; use the local Mistral writing route instead of the 14B primary brain.";
     const budget = buildRuntimeBudget("writing_chat", reason);
     return {
-      capabilityId: "qwen-3b-standard-light",
-      displayName: "Qwen 3B Practical Writer",
-      modelName: QWEN_3B,
+      capabilityId: "mistral-mixtral-business",
+      displayName: "Mistral Practical Writer",
+      modelName: MISTRAL_BUSINESS,
       specialistRole: "writing_business",
       routingReason: reason,
-      pipeline: [...basePipeline, `practical_writer:${QWEN_3B}`],
-      fallbackModelNames: buildSpecialistOnlyFallbacks(QWEN_3B),
+      pipeline: [...basePipeline, `practical_writer:${MISTRAL_BUSINESS}`],
+      fallbackModelNames: buildSpecialistOnlyFallbacks(MISTRAL_BUSINESS),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: {
         ...budget,
@@ -483,7 +482,7 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
         maxLatencyMs: budget.maxLatencyMs,
         maxOutputTokens: Math.min(budget.maxOutputTokens, 220),
         fallbackDepth: 0,
-        concurrencyKey: "standard_light_local_chat"
+        concurrencyKey: "standard_local_chat"
       }
     };
   }
@@ -559,16 +558,16 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
 
   if (containsStablePersonFactSignal(text, input)) {
     const reason =
-      "Stable person, biography, or historical fact question; use the CPU-safe 3B factual route first and reserve Mistral as a fallback.";
+      "Stable person, biography, or historical fact question; use Mistral 7B instead of the 3B route for stronger factual prose on CPU.";
     const budget = buildRuntimeBudget("stable_fact_chat", reason);
     return {
-      capabilityId: "qwen-3b-standard-light",
-      displayName: "Qwen 3B Stable Fact",
-      modelName: QWEN_3B,
+      capabilityId: "mistral-mixtral-business",
+      displayName: "Mistral/Mixtral",
+      modelName: MISTRAL_BUSINESS,
       specialistRole: "writing_business",
       routingReason: reason,
-      pipeline: [...basePipeline, `stable_fact_writer:${QWEN_3B}`, `stable_fact_quality_fallback:${MISTRAL_BUSINESS}`],
-      fallbackModelNames: buildStableFactFallbacks(QWEN_3B),
+      pipeline: [...basePipeline, `stable_fact_writer:${MISTRAL_BUSINESS}`, `stable_fact_light_fallback:${QWEN_3B}`],
+      fallbackModelNames: buildStableFactFallbacks(MISTRAL_BUSINESS),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
     };
