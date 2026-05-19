@@ -997,7 +997,21 @@ function buildSourceBackedFactualRepair(args: {
 
   const factText = fact.replace(/^[^:]{1,90}:\s*/, "").trim();
   const sentences = factText.match(/[^.!?]+[.!?]+/g)?.map((sentence) => sentence.trim()) ?? [factText];
-  const repaired = sentences.slice(0, 2).join(" ").replace(/\s+/g, " ").trim();
+  const firstSentenceIsMostlyDates =
+    sentences.length > 1 &&
+    /\b(?:n(?:e|ee|é|ée)|born|mort(?:e)?|died|death|naissance|deces|d(?:e|\u00e9)c(?:e|\u00e8)s)\b/i.test(
+      normalizeText(sentences[0] ?? "")
+    );
+  const informativeSentences = firstSentenceIsMostlyDates ? sentences.slice(1, 3) : sentences.slice(0, 2);
+  const shouldKeepModelLead = countWords(args.answer.answer) >= 8 && answerMentionsAnyTerm(args.answer.answer, subjectTerms.size > 0 ? [...subjectTerms] : extractTerms(fact, 4));
+  const repaired = [
+    shouldKeepModelLead ? args.answer.answer : "",
+    ...informativeSentences
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
   if (!repaired || normalizeText(repaired) === normalizedAnswer) {
     return null;
   }
