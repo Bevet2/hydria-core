@@ -169,3 +169,18 @@ test("answerability planner treats English explain turns as sourceable factual l
   assert.ok(plan.requiredEvidence.includes("source_research"));
   assert.equal(plan.requiresResearch, true);
 });
+
+test("answerability planner keeps conceptual streaming architecture off source research", () => {
+  const plan = planner.planRequirement({
+    question: "Explique le traitement temps reel dans une architecture streaming.",
+    userMessage: "Explique le traitement temps reel dans une architecture streaming.",
+    category: "architecture_design",
+    toolRouting: route({}),
+    conversationState: createInitialState(),
+    hasPriorConversation: false
+  });
+
+  assert.equal(plan.answerabilityMode, "specialist_synthesis");
+  assert.equal(plan.requiresResearch, false);
+  assert.ok(plan.requiredEvidence.includes("multi_specialist_synthesis"));
+});

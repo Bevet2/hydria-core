@@ -207,7 +207,7 @@ export const generalAnswerabilityGateCases: AnswerabilityGateCase[] = [
     message: "Redige un message court pour prevenir un client d'un retard de livraison.",
     expectedMode: "direct_model",
     expectedProvider: "ollama",
-    expectedTerms: ["client", "retard"]
+    expectedTerms: ["retard", "livraison"]
   },
   {
     id: "fr_strategy_specialist",

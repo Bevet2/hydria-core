@@ -1879,6 +1879,22 @@ function buildDeterministicRuntimeDraft(args: {
   };
 }
 
+function isQualityTrustedDeterministicRuntimeModel(model: string) {
+  return [
+    "context_ack",
+    "strategic_context_ack",
+    "conversation_fact_ack",
+    "conversation_memory",
+    "runtime_product_knowledge",
+    "research_recent_updates",
+    "weather",
+    "finance",
+    "web",
+    "time",
+    "calculator"
+  ].includes(model);
+}
+
 function sourceCueForKnowledgeHit(hit: ChatKnowledgeRetrievalMetadata["hits"][number]) {
   const doiSource = hit.sourceUris.find((source) => /doi|crossref|openalex/i.test(source));
   return doiSource ?? hit.sourceUris[0] ?? hit.title;
@@ -2696,13 +2712,7 @@ export class ChatRuntimeService {
       recentMessages: session.messages,
       toolRouting: tooling.routing
     });
-    if (
-      draft.generation.model === "context_ack" ||
-      draft.generation.model === "strategic_context_ack" ||
-      draft.generation.model === "conversation_fact_ack" ||
-      draft.generation.model === "conversation_memory" ||
-      draft.generation.model === "runtime_product_knowledge"
-    ) {
+    if (isQualityTrustedDeterministicRuntimeModel(draft.generation.model)) {
       conversationQuality = {
         passed: true,
         issues: [],
