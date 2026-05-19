@@ -948,6 +948,68 @@ function normalizeDirectChatAnswer(answer: StudentAnswer, quality: ConversationQ
   };
 }
 
+function buildSourceBackedFactualRepair(args: {
+  answer: StudentAnswer;
+  tooling: ChatToolMetadata;
+}): StudentAnswer | null {
+  if (
+    !args.tooling.used ||
+    args.tooling.routing.toolType !== "research" ||
+    args.tooling.routing.intent !== "fact_check"
+  ) {
+    return null;
+  }
+
+  const fact = args.tooling.verifiedFacts[0]?.replace(/\s+/g, " ").trim();
+  if (!fact || fact.length < 40) {
+    return null;
+  }
+
+  const subject =
+    typeof args.tooling.routing.extractedArgs?.subject === "string"
+      ? args.tooling.routing.extractedArgs.subject
+      : "";
+  const normalizedAnswer = normalizeText(args.answer.answer);
+  const subjectTerms = new Set(extractTerms(subject, 10));
+  const genericDescriptorTerms = new Set([
+    "physicienne",
+    "chimiste",
+    "scientifique",
+    "polonaise",
+    "francaise",
+    "franco",
+    "english",
+    "french",
+    "polish",
+    "mathematician",
+    "scientist",
+    "writer"
+  ]);
+  const sourceTerms = extractTerms(fact, 24).filter(
+    (term) => !subjectTerms.has(term) && !genericDescriptorTerms.has(term)
+  );
+  const sourceTermsUsed = sourceTerms.filter((term) => normalizedAnswer.includes(term)).length;
+  const sourceTermsMissing = sourceTerms.length - sourceTermsUsed;
+
+  if (countWords(args.answer.answer) > 22 || sourceTermsMissing < 3) {
+    return null;
+  }
+
+  const factText = fact.replace(/^[^:]{1,90}:\s*/, "").trim();
+  const sentences = factText.match(/[^.!?]+[.!?]+/g)?.map((sentence) => sentence.trim()) ?? [factText];
+  const repaired = sentences.slice(0, 2).join(" ").replace(/\s+/g, " ").trim();
+  if (!repaired || normalizeText(repaired) === normalizedAnswer) {
+    return null;
+  }
+
+  return {
+    ...args.answer,
+    answer: repaired.length <= 360 ? repaired : `${repaired.slice(0, 357).trim()}...`,
+    key_points: [...args.answer.key_points, "Source-backed factual repair"].slice(0, 6),
+    confidence: Math.max(args.answer.confidence, 82)
+  };
+}
+
 function shouldRepairConversationQuality(quality: ConversationQualityGateResult) {
   if (quality.passed || quality.recommendedAction === "ask_clarification") {
     return false;
@@ -2033,6 +2095,29 @@ export class ChatRuntimeService {
       runtimeMode === "direct"
         ? normalizeDirectChatAnswer(draft.answer, conversationQuality)
         : draft.answer;
+
+    const sourceBackedFactualRepair =
+      runtimeMode === "direct"
+        ? buildSourceBackedFactualRepair({
+            answer: finalAnswer,
+            tooling
+          })
+        : null;
+    if (sourceBackedFactualRepair) {
+      finalAnswer = sourceBackedFactualRepair;
+      conversationQuality = this.analyzeQuality({
+        runtimeMode,
+        conversationState,
+        activeConstraintCapsule,
+        answerPolicy,
+        newUserMessage: args.message,
+        answer: finalAnswer.answer,
+        lastAssistantAnswer: session.lastAssistantAnswer,
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
+      });
+      usedRetry = true;
+    }
 
     const correctionAcknowledged = buildCorrectionAcknowledgedText({
       newUserMessage: args.message,

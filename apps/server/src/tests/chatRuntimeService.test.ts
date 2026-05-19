@@ -102,6 +102,29 @@ test("chat runtime keeps follow-up context in the direct student chat adapter", 
   );
 });
 
+test("chat runtime repairs thin source-backed factual answers with verified facts", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult("Marie Curie etait une physicienne et chimiste polonaise et francaise.");
+      }
+    },
+    undefined,
+    buildFactCheckToolResult(
+      "Marie Curie: Marie Curie est une physicienne et chimiste franco-polonaise, pionniere des recherches sur la radioactivite, laureate de deux prix Nobel."
+    )
+  );
+
+  const response = await service.sendMessage({ message: "Qui est Marie Curie ?" });
+
+  assert.match(response.answer.answer, /radioactivite/i);
+  assert.match(response.answer.answer, /Nobel/i);
+  assert.equal(response.tooling.routing.toolType, "research");
+  assert.equal(response.tooling.used, true);
+  assert.equal(response.usedRetry, true);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
 test("chat runtime recalls user-provided facts without triggering research", async () => {
   let adapterCalled = false;
   const service = new ChatRuntimeService({
