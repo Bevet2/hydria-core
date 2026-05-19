@@ -142,6 +142,15 @@ Do not invent optional flavorings such as citrus, maple, chocolate syrup, yogurt
 Do not return JSON, bullets, numbered lists, hidden reasoning, or chain-of-thought.
 Use one compact paragraph of 3 or 4 complete sentences.`;
 
+const concisePlainTextSystemPrompt = `You are Hydria Core's local concise chat runtime.
+Answer the current user message as plain final user-facing text only.
+Do not return JSON, wrapper labels, markdown, hidden reasoning, or chain-of-thought.
+Keep the user's language.
+If the user writes in French, every final word must be French except proper nouns and technical names.
+If an active constraint asks for a short answer or a word limit, obey it strictly.
+For simple educational or conceptual questions, give the direct definition first in one concise sentence.
+If the user asks a stable non-live concept, answer from stable model knowledge; do not abstain.`;
+
 const codePlainTextSystemPrompt = `You are Hydria Core's local code and debugging specialist.
 Answer the current user message as plain final text only.
 Do not return JSON, wrapper labels, hidden reasoning, or chain-of-thought.
@@ -298,6 +307,15 @@ function maybeStableFactCompaction(route: StudentChatModelRoute) {
 }
 
 function maybePlainRouteGuidance(route: StudentChatModelRoute) {
+  if (route.runtimeBudget.profile === "standard_light_chat" || route.runtimeBudget.profile === "concise_chat") {
+    return [
+      "Concise route: produce the final answer directly, without JSON or metadata.",
+      "Language is binding: French request means French-only final text; English request means English-only final text.",
+      "If an active constraint says less than N words or asks for a short answer, keep the answer short enough to satisfy it.",
+      "For stable concepts such as APIs, databases, Docker, or SQL, answer from stable model knowledge in one compact sentence.",
+      "Do not abstain unless the answer depends on missing live/current/private data."
+    ];
+  }
   if (route.runtimeBudget.profile === "writing_chat") {
     if (route.pipeline.some((step) => step.startsWith("practical_writer:"))) {
       return [
@@ -468,6 +486,18 @@ function stripReasoningArtifacts(value: string) {
 }
 
 function cleanPlainStableFactAnswer(raw: string) {
+  try {
+    const parsed = parseLooseJson(stripCodeFences(raw), "Plain chat answer");
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      typeof (parsed as { answer?: unknown }).answer === "string"
+    ) {
+      raw = (parsed as { answer: string }).answer;
+    }
+  } catch {
+    // Plain-text routes should not return JSON, but this keeps old local model behavior safe.
+  }
   let cleaned = stripReasoningArtifacts(stripCodeFences(raw))
     .replace(/^\s*(?:answer|reponse|réponse)\s*[:\-]\s*/i, "")
     .replace(/^["']|["']$/g, "")
@@ -644,12 +674,22 @@ function parsePlainChatAnswer(raw: string, route: StudentChatModelRoute, input: 
 }
 
 function shouldUsePlainTextRoute(route: StudentChatModelRoute) {
-  return ["stable_fact_chat", "writing_chat", "code_chat", "deep_reasoning"].includes(route.runtimeBudget.profile);
+  return [
+    "stable_fact_chat",
+    "standard_light_chat",
+    "concise_chat",
+    "writing_chat",
+    "code_chat",
+    "deep_reasoning"
+  ].includes(route.runtimeBudget.profile);
 }
 
 function systemPromptForRoute(route: StudentChatModelRoute) {
   if (route.runtimeBudget.profile === "stable_fact_chat") {
     return stableFactPlainTextSystemPrompt;
+  }
+  if (route.runtimeBudget.profile === "standard_light_chat" || route.runtimeBudget.profile === "concise_chat") {
+    return concisePlainTextSystemPrompt;
   }
   if (route.runtimeBudget.profile === "writing_chat") {
     if (route.pipeline.some((step) => step.startsWith("practical_writer:"))) {

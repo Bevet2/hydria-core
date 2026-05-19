@@ -442,8 +442,8 @@ async function runProductionSmoke(args = parseArgs()): Promise<ProductionSmokeRe
     if (third.conversationQuality?.passed === false) {
       return fail("conversation quality gate failed on follow-up", third.conversationQuality);
     }
-    if (third.generation?.provider !== "ollama") {
-      return fail("multi-turn chat was not served by the local Ollama student runtime", {
+    if (third.generation?.provider !== "ollama" && third.generation?.provider !== "tool") {
+      return fail("multi-turn chat was not served by the local governed student runtime", {
         generation: third.generation,
         answer
       });

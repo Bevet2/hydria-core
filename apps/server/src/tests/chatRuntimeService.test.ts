@@ -1003,3 +1003,58 @@ test("chat runtime does not treat generic brevity constraints as strategic conte
   assert.equal(third.conversationQuality.passed, true);
   assert.equal(second.generation.model, "context_ack");
 });
+
+test("chat runtime repairs concise stable concept timeouts instead of returning a generic fallback", async () => {
+  const service = new ChatRuntimeService({
+    async answer() {
+      return {
+        answer: {
+          modelRole: "student",
+          answer: "Je n'ai pas reussi a generer une reponse fiable pour ce tour.",
+          key_points: ["Generation indisponible"],
+          assumptions: ["student_chat_generation_failed"],
+          confidence: 30
+        },
+        usedRetry: true,
+        provider: "fallback",
+        model: "qwen2.5:3b",
+        specialist: {
+          capabilityId: "qwen-3b-router",
+          role: "fast_router",
+          displayName: "Qwen 3B",
+          routingReason: "test timeout",
+          pipeline: ["fast_router:phi3:mini", "concise_answer:qwen2.5:3b"]
+        },
+        raw: "Je n'ai pas reussi a generer une reponse fiable pour ce tour.",
+        validationIssues: ["student_chat_generation_failed", "qwen2.5:3b: timeout"],
+        runtimeBudget: {
+          profile: "concise_chat",
+          label: "Concise fast chat",
+          reason: "test timeout",
+          timeoutMs: 45000,
+          maxLatencyMs: 45000,
+          maxOutputTokens: 96,
+          maxConcurrent: 1,
+          fallbackDepth: 1,
+          concurrencyKey: "fast_local_chat"
+        }
+      };
+    }
+  });
+
+  const first = await service.sendMessage({ message: "On parle de bases de donnees." });
+  await service.sendMessage({
+    sessionId: first.sessionId,
+    message: "Pour la suite, reponds en moins de 12 mots."
+  });
+  const third = await service.sendMessage({
+    sessionId: first.sessionId,
+    message: "Explique PostgreSQL en respectant ma contrainte."
+  });
+
+  assert.equal(third.generation.provider, "tool");
+  assert.equal(third.generation.model, "runtime_technical_concept");
+  assert.match(third.answer.answer, /PostgreSQL/i);
+  assert.doesNotMatch(third.answer.answer, /pas reussi|reformule/i);
+  assert.equal(third.conversationQuality.passed, true);
+});

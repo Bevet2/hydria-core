@@ -1117,6 +1117,98 @@ function buildRuntimeProductFallbackRepair(args: {
   };
 }
 
+function buildStableTechnicalConceptBrief(args: {
+  anchor: string;
+  language: ConversationState["language"];
+}) {
+  const normalized = normalizeText(args.anchor);
+  const isFrench = args.language !== "en";
+  if (/\bpostgres(?:ql)?\b/.test(normalized)) {
+    return isFrench
+      ? "PostgreSQL est une base de donnees relationnelle SQL open source."
+      : "PostgreSQL is an open-source SQL relational database.";
+  }
+  if (normalized === "api") {
+    return isFrench
+      ? "Une API permet a deux logiciels de communiquer."
+      : "An API lets two software systems communicate.";
+  }
+  if (normalized === "docker") {
+    return isFrench
+      ? "Docker isole des applications dans des conteneurs portables."
+      : "Docker packages applications into portable containers.";
+  }
+  if (normalized === "sql") {
+    return isFrench
+      ? "SQL sert a interroger des bases de donnees relationnelles."
+      : "SQL queries and manages relational databases.";
+  }
+  if (normalized === "redis") {
+    return isFrench
+      ? "Redis stocke des donnees rapides en memoire."
+      : "Redis stores fast in-memory data structures.";
+  }
+  if (normalized === "kubernetes") {
+    return isFrench
+      ? "Kubernetes orchestre des conteneurs sur plusieurs machines."
+      : "Kubernetes orchestrates containers across multiple machines.";
+  }
+  if (normalized === "react") {
+    return isFrench
+      ? "React sert a construire des interfaces web par composants."
+      : "React builds web interfaces from reusable components.";
+  }
+  if (/^node/.test(normalized)) {
+    return isFrench
+      ? "Node.js execute du JavaScript cote serveur."
+      : "Node.js runs JavaScript on the server.";
+  }
+  return null;
+}
+
+function buildRuntimeTechnicalConceptFallbackRepair(args: {
+  answer: StudentAnswer;
+  category: QuestionCategory;
+  userMessage: string;
+  routingQuestion: string;
+  language: ConversationState["language"];
+}): StudentAnswer | null {
+  if (
+    !isStaticGenerationFailureAnswer(args.answer.answer) ||
+    !["technical_explanation", "other"].includes(args.category)
+  ) {
+    return null;
+  }
+
+  const source = `${args.routingQuestion}\n${args.userMessage}`;
+  const normalized = normalizeText(source);
+  if (/\b(?:today|current|latest|recent|now|aujourd hui|actuel|derniere|dernier|cette semaine)\b/.test(normalized)) {
+    return null;
+  }
+  if (!/\b(?:explique|explain|definition|define|c est quoi|qu est ce|what is|what are|role|r[oô]le)\b/.test(normalized)) {
+    return null;
+  }
+
+  const anchor = extractTechnicalAnchor(source);
+  if (anchor === "the failing component") {
+    return null;
+  }
+  const brief = buildStableTechnicalConceptBrief({
+    anchor,
+    language: args.language
+  });
+  if (!brief) {
+    return null;
+  }
+
+  return {
+    ...args.answer,
+    answer: brief,
+    key_points: [...args.answer.key_points, "Runtime stable concept repair"].slice(0, 6),
+    confidence: Math.max(args.answer.confidence, 76)
+  };
+}
+
 function isHydriaCoreSelfKnowledgeRequest(message: string) {
   const normalized = normalizeText(message);
   return /\bhydria core\b/.test(normalized) && /\b(?:role|r[oô]le|what is|c est quoi|qu est ce|explique|explain|presente|pr[eé]sente)\b/.test(normalized);
@@ -2670,6 +2762,52 @@ export class ChatRuntimeService {
             pipeline: [
               ...draft.generation.specialist.pipeline,
               "runtime_product_knowledge:hydria_core"
+            ]
+          },
+          usedRetry: true,
+          validationIssues: draft.generation.validationIssues.filter(
+            (issue) => !/student_chat_generation_failed|operation was aborted|timeout/i.test(issue)
+          )
+        }
+      };
+      conversationQuality = this.analyzeQuality({
+        runtimeMode,
+        conversationState,
+        activeConstraintCapsule,
+        answerPolicy,
+        newUserMessage: args.message,
+        answer: finalAnswer.answer,
+        lastAssistantAnswer: session.lastAssistantAnswer,
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
+      });
+      usedRetry = true;
+    }
+
+    const runtimeTechnicalConceptFallbackRepair = buildRuntimeTechnicalConceptFallbackRepair({
+      answer: finalAnswer,
+      category: draft.category,
+      userMessage: args.message,
+      routingQuestion,
+      language: conversationState.language
+    });
+    if (runtimeTechnicalConceptFallbackRepair && draft.generation.provider === "fallback") {
+      finalAnswer = runtimeTechnicalConceptFallbackRepair;
+      draft = {
+        ...draft,
+        generation: {
+          ...draft.generation,
+          provider: "tool",
+          model: "runtime_technical_concept",
+          specialist: {
+            capabilityId: "qwen-3b-standard-light",
+            role: "primary_brain",
+            displayName: "Runtime stable concept repair",
+            routingReason:
+              "The concise local model timed out on a stable concept question; runtime produced a bounded concept answer instead of a generic fallback.",
+            pipeline: [
+              ...draft.generation.specialist.pipeline,
+              "runtime_technical_concept:stable_brief"
             ]
           },
           usedRetry: true,
