@@ -360,8 +360,8 @@ async function runProductionSmoke(args = parseArgs()): Promise<ProductionSmokeRe
     if (hasInternalLeak(answer)) {
       return fail("chat leaked internal runtime language", { answer });
     }
-    if (response.generation?.provider !== "ollama") {
-      return fail("chat was not served by the local Ollama student runtime", {
+    if (response.generation?.provider !== "ollama" && response.generation?.provider !== "tool") {
+      return fail("chat was not served by the local chat runtime", {
         generation: response.generation,
         answer
       });

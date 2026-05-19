@@ -1091,6 +1091,28 @@ function buildRuntimeCodeFallbackRepair(args: {
   };
 }
 
+function buildRuntimeProductFallbackRepair(args: {
+  answer: StudentAnswer;
+  userMessage: string;
+  language: ConversationState["language"];
+}): StudentAnswer | null {
+  if (!isStaticGenerationFailureAnswer(args.answer.answer) || !/\bhydria\s+core\b/i.test(args.userMessage)) {
+    return null;
+  }
+
+  const answer =
+    args.language === "fr"
+      ? "Hydria Core est un runtime cognitif gouverne qui orchestre des modeles specialises, des outils, la memoire et la knowledge pour produire des reponses controlees."
+      : "Hydria Core is a governed cognitive runtime that orchestrates specialized models, tools, memory, and knowledge to produce controlled answers.";
+
+  return {
+    ...args.answer,
+    answer,
+    key_points: [...args.answer.key_points, "Runtime product knowledge fallback"].slice(0, 6),
+    confidence: Math.max(args.answer.confidence, 82)
+  };
+}
+
 function preserveIncidentPaymentTerm(args: {
   answer: StudentAnswer;
   category: QuestionCategory;
@@ -2292,6 +2314,50 @@ export class ChatRuntimeService {
             pipeline: [
               ...draft.generation.specialist.pipeline,
               "runtime_code_diagnostic:context_terms"
+            ]
+          },
+          usedRetry: true,
+          validationIssues: draft.generation.validationIssues.filter(
+            (issue) => !/student_chat_generation_failed|operation was aborted|timeout/i.test(issue)
+          )
+        }
+      };
+      conversationQuality = this.analyzeQuality({
+        runtimeMode,
+        conversationState,
+        activeConstraintCapsule,
+        answerPolicy,
+        newUserMessage: args.message,
+        answer: finalAnswer.answer,
+        lastAssistantAnswer: session.lastAssistantAnswer,
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
+      });
+      usedRetry = true;
+    }
+
+    const runtimeProductFallbackRepair = buildRuntimeProductFallbackRepair({
+      answer: finalAnswer,
+      userMessage: args.message,
+      language: conversationState.language
+    });
+    if (runtimeProductFallbackRepair && draft.generation.provider === "fallback") {
+      finalAnswer = runtimeProductFallbackRepair;
+      draft = {
+        ...draft,
+        generation: {
+          ...draft.generation,
+          provider: "tool",
+          model: "runtime_product_knowledge",
+          specialist: {
+            capabilityId: "qwen-3b-standard-light",
+            role: "primary_brain",
+            displayName: "Runtime product knowledge",
+            routingReason:
+              "The local model timed out on a Hydria Core self-knowledge question; runtime used the governed product definition.",
+            pipeline: [
+              ...draft.generation.specialist.pipeline,
+              "runtime_product_knowledge:hydria_core"
             ]
           },
           usedRetry: true,

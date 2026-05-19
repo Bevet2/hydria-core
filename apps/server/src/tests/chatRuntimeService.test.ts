@@ -247,6 +247,32 @@ test("chat runtime preserves decisive payment terms in incident rollback decisio
   assert.equal(third.conversationQuality.passed, true);
 });
 
+test("chat runtime answers Hydria Core self-knowledge when the local model falls back", async () => {
+  const service = new ChatRuntimeService({
+    async answer() {
+      return {
+        ...buildAdapterResult(
+          "Je n'ai pas reussi a generer une reponse fiable pour ce tour. Reformule la question ou donne un peu plus de contexte."
+        ),
+        provider: "fallback" as const,
+        model: "qwen2.5:3b",
+        validationIssues: ["student_chat_generation_failed", "qwen2.5:3b: timeout"]
+      };
+    }
+  });
+
+  const response = await service.sendMessage({
+    message: "Reponds en une phrase courte : quel est le role de Hydria Core ?"
+  });
+
+  assert.match(response.answer.answer, /Hydria Core/i);
+  assert.match(response.answer.answer, /runtime cognitif|cognitive runtime/i);
+  assert.equal(response.generation.provider, "tool");
+  assert.equal(response.generation.model, "runtime_product_knowledge");
+  assert.equal(response.generation.usedStaticFallback, false);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
 test("chat runtime recalls user-provided facts without triggering research", async () => {
   let adapterCalled = false;
   const service = new ChatRuntimeService({
