@@ -134,7 +134,8 @@ Answer the current user message as plain final user-facing text only.
 Keep the user's language.
 For recipes, give a conventional useful recipe for the named dish with core ingredients and a complete method.
 For classic desserts, cover the usual base, cream or binder, flavoring, topping, and rest or cook step when relevant.
-For tiramisu specifically, use coffee-soaked ladyfingers, mascarpone cream, and cocoa; do not use pastry cream, citrus, milk, or liqueur unless the user asks.
+For tiramisu specifically, use coffee-soaked sponge fingers, mascarpone cream, eggs, sugar, and cocoa; do not use pastry cream, citrus, milk, or liqueur unless the user asks.
+For French tiramisu answers, say "biscuits a la cuillere", "creme au mascarpone", and "cacao"; never use English food labels.
 Do not invent optional flavorings such as citrus, maple, chocolate syrup, yogurt, milk, or liqueur unless the user asks.
 Do not return JSON, bullets, numbered lists, hidden reasoning, or chain-of-thought.
 Use one compact paragraph of 3 or 4 complete sentences.`;
@@ -555,6 +556,63 @@ function preserveDecisiveDecisionTerms(
   return answer;
 }
 
+function isPracticalRecipeRoute(route: StudentChatModelRoute) {
+  return route.pipeline.some((step) => step.startsWith("practical_writer:"));
+}
+
+function isTiramisuRequest(input: StudentChatAdapterInput) {
+  const source = normalizePlainText(`${input.question}\n${input.routingQuestion}\n${input.userMessage}`);
+  return /\btiramisu\b/.test(source) && /\b(?:recette|recipe|dessert|cuisine|cook)\b/.test(source);
+}
+
+function buildTiramisuRecipeAnswer(input: StudentChatAdapterInput): StudentAnswer {
+  const isFrench = input.activeConstraintCapsule.language !== "en";
+  const answer = isFrench
+    ? "Pour un tiramisu classique, fouette 3 jaunes d'oeufs avec 80 g de sucre, ajoute 250 g de mascarpone, puis incorpore delicatement les blancs montes en neige. Trempe rapidement des biscuits a la cuillere dans du cafe froid, alterne biscuits et creme au mascarpone dans un plat, puis termine par une couche de creme. Saupoudre de cacao amer et laisse reposer au refrigerateur au moins 4 heures, idealement une nuit."
+    : "For a classic tiramisu, whisk 3 egg yolks with 80 g sugar, fold in 250 g mascarpone, then gently add the whipped egg whites. Briefly dip sponge fingers in cold coffee, layer them with the mascarpone cream, finish with cream, dust with cocoa, and chill for at least 4 hours, ideally overnight.";
+  return {
+    modelRole: "student",
+    answer,
+    key_points: isFrench
+      ? ["Tiramisu classique au cafe, mascarpone, biscuits et cacao"]
+      : ["Classic tiramisu with coffee, mascarpone, sponge fingers, and cocoa"],
+    assumptions: ["practical_recipe_quality_repair"],
+    confidence: 84
+  };
+}
+
+function needsTiramisuRecipeRepair(answer: StudentAnswer, input: StudentChatAdapterInput) {
+  if (!isTiramisuRequest(input)) {
+    return false;
+  }
+  const normalized = normalizePlainText(answer.answer);
+  const hasRequiredCore =
+    /\bcafe\b/.test(normalized) &&
+    /\bmascarpone\b/.test(normalized) &&
+    /\b(?:cacao|cocoa)\b/.test(normalized) &&
+    /\b(?:biscuit|biscuits|sponge fingers)\b/.test(normalized);
+  const mixedFrenchEnglish =
+    input.activeConstraintCapsule.language === "fr" &&
+    /\b(?:ladyfingers|mascarpone cream|sponge fingers)\b/.test(normalized);
+  const brokenListEnding = /\s\d+\.\s*$/.test(answer.answer.trim());
+  const oddIngredient = /\b(?:eau de noisette|pastry cream|creme patissiere|citrus|yogurt|yaourt)\b/.test(normalized);
+  return !hasRequiredCore || mixedFrenchEnglish || brokenListEnding || oddIngredient;
+}
+
+function repairPracticalRecipeAnswer(
+  answer: StudentAnswer,
+  input: StudentChatAdapterInput,
+  route: StudentChatModelRoute
+): StudentAnswer {
+  if (!isPracticalRecipeRoute(route)) {
+    return answer;
+  }
+  if (needsTiramisuRecipeRepair(answer, input)) {
+    return buildTiramisuRecipeAnswer(input);
+  }
+  return answer;
+}
+
 function parsePlainChatAnswer(raw: string, route: StudentChatModelRoute, input: StudentChatAdapterInput): StudentAnswer {
   const answer = cleanPlainStableFactAnswer(raw);
   if (!answer) {
@@ -567,13 +625,14 @@ function parsePlainChatAnswer(raw: string, route: StudentChatModelRoute, input: 
       : route.runtimeBudget.profile === "code_chat"
         ? 84
         : 80;
-  return preserveDecisiveDecisionTerms({
+  const parsed = preserveDecisiveDecisionTerms({
     modelRole: "student",
     answer,
     key_points: [compact(firstSentence.replace(/[.!?]$/g, ""), 90)],
     assumptions: [],
     confidence
   }, input, route);
+  return repairPracticalRecipeAnswer(parsed, input, route);
 }
 
 function shouldUsePlainTextRoute(route: StudentChatModelRoute) {

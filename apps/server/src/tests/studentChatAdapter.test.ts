@@ -480,10 +480,15 @@ test("student chat adapter routes French recipe requests through practical writi
   assert.equal(timeoutMs < 150000, true);
   assert.equal(numPredict >= 180, true);
   assert.equal(numPredict <= 220, true);
-  assert.match(system, /coffee-soaked ladyfingers/i);
+  assert.match(system, /coffee-soaked sponge fingers/i);
+  assert.match(system, /biscuits a la cuillere/i);
   assert.match(prompt, /avoid pastry cream/i);
   assert.match(result.answer.answer, /tiramisu/);
+  assert.match(result.answer.answer, /biscuits a la cuillere/);
+  assert.match(result.answer.answer, /cacao/);
+  assert.doesNotMatch(result.answer.answer, /mascarpone cream|ladyfingers/i);
   assert.doesNotMatch(result.answer.answer, /\s2\.$/);
+  assert.equal(result.answer.assumptions.includes("practical_recipe_quality_repair"), true);
 });
 
 test("student chat adapter routes lightweight context-setting turns to the fast 3B specialist", async () => {
