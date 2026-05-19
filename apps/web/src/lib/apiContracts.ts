@@ -129,6 +129,13 @@ export type {
 } from "../../../server/src/types/learning.js";
 
 export type {
+  LearningQueueCandidate,
+  LearningQueueFile,
+  LearningQueueGateReport,
+  LearningQueueState
+} from "../../../server/src/types/learningQueue.js";
+
+export type {
   PersistenceStatus,
   PersistenceProjectionStatus,
   PersistenceFileStat,

@@ -3,6 +3,7 @@ import type {
   HydriaWorkflowRun,
   KnowledgeInjection,
   LearningGovernanceState,
+  LearningQueueState,
   OrchestrationPolicyDetails,
   PersistenceHealthReport,
   QuestionCategory,
@@ -16,6 +17,7 @@ import { HydriaMemoryPanel } from "./HydriaMemoryPanel";
 import { PersistenceHealthPanel } from "./PersistenceHealthPanel";
 import { HydriaWorkflowPanel } from "./HydriaWorkflowPanel";
 import { LearningGovernancePanel } from "./LearningGovernancePanel";
+import { LearningQueuePanel } from "./LearningQueuePanel";
 
 function renderBulletList(items: string[], emptyLabel: string) {
   if (items.length === 0) {
@@ -40,11 +42,13 @@ export function StudentLabSidebar(props: {
   displayedOrchestration: OrchestrationPolicyDetails | null;
   displayedWorkflow: HydriaWorkflowRun | null;
   learningState: LearningGovernanceState | null;
+  learningQueueState: LearningQueueState | null;
   persistenceHealth: PersistenceHealthReport | null;
   currentSession: StudentSession | null;
   summary: StudentProgressSummary | null;
   sessions: StudentSession[];
   onRefreshLearning: () => Promise<void>;
+  onRefreshLearningQueue: () => Promise<void>;
   onRefreshPersistence: () => Promise<void>;
   onSelectSession: (session: StudentSession) => void;
 }) {
@@ -242,6 +246,10 @@ export function StudentLabSidebar(props: {
 
       <HydriaMemoryPanel memory={props.displayedMemory} title="Hydria Memory Snapshot" />
       <HydriaWorkflowPanel workflow={props.displayedWorkflow} title="Hydria Workflow Trace" />
+      <LearningQueuePanel
+        state={props.learningQueueState}
+        onRefresh={props.onRefreshLearningQueue}
+      />
       <LearningGovernancePanel
         state={props.learningState}
         onRefresh={props.onRefreshLearning}

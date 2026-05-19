@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  fetchLearningQueueState,
   fetchModelRuntimeOps,
   resetChatSession,
   sendChatMessage,
   type ChatMessage,
   type ChatMessageResponse,
+  type LearningQueueState,
   type ModelRuntimeOpsSummary
 } from "../lib/api";
 import { AppNav } from "./AppNav";
+import { LearningQueuePanel } from "./LearningQueuePanel";
 import { ModelRuntimePanel } from "./ModelRuntimePanel";
 
 type ChatUiMessage = ChatMessage & {
@@ -81,6 +84,7 @@ export function ChatPage() {
   const [draft, setDraft] = useState("");
   const [lastResponse, setLastResponse] = useState<ChatMessageResponse | null>(null);
   const [modelRuntimeOps, setModelRuntimeOps] = useState<ModelRuntimeOpsSummary | null>(null);
+  const [learningQueueState, setLearningQueueState] = useState<LearningQueueState | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -120,9 +124,14 @@ export function ChatPage() {
     setModelRuntimeOps(await fetchModelRuntimeOps());
   }
 
+  async function refreshLearningQueueState() {
+    setLearningQueueState(await fetchLearningQueueState());
+  }
+
   useEffect(() => {
-    void refreshModelRuntimeOps().catch(() => {
+    void Promise.all([refreshModelRuntimeOps(), refreshLearningQueueState()]).catch(() => {
       setModelRuntimeOps(null);
+      setLearningQueueState(null);
     });
   }, []);
 
@@ -156,6 +165,9 @@ export function ChatPage() {
       ]);
       void refreshModelRuntimeOps().catch(() => {
         setModelRuntimeOps(null);
+      });
+      void refreshLearningQueueState().catch(() => {
+        setLearningQueueState(null);
       });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Chat request failed.");
@@ -268,6 +280,7 @@ export function ChatPage() {
         </section>
 
         <aside className="chat-inspector">
+          <LearningQueuePanel state={learningQueueState} onRefresh={refreshLearningQueueState} />
           <ModelRuntimePanel summary={modelRuntimeOps} onRefresh={refreshModelRuntimeOps} />
 
           <section className="panel">

@@ -349,6 +349,21 @@ curl -fsS https://app.hydria.click/api/learning/knowledge-quality
 curl -fsS https://app.hydria.click/api/learning/knowledge-scheduler
 curl -fsS https://app.hydria.click/api/learning/promotion
 curl -fsS https://app.hydria.click/api/learning/training-queue
+curl -fsS https://app.hydria.click/api/learning/queue
+```
+
+Learning Queue v1 captures runtime failure candidates from public chat, including model fallback,
+quality repair, language mismatch, tool-routing gaps, retrieval gaps, and source-grounding gaps.
+It is a review queue only: it does not train, promote, or alter model weights. Validate it with:
+
+```bash
+npm run learning:queue-gate
+```
+
+This writes:
+
+```text
+storage/learning/hydria-learning-queue-gate-v1.json
 ```
 
 Knowledge retrieval is injected into public chat in guarded mode only after tool routing. Verified tool context has priority; live/current tool routes skip static knowledge retrieval. Validate the runtime path with:
@@ -389,6 +404,8 @@ KNOWLEDGE_PROMOTION_FILE=/app/storage/learning/hydria-knowledge-promotion-v1.jso
 TRAINING_CANDIDATE_QUEUE_FILE=/app/storage/learning/hydria-training-candidate-queue-v1.json
 TRAINING_QUEUE_VALIDATION_FILE=/app/storage/learning/hydria-training-queue-validation-v1.json
 TRAINING_QUEUE_MIN_SFT_READY_ITEMS=6
+LEARNING_QUEUE_FILE=/app/storage/learning/hydria-learning-queue-v1.json
+LEARNING_QUEUE_GATE_FILE=/app/storage/learning/hydria-learning-queue-gate-v1.json
 ```
 
 Install or refresh the OVH systemd timer:

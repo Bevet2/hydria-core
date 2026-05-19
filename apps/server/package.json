@@ -22,6 +22,7 @@
     "learning:dataset-expansion": "tsx src/scripts/runDatasetExpansionCampaign.ts",
     "learning:loop": "tsx src/scripts/runLearningLoop.ts",
     "learning:interactions": "tsx src/scripts/runInteractionLearningDigest.ts",
+    "learning:queue-gate": "tsx src/scripts/runLearningQueueGate.ts",
     "student:training-pack": "tsx src/scripts/runPrepareLocalStudentTrainingPack.ts",
     "student:training-env": "tsx src/scripts/runCheckLocalStudentTrainingEnv.ts",
     "student:baseline": "tsx src/scripts/runFreezeLocalStudentBaseline.ts",

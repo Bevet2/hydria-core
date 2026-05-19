@@ -42,6 +42,7 @@ import { KnowledgePromotionGovernanceService } from "./services/knowledgePromoti
 import { KnowledgeQualityGateService } from "./services/knowledgeQualityGateService.js";
 import { KnowledgeRetrievalService } from "./services/knowledgeRetrievalService.js";
 import { LearningGovernanceService } from "./services/learningGovernanceService.js";
+import { LearningQueueService } from "./services/learningQueueService.js";
 import { LocalModelService } from "./services/localModel.js";
 import { ModelCapabilityService } from "./services/models/modelCapabilityService.js";
 import { ModelProviderService } from "./services/models/modelProviderService.js";
@@ -106,6 +107,7 @@ const persistenceHealthService = new PersistenceHealthService();
 const arenaQualityAnalyticsService = new ArenaQualityAnalyticsService();
 const arenaRespondentFailureStore = new ArenaRespondentFailureStore();
 const learningGovernanceService = new LearningGovernanceService();
+const learningQueueService = new LearningQueueService();
 const studentService = new StudentService(
   localModelService,
   openRouterService,
@@ -121,7 +123,8 @@ const chatRuntimeService = new ChatRuntimeService(
   undefined,
   modelRuntimeTelemetryService,
   interactionLogStore,
-  knowledgeRetrievalService
+  knowledgeRetrievalService,
+  learningQueueService
 );
 const arenaRunner = new ArenaRunner(
   openRouterService,
@@ -289,7 +292,8 @@ app.use(
     trainingQueueValidationService,
     sourceAcquisitionStore,
     governedKnowledgeSchedulerService,
-    knowledgeQualityGateService
+    knowledgeQualityGateService,
+    learningQueueService
   )
 );
 app.use("/api/student", createStudentRouter(studentService));

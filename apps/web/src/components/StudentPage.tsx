@@ -3,10 +3,12 @@ import {
   analyzeStudentDraft,
   answerStudentQuestion,
   fetchLearningGovernanceState,
+  fetchLearningQueueState,
   fetchPersistenceHealth,
   fetchStudentSession,
   fetchStudentSessions,
   type LearningGovernanceState,
+  type LearningQueueState,
   type PersistenceHealthReport,
   type StudentAnswerPreview,
   type StudentProgressSummary,
@@ -26,6 +28,7 @@ export function StudentPage() {
   const [summary, setSummary] = useState<StudentProgressSummary | null>(null);
   const [currentSession, setCurrentSession] = useState<StudentSession | null>(null);
   const [learningState, setLearningState] = useState<LearningGovernanceState | null>(null);
+  const [learningQueueState, setLearningQueueState] = useState<LearningQueueState | null>(null);
   const [persistenceHealth, setPersistenceHealth] = useState<PersistenceHealthReport | null>(null);
   const [answering, setAnswering] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -78,8 +81,18 @@ export function StudentPage() {
     setLearningState(nextState);
   }
 
+  async function refreshLearningQueueState() {
+    const nextState = await fetchLearningQueueState();
+    setLearningQueueState(nextState);
+  }
+
   useEffect(() => {
-    void Promise.all([refreshSessions(), refreshPersistenceHealth(), refreshLearningState()]).catch((cause: unknown) => {
+    void Promise.all([
+      refreshSessions(),
+      refreshPersistenceHealth(),
+      refreshLearningState(),
+      refreshLearningQueueState()
+    ]).catch((cause: unknown) => {
       setError(cause instanceof Error ? cause.message : "Failed to load student history.");
     });
   }, []);
@@ -228,11 +241,13 @@ export function StudentPage() {
           displayedOrchestration={displayedOrchestration}
           displayedWorkflow={displayedWorkflow}
           learningState={learningState}
+          learningQueueState={learningQueueState}
           persistenceHealth={persistenceHealth}
           currentSession={currentSession}
           summary={summary}
           sessions={sessions}
           onRefreshLearning={refreshLearningState}
+          onRefreshLearningQueue={refreshLearningQueueState}
           onRefreshPersistence={refreshPersistenceHealth}
           onSelectSession={(session) => {
             setCurrentSession(session);

@@ -2,6 +2,7 @@ import type {
   ArenaQualityAnalyticsReport,
   ArenaRound,
   LearningGovernanceState,
+  LearningQueueState,
   LocalModelHealth,
   LocalModelTestResponse,
   ModelRuntimeOpsSummary
@@ -11,6 +12,7 @@ import { HistoryPanel } from "./HistoryPanel";
 import { HydriaMemoryPanel } from "./HydriaMemoryPanel";
 import { HydriaWorkflowPanel } from "./HydriaWorkflowPanel";
 import { LearningGovernancePanel } from "./LearningGovernancePanel";
+import { LearningQueuePanel } from "./LearningQueuePanel";
 import { LocalModelPanel } from "./LocalModelPanel";
 import { ModelRuntimePanel } from "./ModelRuntimePanel";
 import { PersistenceHealthPanel } from "./PersistenceHealthPanel";
@@ -22,12 +24,14 @@ type CorePlaygroundSidebarProps = {
   rounds: ArenaRound[];
   qualityReport: ArenaQualityAnalyticsReport | null;
   learningState: LearningGovernanceState | null;
+  learningQueueState: LearningQueueState | null;
   localHealth: LocalModelHealth | null;
   modelRuntimeOps: ModelRuntimeOpsSummary | null;
   persistenceHealth: PersistenceHealthReport | null;
   lastLocalTest: LocalModelTestResponse | null;
   onRefreshHealth: () => Promise<void>;
   onRefreshLearning: () => Promise<void>;
+  onRefreshLearningQueue: () => Promise<void>;
   onRefreshModelRuntime: () => Promise<void>;
   onRefreshPersistence: () => Promise<void>;
   onRunTest: (prompt: string) => Promise<void>;
@@ -39,12 +43,14 @@ export function CorePlaygroundSidebar({
   rounds,
   qualityReport,
   learningState,
+  learningQueueState,
   localHealth,
   modelRuntimeOps,
   persistenceHealth,
   lastLocalTest,
   onRefreshHealth,
   onRefreshLearning,
+  onRefreshLearningQueue,
   onRefreshModelRuntime,
   onRefreshPersistence,
   onRunTest,
@@ -54,6 +60,7 @@ export function CorePlaygroundSidebar({
     <aside className="right-column">
       <TracePanel round={round} />
       <ArenaQualityPanel report={qualityReport} />
+      <LearningQueuePanel state={learningQueueState} onRefresh={onRefreshLearningQueue} />
       <LearningGovernancePanel state={learningState} onRefresh={onRefreshLearning} />
       <ModelRuntimePanel summary={modelRuntimeOps} onRefresh={onRefreshModelRuntime} />
       <HydriaWorkflowPanel workflow={round?.workflow ?? null} title="Hydria Workflow Trace" />

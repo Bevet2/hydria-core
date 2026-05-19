@@ -5,6 +5,7 @@ import {
   fetchArenaRound,
   fetchHistory,
   fetchLearningGovernanceState,
+  fetchLearningQueueState,
   fetchLocalHealth,
   fetchModelRuntimeOps,
   fetchPersistenceHealth,
@@ -15,6 +16,7 @@ import {
   type ArenaQualityAnalyticsReport,
   type ArenaRound,
   type LearningGovernanceState,
+  type LearningQueueState,
   type LocalModelHealth,
   type LocalModelTestResponse,
   type ModelRuntimeOpsSummary,
@@ -44,6 +46,7 @@ export function CorePlayground() {
   const [currentRound, setCurrentRound] = useState<ArenaRound | null>(null);
   const [qualityReport, setQualityReport] = useState<ArenaQualityAnalyticsReport | null>(null);
   const [learningState, setLearningState] = useState<LearningGovernanceState | null>(null);
+  const [learningQueueState, setLearningQueueState] = useState<LearningQueueState | null>(null);
   const [appHealth, setAppHealth] = useState<AppHealth | null>(null);
   const [localHealth, setLocalHealth] = useState<LocalModelHealth | null>(null);
   const [modelRuntimeOps, setModelRuntimeOps] = useState<ModelRuntimeOpsSummary | null>(null);
@@ -106,13 +109,23 @@ export function CorePlayground() {
     setLearningState(nextState);
   }
 
+  async function refreshLearningQueueState() {
+    const nextState = await fetchLearningQueueState();
+    setLearningQueueState(nextState);
+  }
+
   async function refreshLocalHealth() {
     const health = await fetchLocalHealth();
     setLocalHealth(health);
   }
 
   useEffect(() => {
-    void Promise.all([refreshHistory(), refreshAppHealth(), refreshLearningState()]).catch((cause: unknown) => {
+    void Promise.all([
+      refreshHistory(),
+      refreshAppHealth(),
+      refreshLearningState(),
+      refreshLearningQueueState()
+    ]).catch((cause: unknown) => {
       setError(cause instanceof Error ? cause.message : "Initial load failed.");
     });
   }, []);
@@ -174,12 +187,14 @@ export function CorePlayground() {
           rounds={rounds}
           qualityReport={qualityReport}
           learningState={learningState}
+          learningQueueState={learningQueueState}
           localHealth={localHealth}
           modelRuntimeOps={modelRuntimeOps}
           persistenceHealth={persistenceHealth}
           lastLocalTest={lastLocalTest}
           onRefreshHealth={refreshLocalHealth}
           onRefreshLearning={refreshLearningState}
+          onRefreshLearningQueue={refreshLearningQueueState}
           onRefreshModelRuntime={refreshModelRuntimeOps}
           onRefreshPersistence={refreshAppHealth}
           onRunTest={handleLocalTest}

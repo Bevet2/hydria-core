@@ -5,6 +5,7 @@ import type { KnowledgeConsolidationService } from "../services/knowledgeConsoli
 import type { KnowledgePromotionGovernanceService } from "../services/knowledgePromotionGovernanceService.js";
 import type { KnowledgeQualityGateService } from "../services/knowledgeQualityGateService.js";
 import type { LearningGovernanceService } from "../services/learningGovernanceService.js";
+import type { LearningQueueService } from "../services/learningQueueService.js";
 import type { SourceAcquisitionStore } from "../services/sourceAcquisitionStore.js";
 import type { TrainingQueueValidationService } from "../services/trainingQueueValidationService.js";
 import type { WatcherStore } from "../services/watchers/watcherStore.js";
@@ -22,7 +23,8 @@ export function createLearningRouter(
   trainingQueueValidationService?: Pick<TrainingQueueValidationService, "loadReport">,
   sourceAcquisitionStore?: Pick<SourceAcquisitionStore, "load">,
   governedKnowledgeSchedulerService?: Pick<GovernedKnowledgeSchedulerService, "loadReport">,
-  knowledgeQualityGateService?: Pick<KnowledgeQualityGateService, "loadReport">
+  knowledgeQualityGateService?: Pick<KnowledgeQualityGateService, "loadReport">,
+  learningQueueService?: Pick<LearningQueueService, "loadQueue" | "loadGateReport">
 ) {
   const router = Router();
 
@@ -135,6 +137,23 @@ export function createLearningRouter(
       response.json({
         queue,
         validation
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/queue", async (_request, response, next) => {
+    try {
+      const [queue, gate] = learningQueueService
+        ? await Promise.all([
+            learningQueueService.loadQueue(),
+            learningQueueService.loadGateReport()
+          ])
+        : [null, null];
+      response.json({
+        queue,
+        gate
       });
     } catch (error) {
       next(error);

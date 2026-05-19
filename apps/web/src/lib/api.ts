@@ -4,6 +4,7 @@ import type {
   ArenaQualityAnalyticsReport,
   ArenaRound,
   LearningGovernanceState,
+  LearningQueueState,
   BenchmarkRun,
   BenchmarkRunListItem,
   BenchmarkSummaryResponse,
@@ -97,6 +98,10 @@ export async function fetchPersistenceHealth() {
 
 export async function fetchLearningGovernanceState() {
   return request<LearningGovernanceState>("/api/learning/report");
+}
+
+export async function fetchLearningQueueState() {
+  return request<LearningQueueState>("/api/learning/queue");
 }
 
 export async function fetchLocalHealth() {

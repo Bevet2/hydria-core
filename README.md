@@ -651,6 +651,7 @@ Server-only equivalents live in `apps/server/package.json`.
 ### Learning
 
 - `GET /api/learning/report`
+- `GET /api/learning/queue`
 
 ### Local Model
 
@@ -685,6 +686,13 @@ Learning report:
 Invoke-RestMethod -Method Get -Uri http://localhost:8080/api/learning/report
 ```
 
+Learning queue gate:
+
+```powershell
+npm run learning:queue-gate
+Invoke-RestMethod -Method Get -Uri http://localhost:8080/api/learning/queue
+```
+
 Student preview:
 
 ```powershell
@@ -705,6 +713,7 @@ The frontend exposes:
 - persistence health
 - arena quality analytics
 - learning governance report
+- learning queue for governed runtime failure candidates
 
 ## Current Boundaries
 

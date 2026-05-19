@@ -39,6 +39,7 @@ import { ToolRoutingService } from "./tools/toolRoutingService.js";
 import type { ModelRuntimeTelemetryService } from "./models/modelRuntimeTelemetryService.js";
 import type { InteractionLogStore } from "./interactionLogStore.js";
 import { KnowledgeRetrievalService } from "./knowledgeRetrievalService.js";
+import type { LearningQueueService } from "./learningQueueService.js";
 
 type ChatRuntimeSession = {
   sessionId: string;
@@ -1689,7 +1690,8 @@ export class ChatRuntimeService {
       new LocalToolExecutionService(),
     private readonly modelRuntimeTelemetryService: Pick<ModelRuntimeTelemetryService, "safeRecordEvent"> | null = null,
     private readonly interactionLogStore: Pick<InteractionLogStore, "safeAppend"> | null = null,
-    private readonly knowledgeRetrievalService: Pick<KnowledgeRetrievalService, "retrieve"> | null = null
+    private readonly knowledgeRetrievalService: Pick<KnowledgeRetrievalService, "retrieve"> | null = null,
+    private readonly learningQueueService: Pick<LearningQueueService, "safeCaptureChatResponse"> | null = null
   ) {}
 
   resetSession(sessionId: string) {
@@ -2116,7 +2118,7 @@ export class ChatRuntimeService {
       durationMs
     };
 
-    await this.interactionLogStore?.safeAppend({
+    const interactionRecord = await this.interactionLogStore?.safeAppend({
       scope: "chat_turn",
       source: "chat",
       mode: "chat",
@@ -2142,6 +2144,10 @@ export class ChatRuntimeService {
       payload: {
         response
       }
+    });
+    await this.learningQueueService?.safeCaptureChatResponse({
+      response,
+      interactionRecord
     });
 
     return response;

@@ -182,6 +182,14 @@ const envSchema = z.object({
     .string()
     .min(1)
     .default(projectPath("storage", "learning", "hydria-learning-active-memory-v1.json")),
+  LEARNING_QUEUE_FILE: z
+    .string()
+    .min(1)
+    .default(projectPath("storage", "learning", "hydria-learning-queue-v1.json")),
+  LEARNING_QUEUE_GATE_FILE: z
+    .string()
+    .min(1)
+    .default(projectPath("storage", "learning", "hydria-learning-queue-gate-v1.json")),
   ARENA_RESPONDENT_FAILURE_FILE: z
     .string()
     .min(1)
