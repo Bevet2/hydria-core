@@ -223,9 +223,7 @@ export const generalAnswerabilityGateCases: AnswerabilityGateCase[] = [
     id: "fr_realtime_streaming_not_weather",
     language: "fr",
     message: "Explique le traitement temps reel dans une architecture streaming.",
-    expectedMode: "specialist_synthesis",
-    expectedEvidence: "multi_specialist_synthesis",
-    expectedProvider: "ollama",
+    expectedMode: "direct_model",
     expectedTerms: ["streaming"],
     forbidden: [/meteo|weather/i]
   },

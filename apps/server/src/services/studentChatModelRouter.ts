@@ -150,6 +150,22 @@ function containsStableKnowledgeSignal(text: string) {
   );
 }
 
+function containsConceptualSystemExplanationSignal(text: string) {
+  const isConceptualSystem =
+    /\b(?:architecture|system design|design pattern|pipeline|streaming|real[- ]time|temps reel|migration technique|document de migration)\b/.test(
+      text
+    );
+  const isExplanation =
+    /\b(?:explain|describe|define|what is|how should|comment|explique|definis|structurer|structure)\b/.test(
+      text
+    );
+  const isDecision =
+    /\b(?:recommend|choose|decision|strategy|incident|rollback|tradeoff|constraint|budget|deadline|stakeholder|recommande|choisis|decision|strategie|incident|contrainte|budget|deadline|delai|arbitrage)\b/.test(
+      text
+    );
+  return isConceptualSystem && isExplanation && !isDecision;
+}
+
 function containsSimpleStableKnowledgeSignal(text: string, input: StudentChatModelRoutingInput) {
   if (!["other", "technical_explanation"].includes(input.category)) {
     return false;
@@ -649,6 +665,23 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
         fallbackDepth: 0,
         concurrencyKey: "fast_local_chat"
       }
+    };
+  }
+
+  if (containsConceptualSystemExplanationSignal(text)) {
+    const reason =
+      "Conceptual architecture or streaming explanation without a decision request; use the CPU-aware 3B route instead of deep strategic synthesis.";
+    const budget = buildRuntimeBudget("standard_light_chat", reason);
+    return {
+      capabilityId: "qwen-3b-standard-light",
+      displayName: "Qwen 3B Standard Light",
+      modelName: QWEN_3B,
+      specialistRole: "primary_brain",
+      routingReason: reason,
+      pipeline: [...basePipeline, `conceptual_system_explanation:${QWEN_3B}`],
+      fallbackModelNames: buildSpecialistOnlyFallbacks(QWEN_3B),
+      timeoutMs: budget.timeoutMs,
+      runtimeBudget: budget
     };
   }
 

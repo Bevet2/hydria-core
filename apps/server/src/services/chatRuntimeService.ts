@@ -1114,7 +1114,7 @@ function extractFailingCommand(message: string) {
 
 function extractTechnicalAnchor(message: string) {
   return message.match(
-    /\b(?:Docker|TypeScript|JavaScript|Node(?:\.js)?|React|PostgreSQL|SQL|API|Python|FastAPI|Next\.js|Vite|Prisma|Redis|Kubernetes|GitHub Actions)\b/i
+    /\b(?:Docker|TypeScript|JavaScript|Node(?:\.js)?|React|PostgreSQL|SQL|API|Python|FastAPI|Next\.js|Vite|Prisma|Redis|Kubernetes|GitHub Actions|streaming|temps r[eé]el|temps reel)\b/i
   )?.[0] ?? "the failing component";
 }
 
@@ -1196,6 +1196,11 @@ function buildStableTechnicalConceptBrief(args: {
       ? "Redis stocke des donnees rapides en memoire."
       : "Redis stores fast in-memory data structures.";
   }
+  if (normalized === "streaming" || /temps r(?:e|é)el/.test(normalized)) {
+    return isFrench
+      ? "Le streaming temps reel traite les donnees en continu des leur arrivee."
+      : "Real-time streaming processes data continuously as events arrive.";
+  }
   if (normalized === "kubernetes") {
     return isFrench
       ? "Kubernetes orchestre des conteneurs sur plusieurs machines."
@@ -1223,7 +1228,7 @@ function buildRuntimeTechnicalConceptFallbackRepair(args: {
 }): StudentAnswer | null {
   if (
     !isStaticGenerationFailureAnswer(args.answer.answer) ||
-    !["technical_explanation", "other"].includes(args.category)
+    !["technical_explanation", "architecture_design", "other"].includes(args.category)
   ) {
     return null;
   }

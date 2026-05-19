@@ -170,7 +170,7 @@ test("answerability planner treats English explain turns as sourceable factual l
   assert.equal(plan.requiresResearch, true);
 });
 
-test("answerability planner keeps conceptual streaming architecture off source research", () => {
+test("answerability planner keeps conceptual streaming architecture on direct model routing", () => {
   const plan = planner.planRequirement({
     question: "Explique le traitement temps reel dans une architecture streaming.",
     userMessage: "Explique le traitement temps reel dans une architecture streaming.",
@@ -180,7 +180,7 @@ test("answerability planner keeps conceptual streaming architecture off source r
     hasPriorConversation: false
   });
 
-  assert.equal(plan.answerabilityMode, "specialist_synthesis");
+  assert.equal(plan.answerabilityMode, "direct_model");
   assert.equal(plan.requiresResearch, false);
-  assert.ok(plan.requiredEvidence.includes("multi_specialist_synthesis"));
+  assert.equal(plan.requiresSynthesis, false);
 });

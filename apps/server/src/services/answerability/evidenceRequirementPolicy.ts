@@ -58,8 +58,12 @@ const CODE_PATTERN =
   /\b(?:code|debug|bug|stack trace|typescript|javascript|python|docker build|npm install|sql|postgres|api error|implementation|repo|repository|fonction|erreur|corrige|d[e\u00e9]bug)\b/i;
 const STRATEGIC_PATTERN =
   /\b(?:recommend|choose|decision|strategy|architecture|incident|rollback|tradeoff|constraint|budget|deadline|stakeholder|recommande|choisis|d[e\u00e9]cision|strat[e\u00e9]gie|incident|contrainte|budget|deadline|delai|d[e\u00e9]lai|arbitrage)\b/i;
+const DECISION_SYNTHESIS_PATTERN =
+  /\b(?:recommend|choose|decision|strategy|incident|rollback|tradeoff|constraint|budget|deadline|stakeholder|recommande|choisis|d[e\u00e9]cision|strat[e\u00e9]gie|incident|contrainte|budget|deadline|delai|d[e\u00e9]lai|arbitrage)\b/i;
 const CONCEPTUAL_SYSTEM_PATTERN =
   /\b(?:architecture|system design|design pattern|pipeline|streaming|real[- ]time|temps reel|temps r[e\u00e9]el|migration technique|document de migration)\b/i;
+const CONCEPTUAL_EXPLANATION_PATTERN =
+  /\b(?:explain|describe|define|what is|how should|comment|explique|d[e\u00e9]finis|structurer|structure)\b/i;
 
 function unique<T>(values: T[]) {
   return [...new Set(values)];
@@ -120,7 +124,10 @@ export function decideEvidenceRequirement(input: EvidenceRequirementPolicyInput)
   const isHydriaKnowledgeQuestion = KNOWLEDGE_PATTERN.test(text);
   const isPracticalEverydayTask =
     PRACTICAL_EVERYDAY_PATTERN.test(text) || input.category === "operational_writing";
-  const isConceptualSystemQuestion = CONCEPTUAL_SYSTEM_PATTERN.test(text);
+  const isConceptualSystemQuestion =
+    CONCEPTUAL_SYSTEM_PATTERN.test(text) &&
+    CONCEPTUAL_EXPLANATION_PATTERN.test(text) &&
+    !DECISION_SYNTHESIS_PATTERN.test(text);
 
   if (input.toolRouting.toolRequired) {
     requiredEvidence.push(toolEvidenceKind(input.toolRouting));
@@ -172,8 +179,8 @@ export function decideEvidenceRequirement(input: EvidenceRequirementPolicyInput)
   }
 
   if (
-    STRATEGIC_PATTERN.test(text) ||
-    input.category === "architecture_design" ||
+    (STRATEGIC_PATTERN.test(text) && !isConceptualSystemQuestion) ||
+    (input.category === "architecture_design" && !isConceptualSystemQuestion) ||
     input.category === "incident_response" ||
     input.category === "product_strategy" ||
     input.category === "mixed_reasoning"

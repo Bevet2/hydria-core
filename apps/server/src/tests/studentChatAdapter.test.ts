@@ -191,6 +191,40 @@ test("student chat adapter routes simple stable definitions through standard-lig
   assert.equal(timeoutMs >= 45000, true);
 });
 
+test("student chat adapter keeps conceptual streaming architecture explanations on the light route", async () => {
+  let selectedModel = "";
+  const input = {
+    ...buildInput(),
+    category: "architecture_design" as const,
+    routingQuestion: "Explique le traitement temps reel dans une architecture streaming.",
+    userMessage: "Explique le traitement temps reel dans une architecture streaming.",
+    question: "Explique le traitement temps reel dans une architecture streaming.",
+    requiresExternalGrounding: false
+  };
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "qwen2.5:14b";
+    },
+    async testPrompt(_prompt, _system, options) {
+      selectedModel = options?.modelName ?? "";
+      return {
+        provider: "ollama",
+        model: selectedModel,
+        response: "Le streaming temps reel traite les evenements en continu des leur arrivee.",
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer(input);
+
+  assert.equal(selectedModel, "qwen2.5:3b");
+  assert.equal(result.specialist.role, "primary_brain");
+  assert.equal(result.runtimeBudget?.profile, "standard_light_chat");
+  assert.match(result.specialist.routingReason, /Conceptual architecture/i);
+  assert.match(result.answer.answer, /streaming/i);
+});
+
 test("student chat adapter reserves qwen 14B for complex standard reasoning", async () => {
   let selectedModel = "";
   const input = {
