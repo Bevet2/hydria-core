@@ -79,8 +79,13 @@ function containsCodeSignal(text: string, category: QuestionCategory) {
   if (category === "debug_diagnostic") {
     return true;
   }
-  const explicitCodeSignal =
-    /\b(?:code|typescript|javascript|python|react|node|stack trace|erreur|error|bug|debug|repo|repository|dockerfile|docker-compose|compose\.ya?ml|docker build|docker run|container logs?|sql|postgres|schema|test|compile|fonction|function|classe|class|component|composant)\b/.test(
+  const explicitImplementationSignal =
+    /\b(?:code|typescript|javascript|python|react|node|stack trace|erreur|error|bug|debug|repo|repository|dockerfile|docker-compose|compose\.ya?ml|docker build|docker run|container logs?|schema|test|compile|fonction|function|classe|class|component|composant)\b/.test(
+      text
+    );
+  const technologyWithImplementationSignal =
+    /\b(?:docker|sql|postgres|postgresql|api|endpoint|database|base de donnees)\b/.test(text) &&
+    /\b(?:erreur|error|bug|debug|stack trace|dockerfile|docker build|docker run|npm install|container logs?|schema|migration|query|requete|handler|route|request|response|status|compile|test|fails?|failed|failure|lent|slow)\b/.test(
       text
     );
   const apiImplementationSignal =
@@ -90,7 +95,7 @@ function containsCodeSignal(text: string, category: QuestionCategory) {
     /\b(?:bug|debug|error|erreur|handler|route|request|response|status|schema|typescript|node|test|compile)\b.*\b(?:api|endpoint)\b/.test(
       text
     );
-  return explicitCodeSignal || apiImplementationSignal;
+  return explicitImplementationSignal || technologyWithImplementationSignal || apiImplementationSignal;
 }
 
 function containsWritingSignal(text: string, category: QuestionCategory) {
@@ -206,6 +211,30 @@ function containsDeepReasoningSignal(input: StudentChatModelRoutingInput, text: 
     return true;
   }
   return false;
+}
+
+function containsStrategicContextSetupSignal(input: StudentChatModelRoutingInput, text: string) {
+  const strategicCategory = ["architecture_design", "incident_response", "mixed_reasoning", "product_strategy"].includes(
+    input.category
+  );
+  const hasStrategicSetupSignal =
+    /\b(?:au depart|initialement|je pensais|contrainte|on-prem|aws|budget|deadline|demain|incident|risque|direction|attendre|mid-market|signal|architecture|paiement|deploy)\b/.test(
+      text
+    );
+  if (!strategicCategory && !hasStrategicSetupSignal) {
+    return false;
+  }
+  if (/[?]/.test(input.userMessage)) {
+    return false;
+  }
+  if (
+    /\b(?:tu recommandes|recommandes quoi|decision maintenant|d[eé]cision maintenant|what should|should we|choose|choisis|tranche)\b/.test(
+      text
+    )
+  ) {
+    return false;
+  }
+  return hasStrategicSetupSignal;
 }
 
 function buildFallbacks(primary: string, role: StudentChatSpecialistRole) {
@@ -487,6 +516,28 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
       fallbackModelNames: buildSpecialistOnlyFallbacks(QWEN_3B),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
+    };
+  }
+
+  if (containsStrategicContextSetupSignal(input, text)) {
+    const reason =
+      "Strategic context-setting turn without an explicit decision request; use the fast local route and reserve heavy reasoning for the actual recommendation turn.";
+    const budget = buildRuntimeBudget("concise_chat", reason);
+    return {
+      capabilityId: "qwen-3b-standard-light",
+      displayName: "Qwen 3B Standard Light",
+      modelName: QWEN_3B,
+      specialistRole: "primary_brain",
+      routingReason: reason,
+      pipeline: [...basePipeline, `strategic_context:${QWEN_3B}`],
+      fallbackModelNames: buildFallbacks(QWEN_3B, "primary_brain"),
+      timeoutMs: budget.timeoutMs,
+      runtimeBudget: {
+        ...budget,
+        maxOutputTokens: Math.min(budget.maxOutputTokens, 96),
+        fallbackDepth: 0,
+        concurrencyKey: "fast_local_chat"
+      }
     };
   }
 

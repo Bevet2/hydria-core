@@ -433,6 +433,10 @@ function isCloudRuntime(provider: string, model: string) {
   return /(?:openai|anthropic|openrouter|qwen\/|google|mistralai)\//i.test(model);
 }
 
+function isDeterministicSetupRuntime(model: string) {
+  return model === "context_ack" || model === "strategic_context_ack" || model === "conversation_fact_ack";
+}
+
 function countBy(values: string[]) {
   const counts: Record<string, number> = {};
   for (const value of values) {
@@ -472,7 +476,7 @@ function inspectTurn(args: {
   const cloudRuntime = isCloudRuntime(provider, model);
   const issues: string[] = [];
 
-  if (args.testCase.expectedProvider && provider !== args.testCase.expectedProvider) {
+  if (args.testCase.expectedProvider && provider !== args.testCase.expectedProvider && !isDeterministicSetupRuntime(model)) {
     issues.push(`provider:${provider}`);
   }
   if (!includesExact(model, args.testCase.expectedModel)) {

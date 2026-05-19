@@ -251,8 +251,10 @@ test("chat runtime preserves decisive payment terms in incident rollback decisio
 });
 
 test("chat runtime repairs on-prem budget decisions with explicit constraint use", async () => {
+  const calls: StudentChatAdapterInput[] = [];
   const service = new ChatRuntimeService({
-    async answer() {
+    async answer(input) {
+      calls.push(input);
       return buildAdapterResult("Je recommande AWS pour garder de la flexibilite.");
     }
   });
@@ -269,6 +271,10 @@ test("chat runtime repairs on-prem budget decisions with explicit constraint use
     message: "Tu recommandes quoi ?"
   });
 
+  assert.equal(calls.length, 2);
+  assert.equal(first.generation.model, "strategic_context_ack");
+  assert.equal(second.generation.model, "strategic_context_ack");
+  assert.equal(third.generation.provider, "ollama");
   assert.match(third.answer.answer, /on-prem/i);
   assert.match(third.answer.answer, /budget bloque/i);
   assert.match(third.answer.answer, /deadline de demain/i);
@@ -276,9 +282,11 @@ test("chat runtime repairs on-prem budget decisions with explicit constraint use
   assert.equal(third.conversationQuality.passed, true);
 });
 
-test("chat runtime answers Hydria Core self-knowledge when the local model falls back", async () => {
+test("chat runtime answers Hydria Core self-knowledge without waiting for model fallback", async () => {
+  let adapterCalled = false;
   const service = new ChatRuntimeService({
     async answer() {
+      adapterCalled = true;
       return {
         ...buildAdapterResult(
           "Je n'ai pas reussi a generer une reponse fiable pour ce tour. Reformule la question ou donne un peu plus de contexte."
@@ -294,6 +302,7 @@ test("chat runtime answers Hydria Core self-knowledge when the local model falls
     message: "Reponds en une phrase courte : quel est le role de Hydria Core ?"
   });
 
+  assert.equal(adapterCalled, false);
   assert.match(response.answer.answer, /Hydria Core/i);
   assert.match(response.answer.answer, /runtime cognitif|cognitive runtime/i);
   assert.equal(response.generation.provider, "tool");

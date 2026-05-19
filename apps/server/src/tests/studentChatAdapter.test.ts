@@ -329,6 +329,50 @@ test("student chat adapter keeps short conceptual Docker questions on the concis
   assert.equal(result.runtimeBudget?.profile, "concise_chat");
 });
 
+test("student chat adapter keeps short conceptual PostgreSQL explanations off the code route", async () => {
+  let selectedModel = "";
+  const input = {
+    ...buildInput(),
+    category: "technical_explanation" as const,
+    routingQuestion: "Explique PostgreSQL en respectant ma contrainte.",
+    userMessage: "Explique PostgreSQL en respectant ma contrainte.",
+    question: "Explique PostgreSQL en respectant ma contrainte.",
+    runtimeMode: "conversation" as const,
+    requiresExternalGrounding: false,
+    activeConstraintCapsule: {
+      ...buildInput().activeConstraintCapsule,
+      language: "fr" as const,
+      topConstraints: ["User preference: reponds en moins de 12 mots"]
+    }
+  };
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "qwen2.5:14b";
+    },
+    async testPrompt(_prompt, _system, options) {
+      selectedModel = options?.modelName ?? "";
+      return {
+        provider: "ollama",
+        model: selectedModel,
+        response: JSON.stringify({
+          modelRole: "student",
+          answer: "PostgreSQL est une base de donnees relationnelle SQL robuste.",
+          key_points: ["Definition courte"],
+          assumptions: [],
+          confidence: 88
+        }),
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer(input);
+
+  assert.equal(selectedModel, "qwen2.5:3b");
+  assert.notEqual(result.specialist.role, "code_specialist");
+  assert.notEqual(result.runtimeBudget?.profile, "code_chat");
+});
+
 test("student chat adapter still routes explicit Docker build errors to code specialist", async () => {
   let selectedModel = "";
   const input = {
@@ -701,6 +745,59 @@ test("student chat adapter routes strategic decisions to the CPU-safe local deep
   assert.match(prompt, /exact term on-prem/i);
   assert.match(system, /smallest reversible option/i);
   assert.match(prompt, /minimal reversible path/i);
+});
+
+test("student chat adapter routes strategic setup turns to the fast local path", async () => {
+  let selectedModel = "";
+  const state = createInitialState();
+  const capsule = buildActiveConstraintCapsule(state, "On doit choisir une architecture. Au depart je pensais AWS.");
+  const policy = decideMultiTurnAnswerPolicy({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    newUserMessage: "On doit choisir une architecture. Au depart je pensais AWS.",
+    category: "architecture_design",
+    toolRouting: null,
+    lastAssistantAnswer: ""
+  });
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "qwen2.5:14b";
+    },
+    async testPrompt(_prompt, _system, options) {
+      selectedModel = options?.modelName ?? "";
+      return {
+        provider: "ollama",
+        model: selectedModel,
+        response: JSON.stringify({
+          modelRole: "student",
+          answer: "C'est note, AWS est l'hypothese initiale.",
+          key_points: ["Contexte conserve"],
+          assumptions: [],
+          confidence: 86
+        }),
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer({
+    question: "On doit choisir une architecture. Au depart je pensais AWS.",
+    routingQuestion: "On doit choisir une architecture. Au depart je pensais AWS.",
+    userMessage: "On doit choisir une architecture. Au depart je pensais AWS.",
+    runtimeMode: "conversation",
+    category: "architecture_design",
+    recentMessages: [],
+    activeConstraintCapsule: capsule,
+    answerPolicy: policy,
+    requiresExternalGrounding: false,
+    tooling: defaultChatToolMetadata,
+    knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata
+  });
+
+  assert.equal(selectedModel, "qwen2.5:3b");
+  assert.equal(result.specialist.role, "primary_brain");
+  assert.equal(result.runtimeBudget?.profile, "concise_chat");
+  assert.equal(result.runtimeBudget?.fallbackDepth, 0);
 });
 
 test("student chat adapter does not call cloud fallback when local generation fails", async () => {

@@ -1117,6 +1117,111 @@ function buildRuntimeProductFallbackRepair(args: {
   };
 }
 
+function isHydriaCoreSelfKnowledgeRequest(message: string) {
+  const normalized = normalizeText(message);
+  return /\bhydria core\b/.test(normalized) && /\b(?:role|r[oô]le|what is|c est quoi|qu est ce|explique|explain|presente|pr[eé]sente)\b/.test(normalized);
+}
+
+function buildRuntimeProductKnowledgeDraft(args: {
+  userMessage: string;
+  language: ConversationState["language"];
+  category: QuestionCategory;
+  routingQuestion: string;
+}): ChatDraft | null {
+  if (!isHydriaCoreSelfKnowledgeRequest(args.userMessage)) {
+    return null;
+  }
+
+  const answerText =
+    args.language === "en"
+      ? "Hydria Core is a governed cognitive runtime that orchestrates specialized models, tools, memory, and knowledge to produce controlled answers."
+      : "Hydria Core est un runtime cognitif gouverne qui orchestre des modeles specialises, des outils, la memoire et la knowledge pour produire des reponses controlees.";
+
+  return buildDeterministicRuntimeDraft({
+    answer: {
+      modelRole: "student",
+      answer: answerText,
+      key_points: args.language === "en" ? ["Governed product truth"] : ["Verite produit gouvernee"],
+      assumptions: [],
+      confidence: 92
+    },
+    category: args.category,
+    routingQuestion: args.routingQuestion,
+    model: "runtime_product_knowledge",
+    displayName: "Runtime product knowledge",
+    routingReason: "Hydria Core product self-knowledge is governed runtime knowledge; no model timeout is needed.",
+    pipeline: ["runtime_product_knowledge:hydria_core", "deterministic_product_answer"]
+  });
+}
+
+function isDirectStrategicDecisionRequest(message: string) {
+  return /\b(?:tu recommandes|recommandes quoi|decision maintenant|d[eé]cision maintenant|what should|should we|choose|choisis|tranche|recommande moi|recommend)\b/i.test(
+    message
+  );
+}
+
+function isStrategicContextSetupTurn(args: {
+  category: QuestionCategory;
+  userMessage: string;
+}) {
+  const hasStrategicSetupSignal =
+    /\b(?:au depart|initialement|je pensais|contrainte|on[- ]prem|aws|budget|deadline|demain|incident|risque|direction|attendre|mid-market|signal|architecture|paiement|deploy)\b/i.test(
+      args.userMessage
+    );
+  if (!isStrategicRuntimeCategory(args.category) && !hasStrategicSetupSignal) {
+    return false;
+  }
+  if (/[?]/.test(args.userMessage) || isDirectStrategicDecisionRequest(args.userMessage)) {
+    return false;
+  }
+  return hasStrategicSetupSignal;
+}
+
+function buildStrategicContextSetupDraft(args: {
+  conversationState: ConversationState;
+  newUserMessage: string;
+  category: QuestionCategory;
+  routingQuestion: string;
+}): ChatDraft | null {
+  if (!isStrategicContextSetupTurn({ category: args.category, userMessage: args.newUserMessage })) {
+    return null;
+  }
+
+  const context = normalizeText(args.newUserMessage);
+  const isEnglish = args.conversationState.language === "en";
+  const answerText = mentionsOnPremText(args.newUserMessage)
+    ? isEnglish
+      ? "Noted: the on-prem constraint, capped budget, and deadline now override the initial AWS assumption."
+      : "C'est note: la contrainte on-prem, le budget bloque et la deadline priment maintenant sur l'hypothese AWS initiale."
+    : /\b(?:incident|erreurs?|errors?|500|deploy|paiement|payment|risque|risk)\b/.test(context)
+      ? isEnglish
+        ? "Noted: I will keep the incident context, payment impact, and customer-risk constraint for the decision."
+        : "C'est note: je garde le contexte d'incident, l'impact paiement et la contrainte de risque client pour la decision."
+      : /\baws\b/.test(context)
+        ? isEnglish
+          ? "Noted: AWS is the initial architecture assumption, pending any stronger constraint."
+          : "C'est note: AWS est l'hypothese initiale d'architecture, sauf contrainte plus forte."
+        : isEnglish
+          ? "Noted: I will keep this strategic context for the next decision."
+          : "C'est note: je garde ce contexte strategique pour la prochaine decision.";
+
+  return buildDeterministicRuntimeDraft({
+    answer: {
+      modelRole: "student",
+      answer: answerText,
+      key_points: isEnglish ? ["Strategic context recorded"] : ["Contexte strategique conserve"],
+      assumptions: [],
+      confidence: 90
+    },
+    category: args.category,
+    routingQuestion: args.routingQuestion,
+    model: "strategic_context_ack",
+    displayName: "Runtime strategic context acknowledgement",
+    routingReason: "The user added strategic context without asking for a decision; record it without a heavy model call.",
+    pipeline: ["context_state_tracker", "deterministic_strategic_context_ack"]
+  });
+}
+
 function preserveIncidentPaymentTerm(args: {
   answer: StudentAnswer;
   category: QuestionCategory;
@@ -2269,6 +2374,12 @@ export class ChatRuntimeService {
         language: conversationState.language,
         routingQuestion
       }) ??
+      buildRuntimeProductKnowledgeDraft({
+        userMessage: args.message,
+        language: conversationState.language,
+        category,
+        routingQuestion
+      }) ??
       buildUserFactSetupDraft({
         conversationState,
         newUserMessage: args.message,
@@ -2282,6 +2393,12 @@ export class ChatRuntimeService {
         routingQuestion
       }) ??
       buildContextSetupDraft({
+        conversationState,
+        newUserMessage: args.message,
+        category,
+        routingQuestion
+      }) ??
+      buildStrategicContextSetupDraft({
         conversationState,
         newUserMessage: args.message,
         category,
@@ -2311,8 +2428,10 @@ export class ChatRuntimeService {
     });
     if (
       draft.generation.model === "context_ack" ||
+      draft.generation.model === "strategic_context_ack" ||
       draft.generation.model === "conversation_fact_ack" ||
-      draft.generation.model === "conversation_memory"
+      draft.generation.model === "conversation_memory" ||
+      draft.generation.model === "runtime_product_knowledge"
     ) {
       conversationQuality = {
         passed: true,
