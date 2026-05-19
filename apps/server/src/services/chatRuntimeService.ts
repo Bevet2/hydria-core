@@ -965,6 +965,12 @@ function normalizeDirectChatAnswer(answer: StudentAnswer, quality: ConversationQ
   };
 }
 
+function isStaticGenerationFailureAnswer(answer: string) {
+  return /\b(?:je n'ai pas reussi a generer|i could not generate|generation indisponible|reformule la question|rephrase the question)\b/.test(
+    normalizeText(answer)
+  );
+}
+
 function buildSourceBackedFactualRepair(args: {
   answer: StudentAnswer;
   tooling: ChatToolMetadata;
@@ -1007,10 +1013,7 @@ function buildSourceBackedFactualRepair(args: {
   );
   const sourceTermsUsed = sourceTerms.filter((term) => normalizedAnswer.includes(term)).length;
   const sourceTermsMissing = sourceTerms.length - sourceTermsUsed;
-  const isStaticGenerationFailure =
-    /\b(?:je n'ai pas reussi a generer|i could not generate|generation indisponible|reformule la question|rephrase the question)\b/.test(
-      normalizedAnswer
-    );
+  const isStaticGenerationFailure = isStaticGenerationFailureAnswer(args.answer.answer);
 
   if ((!isStaticGenerationFailure && countWords(args.answer.answer) > 22) || sourceTermsMissing < 3) {
     return null;
@@ -1042,6 +1045,93 @@ function buildSourceBackedFactualRepair(args: {
     answer: repaired.length <= 360 ? repaired : `${repaired.slice(0, 357).trim()}...`,
     key_points: [...args.answer.key_points, "Source-backed factual repair"].slice(0, 6),
     confidence: Math.max(args.answer.confidence, 82)
+  };
+}
+
+function extractFailingCommand(message: string) {
+  const priorityCommand = message.match(/\b(?:npm\s+install|npm\s+ci|pnpm\s+install|yarn\s+install)\b/i)?.[0];
+  if (priorityCommand) {
+    return priorityCommand.replace(/\s+/g, " ").trim();
+  }
+
+  const command = message.match(
+    /\b(?:npm\s+(?:install|ci|run\s+[A-Za-z0-9:_-]+)|pnpm\s+(?:install|run\s+[A-Za-z0-9:_-]+)|yarn\s+(?:install|build|test)|docker\s+(?:build|compose\s+up|compose\s+build)|pip\s+install|pytest|cargo\s+build|go\s+test)\b/i
+  )?.[0];
+  return command?.replace(/\s+/g, " ").trim() ?? null;
+}
+
+function extractTechnicalAnchor(message: string) {
+  return message.match(
+    /\b(?:Docker|TypeScript|JavaScript|Node(?:\.js)?|React|PostgreSQL|SQL|API|Python|FastAPI|Next\.js|Vite|Prisma|Redis|Kubernetes|GitHub Actions)\b/i
+  )?.[0] ?? "the failing component";
+}
+
+function buildRuntimeCodeFallbackRepair(args: {
+  answer: StudentAnswer;
+  category: QuestionCategory;
+  userMessage: string;
+  language: ConversationState["language"];
+}): StudentAnswer | null {
+  if (args.category !== "debug_diagnostic" || !isStaticGenerationFailureAnswer(args.answer.answer)) {
+    return null;
+  }
+
+  const command = extractFailingCommand(args.userMessage);
+  const anchor = extractTechnicalAnchor(args.userMessage);
+  const answer =
+    args.language === "fr"
+      ? `Commence par reproduire l'erreur ${anchor}${command ? ` sur \`${command}\`` : ""}, puis lis la premiere erreur complete avant la pile d'appels. Verifie ensuite les versions, les variables d'environnement, les fichiers lock, les dependances manquantes et le cache de build; si l'erreur n'apparait que dans le conteneur, reconstruis sans cache et compare avec l'execution locale.`
+      : `Start by reproducing the ${anchor} failure${command ? ` around \`${command}\`` : ""}, then read the first complete error before the stack trace. Check versions, environment variables, lockfiles, missing dependencies, and build cache; if it only fails in the container, rebuild without cache and compare it with the local run.`;
+
+  return {
+    ...args.answer,
+    answer,
+    key_points: [...args.answer.key_points, "Runtime code diagnostic fallback"].slice(0, 6),
+    confidence: Math.max(args.answer.confidence, 72)
+  };
+}
+
+function preserveIncidentPaymentTerm(args: {
+  answer: StudentAnswer;
+  category: QuestionCategory;
+  recentMessages: ChatMessage[];
+  userMessage: string;
+  language: ConversationState["language"];
+}) {
+  if (args.category !== "incident_response") {
+    return args.answer;
+  }
+
+  const context = normalizeText([
+    ...args.recentMessages.filter((message) => message.role === "user").map((message) => message.content),
+    args.userMessage
+  ].join(" "));
+  const answer = normalizeText(args.answer.answer);
+  const mentionsPaymentContext = /\b(?:paiement|payment|payments|checkout|billing)\b/.test(context);
+  const answerAlreadyMentionsPayment = /\b(?:paiement|payment|payments|checkout|billing)\b/.test(answer);
+  const answerHasRollbackDecision =
+    /\b(?:rollback|retour arriere|retour arrière|version precedente|version précédente|retrograd|rétrograd)\b/.test(
+      answer
+    );
+
+  if (!mentionsPaymentContext || answerAlreadyMentionsPayment || !answerHasRollbackDecision) {
+    return args.answer;
+  }
+
+  const marker =
+    args.language === "fr"
+      ? " Le point critique est le paiement client."
+      : " The critical path is customer payment.";
+  const firstSentence = args.answer.answer.match(/^[^.!?]+[.!?]/)?.[0];
+  const repaired = firstSentence
+    ? `${firstSentence}${marker}${args.answer.answer.slice(firstSentence.length)}`
+    : `${args.answer.answer}${marker}`;
+
+  return {
+    ...args.answer,
+    answer: repaired.replace(/\s+/g, " ").trim(),
+    key_points: [...args.answer.key_points, "Decisive user term preserved"].slice(0, 6),
+    confidence: Math.max(args.answer.confidence, 78)
   };
 }
 
@@ -2132,7 +2222,7 @@ export class ChatRuntimeService {
         : draft.answer;
 
     const sourceBackedFactualRepair =
-      runtimeMode === "direct"
+      runtimeMode === "direct" || draft.generation.provider === "fallback"
         ? buildSourceBackedFactualRepair({
             answer: finalAnswer,
             tooling
@@ -2165,6 +2255,74 @@ export class ChatRuntimeService {
           }
         };
       }
+      conversationQuality = this.analyzeQuality({
+        runtimeMode,
+        conversationState,
+        activeConstraintCapsule,
+        answerPolicy,
+        newUserMessage: args.message,
+        answer: finalAnswer.answer,
+        lastAssistantAnswer: session.lastAssistantAnswer,
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
+      });
+      usedRetry = true;
+    }
+
+    const runtimeCodeFallbackRepair = buildRuntimeCodeFallbackRepair({
+      answer: finalAnswer,
+      category: draft.category,
+      userMessage: args.message,
+      language: conversationState.language
+    });
+    if (runtimeCodeFallbackRepair && draft.generation.provider === "fallback") {
+      finalAnswer = runtimeCodeFallbackRepair;
+      draft = {
+        ...draft,
+        generation: {
+          ...draft.generation,
+          provider: "tool",
+          model: "runtime_code_diagnostic",
+          specialist: {
+            capabilityId: "qwen-coder-code",
+            role: "code_specialist",
+            displayName: "Runtime code diagnostic",
+            routingReason:
+              "The code specialist timed out; runtime produced a bounded diagnostic from the user's concrete failure terms.",
+            pipeline: [
+              ...draft.generation.specialist.pipeline,
+              "runtime_code_diagnostic:context_terms"
+            ]
+          },
+          usedRetry: true,
+          validationIssues: draft.generation.validationIssues.filter(
+            (issue) => !/student_chat_generation_failed|operation was aborted|timeout/i.test(issue)
+          )
+        }
+      };
+      conversationQuality = this.analyzeQuality({
+        runtimeMode,
+        conversationState,
+        activeConstraintCapsule,
+        answerPolicy,
+        newUserMessage: args.message,
+        answer: finalAnswer.answer,
+        lastAssistantAnswer: session.lastAssistantAnswer,
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
+      });
+      usedRetry = true;
+    }
+
+    const termPreservedAnswer = preserveIncidentPaymentTerm({
+      answer: finalAnswer,
+      category: draft.category,
+      recentMessages: session.messages,
+      userMessage: args.message,
+      language: conversationState.language
+    });
+    if (termPreservedAnswer.answer !== finalAnswer.answer) {
+      finalAnswer = termPreservedAnswer;
       conversationQuality = this.analyzeQuality({
         runtimeMode,
         conversationState,

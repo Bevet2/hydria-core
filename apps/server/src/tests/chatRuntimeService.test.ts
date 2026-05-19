@@ -156,6 +156,97 @@ test("chat runtime synthesizes from source-backed facts when the local model fal
   assert.equal(response.conversationQuality.passed, true);
 });
 
+test("chat runtime repairs source-backed factual fallbacks inside a conversation", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return {
+          ...buildAdapterResult(
+            "Je n'ai pas reussi a generer une reponse fiable pour ce tour. Reformule la question ou donne un peu plus de contexte."
+          ),
+          provider: "fallback" as const,
+          model: "qwen2.5:3b",
+          validationIssues: ["student_chat_generation_failed", "qwen2.5:3b: timeout"]
+        };
+      }
+    },
+    undefined,
+    buildFactCheckToolResult("Saint Louis, ou Louis IX, est un roi de France capetien.")
+  );
+
+  const first = await service.sendMessage({ message: "qui est louis 9" });
+  const second = await service.sendMessage({
+    sessionId: first.sessionId,
+    message: "tu ne connais pas louis 9 ou dit plutot saint louis"
+  });
+
+  assert.match(second.answer.answer, /Saint Louis|Louis IX/i);
+  assert.match(second.answer.answer, /roi de France/i);
+  assert.equal(second.generation.provider, "tool");
+  assert.equal(second.generation.model, "research_fact_check");
+  assert.equal(second.conversationQuality.passed, true);
+});
+
+test("chat runtime provides a bounded code diagnostic when the code specialist falls back", async () => {
+  const service = new ChatRuntimeService({
+    async answer() {
+      return {
+        ...buildAdapterResult(
+          "I could not generate a reliable answer for this turn. Rephrase the question or add a little more context."
+        ),
+        provider: "fallback" as const,
+        model: "qwen2.5-coder:7b",
+        validationIssues: ["student_chat_generation_failed", "qwen2.5-coder:7b: timeout"]
+      };
+    }
+  });
+
+  const response = await service.sendMessage({
+    message: "Debug a Docker build error where npm install fails."
+  });
+
+  assert.match(response.answer.answer, /Docker/i);
+  assert.match(response.answer.answer, /npm install/i);
+  assert.equal(response.generation.provider, "tool");
+  assert.equal(response.generation.model, "runtime_code_diagnostic");
+  assert.equal(response.generation.usedStaticFallback, false);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
+test("chat runtime preserves decisive payment terms in incident rollback decisions", async () => {
+  const service = new ChatRuntimeService({
+    async answer(input) {
+      if (/decision/i.test(input.userMessage)) {
+        return buildAdapterResult(
+          "Je recommande de faire un retour arriere vers la version precedente immediatement pour minimiser le risque client. Le risque croissant l'emporte sur l'attente; on reconsidere apres verification."
+        );
+      }
+      if (/direction/i.test(input.userMessage)) {
+        return buildAdapterResult("Contexte mis a jour: le risque client augmente malgre l'attente demandee.");
+      }
+      if (/incident/i.test(input.userMessage)) {
+        return buildAdapterResult("Contexte note: incident prod avec impact paiement.");
+      }
+      return buildAdapterResult("Contexte conserve.");
+    }
+  });
+
+  const first = await service.sendMessage({
+    message: "Incident prod: erreurs 500 apres deploy, impact paiement."
+  });
+  const second = await service.sendMessage({
+    sessionId: first.sessionId,
+    message: "La direction veut attendre mais le risque client augmente."
+  });
+  const third = await service.sendMessage({
+    sessionId: second.sessionId,
+    message: "Decision maintenant ?"
+  });
+
+  assert.match(third.answer.answer, /paiement client/i);
+  assert.equal(third.conversationQuality.passed, true);
+});
+
 test("chat runtime recalls user-provided facts without triggering research", async () => {
   let adapterCalled = false;
   const service = new ChatRuntimeService({
