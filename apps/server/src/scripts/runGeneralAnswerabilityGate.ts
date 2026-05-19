@@ -8,6 +8,7 @@ type AnswerabilityGateCase = {
   id: string;
   language: "fr" | "en";
   message: string;
+  conversation?: string[];
   expectedMode:
     | "direct_model"
     | "tool_first"
@@ -33,6 +34,7 @@ type Args = {
 };
 
 type ChatResponse = {
+  sessionId?: string;
   runtimeMode?: string;
   category?: string;
   durationMs?: number;
@@ -127,6 +129,16 @@ export const generalAnswerabilityGateCases: AnswerabilityGateCase[] = [
     expectedTerms: ["Paris"]
   },
   {
+    id: "fr_weather_tool_first",
+    language: "fr",
+    message: "Quelle est la meteo actuelle a Paris ?",
+    expectedMode: "tool_first",
+    expectedEvidence: "tool_live",
+    expectedProvider: "tool",
+    expectedToolType: "weather",
+    expectedTerms: ["Paris"]
+  },
+  {
     id: "fr_stable_fact_source_backed",
     language: "fr",
     message: "Qui est Marie Curie ?",
@@ -134,6 +146,16 @@ export const generalAnswerabilityGateCases: AnswerabilityGateCase[] = [
     expectedEvidence: "source_research",
     expectedToolType: "research",
     expectedTerms: ["marie", "curie"]
+  },
+  {
+    id: "en_latest_ai_requires_research",
+    language: "en",
+    message: "What are the latest AI model releases this week?",
+    expectedMode: "source_backed",
+    expectedEvidence: "source_research",
+    expectedProvider: "tool",
+    expectedToolType: "research",
+    expectedTerms: [["AI", "model"]]
   },
   {
     id: "en_stable_concept_source_backed",
@@ -154,12 +176,38 @@ export const generalAnswerabilityGateCases: AnswerabilityGateCase[] = [
     expectedTerms: ["docker", "npm"]
   },
   {
+    id: "en_debug_api_502_specialist",
+    language: "en",
+    message: "Debug an API error that returns HTTP 502 after checkout.",
+    expectedMode: "specialist_synthesis",
+    expectedEvidence: "specialist_model",
+    expectedProvider: "ollama",
+    expectedTerms: ["502", "API"]
+  },
+  {
+    id: "en_repo_analysis_concept_no_repo_tool",
+    language: "en",
+    message: "How should I analyze a repository efficiently if I have not provided a repo URL?",
+    expectedMode: "specialist_synthesis",
+    expectedEvidence: "specialist_model",
+    expectedProvider: "ollama",
+    expectedTerms: [["repo", "repository"]]
+  },
+  {
     id: "fr_recipe_direct_model",
     language: "fr",
     message: "Donne moi une recette de tiramisu.",
     expectedMode: "direct_model",
     expectedProvider: "ollama",
     expectedTerms: ["tiramisu", "mascarpone", ["cafe", "cacao"]]
+  },
+  {
+    id: "fr_customer_delay_message_direct",
+    language: "fr",
+    message: "Redige un message court pour prevenir un client d'un retard de livraison.",
+    expectedMode: "direct_model",
+    expectedProvider: "ollama",
+    expectedTerms: ["client", "retard"]
   },
   {
     id: "fr_strategy_specialist",
@@ -170,6 +218,24 @@ export const generalAnswerabilityGateCases: AnswerabilityGateCase[] = [
     expectedProvider: "ollama",
     expectedTerms: ["on-prem", ["budget", "deadline", "demain"]],
     forbidden: [/microservices/i]
+  },
+  {
+    id: "fr_realtime_streaming_not_weather",
+    language: "fr",
+    message: "Explique le traitement temps reel dans une architecture streaming.",
+    expectedMode: "specialist_synthesis",
+    expectedEvidence: "multi_specialist_synthesis",
+    expectedProvider: "ollama",
+    expectedTerms: ["streaming"],
+    forbidden: [/meteo|weather/i]
+  },
+  {
+    id: "fr_migration_document_no_file_tool",
+    language: "fr",
+    message: "Comment structurer un document de migration technique ?",
+    expectedMode: "direct_model",
+    expectedProvider: "ollama",
+    expectedTerms: ["migration"]
   },
   {
     id: "en_product_strategy_specialist",
@@ -187,6 +253,27 @@ export const generalAnswerabilityGateCases: AnswerabilityGateCase[] = [
     expectedMode: "knowledge_augmented",
     expectedEvidence: "governed_knowledge",
     expectedTerms: ["watcher", "Hydria"]
+  },
+  {
+    id: "en_hydria_watchers_knowledge_augmented",
+    language: "en",
+    message: "Explain Hydria Core watchers and what they are for.",
+    expectedMode: "knowledge_augmented",
+    expectedEvidence: "governed_knowledge",
+    expectedTerms: ["watcher", "Hydria"]
+  },
+  {
+    id: "fr_conversation_memory_recall",
+    language: "fr",
+    message: "Comment s'appelle mon projet ?",
+    conversation: [
+      "Mon projet s'appelle Hydria Core.",
+      "Comment s'appelle mon projet ?"
+    ],
+    expectedMode: "conversation_state",
+    expectedEvidence: "conversation_memory",
+    expectedProvider: "tool",
+    expectedTerms: ["Hydria Core"]
   },
   {
     id: "en_stable_general_direct",
@@ -325,6 +412,12 @@ function answerText(response: ChatResponse) {
   return response.assistantMessage?.content ?? response.answer?.answer ?? "";
 }
 
+function conversationForCase(testCase: AnswerabilityGateCase) {
+  return testCase.conversation && testCase.conversation.length > 0
+    ? testCase.conversation
+    : [testCase.message];
+}
+
 function inspectCase(testCase: AnswerabilityGateCase, response: ChatResponse): CaseResult {
   const answer = answerText(response);
   const issues: string[] = [];
@@ -420,13 +513,24 @@ export async function runGeneralAnswerabilityGate(args = parseArgs()) {
 
   for (const testCase of selectedCases) {
     try {
-      const response = await postJson<ChatResponse>({
-        baseUrl: args.baseUrl,
-        path: "/api/chat/message",
-        body: { message: testCase.message },
-        timeoutMs: args.timeoutMs,
-        apiKey: args.apiKey
-      });
+      let sessionId: string | undefined;
+      let response: ChatResponse | null = null;
+      for (const message of conversationForCase(testCase)) {
+        response = await postJson<ChatResponse>({
+          baseUrl: args.baseUrl,
+          path: "/api/chat/message",
+          body: {
+            message,
+            ...(sessionId ? { sessionId } : {})
+          },
+          timeoutMs: args.timeoutMs,
+          apiKey: args.apiKey
+        });
+        sessionId = response.sessionId ?? sessionId;
+      }
+      if (!response) {
+        throw new Error("case did not execute any chat turn");
+      }
       results.push(inspectCase(testCase, response));
     } catch (error) {
       results.push({

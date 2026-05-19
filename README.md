@@ -355,7 +355,7 @@ General answerability validation:
 npm run prod:general-answerability-gate -- --base-url=https://app.hydria.click --timeout-ms=180000
 ```
 
-This writes `storage/training/general-answerability-gate-v1.json`. The gate checks that every public chat turn has an `EvidenceCapsule` and an `answerability` trace step, and that Hydria chooses the correct evidence path before generation: live tool, source-backed research, governed knowledge, conversation state, direct model knowledge, or specialist synthesis.
+This writes `storage/training/general-answerability-gate-v1.json`. The gate checks that every public chat turn has an `EvidenceCapsule` and an `answerability` trace step, and that Hydria chooses the correct evidence path before generation: live tool, source-backed research, governed knowledge, conversation state, direct model knowledge, or specialist synthesis. It also includes multi-turn memory recall and false-positive routing guards for weather, file, repository, and document-like wording.
 
 ### Learning Governance
 

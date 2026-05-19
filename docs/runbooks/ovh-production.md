@@ -539,7 +539,7 @@ This writes:
 storage/training/general-answerability-gate-v1.json
 ```
 
-This gate checks the Answerability Orchestrator v1 surface: every chat turn must expose an `EvidenceCapsule`, the orchestration trace must include an `answerability` step, live/current questions must use tools or source-backed research, stable sourceable factual lookups must be source-backed, code and strategic questions must route through specialist synthesis, and direct practical answers must avoid static fallback or generic refusal.
+This gate checks the Answerability Orchestrator v1 surface: every chat turn must expose an `EvidenceCapsule`, the orchestration trace must include an `answerability` step, live/current questions must use tools or source-backed research, stable sourceable factual lookups must be source-backed, code and strategic questions must route through specialist synthesis, and direct practical answers must avoid static fallback or generic refusal. It also covers multi-turn memory recall and false-positive routing guards for weather, file, repository, and document-like wording.
 
 Chat model warmup:
 
