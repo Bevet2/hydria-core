@@ -125,6 +125,37 @@ test("chat runtime repairs thin source-backed factual answers with verified fact
   assert.equal(response.conversationQuality.passed, true);
 });
 
+test("chat runtime synthesizes from source-backed facts when the local model falls back", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return {
+          ...buildAdapterResult(
+            "Je n'ai pas reussi a generer une reponse fiable pour ce tour. Reformule la question ou donne un peu plus de contexte."
+          ),
+          provider: "fallback" as const,
+          model: "qwen2.5:3b",
+          validationIssues: ["student_chat_generation_failed", "qwen2.5:3b: timeout"]
+        };
+      }
+    },
+    undefined,
+    buildFactCheckToolResult(
+      "Charlemagne: Charlemagne est un roi des Francs et empereur carolingien couronne a Rome en 800."
+    )
+  );
+
+  const response = await service.sendMessage({ message: "Qui est Charlemagne ?" });
+
+  assert.match(response.answer.answer, /Charlemagne/i);
+  assert.match(response.answer.answer, /roi des Francs/i);
+  assert.match(response.answer.answer, /empereur/i);
+  assert.equal(response.generation.provider, "tool");
+  assert.equal(response.generation.model, "research_fact_check");
+  assert.equal(response.generation.usedStaticFallback, false);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
 test("chat runtime recalls user-provided facts without triggering research", async () => {
   let adapterCalled = false;
   const service = new ChatRuntimeService({

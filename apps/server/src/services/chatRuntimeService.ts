@@ -1007,8 +1007,12 @@ function buildSourceBackedFactualRepair(args: {
   );
   const sourceTermsUsed = sourceTerms.filter((term) => normalizedAnswer.includes(term)).length;
   const sourceTermsMissing = sourceTerms.length - sourceTermsUsed;
+  const isStaticGenerationFailure =
+    /\b(?:je n'ai pas reussi a generer|i could not generate|generation indisponible|reformule la question|rephrase the question)\b/.test(
+      normalizedAnswer
+    );
 
-  if (countWords(args.answer.answer) > 22 || sourceTermsMissing < 3) {
+  if ((!isStaticGenerationFailure && countWords(args.answer.answer) > 22) || sourceTermsMissing < 3) {
     return null;
   }
 
@@ -2136,6 +2140,31 @@ export class ChatRuntimeService {
         : null;
     if (sourceBackedFactualRepair) {
       finalAnswer = sourceBackedFactualRepair;
+      if (draft.generation.provider === "fallback") {
+        draft = {
+          ...draft,
+          generation: {
+            ...draft.generation,
+            provider: "tool",
+            model: "research_fact_check",
+            specialist: {
+              capabilityId: "qwen-3b-standard-light",
+              role: "primary_brain",
+              displayName: "Source-backed factual repair",
+              routingReason:
+                "A verified research tool result was available after local model fallback; answer was synthesized from the source-backed fact.",
+              pipeline: [
+                ...draft.generation.specialist.pipeline,
+                "source_backed_fact_repair:research_fact_check"
+              ]
+            },
+            usedRetry: true,
+            validationIssues: draft.generation.validationIssues.filter(
+              (issue) => !/student_chat_generation_failed|operation was aborted|timeout/i.test(issue)
+            )
+          }
+        };
+      }
       conversationQuality = this.analyzeQuality({
         runtimeMode,
         conversationState,

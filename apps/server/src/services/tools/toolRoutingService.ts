@@ -269,9 +269,10 @@ function extractEntitySubject(question: string) {
   const stripped = normalizeSpace(
     question
       .replace(/[?]/g, " ")
-      .replace(/\b(?:who is|what is|what are|show me|find|lookup|look up|tell me|qui est|quel est|quelle est|quels sont|quelles sont)\b/gi, " ")
+      .replace(/\b(?:who is|what is|what are|show me|find|lookup|look up|tell me|explain|define|definition|qui est|quel est|quelle est|quels sont|quelles sont|qu'est[- ]ce que|quest ce que|c'est quoi|c est quoi|ce qu'est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition)\b/gi, " ")
+      .replace(/\b(?:simply|simplement)\b/gi, " ")
       .replace(/\b(?:current|currently|actuel|actuelle|latest|official|github|repository|repo|website|site|ceo|president|pr(?:e|\u00e9)sident|version|release|announcements?|docs?|documentation)\b/gi, " ")
-      .replace(/\b(?:de|du|des|d'|of|the|le|la|les|un|une)\b/gi, " ")
+      .replace(/\b(?:ce|que|de|du|des|d'|of|the|le|la|les|un|une)\b/gi, " ")
   );
 
   return stripped.length >= 2 ? stripped : extractQuotedOrTrailingName(question) ?? "";
@@ -663,6 +664,24 @@ function isConceptOnlyExplanation(question: string) {
   );
 }
 
+function isSourceBackedConceptLookup(question: string) {
+  if (!isConceptOnlyExplanation(question)) {
+    return false;
+  }
+
+  const termCount = question.match(/[A-Za-z0-9\u00c0-\u00ff]{2,}/g)?.length ?? 0;
+  const asksShortDefinition =
+    /\b(?:what is|what are|qu'est-ce que|quest ce que|c'est quoi|c est quoi|define|definition|explique simplement|explain simply)\b/i.test(
+      question
+    );
+  const asksScenarioExplanation =
+    /\b(?:dans|in|with|using|architecture|systemes|syst(?:e|\u00e8)mes|systems|example|exemple|practical|pratique|tradeoff|debug|diagnostic)\b/i.test(
+      question
+    );
+
+  return asksShortDefinition && termCount <= 10 && !asksScenarioExplanation;
+}
+
 function shouldUseGeneralFactResearch(question: string, category: QuestionCategory | null | undefined) {
   if (isConversationPlanningCategory(category)) {
     return false;
@@ -670,10 +689,11 @@ function shouldUseGeneralFactResearch(question: string, category: QuestionCatego
   if (WRITING_OR_BRAINSTORM_PATTERN.test(question)) {
     return false;
   }
-  if (isConceptOnlyExplanation(question)) {
-    return false;
-  }
-  return isIdentityOrBiographyLookup(question) || EXPLICIT_FACTUAL_RESEARCH_PATTERN.test(question);
+  return (
+    isIdentityOrBiographyLookup(question) ||
+    isSourceBackedConceptLookup(question) ||
+    EXPLICIT_FACTUAL_RESEARCH_PATTERN.test(question)
+  );
 }
 
 function forbidsExternalTools(question: string) {

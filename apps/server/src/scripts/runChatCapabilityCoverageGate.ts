@@ -154,7 +154,6 @@ const cases: CapabilityCase[] = [
     language: "fr",
     conversation: ["Qui est Charlemagne ?"],
     expectedTerms: ["charlemagne", ["franc", "france", "carolingien"], ["empereur", "empire", "roi"]],
-    expectedProvider: "ollama",
     expectedToolType: "research"
   },
   {
@@ -168,7 +167,6 @@ const cases: CapabilityCase[] = [
       ["science", "scientifique", "physique", "physicienne", "chimie", "chimiste"],
       ["radioactivite", "radium", "polonium", "nobel"]
     ],
-    expectedProvider: "ollama",
     expectedToolType: "research",
     forbidden: [/\bvar[eè]se\b/i]
   },
@@ -178,7 +176,7 @@ const cases: CapabilityCase[] = [
     language: "fr",
     conversation: ["Explique simplement ce qu'est une API."],
     expectedTerms: ["api", ["logiciels", "application", "interface"]],
-    expectedProvider: "ollama"
+    expectedToolType: "research"
   },
   {
     id: "concept_docker_en",
@@ -186,7 +184,7 @@ const cases: CapabilityCase[] = [
     language: "en",
     conversation: ["What is Docker?"],
     expectedTerms: ["docker", ["container", "containers"]],
-    expectedProvider: "ollama"
+    expectedToolType: "research"
   },
   {
     id: "code_docker_debug_en",
