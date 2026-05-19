@@ -580,6 +580,7 @@ test("chat runtime answers recent AI updates from verified research tool facts w
   assert.equal(response.tooling.used, true);
   assert.match(response.answer.answer, /recap IA source/i);
   assert.match(response.answer.answer, /OpenAI News/);
+  assert.equal(response.conversationQuality.passed, true);
   assert.equal(response.conversationQuality.issues.includes("tool_required_but_not_used"), false);
 });
 

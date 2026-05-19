@@ -136,6 +136,19 @@ test("context state tracker detects French short-answer instructions without acc
   assert.equal(updated.language, "fr");
 });
 
+test("context state tracker does not treat weekly AI news recaps as deadline constraints", () => {
+  const updated = updateConversationState(
+    createInitialState(),
+    "Fais-moi un recap de toutes les nouveautes IA sorties cette semaine.",
+    ""
+  );
+  const capsule = buildActiveConstraintCapsule(updated, updated.userGoal ?? "");
+
+  assert.equal(updated.language, "fr");
+  assert.equal(updated.constraints.some((constraint) => /^deadline:/i.test(constraint)), false);
+  assert.deepEqual(capsule.topConstraints.filter((constraint) => /^deadline:/i.test(constraint)), []);
+});
+
 test("active constraint capsule marks changed budget obsolete and keeps latest budget active", () => {
   const initial = updateConversationState(
     createInitialState(),

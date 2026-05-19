@@ -220,9 +220,27 @@ function extractGoal(message: string) {
   return withoutPreface || null;
 }
 
+function isFreshExternalUpdateRequest(message: string) {
+  const normalized = normalizeText(message);
+  const hasFreshWindow = /\b(?:this week|cette semaine|this month|ce mois|recent|recente?s?|dernieres?|dernier|nouveau|nouveaux)\b/.test(
+    normalized
+  );
+  const hasUpdateIntent = /\b(?:recap|news|updates?|headline|headlines|actualite?s?|nouveaute?s?|sorties?|annonces?)\b/.test(
+    normalized
+  );
+  const hasExternalTopic = /\b(?:ai|ia|llm|openai|anthropic|google ai|hugging face|deepmind|intelligence artificielle|artificial intelligence)\b/.test(
+    normalized
+  );
+  return hasFreshWindow && hasUpdateIntent && hasExternalTopic;
+}
+
 function extractConstraints(message: string) {
   const constraints: string[] = [];
+  const freshExternalUpdateRequest = isFreshExternalUpdateRequest(message);
   for (const { label, pattern } of CONSTRAINT_PATTERNS) {
+    if (freshExternalUpdateRequest && label === "deadline") {
+      continue;
+    }
     if (pattern.test(message) && !isNegatedConstraint(label, message)) {
       constraints.push(`${label}: ${compact(message, 180)}`);
     }
