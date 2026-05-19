@@ -152,6 +152,16 @@ export type {
   ModelRuntimeStat
 } from "../../../server/src/types/modelOps.js";
 
+export type {
+  ExecutionActionKind,
+  ExecutionAuditEvent,
+  ExecutionAuditStat,
+  ExecutionAuditSummary,
+  ExecutionCapability,
+  ExecutionPermissionState,
+  ExecutionRiskLevel
+} from "../../../server/src/types/execution.js";
+
 import type {
   JudgeScorePair,
   ModelSelection

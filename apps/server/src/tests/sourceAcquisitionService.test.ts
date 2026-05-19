@@ -4,6 +4,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { WATCHER_SOURCE_PACKS } from "../data/watcherSourcePacks.js";
+import { BrowserAutomationPolicyService } from "../services/browser/browserAutomationPolicyService.js";
+import { ExecutionAuditStore } from "../services/execution/executionAuditStore.js";
 import { KnowledgeConsolidationService } from "../services/knowledgeConsolidationService.js";
 import { KnowledgeObjectStore } from "../services/knowledgeObjectStore.js";
 import { KnowledgeQualityGateService } from "../services/knowledgeQualityGateService.js";
@@ -61,12 +63,28 @@ function buildFetcher(): typeof fetch {
   }) as typeof fetch;
 }
 
+function buildAuditPolicy(tempRoot: string) {
+  const auditStore = new ExecutionAuditStore({
+    filePath: join(tempRoot, "execution-audit.jsonl"),
+    maxEvents: 100
+  });
+  return {
+    auditStore,
+    browserAutomationPolicyService: new BrowserAutomationPolicyService({
+      auditStore,
+      now: () => new Date("2026-05-18T12:00:00.000Z")
+    })
+  };
+}
+
 test("source acquisition fetches bounded source packs and marks corroborated evidence", async () => {
   const tempRoot = await mkdtemp(join(tmpdir(), "hydria-source-acquisition-"));
   try {
+    const { browserAutomationPolicyService } = buildAuditPolicy(tempRoot);
     const service = new SourceAcquisitionService({
       fetcher: buildFetcher(),
       store: new SourceAcquisitionStore(join(tempRoot, "source-acquisition.json")),
+      browserAutomationPolicyService,
       now: () => new Date("2026-05-18T12:00:00.000Z")
     });
     const file = await service.run({
@@ -97,6 +115,7 @@ test("source acquisition fetches bounded source packs and marks corroborated evi
 test("source acquisition truncates long HTML summaries before schema validation", async () => {
   const tempRoot = await mkdtemp(join(tmpdir(), "hydria-source-acquisition-html-"));
   try {
+    const { browserAutomationPolicyService } = buildAuditPolicy(tempRoot);
     const longDescription = Array.from({ length: 32 }, () => "Docker runtime release notes and platform updates")
       .join(" ");
     const service = new SourceAcquisitionService({
@@ -111,6 +130,7 @@ test("source acquisition truncates long HTML summaries before schema validation"
           }
         )) as typeof fetch,
       store: new SourceAcquisitionStore(join(tempRoot, "source-acquisition.json")),
+      browserAutomationPolicyService,
       now: () => new Date("2026-05-18T12:00:00.000Z")
     });
     const file = await service.run({
@@ -168,9 +188,80 @@ test("source acquisition truncates long HTML summaries before schema validation"
   }
 });
 
+test("source acquisition can fall back to Scrapling when normal fetch is blocked", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "hydria-source-acquisition-scrapling-"));
+  try {
+    const { auditStore, browserAutomationPolicyService } = buildAuditPolicy(tempRoot);
+    const service = new SourceAcquisitionService({
+      sourcePacks: [
+        {
+          packId: "scrapling-html-source-pack",
+          domain: "web_acquisition",
+          category: "mixed_reasoning",
+          candidateType: "source_profile",
+          freshness: "recent",
+          riskLevel: "medium",
+          taskType: "collect_sources",
+          priority: "medium",
+          title: "Scrapling HTML source pack",
+          claim: "Use a governed fallback fetcher when a public HTML source blocks normal fetch.",
+          summary: "Scrapling fallback fixture.",
+          sources: [{ label: "Blocked HTML page", url: "https://example.com/blocked" }],
+          tags: ["source-pack", "scrapling"]
+        }
+      ],
+      fetcher: (async () => new Response("forbidden", { status: 403 })) as typeof fetch,
+      scraplingClient: {
+        isConfigured() {
+          return true;
+        },
+        async extract() {
+          return {
+            ok: true,
+            mode: "fetcher",
+            status: 200,
+            url: "https://example.com/blocked",
+            contentType: "text/html",
+            headers: { "content-type": "text/html" },
+            body: "<html><head><title>AI weekly updates</title><meta name=\"description\" content=\"Official model releases and benchmark updates.\" /></head><body><article><h2>New AI release notes</h2><p>Release notes with model capability details.</p></article></body></html>",
+            elapsedMs: 12
+          };
+        }
+      },
+      store: new SourceAcquisitionStore(join(tempRoot, "source-acquisition.json")),
+      browserAutomationPolicyService,
+      now: () => new Date("2026-05-18T12:00:00.000Z")
+    });
+    const file = await service.run({
+      networkEnabled: true,
+      persistMode: "replace",
+      maxPacks: 1,
+      maxSourcesPerPack: 1,
+      maxItemsPerSource: 1,
+      timeoutMs: 1000
+    });
+
+    assert.equal(file.sourceStats.failedSourceCount, 0);
+    assert.equal(file.sourceRuns[0]?.fetcher, "scrapling");
+    assert.equal(file.sourceRuns[0]?.status, "parsed");
+    assert.equal(file.sourceRuns[0]?.executionAuditIds.length, 2);
+    assert.equal(file.items.length, 1);
+    assert.ok(file.items[0]?.tags.includes("scrapling-fetcher"));
+    const auditSummary = await auditStore.buildSummary({ limit: 10 });
+    assert.equal(auditSummary.window.eventCount, 2);
+    assert.equal(auditSummary.byCapability.fetcher_http?.count, 1);
+    assert.equal(auditSummary.byCapability.fetcher_scrapling?.count, 1);
+    assert.equal(auditSummary.totals.realExecutionStepCount, 0);
+    assert.equal(auditSummary.totals.sensitiveHeaderLeakCount, 0);
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test("source acquisition extracts corroborated API evidence that can pass quality promotion", async () => {
   const tempRoot = await mkdtemp(join(tmpdir(), "hydria-source-acquisition-api-quality-"));
   try {
+    const { browserAutomationPolicyService } = buildAuditPolicy(tempRoot);
     const crossrefUrl = "https://api.crossref.org/works/10.1145/362384.362685";
     const openAlexUrl = "https://api.openalex.org/works/doi:10.1145/362384.362685";
     const service = new SourceAcquisitionService({
@@ -246,6 +337,7 @@ test("source acquisition extracts corroborated API evidence that can pass qualit
         );
       }) as typeof fetch,
       store: new SourceAcquisitionStore(join(tempRoot, "source-acquisition.json")),
+      browserAutomationPolicyService,
       now: () => new Date("2026-05-18T12:00:00.000Z")
     });
 
@@ -281,9 +373,11 @@ test("source acquisition extracts corroborated API evidence that can pass qualit
 test("knowledge consolidation turns source acquisitions into non-active knowledge objects", async () => {
   const tempRoot = await mkdtemp(join(tmpdir(), "hydria-source-knowledge-"));
   try {
+    const { browserAutomationPolicyService } = buildAuditPolicy(tempRoot);
     const sourceService = new SourceAcquisitionService({
       fetcher: buildFetcher(),
       store: new SourceAcquisitionStore(join(tempRoot, "source-acquisition.json")),
+      browserAutomationPolicyService,
       now: () => new Date("2026-05-18T12:00:00.000Z")
     });
     const acquisition = await sourceService.run({

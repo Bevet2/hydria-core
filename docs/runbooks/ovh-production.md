@@ -272,6 +272,30 @@ npm run knowledge:source-acquire -- --network --max-packs=5 --max-sources-per-pa
 npm run knowledge:quality-gate
 ```
 
+Optional Scrapling acquisition fallback:
+
+```text
+SCRAPLING_FETCHER_ENABLED=false
+SCRAPLING_FETCHER_BASE_URL=http://scrapling-fetcher:8092
+SCRAPLING_FETCHER_TIMEOUT_MS=10000
+SCRAPLING_FETCHER_MAX_CHARS=120000
+SCRAPLING_BROWSER_FETCH_ENABLED=false
+```
+
+`scrapling-fetcher` is a separate optional sidecar for source acquisition only. Hydria first uses the normal bounded HTTP fetch path; if a source blocks or returns an empty parse, it can fall back to Scrapling and tags resulting items with `scrapling-fetcher`. Browser-backed dynamic/stealth fetching stays disabled by default. Do not route public chat directly through Scrapling; source-acquired claims still pass quality gate, consolidation, promotion governance, and training queue validation before becoming usable knowledge.
+
+Execution governance / browser contract:
+
+```bash
+npm run browser:automation-gate
+npm run execution:audit-gate
+curl -fsS https://app.hydria.click/api/execution/audit?limit=25
+```
+
+`/api/execution/audit` and `/api/execution/audit/:auditId` are read-only traces for governed execution plans. They expose permission decisions, risk level, dry-run plan, rollback hint, provenance, selected/recommended acquisition capability, and sanitized scoring metadata. They do not expose a POST/action endpoint and do not enable real browser navigation, shell commands, or filesystem access. Dynamic and stealth browser capabilities remain candidates only and are disabled by default.
+
+Source acquisition writes plan-only execution audit events for each HTTP fetch attempt and each Scrapling fallback attempt. `sourceRuns[].executionAuditIds` links the knowledge acquisition report back to the execution governance trail. This is observability only: it does not add any browser runtime, command execution, or filesystem action to the acquisition pipeline.
+
 Without `--network`, the acquisition run records skipped source checks and does not fetch remote content. The quality gate is deterministic and rejects poor/generic source items before consolidation. The offline source gate is deterministic and safe for CI:
 
 ```bash
@@ -631,6 +655,17 @@ sudo docker compose --env-file .env.docker \
   -f docker-compose.ovh.yml \
   -f docker-compose.reranker.yml \
   up -d hydria-core bge-reranker
+```
+
+When the optional Scrapling source-acquisition fallback is enabled, include the Scrapling override too:
+
+```bash
+sudo docker compose --env-file .env.docker \
+  -f docker-compose.yml \
+  -f docker-compose.ovh.yml \
+  -f docker-compose.reranker.yml \
+  -f docker-compose.scrapling.yml \
+  up -d --build hydria-core bge-reranker scrapling-fetcher
 ```
 
 Then run the health checks.

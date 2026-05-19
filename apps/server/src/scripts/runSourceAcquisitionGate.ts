@@ -2,6 +2,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WATCHER_SOURCE_PACKS } from "../data/watcherSourcePacks.js";
+import { BrowserAutomationPolicyService } from "../services/browser/browserAutomationPolicyService.js";
+import { ExecutionAuditStore } from "../services/execution/executionAuditStore.js";
 import { SourceAcquisitionService } from "../services/sourceAcquisitionService.js";
 import type { SourceAcquisitionFile } from "../types/sourceAcquisition.js";
 import { GovernedRerankerService } from "../services/retrieval/governedRerankerService.js";
@@ -24,14 +26,17 @@ type SourceAcquisitionGateReport = {
     corroboratedItemCount: number;
     guardedItemCount: number;
     retrievalTopPackId: string | null;
+    executionAuditEventCount: number;
   };
   checks: GateCheck[];
   acquisition: SourceAcquisitionFile;
+  executionAudit: Awaited<ReturnType<ExecutionAuditStore["buildSummary"]>>;
 };
 
 const currentFilePath = fileURLToPath(import.meta.url);
 const projectRoot = resolve(dirname(currentFilePath), "../../../../");
 const defaultOutput = resolve(projectRoot, "storage", "training", "source-acquisition-gate-v1.json");
+const defaultAuditFile = resolve(projectRoot, "storage", "training", "source-acquisition-gate-execution-audit.jsonl");
 
 function readOption(argv: string[], name: string) {
   const prefix = `${name}=`;
@@ -115,9 +120,19 @@ function buildFixtureFetcher(): typeof fetch {
 
 async function buildReport(): Promise<SourceAcquisitionGateReport> {
   let saved: SourceAcquisitionFile | null = null;
+  await mkdir(dirname(defaultAuditFile), { recursive: true });
+  await writeFile(defaultAuditFile, "", "utf8");
+  const executionAuditStore = new ExecutionAuditStore({
+    filePath: defaultAuditFile,
+    maxEvents: 100
+  });
   const service = new SourceAcquisitionService({
     fetcher: buildFixtureFetcher(),
     now: () => new Date("2026-05-18T12:00:00.000Z"),
+    browserAutomationPolicyService: new BrowserAutomationPolicyService({
+      auditStore: executionAuditStore,
+      now: () => new Date("2026-05-18T12:00:00.000Z")
+    }),
     store: {
       async load() {
         return saved;
@@ -159,6 +174,7 @@ async function buildReport(): Promise<SourceAcquisitionGateReport> {
     maxItemsPerSource: 1,
     timeoutMs: 1000
   });
+  const executionAudit = await executionAuditStore.buildSummary({ limit: 100 });
   const reranker = new GovernedRerankerService({
     client: {
       isConfigured: () => false,
@@ -213,6 +229,18 @@ async function buildReport(): Promise<SourceAcquisitionGateReport> {
       "retrieval-selects-domain-source",
       topItem?.packId === "cyber-vulnerability-source-pack",
       "Retrieval evaluation should select the cyber source pack for CVE remediation questions."
+    ),
+    check(
+      "source-runs-emit-execution-audits",
+      acquisition.sourceRuns.every((run) => run.executionAuditIds.length > 0) &&
+        executionAudit.window.eventCount === acquisition.sourceRuns.length,
+      "Each source run must emit one plan-only execution audit event."
+    ),
+    check(
+      "execution-audit-remains-plan-only",
+      executionAudit.totals.realExecutionStepCount === 0 &&
+        executionAudit.totals.sensitiveHeaderLeakCount === 0,
+      "Source acquisition audit events must remain dry-run only and sanitized."
     )
   ];
 
@@ -226,10 +254,12 @@ async function buildReport(): Promise<SourceAcquisitionGateReport> {
       itemCount: acquisition.items.length,
       corroboratedItemCount: acquisition.sourceStats.corroboratedItemCount,
       guardedItemCount: acquisition.sourceStats.guardedItemCount,
-      retrievalTopPackId: topItem?.packId ?? null
+      retrievalTopPackId: topItem?.packId ?? null,
+      executionAuditEventCount: executionAudit.window.eventCount
     },
     checks,
-    acquisition
+    acquisition,
+    executionAudit
   };
 }
 

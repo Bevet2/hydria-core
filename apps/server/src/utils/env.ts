@@ -134,6 +134,13 @@ const envSchema = z.object({
   SOURCE_ACQUISITION_MAX_PACKS: z.coerce.number().int().min(1).max(20).default(5),
   SOURCE_ACQUISITION_MAX_SOURCES_PER_PACK: z.coerce.number().int().min(1).max(8).default(4),
   SOURCE_ACQUISITION_MAX_ITEMS_PER_SOURCE: z.coerce.number().int().min(1).max(20).default(4),
+  SCRAPLING_FETCHER_ENABLED: z
+    .string()
+    .default("false")
+    .transform((value) => value.toLowerCase() === "true"),
+  SCRAPLING_FETCHER_BASE_URL: z.string().default(""),
+  SCRAPLING_FETCHER_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(10000),
+  SCRAPLING_FETCHER_MAX_CHARS: z.coerce.number().int().min(1024).max(500000).default(120000),
   KNOWLEDGE_SCHEDULER_REPORT_FILE: z
     .string()
     .min(1)

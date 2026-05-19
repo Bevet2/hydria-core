@@ -602,6 +602,36 @@ h4 {
   overflow-wrap: anywhere;
 }
 
+.execution-audit-row {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.52);
+  border: 1px solid rgba(61, 45, 28, 0.08);
+}
+
+.execution-audit-row p {
+  margin-bottom: 0;
+  overflow-wrap: anywhere;
+}
+
+.execution-audit-row__header,
+.execution-audit-row__meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.execution-audit-row__meta {
+  justify-content: flex-start;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
 .summary-card,
 .impact-card {
   display: grid;

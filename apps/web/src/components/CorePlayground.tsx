@@ -3,6 +3,7 @@ import {
   fetchAppHealth,
   fetchArenaQualityReport,
   fetchArenaRound,
+  fetchExecutionAudit,
   fetchHistory,
   fetchLearningGovernanceState,
   fetchLearningQueueState,
@@ -15,6 +16,7 @@ import {
   type ArenaModels,
   type ArenaQualityAnalyticsReport,
   type ArenaRound,
+  type ExecutionAuditSummary,
   type LearningGovernanceState,
   type LearningQueueState,
   type LocalModelHealth,
@@ -50,6 +52,7 @@ export function CorePlayground() {
   const [appHealth, setAppHealth] = useState<AppHealth | null>(null);
   const [localHealth, setLocalHealth] = useState<LocalModelHealth | null>(null);
   const [modelRuntimeOps, setModelRuntimeOps] = useState<ModelRuntimeOpsSummary | null>(null);
+  const [executionAudit, setExecutionAudit] = useState<ExecutionAuditSummary | null>(null);
   const [persistenceHealth, setPersistenceHealth] = useState<PersistenceHealthReport | null>(null);
   const [lastLocalTest, setLastLocalTest] = useState<LocalModelTestResponse | null>(null);
   const requestedRoundId = new URLSearchParams(window.location.search).get("roundId");
@@ -104,6 +107,10 @@ export function CorePlayground() {
     setModelRuntimeOps(await fetchModelRuntimeOps());
   }
 
+  async function refreshExecutionAudit() {
+    setExecutionAudit(await fetchExecutionAudit());
+  }
+
   async function refreshLearningState() {
     const nextState = await fetchLearningGovernanceState();
     setLearningState(nextState);
@@ -123,6 +130,7 @@ export function CorePlayground() {
     void Promise.all([
       refreshHistory(),
       refreshAppHealth(),
+      refreshExecutionAudit(),
       refreshLearningState(),
       refreshLearningQueueState()
     ]).catch((cause: unknown) => {
@@ -140,6 +148,7 @@ export function CorePlayground() {
       syncRoundInUrl(round.roundId);
       await refreshHistory(round.roundId);
       await refreshLocalHealth();
+      await refreshExecutionAudit();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Arena run failed.");
     } finally {
@@ -190,12 +199,14 @@ export function CorePlayground() {
           learningQueueState={learningQueueState}
           localHealth={localHealth}
           modelRuntimeOps={modelRuntimeOps}
+          executionAudit={executionAudit}
           persistenceHealth={persistenceHealth}
           lastLocalTest={lastLocalTest}
           onRefreshHealth={refreshLocalHealth}
           onRefreshLearning={refreshLearningState}
           onRefreshLearningQueue={refreshLearningQueueState}
           onRefreshModelRuntime={refreshModelRuntimeOps}
+          onRefreshExecutionAudit={refreshExecutionAudit}
           onRefreshPersistence={refreshAppHealth}
           onRunTest={handleLocalTest}
           onSelectRound={(round) => {

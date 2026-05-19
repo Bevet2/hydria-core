@@ -7,6 +7,9 @@ import {
   type SourceAcquisitionSourceRun
 } from "../types/sourceAcquisition.js";
 import { env } from "../utils/env.js";
+import { BrowserAutomationPolicyService } from "./browser/browserAutomationPolicyService.js";
+import { ExecutionAuditStore } from "./execution/executionAuditStore.js";
+import { ScraplingFetcherClient, type ScraplingExtractResult } from "./scraplingFetcherClient.js";
 import { SourceAcquisitionStore } from "./sourceAcquisitionStore.js";
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
@@ -15,6 +18,8 @@ type SourceAcquisitionServiceOptions = {
   sourcePacks?: WatcherSourcePack[];
   store?: Pick<SourceAcquisitionStore, "upsert" | "save" | "load">;
   fetcher?: FetchLike;
+  scraplingClient?: Pick<ScraplingFetcherClient, "isConfigured" | "extract"> | null;
+  browserAutomationPolicyService?: Pick<BrowserAutomationPolicyService, "plan"> | null;
   now?: () => Date;
 };
 
@@ -123,6 +128,22 @@ function decayFor(pack: WatcherSourcePack, retrievedAt: string) {
 
 function sourceRunId(pack: WatcherSourcePack, sourceUrl: string, retrievedAt: string) {
   return `source-run::${pack.packId}::${stableShortHash(`${sourceUrl}:${retrievedAt}`)}`;
+}
+
+function hostnameFromUrl(value: string) {
+  try {
+    return new URL(value).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function headersToRecord(headers: Headers) {
+  const entries: Array<[string, string]> = [];
+  headers.forEach((value, key) => {
+    entries.push([key, value]);
+  });
+  return Object.fromEntries(entries);
 }
 
 function itemId(pack: WatcherSourcePack, sourceUrl: string, title: string) {
@@ -764,12 +785,19 @@ export class SourceAcquisitionService {
   private readonly sourcePacks: WatcherSourcePack[];
   private readonly store: Pick<SourceAcquisitionStore, "upsert" | "save" | "load">;
   private readonly fetcher: FetchLike;
+  private readonly scraplingClient: Pick<ScraplingFetcherClient, "isConfigured" | "extract"> | null;
+  private readonly browserAutomationPolicyService: Pick<BrowserAutomationPolicyService, "plan"> | null;
   private readonly now: () => Date;
 
   constructor(options: SourceAcquisitionServiceOptions = {}) {
     this.sourcePacks = options.sourcePacks ?? WATCHER_SOURCE_PACKS;
     this.store = options.store ?? new SourceAcquisitionStore();
     this.fetcher = options.fetcher ?? fetch;
+    this.scraplingClient = options.scraplingClient === undefined ? new ScraplingFetcherClient() : options.scraplingClient;
+    this.browserAutomationPolicyService =
+      options.browserAutomationPolicyService === undefined
+        ? new BrowserAutomationPolicyService({ auditStore: ExecutionAuditStore.persistent() })
+        : options.browserAutomationPolicyService;
     this.now = options.now ?? (() => new Date());
   }
 
@@ -794,11 +822,13 @@ export class SourceAcquisitionService {
             packId: pack.packId,
             sourceLabel: source.label,
             sourceUrl: source.url,
+            fetcher: "node_fetch",
             status: "skipped",
             httpStatus: null,
             itemCount: 0,
             retrievedAt: null,
-            error: "network_disabled"
+            error: "network_disabled",
+            executionAuditIds: []
           });
           continue;
         }
@@ -835,6 +865,7 @@ export class SourceAcquisitionService {
     const retrievedAt = args.now.toISOString();
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), args.timeoutMs);
+    const startedAt = Date.now();
     try {
       const response = await this.fetcher(args.source.url, {
         method: "GET",
@@ -854,16 +885,41 @@ export class SourceAcquisitionService {
             maxItems: args.maxItemsPerSource
           })
         : [];
+      const httpAuditIds = await this.planAcquisition({
+        ...args,
+        retrievedAt,
+        fetchMethod: "fetcher_http",
+        latencyMs: Date.now() - startedAt,
+        responseHeaders: headersToRecord(response.headers),
+        hints: {
+          httpFailed: !response.ok,
+          parseEmpty: response.ok && parsed.length === 0,
+          failureReason: response.ok ? (parsed.length === 0 ? "empty_parse" : null) : `http_${response.status}`
+        }
+      });
+      if (!response.ok || parsed.length === 0) {
+        const scraplingResult = await this.tryScraplingFetch({
+          ...args,
+          retrievedAt,
+          reason: response.ok ? "empty_parse" : `http_${response.status}`,
+          previousAuditIds: httpAuditIds
+        });
+        if (scraplingResult && (scraplingResult.items.length > 0 || !response.ok)) {
+          return scraplingResult;
+        }
+      }
       const sourceRun: SourceAcquisitionSourceRun = {
         sourceRunId: sourceRunId(args.pack, args.source.url, retrievedAt),
         packId: args.pack.packId,
         sourceLabel: args.source.label,
         sourceUrl: args.source.url,
+        fetcher: "node_fetch",
         status: response.ok ? "parsed" : "failed",
         httpStatus: response.status,
         itemCount: parsed.length,
         retrievedAt,
-        error: response.ok ? null : `http_${response.status}`
+        error: response.ok ? null : `http_${response.status}`,
+        executionAuditIds: httpAuditIds
       };
 
       return {
@@ -871,23 +927,196 @@ export class SourceAcquisitionService {
         items: parsed.map((item) => this.toAcquisitionItem(args.pack, args.source, item, retrievedAt))
       };
     } catch (error) {
+      const httpAuditIds = await this.planAcquisition({
+        ...args,
+        retrievedAt,
+        fetchMethod: "fetcher_http",
+        latencyMs: Date.now() - startedAt,
+        responseHeaders: {},
+        hints: {
+          httpFailed: true,
+          parseEmpty: false,
+          failureReason: compact(String(error))
+        }
+      });
+      const scraplingResult = await this.tryScraplingFetch({
+        ...args,
+        retrievedAt,
+        reason: compact(String(error)),
+        previousAuditIds: httpAuditIds
+      });
+      if (scraplingResult) {
+        return scraplingResult;
+      }
       return {
         sourceRun: {
           sourceRunId: sourceRunId(args.pack, args.source.url, retrievedAt),
           packId: args.pack.packId,
           sourceLabel: args.source.label,
           sourceUrl: args.source.url,
+          fetcher: "node_fetch" as const,
           status: "failed" as const,
           httpStatus: null,
           itemCount: 0,
           retrievedAt,
-          error: compact(String(error))
+          error: compact(String(error)),
+          executionAuditIds: httpAuditIds
         },
         items: []
       };
     } finally {
       clearTimeout(timeout);
     }
+  }
+
+  private async tryScraplingFetch(args: {
+    pack: WatcherSourcePack;
+    source: { label: string; url: string };
+    maxItemsPerSource: number;
+    timeoutMs: number;
+    retrievedAt: string;
+    reason: string;
+    previousAuditIds?: string[];
+  }) {
+    if (!this.scraplingClient?.isConfigured()) {
+      return null;
+    }
+
+    try {
+      const startedAt = Date.now();
+      const result = await this.scraplingClient.extract({
+        url: args.source.url,
+        timeoutMs: args.timeoutMs,
+        maxChars: env.SCRAPLING_FETCHER_MAX_CHARS
+      });
+      const parsed = this.parseScraplingResult(result, args.source.label, args.maxItemsPerSource);
+      const scraplingAuditIds = await this.planAcquisition({
+        ...args,
+        fetchMethod: "fetcher_scrapling",
+        latencyMs: result.elapsedMs ?? Date.now() - startedAt,
+        responseHeaders: result.headers,
+        hints: {
+          httpFailed: true,
+          parseEmpty: parsed.length === 0,
+          retryCount: 1,
+          failureReason: parsed.length > 0 ? args.reason : `scrapling_empty_after_${args.reason}`
+        }
+      });
+      const sourceRun: SourceAcquisitionSourceRun = {
+        sourceRunId: sourceRunId(args.pack, args.source.url, args.retrievedAt),
+        packId: args.pack.packId,
+        sourceLabel: args.source.label,
+        sourceUrl: args.source.url,
+        fetcher: "scrapling",
+        status: parsed.length > 0 ? "parsed" : "failed",
+        httpStatus: result.status,
+        itemCount: parsed.length,
+        retrievedAt: args.retrievedAt,
+        error: parsed.length > 0 ? null : `scrapling_empty_after_${args.reason}`,
+        executionAuditIds: [...(args.previousAuditIds ?? []), ...scraplingAuditIds]
+      };
+
+      return {
+        sourceRun,
+        items: parsed.map((item) => this.toAcquisitionItem(args.pack, args.source, item, args.retrievedAt))
+      };
+    } catch (error) {
+      const scraplingAuditIds = await this.planAcquisition({
+        ...args,
+        fetchMethod: "fetcher_scrapling",
+        latencyMs: null,
+        responseHeaders: {},
+        hints: {
+          httpFailed: true,
+          parseEmpty: true,
+          retryCount: 1,
+          failureReason: compact(`scrapling_failed:${String(error)}`)
+        }
+      });
+      return {
+        sourceRun: {
+          sourceRunId: sourceRunId(args.pack, args.source.url, args.retrievedAt),
+          packId: args.pack.packId,
+          sourceLabel: args.source.label,
+          sourceUrl: args.source.url,
+          fetcher: "scrapling" as const,
+          status: "failed" as const,
+          httpStatus: null,
+          itemCount: 0,
+          retrievedAt: args.retrievedAt,
+          error: compact(`primary_failed:${args.reason}; scrapling_failed:${String(error)}`),
+          executionAuditIds: [...(args.previousAuditIds ?? []), ...scraplingAuditIds]
+        },
+        items: []
+      };
+    }
+  }
+
+  private async planAcquisition(args: {
+    pack: WatcherSourcePack;
+    source: { label: string; url: string };
+    retrievedAt: string;
+    fetchMethod: "fetcher_http" | "fetcher_scrapling";
+    latencyMs: number | null;
+    responseHeaders: Record<string, string>;
+    hints: {
+      httpFailed: boolean;
+      parseEmpty: boolean;
+      retryCount?: number;
+      failureReason?: string | null;
+    };
+  }) {
+    if (!this.browserAutomationPolicyService) {
+      return [];
+    }
+    const requestId = `source-acquisition::${args.fetchMethod}::${sourceRunId(args.pack, args.source.url, args.retrievedAt)}`;
+    const hostname = hostnameFromUrl(args.source.url);
+    const plan = await this.browserAutomationPolicyService.plan({
+      requestId,
+      action: "extract_readonly",
+      url: args.source.url,
+      sessionId: null,
+      allowedDomains: hostname ? [hostname] : [],
+      blockedDomains: [],
+      requestedPermissions: ["network:read", "content:extract"],
+      provenance: {
+        requestedBy: "scheduler",
+        requestId,
+        source: "source-acquisition",
+        parentTraceId: null,
+        reason: `Plan-only source acquisition governance for ${args.pack.packId}/${args.source.label}.`
+      },
+      hints: {
+        httpFailed: args.fetchMethod === "fetcher_scrapling",
+        parseEmpty: args.fetchMethod === "fetcher_scrapling" ? args.hints.parseEmpty : false,
+        jsHeavy: false,
+        antiBot: false,
+        readsSecret: false,
+        destructive: false,
+        requiresAuth: false,
+        retryCount: args.hints.retryCount ?? 0,
+        latencyMs: args.latencyMs,
+        responseHeaders: args.responseHeaders,
+        failureReason: args.hints.failureReason ?? null
+      }
+    });
+    return [plan.auditEvent.auditId];
+  }
+
+  private parseScraplingResult(
+    result: ScraplingExtractResult,
+    sourceLabel: string,
+    maxItemsPerSource: number
+  ): ParsedItem[] {
+    return parseSourceBody({
+      body: result.body,
+      contentType: result.contentType,
+      sourceLabel,
+      maxItems: maxItemsPerSource
+    }).map((item) => ({
+      ...item,
+      tags: [...(item.tags ?? []), "scrapling-fetcher", `scrapling-${result.mode}`].slice(0, 16)
+    }));
   }
 
   private toAcquisitionItem(

@@ -1,6 +1,7 @@
 import type {
   ArenaQualityAnalyticsReport,
   ArenaRound,
+  ExecutionAuditSummary,
   LearningGovernanceState,
   LearningQueueState,
   LocalModelHealth,
@@ -8,6 +9,7 @@ import type {
   ModelRuntimeOpsSummary
 } from "../lib/api";
 import { ArenaQualityPanel } from "./ArenaQualityPanel";
+import { ExecutionAuditPanel } from "./ExecutionAuditPanel";
 import { HistoryPanel } from "./HistoryPanel";
 import { HydriaMemoryPanel } from "./HydriaMemoryPanel";
 import { HydriaWorkflowPanel } from "./HydriaWorkflowPanel";
@@ -27,12 +29,14 @@ type CorePlaygroundSidebarProps = {
   learningQueueState: LearningQueueState | null;
   localHealth: LocalModelHealth | null;
   modelRuntimeOps: ModelRuntimeOpsSummary | null;
+  executionAudit: ExecutionAuditSummary | null;
   persistenceHealth: PersistenceHealthReport | null;
   lastLocalTest: LocalModelTestResponse | null;
   onRefreshHealth: () => Promise<void>;
   onRefreshLearning: () => Promise<void>;
   onRefreshLearningQueue: () => Promise<void>;
   onRefreshModelRuntime: () => Promise<void>;
+  onRefreshExecutionAudit: () => Promise<void>;
   onRefreshPersistence: () => Promise<void>;
   onRunTest: (prompt: string) => Promise<void>;
   onSelectRound: (round: ArenaRound) => void;
@@ -46,12 +50,14 @@ export function CorePlaygroundSidebar({
   learningQueueState,
   localHealth,
   modelRuntimeOps,
+  executionAudit,
   persistenceHealth,
   lastLocalTest,
   onRefreshHealth,
   onRefreshLearning,
   onRefreshLearningQueue,
   onRefreshModelRuntime,
+  onRefreshExecutionAudit,
   onRefreshPersistence,
   onRunTest,
   onSelectRound
@@ -63,6 +69,7 @@ export function CorePlaygroundSidebar({
       <LearningQueuePanel state={learningQueueState} onRefresh={onRefreshLearningQueue} />
       <LearningGovernancePanel state={learningState} onRefresh={onRefreshLearning} />
       <ModelRuntimePanel summary={modelRuntimeOps} onRefresh={onRefreshModelRuntime} />
+      <ExecutionAuditPanel summary={executionAudit} onRefresh={onRefreshExecutionAudit} />
       <HydriaWorkflowPanel workflow={round?.workflow ?? null} title="Hydria Workflow Trace" />
       <HydriaMemoryPanel memory={round?.memory ?? null} title="Hydria Memory Snapshot" />
       <PersistenceHealthPanel

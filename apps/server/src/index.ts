@@ -8,6 +8,7 @@ import { createArenaRouter } from "./routes/arena.js";
 import { createBenchmarkRouter } from "./routes/benchmark.js";
 import { createChatRouter } from "./routes/chat.js";
 import { createCoreRouter } from "./routes/core.js";
+import { createExecutionRouter } from "./routes/execution.js";
 import { createHistoryRouter } from "./routes/history.js";
 import { createLearningRouter } from "./routes/learning.js";
 import { createLocalModelRouter } from "./routes/localModel.js";
@@ -51,6 +52,7 @@ import { OpenRouterService } from "./services/openrouter.js";
 import { OrchestrationPolicyService } from "./services/orchestrationPolicy.js";
 import { ResearchToolService } from "./services/researchToolService.js";
 import { RefineRouterService } from "./services/refineRouter.js";
+import { ExecutionAuditStore } from "./services/execution/executionAuditStore.js";
 import { PersistenceHealthService } from "./services/storage/persistenceHealthService.js";
 import { StudentChatAdapter } from "./services/studentChatAdapter.js";
 import { StudentService } from "./services/studentService.js";
@@ -108,6 +110,7 @@ const arenaQualityAnalyticsService = new ArenaQualityAnalyticsService();
 const arenaRespondentFailureStore = new ArenaRespondentFailureStore();
 const learningGovernanceService = new LearningGovernanceService();
 const learningQueueService = new LearningQueueService();
+const executionAuditStore = ExecutionAuditStore.persistent();
 const studentService = new StudentService(
   localModelService,
   openRouterService,
@@ -279,6 +282,7 @@ app.use("/api/arena/history", createHistoryRouter(historyStore));
 app.use("/api/benchmark", createBenchmarkRouter(benchmarkService));
 app.use("/api/chat", createChatRouter(chatRuntimeService));
 app.use("/api/core", createCoreRouter(coreAskService));
+app.use("/api/execution", createExecutionRouter(executionAuditStore));
 app.use("/api/local-model", createLocalModelRouter(localModelService));
 app.use("/api/models", createModelsRouter(modelCapabilityService, modelProviderService, modelRuntimeTelemetryService));
 app.use(

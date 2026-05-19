@@ -1,0 +1,27 @@
+services:
+  hydria-core:
+    environment:
+      SCRAPLING_FETCHER_ENABLED: ${SCRAPLING_FETCHER_ENABLED:-true}
+      SCRAPLING_FETCHER_BASE_URL: http://scrapling-fetcher:8092
+      SCRAPLING_FETCHER_TIMEOUT_MS: ${SCRAPLING_FETCHER_TIMEOUT_MS:-10000}
+      SCRAPLING_FETCHER_MAX_CHARS: ${SCRAPLING_FETCHER_MAX_CHARS:-120000}
+    depends_on:
+      scrapling-fetcher:
+        condition: service_healthy
+
+  scrapling-fetcher:
+    build:
+      context: ./services/scrapling-fetcher
+    image: hydria-scrapling-fetcher:local
+    environment:
+      SCRAPLING_FETCHER_MODE: ${SCRAPLING_FETCHER_MODE:-fetcher}
+      SCRAPLING_BROWSER_FETCH_ENABLED: ${SCRAPLING_BROWSER_FETCH_ENABLED:-false}
+      SCRAPLING_MAX_CHARS: ${SCRAPLING_MAX_CHARS:-200000}
+    expose:
+      - "8092"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8092/health', timeout=5).read()\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s

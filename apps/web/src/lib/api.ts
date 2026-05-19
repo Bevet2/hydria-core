@@ -10,6 +10,7 @@ import type {
   BenchmarkSummaryResponse,
   ChatMessageResponse,
   ChatResetResponse,
+  ExecutionAuditSummary,
   HydriaCoreAskRequest,
   HydriaCoreAskResponse,
   LocalModelHealth,
@@ -110,6 +111,10 @@ export async function fetchLocalHealth() {
 
 export async function fetchModelRuntimeOps(limit = 500) {
   return request<ModelRuntimeOpsSummary>(`/api/models/ops?limit=${encodeURIComponent(String(limit))}`);
+}
+
+export async function fetchExecutionAudit(limit = 100) {
+  return request<ExecutionAuditSummary>(`/api/execution/audit?limit=${encodeURIComponent(String(limit))}`);
 }
 
 export async function testLocalModel(prompt: string) {

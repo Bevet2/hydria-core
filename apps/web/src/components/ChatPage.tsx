@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  fetchExecutionAudit,
   fetchLearningQueueState,
   fetchModelRuntimeOps,
   resetChatSession,
   sendChatMessage,
   type ChatMessage,
   type ChatMessageResponse,
+  type ExecutionAuditSummary,
   type LearningQueueState,
   type ModelRuntimeOpsSummary
 } from "../lib/api";
 import { AppNav } from "./AppNav";
+import { ExecutionAuditPanel } from "./ExecutionAuditPanel";
 import { LearningQueuePanel } from "./LearningQueuePanel";
 import { ModelRuntimePanel } from "./ModelRuntimePanel";
 
@@ -84,6 +87,7 @@ export function ChatPage() {
   const [draft, setDraft] = useState("");
   const [lastResponse, setLastResponse] = useState<ChatMessageResponse | null>(null);
   const [modelRuntimeOps, setModelRuntimeOps] = useState<ModelRuntimeOpsSummary | null>(null);
+  const [executionAudit, setExecutionAudit] = useState<ExecutionAuditSummary | null>(null);
   const [learningQueueState, setLearningQueueState] = useState<LearningQueueState | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -124,13 +128,18 @@ export function ChatPage() {
     setModelRuntimeOps(await fetchModelRuntimeOps());
   }
 
+  async function refreshExecutionAudit() {
+    setExecutionAudit(await fetchExecutionAudit());
+  }
+
   async function refreshLearningQueueState() {
     setLearningQueueState(await fetchLearningQueueState());
   }
 
   useEffect(() => {
-    void Promise.all([refreshModelRuntimeOps(), refreshLearningQueueState()]).catch(() => {
+    void Promise.all([refreshModelRuntimeOps(), refreshExecutionAudit(), refreshLearningQueueState()]).catch(() => {
       setModelRuntimeOps(null);
+      setExecutionAudit(null);
       setLearningQueueState(null);
     });
   }, []);
@@ -165,6 +174,9 @@ export function ChatPage() {
       ]);
       void refreshModelRuntimeOps().catch(() => {
         setModelRuntimeOps(null);
+      });
+      void refreshExecutionAudit().catch(() => {
+        setExecutionAudit(null);
       });
       void refreshLearningQueueState().catch(() => {
         setLearningQueueState(null);
@@ -282,6 +294,7 @@ export function ChatPage() {
         <aside className="chat-inspector">
           <LearningQueuePanel state={learningQueueState} onRefresh={refreshLearningQueueState} />
           <ModelRuntimePanel summary={modelRuntimeOps} onRefresh={refreshModelRuntimeOps} />
+          <ExecutionAuditPanel summary={executionAudit} onRefresh={refreshExecutionAudit} />
 
           <section className="panel">
             <div className="panel__header">

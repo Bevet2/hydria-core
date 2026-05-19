@@ -52,11 +52,13 @@ export const sourceAcquisitionSourceRunSchema = z.object({
   packId: z.string().min(1).max(120),
   sourceLabel: z.string().min(1).max(120),
   sourceUrl: z.string().url(),
+  fetcher: z.enum(["node_fetch", "scrapling"]).default("node_fetch"),
   status: sourceAcquisitionSourceStatusSchema,
   httpStatus: z.number().int().min(0).max(599).nullable().default(null),
   itemCount: z.number().int().nonnegative(),
   retrievedAt: z.string().datetime().nullable().default(null),
-  error: z.string().min(1).max(360).nullable().default(null)
+  error: z.string().min(1).max(360).nullable().default(null),
+  executionAuditIds: z.array(z.string().min(1).max(180)).max(8).default([])
 });
 
 export const sourceAcquisitionFileSchema = z.object({

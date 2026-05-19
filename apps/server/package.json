@@ -13,6 +13,8 @@
     "knowledge:consolidate": "tsx src/scripts/runKnowledgeConsolidation.ts",
     "knowledge:source-acquire": "tsx src/scripts/runSourceAcquisition.ts",
     "knowledge:source-gate": "tsx src/scripts/runSourceAcquisitionGate.ts",
+    "browser:automation-gate": "tsx src/scripts/runBrowserAutomationGovernanceGate.ts",
+    "execution:audit-gate": "tsx src/scripts/runExecutionAuditReadOnlyGate.ts",
     "knowledge:quality-gate": "tsx src/scripts/runKnowledgeQualityGate.ts",
     "watchers:run": "tsx src/scripts/runWatchers.ts",
     "knowledge:scheduler": "tsx src/scripts/runGovernedKnowledgeScheduler.ts",

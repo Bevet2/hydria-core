@@ -159,6 +159,8 @@ The governor records profile, timeout, queue time, budget-exceeded status, and p
 
 The Chat UI exposes an **Orchestration Trace** for each answer. It shows the observable runtime path only: language/context detection, task routing, tool routing, verified facts, selected model/provider, runtime budget, attempts, quality gate, and latency. It deliberately does not expose hidden prompts or private chain-of-thought.
 
+The UI also exposes an **Execution Audit** panel backed by `/api/execution/audit`. It is read-only and shows governed dry-run decisions for future browser/acquisition/execution actions: selected capability, permission state, risk level, denial reasons, rollback hints, provenance, and sanitized acquisition scoring. This does not enable real browser navigation, shell commands, or filesystem access.
+
 Chat tool flow:
 
 - `ToolRoutingService` decides whether a governed tool is required or recommended.
@@ -173,7 +175,14 @@ Retrieval/reranking flow:
 - `bge-reranker` now has a dedicated optional local runtime through `docker-compose.reranker.yml`.
 - `GovernedRerankerService` reranks memory/source candidates before compact prompt injection.
 - If the reranker runtime is unavailable, Hydria falls back to deterministic lexical ranking and records that the BGE runtime was not used.
+- `scrapling-fetcher` is an optional source-acquisition sidecar through `docker-compose.scrapling.yml`. It gives the watcher/source pipeline a Scrapling-backed fallback when a public HTML source blocks normal fetch or parses empty, while browser-backed dynamic/stealth scraping remains disabled by default.
+- Source acquisition now emits plan-only execution audit events for HTTP and Scrapling acquisition attempts. Source runs keep their `executionAuditIds`, and the audit events remain dry-run traces: selected capability, sanitized headers, scoring, provenance, and rollback policy, with no added browser/shell/filesystem execution.
 - Promotion-sensitive checks should run with `--require-runtime`; fallback mode is only a safety path.
+
+Execution governance gates:
+
+- `npm run browser:automation-gate` validates the browser/acquisition planning contract in dry-run mode.
+- `npm run execution:audit-gate` validates JSONL persistence, read-by-id lookup, sanitized headers, rollback visibility, disabled browser capabilities, and that no dry-run step can execute.
 
 Relevant runtime knobs:
 
