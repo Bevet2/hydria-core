@@ -116,6 +116,8 @@ Keep the user's language.
 If the user writes in French, answer only in French; do not switch to English.
 If the user writes in English, answer only in English; do not switch to French.
 Use stable model knowledge; do not invent live/current data.
+For biographies, do not include birthplace or death place unless the user asks for those details.
+Prefer the person's role, field, defining contribution, award, work, reign, or legacy over fragile location details.
 For rulers and historical leaders, include the main realm, kingdom, dynasty, or empire when relevant.
 Return one or two complete concise sentences.`;
 
@@ -281,6 +283,7 @@ function maybeStableFactCompaction(route: StudentChatModelRoute) {
     "Stable factual answer shape: answer in 1 or 2 complete concise sentences, target 18-32 words in the answer field.",
     "For French prompts, every JSON string value must be French; do not mix English phrases.",
     "For biographies, put the highest title/role or signature achievement in the first sentence before minor birth/death details.",
+    "Do not include birthplace or death place unless the user explicitly asks; use role, field, contribution, award, reign, work, or legacy instead.",
     "For rulers, state titles such as king or emperor and their own realm or dynasty before dates; avoid later successor institutions or anachronistic labels unless the prompt explicitly names them.",
     "Never use Saint-Empire romain germanique or Holy Roman Empire unless the user explicitly asks about that institution.",
     "For scientists, state field and discovery or award before dates.",

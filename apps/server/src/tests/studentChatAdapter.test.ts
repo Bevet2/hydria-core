@@ -78,6 +78,7 @@ test("student chat adapter routes stable biographies through the Mistral factual
   assert.equal(numPredict, 104);
   assert.equal(usedFormat, false);
   assert.match(usedSystem, /plain final text only/i);
+  assert.match(usedSystem, /do not include birthplace or death place/i);
   assert.match(result.answer.answer, /Charlemagne/);
 });
 
@@ -88,6 +89,7 @@ test("student chat prompt compacts stable factual biographies", () => {
   assert.match(prompt, /18-32 words/i);
   assert.match(prompt, /every JSON string value must be French/i);
   assert.match(prompt, /highest title\/role/i);
+  assert.match(prompt, /Do not include birthplace or death place/i);
   assert.match(prompt, /own realm or dynasty/i);
   assert.match(prompt, /anachronistic labels/i);
   assert.match(prompt, /Saint-Empire romain germanique/i);

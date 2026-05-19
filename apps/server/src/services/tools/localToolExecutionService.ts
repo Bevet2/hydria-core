@@ -111,6 +111,33 @@ type RecentUpdateEntry = {
   publishedAt: string | null;
 };
 
+type WikipediaSearchResponse = {
+  query?: {
+    search?: Array<{
+      title?: string;
+      snippet?: string;
+    }>;
+  };
+};
+
+type WikipediaSummaryResponse = {
+  title?: string;
+  description?: string;
+  extract?: string;
+  timestamp?: string;
+  content_urls?: {
+    desktop?: {
+      page?: string;
+    };
+  };
+};
+
+type SearchResult = {
+  title: string;
+  url: string;
+  snippet: string;
+};
+
 const CITY_TIMEZONES: Record<string, string> = {
   paris: "Europe/Paris",
   london: "Europe/London",
@@ -558,6 +585,193 @@ async function tryFetchRecentUpdates(args: ToolRoutingDecision): Promise<LocalTo
       retrievalChannel: "live",
       retrievalOrigin: "known_endpoint",
       retrievalEngine: "known_endpoint"
+    }))
+  };
+}
+
+function extractResearchSubject(args: ToolRoutingDecision) {
+  const raw =
+    extractStringArg(args, "subject") ??
+    extractStringArg(args, "query") ??
+    extractStringArg(args, "rawQuestion") ??
+    "";
+  const subject = normalizeSpaces(
+    raw
+      .replace(/[?]/g, " ")
+      .replace(/\b(?:who is|who was|tell me about|qui est|qui etait|qui (?:e|\u00e9)tait|donne(?:-|\s)?moi|sa biographie|son histoire|biographie|biography|known for|connu(?:e)? pour|cherche(?:r)? sur internet|recherche web|verifie|v(?:e|\u00e9)rifie|source|sources|cite)\b/gi, " ")
+      .replace(/\b(?:de|du|des|d'|of|about|sur|le|la|les|un|une|sa|son|his|her)\b/gi, " ")
+      .replace(/[?.!,]+$/g, " ")
+  );
+  return subject.length >= 2 ? subject : raw.trim();
+}
+
+function wikipediaLanguageOrder(language: WeatherLanguage) {
+  return language === "fr" ? ["fr", "en"] : ["en", "fr"];
+}
+
+function wikipediaPageUrl(language: string, title: string) {
+  return `https://${language}.wikipedia.org/wiki/${encodeURIComponent(title.replace(/\s+/g, "_"))}`;
+}
+
+async function searchWikipediaTitle(subject: string, language: string) {
+  const searchUrl = new URL(`https://${language}.wikipedia.org/w/api.php`);
+  searchUrl.searchParams.set("action", "query");
+  searchUrl.searchParams.set("list", "search");
+  searchUrl.searchParams.set("srsearch", subject);
+  searchUrl.searchParams.set("srlimit", "1");
+  searchUrl.searchParams.set("format", "json");
+  searchUrl.searchParams.set("origin", "*");
+  const search = await fetchJson<WikipediaSearchResponse>(searchUrl);
+  return search?.query?.search?.[0]?.title?.trim() || subject;
+}
+
+async function fetchWikipediaSummary(subject: string, language: string) {
+  const title = await searchWikipediaTitle(subject, language);
+  if (!title) {
+    return null;
+  }
+  const summaryUrl = new URL(
+    `https://${language}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/\s+/g, "_"))}`
+  );
+  const summary = await fetchJson<WikipediaSummaryResponse>(summaryUrl);
+  if (!summary?.extract || summary.extract.trim().length < 40) {
+    return null;
+  }
+
+  const pageTitle = summary.title?.trim() || title;
+  const pageUrl = summary.content_urls?.desktop?.page ?? wikipediaPageUrl(language, pageTitle);
+  const timestamp = summary.timestamp && !Number.isNaN(new Date(summary.timestamp).getTime())
+    ? new Date(summary.timestamp).toISOString()
+    : null;
+  const excerpt = normalizeSpaces(summary.extract);
+  const description = summary.description ? normalizeSpaces(summary.description) : null;
+  return {
+    title: pageTitle,
+    url: pageUrl,
+    description,
+    excerpt,
+    timestamp
+  };
+}
+
+function unwrapDuckDuckGoUrl(rawUrl: string) {
+  try {
+    const parsed = new URL(rawUrl, "https://duckduckgo.com");
+    const uddg = parsed.searchParams.get("uddg");
+    if (uddg) {
+      return decodeURIComponent(uddg);
+    }
+    return parsed.href;
+  } catch {
+    return rawUrl;
+  }
+}
+
+async function searchDuckDuckGo(query: string): Promise<SearchResult[]> {
+  const url = new URL("https://duckduckgo.com/html/");
+  url.searchParams.set("q", query);
+  const body = await fetchText(url.toString());
+  if (!body) {
+    return [];
+  }
+
+  const $ = load(body);
+  const results: SearchResult[] = [];
+  $(".result, .web-result").slice(0, 5).each((_index, element) => {
+    const node = $(element);
+    const anchor = node.find("a.result__a, a.result-link").first();
+    const title = normalizeSpaces(anchor.text());
+    const rawHref = anchor.attr("href") ?? "";
+    const urlValue = unwrapDuckDuckGoUrl(rawHref);
+    const snippet = normalizeSpaces(stripHtml(node.find(".result__snippet, .result-snippet").first().text()));
+    if (title && urlValue && snippet) {
+      results.push({ title, url: urlValue, snippet });
+    }
+  });
+  return results.slice(0, 3);
+}
+
+async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<LocalToolExecutionResult | null> {
+  const subject = extractResearchSubject(args);
+  if (!subject || subject.length < 2) {
+    return null;
+  }
+
+  const language = extractLanguage(args);
+  for (const wikipediaLanguage of wikipediaLanguageOrder(language)) {
+    const summary = await fetchWikipediaSummary(subject, wikipediaLanguage);
+    if (!summary) {
+      continue;
+    }
+    const fact =
+      language === "fr"
+        ? `${summary.title}: ${summary.excerpt}`
+        : `${summary.title}: ${summary.excerpt}`;
+    const sourceLabel =
+      language === "fr"
+        ? `Recherche factuelle: source encyclopedique trouvee pour ${summary.title}.`
+        : `Factual research: encyclopedia source found for ${summary.title}.`;
+
+    return {
+      toolType: "research",
+      intent: args.intent,
+      summary: [
+        sourceLabel,
+        summary.description
+          ? language === "fr"
+            ? `Description source: ${summary.description}.`
+            : `Source description: ${summary.description}.`
+          : ""
+      ].filter(Boolean),
+      verifiedFacts: [fact],
+      confidenceScore: 0.88,
+      resultLabel: summary.title,
+      sources: [
+        {
+          title: `Wikipedia: ${summary.title}`,
+          url: summary.url,
+          snippet: summary.description || summary.excerpt.slice(0, 180),
+          excerpt: summary.excerpt,
+          publishedAt: null,
+          modifiedAt: summary.timestamp,
+          effectiveDate: summary.timestamp,
+          dateSource: summary.timestamp ? "meta" : "unknown",
+          retrievalChannel: "live",
+          retrievalOrigin: "known_endpoint",
+          retrievalEngine: "known_endpoint"
+        }
+      ]
+    };
+  }
+
+  const searchResults = await searchDuckDuckGo(subject);
+  if (searchResults.length === 0) {
+    return null;
+  }
+
+  return {
+    toolType: "research",
+    intent: args.intent,
+    summary: [
+      language === "fr"
+        ? `Recherche factuelle: ${searchResults.length} resultat(s) web trouve(s) pour ${subject}.`
+        : `Factual research: ${searchResults.length} web result(s) found for ${subject}.`
+    ],
+    verifiedFacts: searchResults.map((result) => `${result.title}: ${result.snippet}`),
+    confidenceScore: 0.64,
+    resultLabel: subject,
+    sources: searchResults.map((result) => ({
+      title: result.title,
+      url: result.url,
+      snippet: result.snippet,
+      excerpt: result.snippet,
+      publishedAt: null,
+      modifiedAt: null,
+      effectiveDate: null,
+      dateSource: "search_result",
+      retrievalChannel: "live",
+      retrievalOrigin: "generic_search",
+      retrievalEngine: "duckduckgo"
     }))
   };
 }
@@ -1490,6 +1704,10 @@ export class LocalToolExecutionService {
 
     if (routing.toolType === "research" && routing.intent === "recent_updates") {
       return tryFetchRecentUpdates(routing);
+    }
+
+    if (routing.toolType === "research" && routing.intent === "fact_check") {
+      return tryFetchGeneralFactResearch(routing);
     }
 
     if (routing.toolType === "time" && (routing.intent === "current_time" || routing.intent === "current_date")) {

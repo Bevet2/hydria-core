@@ -53,10 +53,10 @@ const warmupCases: WarmupCase[] = [
     expectedBudgetProfile: "standard_light_chat"
   },
   {
-    id: "mistral_stable_fact",
+    id: "source_backed_stable_fact",
     message: "Qui est Marie Curie ?",
-    expectedModel: ["mistral:7b", "qwen2.5:3b"],
-    expectedBudgetProfile: "stable_fact_chat"
+    expectedModel: "qwen2.5:3b",
+    expectedBudgetProfile: "standard_light_chat"
   }
 ];
 

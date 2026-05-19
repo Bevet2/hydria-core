@@ -109,6 +109,43 @@ test("tool router routes French weekly AI novelty recaps to research", () => {
   assert.equal(decision.extractedArgs.temporalFocus, "this_week");
 });
 
+test("tool router routes stable biography lookups to source-backed research", () => {
+  const decision = service.route({
+    question: "Qui est Marie Curie ?",
+    category: "other"
+  });
+
+  assert.equal(decision.toolRequired, true);
+  assert.equal(decision.toolType, "research");
+  assert.equal(decision.intent, "fact_check");
+  assert.equal(decision.fallbackAllowed, false);
+  assert.equal(decision.extractedArgs.subject, "Marie Curie");
+  assert.equal(decision.extractedArgs.language, "fr");
+});
+
+test("tool router keeps simple stable concept explanations model-only", () => {
+  const decision = service.route({
+    question: "Explique simplement ce qu'est une API.",
+    category: "technical_explanation"
+  });
+
+  assert.equal(decision.toolRequired, false);
+  assert.equal(decision.toolType, "none");
+});
+
+test("tool router routes explicit source requests to source-backed research", () => {
+  const decision = service.route({
+    question: "Verify with reliable sources who Ada Lovelace was.",
+    category: "other"
+  });
+
+  assert.equal(decision.toolRequired, true);
+  assert.equal(decision.toolType, "research");
+  assert.equal(decision.intent, "fact_check");
+  assert.equal(decision.fallbackAllowed, false);
+  assert.equal(decision.extractedArgs.language, "en");
+});
+
 test("tool router marks GitHub repo lookup as required repo tool use", () => {
   const decision = service.route({
     question: "Retrouve ce repo GitHub hydria-core",

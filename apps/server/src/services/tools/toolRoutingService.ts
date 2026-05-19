@@ -29,6 +29,8 @@ const DOC_LOOKUP_PATTERN =
   /\b(?:official docs?|documentation|reference|api docs?|rfc|spec|specification|what does .* say|according to)\b/i;
 const WEBSITE_LOOKUP_PATTERN =
   /\b(?:website|site|company page|product page|find .* on github|find .* repo)\b/i;
+const EXPLICIT_FACTUAL_RESEARCH_PATTERN =
+  /\b(?:verify|fact[-\s]?check|source|sources|cite|citation|search the web|search online|look up|lookup|find online|cherche(?:r)? sur internet|recherche web|source fiable|sources fiables|verifie|v(?:e|\u00e9)rifie|cite)\b/i;
 const CURRENCY_NAME_PATTERN =
   /\b(?:usd|eur|gbp|cad|aud|jpy|chf|sek|nok|dkk|pln|inr|cny|rmb|btc|eth|bitcoin|ethereum|dollar(?:s)?|euro(?:s)?|pound(?:s)?|yen)\b/i;
 const TIME_PATTERN =
@@ -272,7 +274,18 @@ function extractEntitySubject(question: string) {
       .replace(/\b(?:de|du|des|d'|of|the|le|la|les|un|une)\b/gi, " ")
   );
 
-  return stripped.length >= 2 ? stripped : extractQuotedOrTrailingName(question);
+  return stripped.length >= 2 ? stripped : extractQuotedOrTrailingName(question) ?? "";
+}
+
+function cleanFactualLookupSubject(question: string) {
+  const cleaned = normalizeSpace(
+    extractEntitySubject(question)
+      .replace(/\b(?:biographie|biography|histoire|story|known for|connu(?:e)? pour|fact[-\s]?check|verify|verifie|v(?:e|\u00e9)rifie|source|sources|cite|citation|cherche(?:r)? sur internet|recherche web)\b/gi, " ")
+      .replace(/\b(?:sa|son|his|her|their|de|du|des|d'|of|about|sur)\b/gi, " ")
+      .replace(/[?.!,]+$/g, " ")
+  );
+
+  return cleaned.length >= 2 ? cleaned : extractQuotedOrTrailingName(question) ?? question;
 }
 
 function cleanSubject(value: string) {
@@ -632,6 +645,35 @@ function isStatusPageQuestion(question: string) {
   return /\b(?:status page|reporting\s+(?:an?\s+)?incidents?|incidents? right now|status right now|service status|live status source)\b/i.test(
     question
   );
+}
+
+function isIdentityOrBiographyLookup(question: string) {
+  return /\b(?:who is|who was|qui est|qui etait|qui (?:e|\u00e9)tait|biographie|biography|sa biographie|son histoire|his biography|her biography|known for|connu(?:e)? pour)\b/i.test(
+    question
+  );
+}
+
+function isConceptOnlyExplanation(question: string) {
+  return (
+    /\b(?:what is|what are|qu'est-ce que|quest ce que|c'est quoi|c est quoi|explique|explain|definition|define)\b/i.test(
+      question
+    ) &&
+    !isIdentityOrBiographyLookup(question) &&
+    !EXPLICIT_FACTUAL_RESEARCH_PATTERN.test(question)
+  );
+}
+
+function shouldUseGeneralFactResearch(question: string, category: QuestionCategory | null | undefined) {
+  if (isConversationPlanningCategory(category)) {
+    return false;
+  }
+  if (WRITING_OR_BRAINSTORM_PATTERN.test(question)) {
+    return false;
+  }
+  if (isConceptOnlyExplanation(question)) {
+    return false;
+  }
+  return isIdentityOrBiographyLookup(question) || EXPLICIT_FACTUAL_RESEARCH_PATTERN.test(question);
 }
 
 function forbidsExternalTools(question: string) {
@@ -1059,6 +1101,23 @@ export class ToolRoutingService {
         extractedArgs: {
           subject: extractEntitySubject(question),
           temporalFocus: temporalProfile.focus,
+          language: detectQuestionLanguage(question)
+        }
+      });
+    }
+
+    if (shouldUseGeneralFactResearch(question, args.category)) {
+      return buildDecision({
+        toolRequired: true,
+        toolType: "research",
+        intent: "fact_check",
+        confidence: 0.83,
+        fallbackAllowed: false,
+        reason:
+          "The request asks for a named factual lookup or explicitly requests verification; use source retrieval before synthesis.",
+        extractedArgs: {
+          subject: cleanFactualLookupSubject(question),
+          query: question,
           language: detectQuestionLanguage(question)
         }
       });

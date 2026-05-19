@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { ChatRuntimeService } from "../services/chatRuntimeService.js";
 import type { StudentChatAdapterInput, StudentChatAdapterResult } from "../services/studentChatAdapter.js";
-import { defaultToolRoutingDecision } from "../types/arena.js";
+import { defaultToolRoutingDecision, type ToolRoutingDecision } from "../types/arena.js";
 import type { StudentAnswer } from "../types/student.js";
 
 function buildAnswer(answer: string): StudentAnswer {
@@ -33,18 +33,40 @@ function buildAdapterResult(answer: string, usedRetry = false): StudentChatAdapt
   };
 }
 
+function buildFactCheckToolResult(fact: string) {
+  return {
+    async tryExecute(routing: ToolRoutingDecision) {
+      if (routing.toolType !== "research" || routing.intent !== "fact_check") {
+        return null;
+      }
+      return {
+        toolType: "research" as const,
+        intent: "fact_check",
+        summary: ["Source-backed factual context for the requested subject."],
+        verifiedFacts: [fact],
+        confidenceScore: 0.88,
+        resultLabel: "fact_check"
+      };
+    }
+  };
+}
+
 test("chat runtime keeps follow-up context in the direct student chat adapter", async () => {
   const calls: StudentChatAdapterInput[] = [];
-  const service = new ChatRuntimeService({
-    async answer(input) {
-      calls.push(input);
-      return buildAdapterResult(
-        calls.length === 1
-          ? "Louis IX est une figure historique, mais la reponse initiale reste incomplete."
-          : "Tu as raison, il fallait comprendre Louis IX, aussi appele Saint Louis. C'est le roi de France capetien qui a regne de 1226 a 1270 et qui a ete canonise ensuite."
-      );
-    }
-  });
+  const service = new ChatRuntimeService(
+    {
+      async answer(input) {
+        calls.push(input);
+        return buildAdapterResult(
+          calls.length === 1
+            ? "Louis IX est une figure historique, mais la reponse initiale reste incomplete."
+            : "Tu as raison, il fallait comprendre Louis IX, aussi appele Saint Louis. C'est le roi de France capetien qui a regne de 1226 a 1270 et qui a ete canonise ensuite."
+        );
+      }
+    },
+    undefined,
+    buildFactCheckToolResult("Louis IX, aussi appele Saint Louis, est un roi de France capetien.")
+  );
 
   const first = await service.sendMessage({ message: "qui est louis 9" });
   const second = await service.sendMessage({
@@ -54,6 +76,8 @@ test("chat runtime keeps follow-up context in the direct student chat adapter", 
 
   assert.equal(calls[0]?.routingQuestion, "qui est louis 9");
   assert.equal(calls[0]?.requiresExternalGrounding, true);
+  assert.equal(calls[0]?.tooling.used, true);
+  assert.equal(calls[0]?.tooling.routing.toolType, "research");
   assert.equal(calls[0]?.runtimeMode, "direct");
   assert.equal(calls[1]?.routingQuestion, "qui est saint louis");
   assert.equal(calls[1]?.requiresExternalGrounding, true);
@@ -103,22 +127,26 @@ test("chat runtime recalls user-provided facts without triggering research", asy
 
 test("chat runtime retries corrected identity turns on the resolved task", async () => {
   const calls: StudentChatAdapterInput[] = [];
-  const service = new ChatRuntimeService({
-    async answer(input) {
-      calls.push(input);
-      if (calls.length === 1) {
-        return buildAdapterResult("Louis IX est une figure historique francaise.");
-      }
-      if (calls.length === 2) {
+  const service = new ChatRuntimeService(
+    {
+      async answer(input) {
+        calls.push(input);
+        if (calls.length === 1) {
+          return buildAdapterResult("Louis IX est une figure historique francaise.");
+        }
+        if (calls.length === 2) {
+          return buildAdapterResult(
+            "Non, je n'ai pas precisement dit que Louis IX etait egalement connu sous le nom de Saint Louis."
+          );
+        }
         return buildAdapterResult(
-          "Non, je n'ai pas precisement dit que Louis IX etait egalement connu sous le nom de Saint Louis."
+          "Saint Louis, ou Louis IX, est un roi de France capetien qui a regne de 1226 a 1270."
         );
       }
-      return buildAdapterResult(
-        "Saint Louis, ou Louis IX, est un roi de France capetien qui a regne de 1226 a 1270."
-      );
-    }
-  });
+    },
+    undefined,
+    buildFactCheckToolResult("Saint Louis, ou Louis IX, est un roi de France capetien.")
+  );
 
   const first = await service.sendMessage({ message: "qui est louis 9" });
   const second = await service.sendMessage({
@@ -167,13 +195,17 @@ test("chat runtime resolves possessive biography follow-ups to the prior subject
     "Charlemagne a consolide un vaste empire en Europe occidentale et a soutenu des reformes administratives et religieuses.",
     "Sa biographie est marquee par l'expansion du royaume franc, les reformes de l'administration et son role dans la renaissance carolingienne."
   ];
-  const service = new ChatRuntimeService({
-    async answer(input) {
-      calls.push(input);
-      const answer = answers[Math.min(calls.length - 1, answers.length - 1)] ?? answers[answers.length - 1]!;
-      return buildAdapterResult(answer);
-    }
-  });
+  const service = new ChatRuntimeService(
+    {
+      async answer(input) {
+        calls.push(input);
+        const answer = answers[Math.min(calls.length - 1, answers.length - 1)] ?? answers[answers.length - 1]!;
+        return buildAdapterResult(answer);
+      }
+    },
+    undefined,
+    buildFactCheckToolResult("Charlemagne est un roi des Francs et empereur carolingien.")
+  );
 
   const first = await service.sendMessage({ message: "qui est charlemagne" });
   const second = await service.sendMessage({

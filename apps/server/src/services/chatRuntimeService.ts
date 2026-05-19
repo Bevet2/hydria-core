@@ -1717,6 +1717,7 @@ function buildChatOrchestrationTrace(args: {
           toolRecommended: args.tooling.routing.toolRecommended,
           resultUsed: args.tooling.used,
           verifiedFacts: args.tooling.verifiedFacts.slice(0, 5),
+          sources: args.tooling.sources.slice(0, 3).map((source) => source.url),
           failureReason: args.tooling.failureReason
         }
       },

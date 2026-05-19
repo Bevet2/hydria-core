@@ -413,6 +413,40 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
     };
   }
 
+  if (verifiedExternalContextPath(input) && containsCodeSignal(text, input.category)) {
+    const reason =
+      "Verified external context is available for a code/debug task; route synthesis to the code specialist.";
+    const budget = buildRuntimeBudget("code_chat", reason);
+    return {
+      capabilityId: "qwen-coder-code",
+      displayName: "Qwen-Coder",
+      modelName: QWEN_CODER,
+      specialistRole: "code_specialist",
+      routingReason: reason,
+      pipeline: [...basePipeline, "verified_context", `code_specialist:${QWEN_CODER}`],
+      fallbackModelNames: buildSpecialistOnlyFallbacks(QWEN_CODER),
+      timeoutMs: budget.timeoutMs,
+      runtimeBudget: budget
+    };
+  }
+
+  if (verifiedExternalContextPath(input) && containsDeepReasoningSignal(input, text)) {
+    const reason =
+      "Verified external context is available for a decision or reasoning task; route synthesis to the guarded deep-reasoning path.";
+    const budget = buildRuntimeBudget("deep_reasoning", reason);
+    return {
+      capabilityId: "qwen-14b-instruct-main",
+      displayName: "Qwen 14B Instruct",
+      modelName: QWEN_MAIN,
+      specialistRole: "deep_reasoner",
+      routingReason: reason,
+      pipeline: [...basePipeline, "verified_context", `deep_reasoner_cpu:${QWEN_MAIN}`],
+      fallbackModelNames: buildSpecialistOnlyFallbacks(QWEN_MAIN),
+      timeoutMs: budget.timeoutMs,
+      runtimeBudget: budget
+    };
+  }
+
   if (verifiedExternalContextPath(input)) {
     const reason =
       "Verified external tool facts are already available; use the CPU-aware 3B route to verbalize them without heavy-model fallback.";

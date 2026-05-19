@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import type { ModelRuntimeBudgetProfile } from "../services/models/modelRuntimeGovernor.js";
 
 type ExpectedProvider = "ollama" | "tool";
-type ExpectedToolType = "none" | "calculator" | "weather" | "finance" | "time" | "web";
+type ExpectedToolType = "none" | "calculator" | "weather" | "finance" | "time" | "web" | "research";
 type Language = "fr" | "en";
 
 type TurnExpectation = {
@@ -163,8 +163,9 @@ const writingExpectation: TurnExpectation = {
 
 const stableFactExpectation: TurnExpectation = {
   provider: "ollama",
-  model: ["mistral:7b", "qwen2.5:3b"],
-  budgetProfile: "stable_fact_chat",
+  model: "qwen2.5:3b",
+  budgetProfile: "standard_light_chat",
+  toolType: "research",
   maxLatencyMs: 90000,
   allowRetry: true
 };
@@ -278,8 +279,8 @@ const cases: RoutingGateCase[] = [
   },
   {
     id: "standard_charlemagne_fr",
-    description: "Stable biography should use the Mistral factual writing route, not the 3B definition route.",
-    routeFamily: "stable_factual_chat",
+    description: "Stable biography should retrieve a source first, then synthesize through the verified-context route.",
+    routeFamily: "source_backed_stable_factual_chat",
     language: "fr",
     turns: [{ message: "Qui est Charlemagne ?", expect: stableFactExpectation }],
     expectedFinalTerms: ["Charlemagne"]

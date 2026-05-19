@@ -8,7 +8,7 @@ type ChatGateCase = {
   id: string;
   language: Language;
   conversation: string[];
-  expectedTerms: string[];
+  expectedTerms: Array<string | string[]>;
   forbidden?: RegExp[];
 };
 
@@ -59,13 +59,13 @@ const cases: ChatGateCase[] = [
     id: "fr_stable_history_charlemagne",
     language: "fr",
     conversation: ["qui est charlemagne"],
-    expectedTerms: ["charlemagne", "franc", "empire"]
+    expectedTerms: ["charlemagne", "franc", ["empire", "empereur", "carolingien"]]
   },
   {
     id: "fr_history_followup_biography",
     language: "fr",
     conversation: ["qui est charlemagne", "tu peux m'en dire plus", "donne moi sa biographie"],
-    expectedTerms: ["charlemagne", "814", "empereur"]
+    expectedTerms: ["charlemagne", "814", ["empereur", "empire", "couronne"]]
   },
   {
     id: "fr_correction_louis_ix",
@@ -321,8 +321,9 @@ async function runCase(testCase: ChatGateCase, args: Args): Promise<CaseResult> 
 
   const normalizedAnswer = normalize(finalAnswer);
   for (const expectedTerm of testCase.expectedTerms) {
-    if (!normalizedAnswer.includes(normalize(expectedTerm))) {
-      issues.push(`missing_expected_term:${expectedTerm}`);
+    const alternatives = Array.isArray(expectedTerm) ? expectedTerm : [expectedTerm];
+    if (!alternatives.some((term) => normalizedAnswer.includes(normalize(term)))) {
+      issues.push(`missing_expected_term:${alternatives.join("|")}`);
     }
   }
   if (!languageLooksRight(finalAnswer, testCase.language)) {

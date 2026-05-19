@@ -175,6 +175,25 @@ function buildAiRecentUpdatesRouting(): ToolRoutingDecision {
   };
 }
 
+function buildFactCheckRouting(subject = "Marie Curie"): ToolRoutingDecision {
+  return {
+    considered: true,
+    toolRequired: true,
+    toolRecommended: false,
+    toolType: "research",
+    intent: "fact_check",
+    confidence: 0.83,
+    fallbackAllowed: false,
+    reason: "The request asks for a named factual lookup or explicitly requests verification.",
+    extractedArgs: {
+      subject,
+      query: `Qui est ${subject} ?`,
+      language: "fr"
+    },
+    toolResultUsed: false
+  };
+}
+
 test("local tool execution resolves current weather through Open-Meteo", async (t) => {
   const originalFetch = globalThis.fetch;
   const requestedUrls: string[] = [];
@@ -459,4 +478,90 @@ test("local research tool resolves recent AI updates from official feeds", async
   assert.match(result?.verifiedFacts.join(" "), /OpenAI ships a new agents update/);
   assert.match(result?.verifiedFacts.join(" "), /New open model leaderboard/);
   assert.equal(result?.sources?.[0]?.retrievalOrigin, "known_endpoint");
+});
+
+test("local research fact-check tool uses Wikipedia summary for stable biographies", async (t) => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    if (url.includes("fr.wikipedia.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          query: {
+            search: [
+              {
+                title: "Marie Curie",
+                snippet: "Physicienne et chimiste."
+              }
+            ]
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("fr.wikipedia.org/api/rest_v1/page/summary/Marie_Curie")) {
+      return new Response(
+        JSON.stringify({
+          title: "Marie Curie",
+          description: "Physicienne et chimiste franco-polonaise",
+          extract:
+            "Marie Curie est une physicienne et chimiste franco-polonaise, pionniere des recherches sur la radioactivite, laureate de deux prix Nobel.",
+          timestamp: "2026-05-01T12:00:00Z",
+          content_urls: {
+            desktop: {
+              page: "https://fr.wikipedia.org/wiki/Marie_Curie"
+            }
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const service = new LocalToolExecutionService();
+  const result = await service.tryExecute(buildFactCheckRouting());
+
+  assert.equal(result?.toolType, "research");
+  assert.equal(result?.intent, "fact_check");
+  assert.equal(result?.resultLabel, "Marie Curie");
+  assert.match(result?.verifiedFacts.join(" "), /radioactivite/);
+  assert.equal(result?.sources?.[0]?.retrievalOrigin, "known_endpoint");
+  assert.equal(result?.sources?.[0]?.retrievalEngine, "known_endpoint");
+});
+
+test("local research fact-check tool falls back to web search snippets", async (t) => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    if (url.includes("wikipedia.org")) {
+      return new Response("not found", { status: 404 });
+    }
+    if (url.includes("duckduckgo.com/html")) {
+      return new Response(
+        `<html><body><div class="result"><a class="result__a" href="https://example.org/ada">Ada Lovelace</a><a class="result__snippet">Ada Lovelace was an English mathematician known for early computing work.</a></div></body></html>`,
+        { status: 200, headers: { "Content-Type": "text/html" } }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const service = new LocalToolExecutionService();
+  const result = await service.tryExecute(buildFactCheckRouting("Ada Lovelace"));
+
+  assert.equal(result?.toolType, "research");
+  assert.equal(result?.intent, "fact_check");
+  assert.match(result?.verifiedFacts.join(" "), /early computing/);
+  assert.equal(result?.sources?.[0]?.retrievalOrigin, "generic_search");
+  assert.equal(result?.sources?.[0]?.retrievalEngine, "duckduckgo");
 });
