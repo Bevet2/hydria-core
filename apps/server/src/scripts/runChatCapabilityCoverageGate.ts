@@ -434,7 +434,12 @@ function isCloudRuntime(provider: string, model: string) {
 }
 
 function isDeterministicSetupRuntime(model: string) {
-  return model === "context_ack" || model === "strategic_context_ack" || model === "conversation_fact_ack";
+  return (
+    model === "context_ack" ||
+    model === "strategic_context_ack" ||
+    model === "conversation_fact_ack" ||
+    model === "runtime_strategic_decision_repair"
+  );
 }
 
 function countBy(values: string[]) {

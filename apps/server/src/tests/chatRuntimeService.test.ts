@@ -282,6 +282,40 @@ test("chat runtime repairs on-prem budget decisions with explicit constraint use
   assert.equal(third.conversationQuality.passed, true);
 });
 
+test("chat runtime converts strategic fallback repairs into governed runtime decisions", async () => {
+  const service = new ChatRuntimeService({
+    async answer() {
+      return {
+        ...buildAdapterResult(
+          "Je n'ai pas reussi a generer une reponse fiable pour ce tour. Reformule la question ou donne un peu plus de contexte."
+        ),
+        provider: "fallback" as const,
+        model: "qwen2.5:3b",
+        validationIssues: ["student_chat_generation_failed", "qwen2.5:3b: timeout"]
+      };
+    }
+  });
+
+  const first = await service.sendMessage({
+    message: "On doit choisir une architecture. Au depart je pensais AWS."
+  });
+  const second = await service.sendMessage({
+    sessionId: first.sessionId,
+    message: "Finalement contrainte stricte: on-prem uniquement, budget bloque, deadline demain."
+  });
+  const third = await service.sendMessage({
+    sessionId: second.sessionId,
+    message: "Tu recommandes quoi ?"
+  });
+
+  assert.equal(third.generation.provider, "tool");
+  assert.equal(third.generation.model, "runtime_strategic_decision_repair");
+  assert.equal(third.generation.usedStaticFallback, false);
+  assert.match(third.answer.answer, /Je recommande/i);
+  assert.match(third.answer.answer, /on-prem/i);
+  assert.equal(third.conversationQuality.passed, true);
+});
+
 test("chat runtime answers Hydria Core self-knowledge without waiting for model fallback", async () => {
   let adapterCalled = false;
   const service = new ChatRuntimeService({
@@ -941,4 +975,31 @@ test("chat runtime accepts English context setup acknowledgements as quality-pas
   assert.match(response.answer.answer, /incident response/i);
   assert.equal(response.conversationQuality.passed, true);
   assert.deepEqual(response.conversationQuality.issues, []);
+});
+
+test("chat runtime does not treat generic brevity constraints as strategic context", async () => {
+  const calls: StudentChatAdapterInput[] = [];
+  const service = new ChatRuntimeService({
+    async answer(input) {
+      calls.push(input);
+      return buildAdapterResult("PostgreSQL est une base relationnelle SQL robuste.");
+    }
+  });
+
+  const first = await service.sendMessage({ message: "On parle de bases de donnees." });
+  const second = await service.sendMessage({
+    sessionId: first.sessionId,
+    message: "Pour la suite, reponds en moins de 12 mots."
+  });
+  const third = await service.sendMessage({
+    sessionId: first.sessionId,
+    message: "Explique PostgreSQL en respectant ma contrainte."
+  });
+
+  assert.equal(calls.length, 1);
+  assert.notEqual(third.generation.model, "strategic_context_ack");
+  assert.equal(third.generation.provider, "ollama");
+  assert.match(third.answer.answer, /PostgreSQL/i);
+  assert.equal(third.conversationQuality.passed, true);
+  assert.equal(second.generation.model, "context_ack");
 });

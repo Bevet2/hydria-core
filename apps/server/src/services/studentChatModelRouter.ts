@@ -217,8 +217,11 @@ function containsStrategicContextSetupSignal(input: StudentChatModelRoutingInput
   const strategicCategory = ["architecture_design", "incident_response", "mixed_reasoning", "product_strategy"].includes(
     input.category
   );
+  if (/\b(?:explique|explain|describe|define|definis|d[eé]finis|calcule|redige|r[eé]dige|donne moi|give me)\b/.test(text)) {
+    return false;
+  }
   const hasStrategicSetupSignal =
-    /\b(?:au depart|initialement|je pensais|contrainte|on-prem|aws|budget|deadline|demain|incident|risque|direction|attendre|mid-market|signal|architecture|paiement|deploy)\b/.test(
+    /\b(?:au depart|initialement|je pensais|on-prem|aws|budget|deadline|demain|incident|risque|direction|attendre|mid-market|signal|architecture|paiement|deploy)\b/.test(
       text
     );
   if (!strategicCategory && !hasStrategicSetupSignal) {
@@ -235,6 +238,29 @@ function containsStrategicContextSetupSignal(input: StudentChatModelRoutingInput
     return false;
   }
   return hasStrategicSetupSignal;
+}
+
+function containsBoundedStrategicDecisionSignal(input: StudentChatModelRoutingInput, text: string) {
+  const directDecisionAsk =
+    input.activeConstraintCapsule.decisionNeeded ||
+    /\b(?:tu recommandes|recommandes quoi|decision maintenant|d[eé]cision maintenant|what should|should we|choose|choisis|tranche|recommend)\b/.test(
+      text
+    );
+  if (!directDecisionAsk) {
+    return false;
+  }
+  const context = normalizeText([
+    text,
+    ...input.activeConstraintCapsule.topConstraints,
+    ...input.activeConstraintCapsule.blockingConstraints,
+    ...input.activeConstraintCapsule.changedConstraints
+  ].join(" "));
+  const boundedOnPrem =
+    /\bon-prem\b/.test(context) && /\b(?:budget|deadline|demain|tomorrow|bloque|blocked|capped)\b/.test(context);
+  const boundedIncident =
+    /\b(?:incident|500|deploy|deploiement|deploi)\b/.test(context) &&
+    /\b(?:paiement|payment|checkout|risque|risk)\b/.test(context);
+  return boundedOnPrem || boundedIncident;
 }
 
 function buildFallbacks(primary: string, role: StudentChatSpecialistRole) {
@@ -598,6 +624,31 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
       fallbackModelNames: buildSpecialistOnlyFallbacks(selectedModel),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
+    };
+  }
+
+  if (containsBoundedStrategicDecisionSignal(input, text)) {
+    const reason =
+      "Bounded strategic decision with explicit active constraints; use the light local reasoner with decision guidance instead of the slow 14B CPU path.";
+    const budget = buildRuntimeBudget("deep_reasoning", reason);
+    const timeoutMs = Math.min(budget.timeoutMs, 45000);
+    return {
+      capabilityId: "qwen-3b-standard-light",
+      displayName: "Qwen 3B Strategic Light",
+      modelName: QWEN_3B,
+      specialistRole: "deep_reasoner",
+      routingReason: reason,
+      pipeline: [...basePipeline, `strategic_light_reasoner:${QWEN_3B}`],
+      fallbackModelNames: buildSpecialistOnlyFallbacks(QWEN_3B),
+      timeoutMs,
+      runtimeBudget: {
+        ...budget,
+        timeoutMs,
+        maxLatencyMs: timeoutMs,
+        maxOutputTokens: Math.min(budget.maxOutputTokens, 140),
+        fallbackDepth: 0,
+        concurrencyKey: "fast_local_chat"
+      }
     };
   }
 

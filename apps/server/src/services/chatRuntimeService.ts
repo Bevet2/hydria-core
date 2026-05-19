@@ -1164,8 +1164,12 @@ function isStrategicContextSetupTurn(args: {
   category: QuestionCategory;
   userMessage: string;
 }) {
+  const normalized = normalizeText(args.userMessage);
+  if (/\b(?:explique|explain|describe|define|definis|calcule|redige|donne moi|give me)\b/.test(normalized)) {
+    return false;
+  }
   const hasStrategicSetupSignal =
-    /\b(?:au depart|initialement|je pensais|contrainte|on[- ]prem|aws|budget|deadline|demain|incident|risque|direction|attendre|mid-market|signal|architecture|paiement|deploy)\b/i.test(
+    /\b(?:au depart|initialement|je pensais|on[- ]prem|aws|budget|deadline|demain|incident|risque|direction|attendre|mid-market|signal|architecture|paiement|deploy)\b/i.test(
       args.userMessage
     );
   if (!isStrategicRuntimeCategory(args.category) && !hasStrategicSetupSignal) {
@@ -1372,7 +1376,7 @@ function buildStrategicDecisionQualityRepair(args: {
   if (onPremBudgetDecision) {
     const answer = isFrench
       ? finalDecisionRequest
-        ? "Je tranche pour l'option on-prem minimale et reversible. Parce que la contrainte on-prem prime sur l'ancienne hypothese initiale, et que le budget bloque avec la deadline de demain limite le choix, il faut reduire le scope. On reconsidere seulement si la contrainte on-prem est levee ou si la deadline change."
+        ? "Je recommande de trancher pour l'option on-prem minimale et reversible. Parce que la contrainte on-prem prime sur l'ancienne hypothese initiale, et que le budget bloque avec la deadline de demain limite le choix, il faut reduire le scope. On reconsidere seulement si la contrainte on-prem est levee ou si la deadline change."
         : "Je recommande l'option on-prem minimale et reversible, parce que la contrainte on-prem prime sur l'ancienne hypothese initiale et que le budget bloque avec la deadline de demain limite le choix. On accepte de perdre de la vitesse managed pour rester compatible avec l'environnement actif; on reconsidere seulement si la contrainte on-prem est levee ou si la deadline change."
       : finalDecisionRequest
         ? "I would choose the smallest reversible on-prem option. Because the on-prem constraint now wins over the old initial assumption and the capped budget with tomorrow's deadline limits the choice, reduce scope. Reconsider only if the on-prem constraint is lifted or the deadline changes."
@@ -2723,6 +2727,30 @@ export class ChatRuntimeService {
     });
     if (strategicQualityRepair) {
       finalAnswer = strategicQualityRepair;
+      if (draft.generation.provider === "fallback") {
+        draft = {
+          ...draft,
+          generation: {
+            ...draft.generation,
+            provider: "tool",
+            model: "runtime_strategic_decision_repair",
+            specialist: {
+              ...draft.generation.specialist,
+              displayName: "Runtime strategic decision repair",
+              routingReason:
+                "The local strategic model timed out; runtime produced a bounded decision from active conversation constraints.",
+              pipeline: [
+                ...draft.generation.specialist.pipeline,
+                "runtime_strategic_decision_repair:active_constraints"
+              ]
+            },
+            usedRetry: true,
+            validationIssues: draft.generation.validationIssues.filter(
+              (issue) => !/student_chat_generation_failed|operation was aborted|timeout/i.test(issue)
+            )
+          }
+        };
+      }
       conversationQuality = this.analyzeQuality({
         runtimeMode,
         conversationState,

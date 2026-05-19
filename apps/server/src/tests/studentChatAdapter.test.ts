@@ -683,7 +683,7 @@ test("student chat adapter uses fast budget for verified calculator tool answers
   assert.equal(numPredict <= 96, true);
 });
 
-test("student chat adapter routes strategic decisions to the CPU-safe local deep reasoner", async () => {
+test("student chat adapter routes bounded strategic decisions to the light local reasoner", async () => {
   let selectedModel = "";
   let usedFormat = false;
   let prompt = "";
@@ -733,12 +733,12 @@ test("student chat adapter routes strategic decisions to the CPU-safe local deep
     knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata
   });
 
-  assert.equal(selectedModel, "qwen2.5:14b");
+  assert.equal(selectedModel, "qwen2.5:3b");
   assert.equal(result.specialist.role, "deep_reasoner");
-  assert.equal(result.specialist.pipeline.some((step) => step.includes("qwen2.5:14b")), true);
+  assert.equal(result.specialist.pipeline.some((step) => step.includes("strategic_light_reasoner:qwen2.5:3b")), true);
   assert.equal(result.runtimeBudget?.profile, "deep_reasoning");
   assert.equal(result.runtimeBudget?.fallbackDepth, 0);
-  assert.equal(result.runtimeBudget?.maxOutputTokens, 180);
+  assert.equal(result.runtimeBudget?.maxOutputTokens, 140);
   assert.match(result.answer.answer, /on-prem/i);
   assert.equal(usedFormat, false);
   assert.match(system, /exact term on-prem/i);
