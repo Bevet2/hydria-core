@@ -213,24 +213,26 @@ test("student chat adapter reserves qwen 14B for complex standard reasoning", as
 test("student chat adapter routes code questions to the local code specialist", async () => {
   let selectedModel = "";
   let usedFormat = false;
+  let usedSystem = "";
   const input = {
     ...buildInput(),
     category: "debug_diagnostic" as const,
-    routingQuestion: "Debug this TypeScript API error",
-    userMessage: "Debug this TypeScript API error",
-    question: "Debug this TypeScript API error"
+    routingQuestion: "Debug a Docker build error where npm install fails.",
+    userMessage: "Debug a Docker build error where npm install fails.",
+    question: "Debug a Docker build error where npm install fails."
   };
   const adapter = new StudentChatAdapter({
     getConfiguredModelName() {
       return "phi3:mini";
     },
-    async testPrompt(_prompt, _system, options) {
+    async testPrompt(_prompt, system, options) {
       selectedModel = options?.modelName ?? "";
       usedFormat = Boolean(options?.format);
+      usedSystem = system ?? "";
       return {
         provider: "ollama",
         model: selectedModel,
-        response: "Start by reproducing the TypeScript API error and checking the failing stack trace.",
+        response: "Start with the Docker npm install failure, then inspect the lockfile and build cache.",
         durationMs: 12
       };
     }
@@ -243,7 +245,9 @@ test("student chat adapter routes code questions to the local code specialist", 
   assert.equal(result.specialist.pipeline.some((step) => step.includes("qwen2.5-coder:7b")), true);
   assert.equal(result.runtimeBudget?.fallbackDepth, 0);
   assert.equal(usedFormat, false);
-  assert.match(result.answer.answer, /TypeScript API error/);
+  assert.match(usedSystem, /failing command/i);
+  assert.match(buildStudentChatPrompt(input), /npm install/i);
+  assert.match(result.answer.answer, /npm install/);
 });
 
 test("student chat adapter routes concise direct answers to the fast 3B specialist", async () => {

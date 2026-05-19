@@ -496,6 +496,23 @@ function shouldUseExternalGroundingForChat(args: {
   return false;
 }
 
+function shouldSkipKnowledgeRetrievalForStrategicContext(args: {
+  question: string;
+  category: QuestionCategory;
+}) {
+  if (!CONVERSATION_RUNTIME_CATEGORIES.has(args.category)) {
+    return false;
+  }
+
+  const normalized = normalizeText(args.question);
+  const asksForKnowledge =
+    /\b(?:source|sources|cite|citation|according to|paper|research|docs|documentation|official|verify|current|latest|recent|news|what is|what are|define|explain|source fiable|sources fiables|cite|citation|papier|recherche|documentation|officiel|verifie|verifier|actuel|recente|recent|nouveautes|actualites|qu est ce que|c est quoi|explique|definis)\b/.test(
+      normalized
+    );
+
+  return !asksForKnowledge;
+}
+
 function extractCorrectionSubject(message: string) {
   const normalized = message.replace(/\s+/g, " ").trim();
   const directMatch =
@@ -2493,6 +2510,16 @@ export class ChatRuntimeService {
         issues: args.tooling.used
           ? ["verified_tool_context_has_priority"]
           : ["tool_route_has_priority"]
+      };
+    }
+
+    if (shouldSkipKnowledgeRetrievalForStrategicContext(args)) {
+      return {
+        ...defaultChatKnowledgeRetrievalMetadata,
+        route: "skipped_tool_route",
+        query: args.question,
+        category: args.category,
+        issues: ["strategic_context_prefers_runtime_state_over_vault"]
       };
     }
 

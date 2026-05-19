@@ -234,6 +234,35 @@ test("conversation quality gate rejects unresolved strategic conflict", () => {
   assert.equal(result.recommendedAction, "revise");
 });
 
+test("conversation quality gate accepts natural incident arbitration wording", () => {
+  const state = stateFromMessages([
+    "Incident prod: erreurs 500 apres deploy, impact paiement.",
+    "La direction veut attendre mais le risque client augmente."
+  ]);
+  const currentUserMessage = "Decision maintenant ?";
+  const capsule = buildActiveConstraintCapsule(state, currentUserMessage);
+  const policy = decideMultiTurnAnswerPolicy({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    newUserMessage: currentUserMessage,
+    category: "incident_response",
+    toolRouting: null
+  });
+  const result = analyzeConversationQuality({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    policy,
+    newUserMessage: currentUserMessage,
+    answer:
+      "Je recommande un rollback pour le paiement, malgre l'attente souhaitee par la direction. Attendre pourrait augmenter le risque client; on reconsidere apres verification des erreurs 500.",
+    toolRouting: null
+  });
+
+  assert.equal(policy.strategicTradeoffPolicy.hasConflict, true);
+  assert.equal(result.issues.includes("strategic_conflict_not_resolved"), false);
+  assert.equal(result.passed, true);
+});
+
 test("conversation quality gate rejects recommendation that contradicts active environment constraint", () => {
   const state = stateFromMessages([
     "Bonjour, on doit choisir entre AWS et on-prem.",

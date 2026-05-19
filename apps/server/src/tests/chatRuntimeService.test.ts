@@ -211,6 +211,38 @@ test("chat runtime recalls user-provided project names", async () => {
   assert.equal(second.conversationQuality.passed, true);
 });
 
+test("chat runtime skips vault retrieval for strategic context unless sources are requested", async () => {
+  let retrievalCalls = 0;
+  const service = new ChatRuntimeService(
+    {
+      async answer(input) {
+        assert.equal(input.knowledgeRetrieval.route, "skipped_tool_route");
+        return buildAdapterResult(
+          "I recommend narrowing the beta because no additional budget dominates broad-launch ambition. Defer platform complexity, keep the mid-market slice reversible, and expand only if the signal proves value and recurring budget is funded."
+        );
+      }
+    },
+    undefined,
+    undefined,
+    null,
+    null,
+    {
+      async retrieve() {
+        retrievalCalls += 1;
+        throw new Error("retrieval should not run for strategic context");
+      }
+    }
+  );
+
+  const response = await service.sendMessage({
+    message: "We have weak signal from mid-market only and no budget for a broad launch."
+  });
+
+  assert.equal(retrievalCalls, 0);
+  assert.equal(response.knowledgeRetrieval.route, "skipped_tool_route");
+  assert.equal(response.conversationQuality.passed, true);
+});
+
 test("chat runtime resolves possessive biography follow-ups to the prior subject", async () => {
   const calls: StudentChatAdapterInput[] = [];
   const answers = [

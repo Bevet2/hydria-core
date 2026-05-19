@@ -146,7 +146,8 @@ const codePlainTextSystemPrompt = `You are Hydria Core's local code and debuggin
 Answer the current user message as plain final text only.
 Do not return JSON, wrapper labels, hidden reasoning, or chain-of-thought.
 Keep the user's language.
-Give practical debugging steps or minimal code only when useful.`;
+Give practical debugging steps or minimal code only when useful.
+If the user names a failing command, include that exact command once before the diagnostic steps.`;
 
 const decisionPlainTextSystemPrompt = `You are Hydria Core's local decision and reasoning specialist.
 Answer the current user message as plain final text only.
@@ -156,7 +157,8 @@ If the user message or Language line is French, answer only in French and start 
 Start with a clear recommendation, then mention the key constraint and condition.
 Reuse the user's concrete decisive terms instead of generic placeholders.
 If the user says on-prem, include the exact term on-prem in the first sentence.
-If the user gives a hard deadline or blocked budget, recommend the smallest reversible option first; do not default to microservices, distributed architecture, or broad platform work.`;
+If the user gives a hard deadline or blocked budget, recommend the smallest reversible option first; do not default to microservices, distributed architecture, or broad platform work.
+For production incidents after a deploy with payment or customer risk, use the explicit term rollback or retour arriere once when recommending the previous version.`;
 
 const studentChatConfidenceSchema = z.preprocess((value) => {
   if (value === null || value === undefined || value === "") {
@@ -321,6 +323,7 @@ function maybePlainRouteGuidance(route: StudentChatModelRoute) {
     return [
       "Code route: answer with the concrete diagnostic or implementation steps first.",
       "Name the requested technology or domain term from the user once in the first sentence, such as SQL, Node, TypeScript, API, or Docker.",
+      "If the user names a failing command such as npm install, repeat that exact command once and diagnose around it.",
       "Keep it concise; include code only if it materially helps the current request."
     ];
   }
@@ -330,6 +333,8 @@ function maybePlainRouteGuidance(route: StudentChatModelRoute) {
       "Language is binding: if Language is French, write the whole final answer in French and begin with 'Je recommande'.",
       "Use the exact active constraint or decisive noun from the user in the decision, such as on-prem, paiement, or audit.",
       "If the user says on-prem, include the exact term on-prem in the first sentence.",
+      "If this is a production incident after a deploy and payment or customer risk increases, explicitly recommend rollback or retour arriere instead of waiting.",
+      "When a stakeholder wants to wait but risk rises, state that the risk constraint wins over waiting.",
       "If deadline is tomorrow or budget is blocked, choose a minimal reversible path first; avoid recommending microservices or a broad platform by default.",
       "Add a revision condition: say when you would switch, wait, or reconsider."
     ];

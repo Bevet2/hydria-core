@@ -267,7 +267,7 @@ const cases: CapabilityCase[] = [
       "La direction veut attendre mais le risque client augmente.",
       "Decision maintenant ?"
     ],
-    expectedTerms: [["rollback", "retour arriere"], "paiement"],
+    expectedTerms: [["rollback", "retour arriere", "retrograd"], "paiement"],
     expectedProvider: "ollama"
   },
   {

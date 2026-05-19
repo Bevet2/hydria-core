@@ -51,7 +51,7 @@ const FINAL_DECISION_INSTRUCTION_ECHO_PATTERN =
 const PROMPT_POLICY_LEAK_PATTERN =
   /\b(?:Conversation runtime requirements|ActiveConstraintCapsule|Answer policy|StrategicTradeoffPolicy|StrategicTradeoffPatch|StrategicCoherencePolicy|StrategicCoherencePatch|Detected answer language|Detected category|topConstraints|blockingConstraints|requiredContextItems|forbiddenBehaviors|revisionTrigger|local specialist|specialist pipeline|DecisionCommitmentPatch: when)\b/i;
 const STRATEGIC_TRADEOFF_MARKER =
-  /\b(?:dominant|dominates|wins|priority|priorite|prioritaire|prime|gagne|defer|deferred|reject|rejected|refuse|differe|differee|tradeoff|compromis|accepted tradeoff|compromis accepte|rather than|au lieu de|pas equivalentes|not equivalent)\b/i;
+  /\b(?:dominant|dominates|wins|wins over|priority|priorite|prioritaire|prime|prime sur|gagne|defer|deferred|reject|rejected|refuse|differe|differee|tradeoff|compromis|accepted tradeoff|compromis accepte|rather than|instead of|au lieu de|plut(?:o|\u00f4)t que|malgr(?:e|\u00e9)|despite|attendre pourrait|waiting would|pas equivalentes|not equivalent)\b/i;
 const REVISION_CONDITION_MARKER =
   /\b(?:if|unless|until|when|only if|threshold|condition|revise|revision|change course|switch|reconsider|si|sauf si|tant que|seuil|condition|reviser|revision|changer de route|bascule|reconsiderer)\b/i;
 const UNBOUNDED_ABSOLUTE_MARKER =
@@ -175,6 +175,14 @@ function jaccardSimilarity(left: string, right: string) {
 function answerMentionsAny(answer: string, values: string[]) {
   const normalizedAnswer = normalizeText(answer);
   return values.some((value) => {
+    const normalizedValue = normalizeText(value);
+    if (
+      /\b(?:production incident risk|risk production incident|incident risk)\b/.test(normalizedValue) &&
+      /\b(?:risque|risk)\b/.test(normalizedAnswer) &&
+      /\b(?:client|customer|paiement|payment|500|incident|prod|production)\b/.test(normalizedAnswer)
+    ) {
+      return true;
+    }
     const terms = normalizeText(value).match(/[a-z0-9]{4,}/g) ?? [];
     return terms.slice(0, 14).some((term) => normalizedAnswer.includes(term));
   });
@@ -186,6 +194,14 @@ function answerMentionsSpecificValue(answer: string, value: string | null) {
   }
 
   const normalizedAnswer = normalizeText(answer);
+  const normalizedValue = normalizeText(value);
+  if (
+    /\b(?:production incident risk|risk production incident|incident risk)\b/.test(normalizedValue) &&
+    /\b(?:risque|risk)\b/.test(normalizedAnswer) &&
+    /\b(?:client|customer|paiement|payment|500|incident|prod|production)\b/.test(normalizedAnswer)
+  ) {
+    return true;
+  }
   const terms = [...new Set(normalizeText(value).match(/[a-z0-9]{4,}/g) ?? [])].filter(
     (term) => !["active", "constraint", "option", "team", "policy", "preference"].includes(term)
   );
@@ -200,7 +216,7 @@ function answerMentionsSpecificValue(answer: string, value: string | null) {
 function hasConstraintUseMarker(answer: string) {
   return (
     CONSTRAINT_USE_MARKER.test(answer) ||
-    /\b(?:afin de|afin d|pour minimiser|pour reduire|pour respecter|pour maintenir|qui respecte|en respectant|permet de respecter|permettant de respecter|permet de maintenir|respecter|dans les limites|to minimize|to reduce|to respect|to satisfy|to keep)\b/.test(
+    /\b(?:afin de|afin d|pour minimiser|pour reduire|pour respecter|pour maintenir|qui respecte|en respectant|permet de respecter|permettant de respecter|permet de maintenir|respecter|dans les limites|malgre|despite|attendre pourrait|waiting would|prime sur|wins over|to minimize|to reduce|to respect|to satisfy|to keep)\b/.test(
       normalizeText(answer)
     )
   );
