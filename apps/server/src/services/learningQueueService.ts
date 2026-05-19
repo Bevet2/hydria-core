@@ -104,11 +104,8 @@ function candidateStatus(seed: CandidateSeed): LearningQueueCandidate["status"] 
   if (seed.recommendedAction === "ignore") {
     return "rejected";
   }
-  if (seed.doNotTrainReason || seed.riskLevel === "high") {
+  if (seed.doNotTrainReason || seed.riskLevel !== "low" || seed.trainingTarget === "student_sft") {
     return "guarded";
-  }
-  if (seed.trainingTarget && seed.priority === "high") {
-    return "ready";
   }
   return "raw";
 }
@@ -486,8 +483,8 @@ export class LearningQueueService {
       ),
       check(
         "human-review-required",
-        candidate.requiresHumanReview || candidate.riskLevel === "low",
-        "Medium/high risk candidates require human review before training use.",
+        !candidate.requiresHumanReview,
+        "Medium/high risk candidates require human or teacher review before training use.",
         candidate.trainingTarget === "student_sft"
       ),
       check(
