@@ -19,6 +19,19 @@ test("detectTemporalQuery resolves this week into an absolute window", () => {
   assert.equal(profile.dateRangeEnd, "2026-04-19");
 });
 
+test("detectTemporalQuery resolves French AI novelty wording as this-week updates", () => {
+  const profile = detectTemporalQuery(
+    "Fais-moi un recap de toutes les nouveautes IA sorties cette semaine.",
+    new Date("2026-05-19T12:00:00.000Z")
+  );
+
+  assert.equal(profile.isTemporal, true);
+  assert.equal(profile.queryType, "recent_updates");
+  assert.equal(profile.focus, "this_week");
+  assert.equal(profile.dateRangeStart, "2026-05-18");
+  assert.equal(profile.dateRangeEnd, "2026-05-24");
+});
+
 test("trust helpers distinguish temporal official news from generic fact-check paths", () => {
   const recentScore = getSearchDomainTrustScore({
     domain: "openai.com",

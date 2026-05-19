@@ -95,6 +95,20 @@ test("tool router routes latest release freshness to direct web tool", () => {
   assert.match(String(decision.extractedArgs.subject), /node/i);
 });
 
+test("tool router routes French weekly AI novelty recaps to research", () => {
+  const decision = service.route({
+    question: "Fais-moi un recap de toutes les nouveautes IA sorties cette semaine.",
+    category: "other"
+  });
+
+  assert.equal(decision.toolRequired, true);
+  assert.equal(decision.toolType, "research");
+  assert.equal(decision.intent, "recent_updates");
+  assert.equal(decision.fallbackAllowed, false);
+  assert.equal(decision.extractedArgs.language, "fr");
+  assert.equal(decision.extractedArgs.temporalFocus, "this_week");
+});
+
 test("tool router marks GitHub repo lookup as required repo tool use", () => {
   const decision = service.route({
     question: "Retrouve ce repo GitHub hydria-core",

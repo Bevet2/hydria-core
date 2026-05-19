@@ -38,6 +38,13 @@ function toIsoDay(value: Date) {
   return value.toISOString().slice(0, 10);
 }
 
+function normalizeTemporalText(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
 export function formatCalendarDate(value: Date) {
   return new Intl.DateTimeFormat("en-US", {
     month: "long",
@@ -87,7 +94,7 @@ export function describeTemporalWindow(profile: ResearchTemporalProfile) {
 }
 
 export function detectTemporalQuery(value: string, now = new Date()): ResearchTemporalProfile {
-  const normalized = value.toLowerCase();
+  const normalized = normalizeTemporalText(value);
   const today = startOfUtcDay(now);
   const absoluteDateHint = formatCalendarDate(today);
   const thisWeekStart = startOfUtcWeek(today);
@@ -97,6 +104,8 @@ export function detectTemporalQuery(value: string, now = new Date()): ResearchTe
   const hasCurrentStateCue = matchesAny(normalized, [
     /\bcurrent\b/i,
     /\bcurrently\b/i,
+    /\bactuel(?:le)?s?\b/i,
+    /\bmaintenant\b/i,
     /\bas of\b/i,
     /\bright now\b/i,
     /\bwho is\b/i,
@@ -111,7 +120,11 @@ export function detectTemporalQuery(value: string, now = new Date()): ResearchTe
     /\bversion\b/i,
     /\bchangelog\b/i,
     /\bannounce(?:d|ment|ments)?\b/i,
+    /\bannonce(?:e|es|s|ments?)?\b/i,
     /\blaunch(?:ed)?\b/i,
+    /\blanc(?:e|ee|ees|es|ement|ements)\b/i,
+    /\bsorti(?:e|es|s)?\b/i,
+    /\bnouveautes?\b/i,
     /\broll(?:ed)? out\b/i,
     /\bga\b/i,
     /\bgeneral availability\b/i,
@@ -123,12 +136,18 @@ export function detectTemporalQuery(value: string, now = new Date()): ResearchTe
       /\brecent\b/i,
       /\brecently\b/i,
       /\bthis week\b/i,
+      /\bcette semaine\b/i,
       /\bthis month\b/i,
+      /\bce mois\b/i,
       /\blast 7 days\b/i,
       /\blast 30 days\b/i,
       /\bpast week\b/i,
       /\bpast month\b/i,
       /\bnews\b/i,
+      /\bactu(?:alite|alites|s)?\b/i,
+      /\bnouveautes?\b/i,
+      /\bsorties?\b/i,
+      /\brecap\b/i,
       /\bheadline(?:s)?\b/i,
       /\bupdates?\b/i,
       /\bwhat happened\b/i,
@@ -146,7 +165,7 @@ export function detectTemporalQuery(value: string, now = new Date()): ResearchTe
     ...profile
   });
 
-  if (/\bthis week\b|\bpast week\b|\blast 7 days\b|\bseven days\b/i.test(normalized)) {
+  if (/\bthis week\b|\bcette semaine\b|\bpast week\b|\blast 7 days\b|\bseven days\b/i.test(normalized)) {
     const windowLabel = `${formatCalendarDate(thisWeekStart)} to ${formatCalendarDate(thisWeekEnd)}`;
     return buildTemporalProfile({
       focus: "this_week",
@@ -167,7 +186,7 @@ export function detectTemporalQuery(value: string, now = new Date()): ResearchTe
     });
   }
 
-  if (/\bthis month\b|\bpast month\b|\blast 30 days\b/i.test(normalized)) {
+  if (/\bthis month\b|\bce mois\b|\bpast month\b|\blast 30 days\b/i.test(normalized)) {
     const windowLabel = `${formatCalendarDate(thisMonthStart)} to ${absoluteDateHint}`;
     return buildTemporalProfile({
       focus: "this_month",
@@ -189,7 +208,7 @@ export function detectTemporalQuery(value: string, now = new Date()): ResearchTe
     });
   }
 
-  if (/\btoday\b|\bas of today\b|\bright now\b/i.test(normalized)) {
+  if (/\btoday\b|\baujourd hui\b|\baujourdhui\b|\bas of today\b|\bright now\b/i.test(normalized)) {
     return buildTemporalProfile({
       focus: "today",
       queryType: hasReleaseCue ? "release_freshness" : "current_status",
@@ -254,8 +273,8 @@ export function detectTemporalQuery(value: string, now = new Date()): ResearchTe
 
   if (
     hasRecentUpdatesCue ||
-    /\brecent\b|\brecently\b/i.test(normalized) ||
-    /\bannounced\b/i.test(normalized)
+    /\brecent\b|\brecently\b|\brecent(?:e|es|s)?\b/i.test(normalized) ||
+    /\bannounced\b|\bannonce(?:e|es|s)?\b/i.test(normalized)
   ) {
     const recentStart = shiftUtcDays(today, -29);
     const windowLabel = `${formatCalendarDate(recentStart)} to ${absoluteDateHint}`;
