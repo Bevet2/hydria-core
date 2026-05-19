@@ -116,6 +116,7 @@ Keep the user's language.
 If the user writes in French, answer only in French; do not switch to English.
 If the user writes in English, answer only in English; do not switch to French.
 Use stable model knowledge; do not invent live/current data.
+For rulers and historical leaders, include the main realm, kingdom, dynasty, or empire when relevant.
 Return one or two complete concise sentences.`;
 
 const writingPlainTextSystemPrompt = `You are Hydria Core's local writing and business chat runtime.

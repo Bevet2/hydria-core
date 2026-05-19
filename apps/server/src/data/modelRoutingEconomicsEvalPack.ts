@@ -52,7 +52,7 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
     id: "chat_stable_biography_primary_brain",
     surface: "chat_route",
     priority: "critical",
-    description: "Stable historical/biography questions should avoid the 3B factual route and use the local Mistral factual writer.",
+    description: "Stable historical/biography questions should use the CPU-safe 3B factual route and reserve heavier writers for fallback only.",
     tags: ["chat", "stable_knowledge", "cost_control", "stable_factual"],
     chat: {
       routingQuestion: "qui est charlemagne ?",
@@ -62,7 +62,7 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
       requiresExternalGrounding: false
     },
     expected: {
-      capabilityId: "mistral-mixtral-business",
+      capabilityId: "qwen-3b-standard-light",
       role: "writing_business",
       maxCostTier: "medium",
       maxEstimatedCostUnits: 1,

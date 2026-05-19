@@ -39,7 +39,7 @@ function buildInput(): StudentChatAdapterInput {
   };
 }
 
-test("student chat adapter routes stable biographies through the Mistral factual writing route", async () => {
+test("student chat adapter routes stable biographies through the CPU-safe factual route", async () => {
   let timeoutMs = 0;
   let numPredict = 0;
   let selectedModel = "";
@@ -67,12 +67,12 @@ test("student chat adapter routes stable biographies through the Mistral factual
   const result = await adapter.answer(buildInput());
 
   assert.equal(result.provider, "ollama");
-  assert.equal(result.model, "mistral:7b");
+  assert.equal(result.model, "qwen2.5:3b");
   assert.equal(result.specialist.role, "writing_business");
   assert.equal(result.answer.modelRole, "student");
   assert.equal(result.answer.confidence, 82);
   assert.equal(timeoutMs > 1000, true);
-  assert.equal(selectedModel, "mistral:7b");
+  assert.equal(selectedModel, "qwen2.5:3b");
   assert.equal(result.runtimeBudget?.profile, "stable_fact_chat");
   assert.equal(result.runtimeBudget?.maxOutputTokens, 104);
   assert.equal(numPredict, 104);
@@ -96,7 +96,7 @@ test("student chat prompt compacts stable factual biographies", () => {
   assert.match(prompt, /Do not write a long biography/i);
 });
 
-test("student chat adapter retries stable factual chat on the light local model before static fallback", async () => {
+test("student chat adapter retries stable factual chat on Mistral only after the light factual route fails", async () => {
   const selectedModels: string[] = [];
   const adapter = new StudentChatAdapter({
     getConfiguredModelName() {
@@ -105,13 +105,13 @@ test("student chat adapter retries stable factual chat on the light local model 
     async testPrompt(_prompt, _system, options) {
       const selectedModel = options?.modelName ?? "";
       selectedModels.push(selectedModel);
-      if (selectedModel === "mistral:7b") {
-        throw new Error("mistral timeout");
+      if (selectedModel === "qwen2.5:3b") {
+        throw new Error("qwen timeout");
       }
       return {
         provider: "ollama",
         model: selectedModel,
-        response: "Charlemagne est un roi des Francs et un empereur carolingien.",
+        response: "Charlemagne est un roi des Francs et un empereur carolingien lie a l'empire carolingien.",
         durationMs: 12
       };
     }
@@ -119,12 +119,12 @@ test("student chat adapter retries stable factual chat on the light local model 
 
   const result = await adapter.answer(buildInput());
 
-  assert.deepEqual(selectedModels, ["mistral:7b", "qwen2.5:3b"]);
+  assert.deepEqual(selectedModels, ["qwen2.5:3b", "mistral:7b"]);
   assert.equal(result.provider, "ollama");
-  assert.equal(result.model, "qwen2.5:3b");
+  assert.equal(result.model, "mistral:7b");
   assert.equal(result.usedRetry, true);
   assert.equal(result.runtimeBudget?.profile, "stable_fact_chat");
-  assert.equal(result.validationIssues.some((issue) => issue.includes("mistral timeout")), true);
+  assert.equal(result.validationIssues.some((issue) => issue.includes("qwen timeout")), true);
 });
 
 test("student chat adapter routes simple stable definitions through standard-light chat", async () => {
@@ -472,12 +472,12 @@ test("student chat adapter routes French recipe requests through practical writi
 
   const result = await adapter.answer(input);
 
-  assert.deepEqual(selectedModels, ["qwen2.5:14b"]);
+  assert.deepEqual(selectedModels, ["qwen2.5:3b"]);
   assert.equal(result.specialist.role, "writing_business");
   assert.match(result.specialist.routingReason, /Practical recipe/i);
   assert.equal(result.runtimeBudget?.profile, "writing_chat");
   assert.equal(result.runtimeBudget?.fallbackDepth, 0);
-  assert.equal(timeoutMs >= 150000, true);
+  assert.equal(timeoutMs < 150000, true);
   assert.equal(numPredict >= 180, true);
   assert.equal(numPredict <= 220, true);
   assert.match(system, /coffee-soaked ladyfingers/i);
@@ -662,7 +662,7 @@ test("student chat adapter does not call cloud fallback when local generation fa
   const result = await adapter.answer(buildInput());
 
   assert.equal(result.provider, "fallback");
-  assert.equal(result.model, "mistral:7b");
+  assert.equal(result.model, "qwen2.5:3b");
   assert.equal(result.specialist.role, "writing_business");
   assert.equal(result.validationIssues.includes("student_chat_generation_failed"), true);
 });

@@ -274,6 +274,24 @@ function hasGenericFailure(answer: string) {
   return /\b(?:je n'ai pas reussi|could not generate|reformule|no reliable source|cannot verify|tool-dependent)\b/i.test(answer);
 }
 
+function isLocalRuntimeProvider(turn: { provider: string; model: string }) {
+  if (turn.provider === "ollama") {
+    return true;
+  }
+  if (turn.provider !== "tool") {
+    return false;
+  }
+  return [
+    "conversation_fact_ack",
+    "conversation_memory",
+    "research_recent_updates",
+    "calculator_verified",
+    "time_verified",
+    "weather_verified",
+    "finance_verified"
+  ].includes(turn.model);
+}
+
 async function runCase(testCase: ChatGateCase, args: Args): Promise<CaseResult> {
   let sessionId: string | undefined;
   const turns: CaseResult["turns"] = [];
@@ -317,7 +335,7 @@ async function runCase(testCase: ChatGateCase, args: Args): Promise<CaseResult> 
     issues.push("forbidden_pattern");
   }
   for (const turn of turns) {
-    if (turn.provider !== "ollama") {
+    if (!isLocalRuntimeProvider(turn)) {
       issues.push(`non_local_provider:${turn.provider}`);
     }
     if (!turn.qualityPassed) {
