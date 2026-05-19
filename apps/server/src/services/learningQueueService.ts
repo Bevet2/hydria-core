@@ -96,6 +96,16 @@ function buildFile(candidates: LearningQueueCandidate[]) {
   });
 }
 
+function normalizedStatus(candidate: LearningQueueCandidate): LearningQueueCandidate["status"] {
+  if (candidate.status === "rejected") {
+    return "rejected";
+  }
+  if (candidate.doNotTrainReason || candidate.riskLevel !== "low" || candidate.trainingTarget === "student_sft") {
+    return "guarded";
+  }
+  return candidate.status;
+}
+
 function includesAny(values: string[], patterns: RegExp[]) {
   return values.some((value) => patterns.some((pattern) => pattern.test(value)));
 }
@@ -224,7 +234,13 @@ export class LearningQueueService {
   async loadQueue() {
     try {
       const raw = await readFile(this.queueFile, "utf8");
-      return learningQueueFileSchema.parse(JSON.parse(raw));
+      const parsed = learningQueueFileSchema.parse(JSON.parse(raw));
+      return buildFile(
+        parsed.candidates.map((candidate) => ({
+          ...candidate,
+          status: normalizedStatus(candidate)
+        }))
+      );
     } catch {
       return emptyQueue();
     }
@@ -241,6 +257,7 @@ export class LearningQueueService {
 
   async validateAndPersist() {
     const queue = await this.loadQueue();
+    await this.writeQueueFile(queue);
     const report = this.buildGateReport(queue);
     await mkdir(dirname(this.gateReportFile), { recursive: true });
     await writeFile(this.gateReportFile, `${JSON.stringify(report, null, 2)}\n`, "utf8");
