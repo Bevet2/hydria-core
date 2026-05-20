@@ -316,6 +316,22 @@ function splitAnswerSentences(answer: string) {
     .filter(Boolean);
 }
 
+function protectFactualSentenceAbbreviations(value: string) {
+  return value.replace(/\b(?:av|apr)\.\s*J\.-C\./gi, (match) => match.replace(/\./g, "<dot>"));
+}
+
+function restoreFactualSentenceAbbreviations(value: string) {
+  return value.replace(/<dot>/g, ".");
+}
+
+function splitFactualSentences(value: string) {
+  const protectedValue = protectFactualSentenceAbbreviations(value);
+  const sentences = protectedValue.match(/[^.!?]+[.!?]+/g)?.map((sentence) =>
+    restoreFactualSentenceAbbreviations(sentence).trim()
+  );
+  return sentences && sentences.length > 0 ? sentences : [value.trim()].filter(Boolean);
+}
+
 function compactToCompleteSentence(value: string, maxChars: number) {
   const normalized = value.replace(/\s+/g, " ").trim();
   if (normalized.length <= maxChars) {
@@ -1067,6 +1083,9 @@ function isLikelyTruncatedAnswer(answer: string) {
   if (/\.{3}$/.test(trimmed)) {
     return true;
   }
+  if (/\b(?:av|apr)\.\s*J\.?$/i.test(trimmed)) {
+    return true;
+  }
   const normalized = normalizeText(trimmed);
   return (
     /(?:[,;:]|\s[-–])$/.test(trimmed) ||
@@ -1152,7 +1171,7 @@ function buildSourceBackedFactualRepair(args: {
   }
 
   const factText = fact.replace(/^[^:]{1,90}:\s*/, "").trim();
-  const sentences = factText.match(/[^.!?]+[.!?]+/g)?.map((sentence) => sentence.trim()) ?? [factText];
+  const sentences = splitFactualSentences(factText);
   const firstSentenceIsMostlyDates =
     sentences.length > 1 &&
     /\b(?:n(?:e|ee|é|ée)|born|mort(?:e)?|died|death|naissance|deces|d(?:e|\u00e9)c(?:e|\u00e8)s)\b/i.test(

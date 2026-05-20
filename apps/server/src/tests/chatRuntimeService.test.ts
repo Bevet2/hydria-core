@@ -302,6 +302,28 @@ test("chat runtime repairs ellipsis-truncated source-backed factual answers", as
   assert.equal(response.conversationQuality.passed, true);
 });
 
+test("chat runtime repairs BCE abbreviation truncation in source-backed biographies", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult("Cleopatre VII Philopator, nee vers 69 av. J.");
+      }
+    },
+    undefined,
+    buildFactCheckToolResult(
+      "Cleopatra VII: Cleopatre VII Philopator, nee vers 69 av. J.-C. et morte le 10 aout 30 av. J.-C., est la derniere reine d'Egypte de la dynastie lagide."
+    )
+  );
+
+  const response = await service.sendMessage({ message: "Qui etait Cleopatre ?" });
+
+  assert.match(response.answer.answer, /J\.-C\./);
+  assert.match(response.answer.answer, /derniere reine/i);
+  assert.doesNotMatch(response.answer.answer.trim(), /\bav\. J\.?$/i);
+  assert.equal(response.usedRetry, true);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
 test("chat runtime repairs unsupported proper nouns in source-backed factual answers", async () => {
   const service = new ChatRuntimeService(
     {
