@@ -339,6 +339,9 @@ function extractOpenQuestion(message: string) {
 }
 
 function detectChangedContext(message: string) {
+  if (/\bclimate change\b/i.test(message)) {
+    return [];
+  }
   if (!CHANGE_PATTERN.test(message)) {
     return [];
   }

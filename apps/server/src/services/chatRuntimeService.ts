@@ -1157,12 +1157,17 @@ function buildSourceBackedFactualRepair(args: {
   );
   const sourceTermsUsed = sourceTerms.filter((term) => normalizedAnswer.includes(term)).length;
   const sourceTermsMissing = sourceTerms.length - sourceTermsUsed;
+  const concreteSubjectTerms = [...subjectTerms].filter((term) => term.length >= 3);
+  const subjectTermsUsed = concreteSubjectTerms.filter((term) => normalizedAnswer.includes(term)).length;
+  const subjectIsUnderspecified =
+    concreteSubjectTerms.length > 0 && subjectTermsUsed < Math.min(2, concreteSubjectTerms.length);
   const isStaticGenerationFailure = isStaticGenerationFailureAnswer(args.answer.answer);
   const isTruncated = isLikelyTruncatedAnswer(args.answer.answer);
   const hasUnsupportedEntity = hasUnsupportedProperNoun(args.answer.answer, fact);
 
   if (
     !args.force &&
+    !subjectIsUnderspecified &&
     !isTruncated &&
     !hasUnsupportedEntity &&
     ((!isStaticGenerationFailure && countWords(args.answer.answer) > 22) || sourceTermsMissing < 3)
@@ -1189,7 +1194,9 @@ function buildSourceBackedFactualRepair(args: {
     !hasUnsupportedEntity &&
     countWords(args.answer.answer) >= 8 &&
     answerMentionsAnyTerm(args.answer.answer, subjectTerms.size > 0 ? [...subjectTerms] : extractTerms(fact, 4));
+  const subjectPrefix = subjectIsUnderspecified && subject.trim().length > 0 ? `${subject.trim()}:` : "";
   const repaired = [
+    subjectPrefix,
     shouldKeepModelLead ? args.answer.answer : "",
     ...informativeSentences
   ]

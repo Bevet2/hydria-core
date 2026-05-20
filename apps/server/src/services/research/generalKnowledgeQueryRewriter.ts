@@ -86,9 +86,23 @@ const COMMON_ALIAS_CANONICALS: Record<string, string> = {
   "napoleon bonaparte": "Napoleon Bonaparte"
 };
 
+const ADDITIONAL_COMMON_ALIAS_CANONICALS: Record<string, string> = {
+  "principe vaccination": "vaccination",
+  vaccination: "vaccination",
+  "revolution industrielle": "R\u00e9volution industrielle",
+  "traite versailles": "Trait\u00e9 de Versailles",
+  "traite de versailles": "Trait\u00e9 de Versailles"
+};
+
 const SPECIAL_CANDIDATE_ALIASES: Record<string, string[]> = {
   "cleopatra vii": ["Cleopatra VII", "Cleopatre VII", "Cléopâtre VII", "Cleopatra", "Cleopatre"],
   "napoleon bonaparte": ["Napoleon Bonaparte", "Napoléon Ier", "Napoleon I", "Napoleon"]
+};
+
+const ADDITIONAL_SPECIAL_CANDIDATE_ALIASES: Record<string, string[]> = {
+  vaccination: ["vaccination", "Vaccination", "vaccine"],
+  "revolution industrielle": ["R\u00e9volution industrielle", "revolution industrielle", "Industrial Revolution"],
+  "traite de versailles": ["Trait\u00e9 de Versailles", "traite de versailles", "Treaty of Versailles"]
 };
 
 const MATCH_TERM_ALIASES: Record<string, string[]> = {
@@ -99,6 +113,12 @@ const MATCH_TERM_ALIASES: Record<string, string[]> = {
 function unique(values: string[]) {
   return [...new Set(values.map((value) => normalizeSpace(value)).filter(Boolean))];
 }
+
+const ADDITIONAL_MATCH_TERM_ALIASES: Record<string, string[]> = {
+  traite: ["traite", "treaty"],
+  industrielle: ["industrielle", "industrial"],
+  vaccination: ["vaccination", "vaccine"]
+};
 
 export function normalizeLooseText(value: string) {
   return value
@@ -149,14 +169,15 @@ function stripRequestTerms(value: string) {
       .replace(/['\u2018\u2019]/g, " ")
       .replace(/[?]/g, " ")
       .replace(
-        /\b(?:who is|who was|what is|what are|tell me about|give me|make me|explain|define|definition|history of|biography of|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce qu[' ]?(?:un|une|le|la|les)?|qu[' ]?est[- ]?ce que|quest ce que|c[' ]?est quoi|ce qu'est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:\s+l\s+histoire\s+de)?|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi,
+        /\b(?:who is|who was|what is|what are|tell me about|give me|make me|explain|define|definition|history of|biography of|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce qu[' ]?(?:un|une|le|la|les)?|qu[' ]?est[- ]?ce que|quest ce que|c[' ]?est quoi|ce qu'est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition|fais|fait|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:\s+l\s+histoire\s+de)?|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi,
         " "
       )
       .replace(/\b(?:c[' ]?est qui|c[' ]?est quel|c[' ]?est quoi|etait[- ]?ce|what causes|what caused|what was|what were|used for)\b/gi, " ")
       .replace(
-        /\b(?:sa biographie|son histoire|biographie|biography|histoire|history|known for|connu(?:e)? pour|complete|compl(?:e|\u00e8)te|complet|courte?|fiche|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9)|diaporama|slides?|simplement|simply|please|svp|s'il te plait|s'il vous plait|historiquement)\b/gi,
+        /\b(?:sa biographie|son histoire|biographie|biography|histoire|history|known for|connu(?:e)? pour|complete|compl(?:e|\u00e8)te|complet|courte?|fiche|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9)|diaporama|slides?|simple|simplement|simply|principe|please|svp|s'il te plait|s'il vous plait|historiquement)\b/gi,
         " "
       )
+      .replace(/\b(?:moi|me)\b/gi, " ")
       .replace(/[?.!,;:]+$/g, " ")
   );
 }
@@ -187,7 +208,8 @@ function candidateWithSimpleSingular(value: string) {
 }
 
 function canonicalAlias(value: string) {
-  return COMMON_ALIAS_CANONICALS[normalizeLooseText(value)] ?? null;
+  const normalized = normalizeLooseText(value);
+  return COMMON_ALIAS_CANONICALS[normalized] ?? ADDITIONAL_COMMON_ALIAS_CANONICALS[normalized] ?? null;
 }
 
 function contextualCanonicalAlias(args: { question: string; subject: string }) {
@@ -224,7 +246,11 @@ export function rewriteGeneralKnowledgeQuery(input: {
       ? "Cléopâtre VII"
       : canonicalSubject;
   const noCountry = withoutCountrySuffix(preferredCanonicalSubject);
-  const specialAliases = SPECIAL_CANDIDATE_ALIASES[normalizeLooseText(canonicalSubject)] ?? [];
+  const normalizedCanonicalSubject = normalizeLooseText(canonicalSubject);
+  const specialAliases = [
+    ...(SPECIAL_CANDIDATE_ALIASES[normalizedCanonicalSubject] ?? []),
+    ...(ADDITIONAL_SPECIAL_CANDIDATE_ALIASES[normalizedCanonicalSubject] ?? [])
+  ];
   const aliases = unique([
     preferredCanonicalSubject,
     ...specialAliases,
@@ -255,7 +281,7 @@ export function meaningfulSubjectTerms(subject: string) {
 }
 
 function matchTermVariants(term: string) {
-  return MATCH_TERM_ALIASES[term] ?? [term];
+  return MATCH_TERM_ALIASES[term] ?? ADDITIONAL_MATCH_TERM_ALIASES[term] ?? [term];
 }
 
 export function subjectMatchesText(subject: string, text: string) {

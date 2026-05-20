@@ -155,6 +155,12 @@ test("context state tracker does not treat weekly AI news recaps as deadline con
   assert.deepEqual(capsule.topConstraints.filter((constraint) => /^deadline:/i.test(constraint)), []);
 });
 
+test("context state tracker does not treat climate change as a conversation context change", () => {
+  const updated = updateConversationState(createInitialState(), "What is climate change?", "");
+
+  assert.deepEqual(updated.changedContext, []);
+});
+
 test("active constraint capsule marks changed budget obsolete and keeps latest budget active", () => {
   const initial = updateConversationState(
     createInitialState(),

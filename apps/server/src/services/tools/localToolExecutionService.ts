@@ -909,9 +909,21 @@ async function searchBritannica(subject: string): Promise<GeneralKnowledgeEviden
   };
 }
 
+function isBlockedGeneralKnowledgeHost(url: string) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+    return /(?:^|\.)quoteinvestigator\.com$|(?:^|\.)azquotes\.com$|(?:^|\.)socratic-method\.com$|(?:^|\.)brainyquote\.com$|(?:^|\.)goodreads\.com$/.test(
+      host
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function searchGenericFactSources(subject: string): Promise<GeneralKnowledgeEvidence[]> {
   const results = await searchDuckDuckGo(subject);
   return results
+    .filter((result) => !isBlockedGeneralKnowledgeHost(result.url))
     .filter((result) => subjectMatchesText(subject, `${result.title} ${result.snippet}`))
     .slice(0, 3)
     .map((result) => ({

@@ -324,6 +324,28 @@ test("chat runtime repairs BCE abbreviation truncation in source-backed biograph
   assert.equal(response.conversationQuality.passed, true);
 });
 
+test("chat runtime repairs source-backed answers missing canonical subject terms", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult(
+          "Deoxyribonucleic acid is a polymer carrying genetic instructions in organisms and viruses."
+        );
+      }
+    },
+    undefined,
+    buildFactCheckToolResult(
+      "DNA: Deoxyribonucleic acid is a polymer composed of two polynucleotide chains that coil around each other to form a double helix."
+    )
+  );
+
+  const response = await service.sendMessage({ message: "What is DNA?" });
+
+  assert.match(response.answer.answer, /\bDNA\b/);
+  assert.match(response.answer.answer, /double helix/i);
+  assert.equal(response.usedRetry, true);
+});
+
 test("chat runtime repairs unsupported proper nouns in source-backed factual answers", async () => {
   const service = new ChatRuntimeService(
     {

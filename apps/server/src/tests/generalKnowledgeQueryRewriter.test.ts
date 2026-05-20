@@ -20,6 +20,28 @@ test("general knowledge rewriter normalizes regnal digit and word aliases", () =
   assert.ok(word.candidates.includes("Louis IX France"));
 });
 
+test("general knowledge rewriter strips prompt adjectives and normalizes common French source subjects", () => {
+  const einstein = rewriteGeneralKnowledgeQuery({
+    question: "Fais une fiche simple sur Albert Einstein.",
+    language: "fr"
+  });
+  assert.equal(einstein.canonicalSubject, "Albert Einstein");
+  assert.equal(einstein.candidates.includes("Simple Albert Einstein"), false);
+
+  const vaccination = rewriteGeneralKnowledgeQuery({
+    question: "Explique le principe de la vaccination.",
+    language: "fr"
+  });
+  assert.equal(vaccination.canonicalSubject, "vaccination");
+
+  const versailles = rewriteGeneralKnowledgeQuery({
+    question: "Explique le traite de Versailles.",
+    language: "fr"
+  });
+  assert.equal(versailles.canonicalSubject, "Trait\u00e9 de Versailles");
+  assert.equal(subjectMatchesText("Trait\u00e9 de Versailles", "Treaty of Versailles ended the state of war."), true);
+});
+
 test("general knowledge source matching rejects off-subject snippets", () => {
   assert.equal(
     subjectMatchesText(
