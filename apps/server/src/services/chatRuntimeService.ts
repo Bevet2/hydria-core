@@ -3501,10 +3501,13 @@ export class ChatRuntimeService {
     question: string;
     category: QuestionCategory;
   }): Promise<ChatToolMetadata> {
-    const routing = this.toolRoutingService.route({
-      question: args.question,
-      category: args.category
-    });
+    const routing = this.normalizeRoutedToolLanguage(
+      this.toolRoutingService.route({
+        question: args.question,
+        category: args.category
+      }),
+      args.question
+    );
 
     if (!routing.toolRequired && !routing.toolRecommended) {
       return {
@@ -3555,6 +3558,29 @@ export class ChatRuntimeService {
       verifiedFacts: [],
       sources: [],
       failureReason: null
+    };
+  }
+
+  private normalizeRoutedToolLanguage(routing: ToolRoutingDecision, question: string): ToolRoutingDecision {
+    if (!routing.toolRequired && !routing.toolRecommended) {
+      return routing;
+    }
+
+    if (!["research", "web", "weather", "finance", "calculator"].includes(routing.toolType)) {
+      return routing;
+    }
+
+    const directLanguage = detectDirectLanguage(question);
+    if (directLanguage === "unknown" || routing.extractedArgs.language === directLanguage) {
+      return routing;
+    }
+
+    return {
+      ...routing,
+      extractedArgs: {
+        ...routing.extractedArgs,
+        language: directLanguage
+      }
     };
   }
 

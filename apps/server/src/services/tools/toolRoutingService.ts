@@ -112,7 +112,7 @@ function isConversationPlanningCategory(category: QuestionCategory | null | unde
 }
 
 function detectQuestionLanguage(question: string) {
-  return /\b(?:fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|recap|r(?:e|\u00e9)cap|nouveaut(?:e|\u00e9)s?|sorties?|semaine|quel|quelle|quels|temps|aujourd|meteo|m(?:e|\u00e9|\u00c3\u00a9|\ufffd)t(?:e|\u00e9|\u00c3\u00a9|\ufffd)o|pluie|vent|neige|fait-il|fait il|qui est|biographie|presentation|pr(?:e|\u00e9)sentation|expos(?:e|\u00e9)|calcule|calculer|combien|convertis|convertir|euros?|dollars?|taux)\b/i.test(
+  return /\b(?:fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|recap|r(?:e|\u00e9)cap|nouveaut(?:e|\u00e9)s?|sorties?|semaine|quel|quelle|quels|temps|aujourd|meteo|m(?:e|\u00e9|\u00c3\u00a9|\ufffd)t(?:e|\u00e9|\u00c3\u00a9|\ufffd)o|pluie|vent|neige|fait-il|fait il|qui est|qui etait|qui (?:e|\u00e9)tait|biographie|presentation|pr(?:e|\u00e9)sentation|expos(?:e|\u00e9)|calcule|calculer|combien|convertis|convertir|euros?|dollars?|taux)\b/i.test(
     question
   )
     ? "fr"

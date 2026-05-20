@@ -88,6 +88,63 @@ test("chat runtime sends narrative French factual questions to research in Frenc
   assert.equal(response.conversationQuality.passed, true);
 });
 
+test("chat runtime corrects routed research language from French user message before execution", async () => {
+  const routedLanguages: Array<unknown> = [];
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult("Cleopatre VII est la derniere reine de l'Egypte ptolemaique.");
+      }
+    },
+    {
+      route() {
+        return {
+          ...defaultToolRoutingDecision,
+          considered: true,
+          toolRequired: true,
+          toolRecommended: false,
+          toolType: "research",
+          intent: "fact_check",
+          confidence: 0.83,
+          fallbackAllowed: false,
+          reason: "test routing with stale language",
+          extractedArgs: {
+            subject: "Cleopatra VII",
+            query: "Qui etait Cleopatre ?",
+            language: "en"
+          },
+          toolResultUsed: false
+        };
+      }
+    },
+    {
+      async tryExecute(routing: ToolRoutingDecision) {
+        routedLanguages.push(routing.extractedArgs.language);
+        if (routing.toolType !== "research" || routing.intent !== "fact_check") {
+          return null;
+        }
+        return {
+          toolType: "research" as const,
+          intent: "fact_check",
+          summary: ["Contexte factuel source sur Cleopatre VII."],
+          verifiedFacts: [
+            "Cleopatre VII: derniere reine de l'Egypte ptolemaique, figure centrale des guerres civiles romaines."
+          ],
+          confidenceScore: 0.88,
+          resultLabel: "fact_check"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "Qui etait Cleopatre ?" });
+
+  assert.deepEqual(routedLanguages, ["fr"]);
+  assert.equal(response.tooling.routing.extractedArgs.language, "fr");
+  assert.match(response.answer.answer, /Cleopatre|Cl[eé]op[aâ]tre/i);
+  assert.doesNotMatch(response.answer.answer, /\bwas Queen\b/i);
+});
+
 test("chat runtime keeps follow-up context in the direct student chat adapter", async () => {
   const calls: StudentChatAdapterInput[] = [];
   const service = new ChatRuntimeService(
