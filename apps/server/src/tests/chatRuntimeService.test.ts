@@ -170,12 +170,13 @@ test("chat runtime repairs truncated source-backed factual answers with verified
     },
     undefined,
     buildFactCheckToolResult(
-      "Louis IX: Louis IX, dit Saint Louis, est roi de France de 1226 a 1270. Il est canonise par l'Eglise catholique en 1297."
+      "Louis IX: Louis IX, roi de France, ne le 25 avril 1214 et mort le 25 aout 1270. Il est canonise par l'Eglise catholique en 1297."
     )
   );
 
   const response = await service.sendMessage({ message: "Le roi Louis neuf de France, c'est qui ?" });
 
+  assert.match(response.answer.answer, /Louis IX/i);
   assert.match(response.answer.answer, /1270/i);
   assert.match(response.answer.answer, /canonise/i);
   assert.doesNotMatch(response.answer.answer.trim(), /\ba$/i);

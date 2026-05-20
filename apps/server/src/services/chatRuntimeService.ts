@@ -1118,7 +1118,12 @@ function buildSourceBackedFactualRepair(args: {
     /\b(?:n(?:e|ee|é|ée)|born|mort(?:e)?|died|death|naissance|deces|d(?:e|\u00e9)c(?:e|\u00e8)s)\b/i.test(
       normalizeText(sentences[0] ?? "")
     );
-  const informativeSentences = firstSentenceIsMostlyDates ? sentences.slice(1, 3) : sentences.slice(0, 2);
+  const firstSentenceNamesSubject = answerMentionsAnyTerm(
+    sentences[0] ?? "",
+    subjectTerms.size > 0 ? [...subjectTerms] : extractTerms(fact, 4)
+  );
+  const informativeSentences =
+    firstSentenceIsMostlyDates && !firstSentenceNamesSubject ? sentences.slice(1, 3) : sentences.slice(0, 2);
   const shouldKeepModelLead =
     !args.force &&
     !isTruncated &&
