@@ -1057,6 +1057,19 @@ function isLikelyTruncatedAnswer(answer: string) {
   );
 }
 
+function hasUnsupportedProperNoun(answer: string, sourceFact: string) {
+  const normalizedFact = normalizeText(sourceFact);
+  const properNouns = answer.match(/\b[A-Z][A-Za-zÀ-ÖØ-öø-ÿ'’-]{3,}\b/g) ?? [];
+  return properNouns.some((term) => {
+    const normalizedTerm = normalizeText(term);
+    return (
+      normalizedTerm.length >= 4 &&
+      !["louis", "saint"].includes(normalizedTerm) &&
+      !normalizedFact.includes(normalizedTerm)
+    );
+  });
+}
+
 function buildSourceBackedFactualRepair(args: {
   answer: StudentAnswer;
   tooling: ChatToolMetadata;
@@ -1102,10 +1115,12 @@ function buildSourceBackedFactualRepair(args: {
   const sourceTermsMissing = sourceTerms.length - sourceTermsUsed;
   const isStaticGenerationFailure = isStaticGenerationFailureAnswer(args.answer.answer);
   const isTruncated = isLikelyTruncatedAnswer(args.answer.answer);
+  const hasUnsupportedEntity = hasUnsupportedProperNoun(args.answer.answer, fact);
 
   if (
     !args.force &&
     !isTruncated &&
+    !hasUnsupportedEntity &&
     ((!isStaticGenerationFailure && countWords(args.answer.answer) > 22) || sourceTermsMissing < 3)
   ) {
     return null;
@@ -1127,6 +1142,7 @@ function buildSourceBackedFactualRepair(args: {
   const shouldKeepModelLead =
     !args.force &&
     !isTruncated &&
+    !hasUnsupportedEntity &&
     countWords(args.answer.answer) >= 8 &&
     answerMentionsAnyTerm(args.answer.answer, subjectTerms.size > 0 ? [...subjectTerms] : extractTerms(fact, 4));
   const repaired = [

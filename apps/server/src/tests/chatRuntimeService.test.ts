@@ -185,6 +185,28 @@ test("chat runtime repairs truncated source-backed factual answers with verified
   assert.equal(response.conversationQuality.passed, true);
 });
 
+test("chat runtime repairs unsupported proper nouns in source-backed factual answers", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult(
+          "Louis IX, roi de France, est ne a Poissy et mort en 1270 a Cartouche."
+        );
+      }
+    },
+    undefined,
+    buildFactCheckToolResult(
+      "Louis IX: Louis IX, roi de France, est ne a Poissy et mort en 1270 a Carthage, pres de Tunis."
+    )
+  );
+
+  const response = await service.sendMessage({ message: "Fais-moi une biographie de Louis 9." });
+
+  assert.match(response.answer.answer, /Carthage/i);
+  assert.doesNotMatch(response.answer.answer, /Cartouche/i);
+  assert.equal(response.usedRetry, true);
+});
+
 test("chat runtime synthesizes from source-backed facts when the local model falls back", async () => {
   const service = new ChatRuntimeService(
     {
