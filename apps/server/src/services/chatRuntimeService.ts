@@ -1312,6 +1312,108 @@ function enforceSourceFactLabelPresence(args: { answer: StudentAnswer; tooling: 
   };
 }
 
+function stripSourceQuestionLabel(value: string) {
+  return value
+    .replace(/\s*-->\s*/g, " ")
+    .replace(
+      /^\s*(?:comment|explique|raconte|pourquoi|qu[' ]?est[- ]?ce|c[' ]?est quoi|what is|what was|who was|who is|why|how)\b[^:]{0,120}:\s*/iu,
+      ""
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function sourceFragmentItems(fact: string) {
+  const cleaned = stripSourceQuestionLabel(fact);
+  if (!cleaned || cleaned === fact.trim()) {
+    return [];
+  }
+
+  return cleaned
+    .split(/\s*[,;]\s*/g)
+    .map((item) =>
+      item
+        .replace(/\s+/g, " ")
+        .replace(/[.!?:;,\-]+$/g, "")
+        .trim()
+    )
+    .filter((item) => countWords(item) >= 2)
+    .filter((item) => !/\b(?:exemples?|historiques?|read more|cliquez|retrieved)\b/i.test(normalizeText(item)))
+    .slice(0, 5);
+}
+
+function sourceSubjectDisplay(subject: string, language: ConversationState["language"]) {
+  const questionTerms = new Set([
+    "comment",
+    "fonctionne",
+    "fonctionner",
+    "forme",
+    "former",
+    "explique",
+    "expliquer",
+    "pourquoi",
+    "what",
+    "who",
+    "how",
+    "why",
+    "does",
+    "work",
+    "works"
+  ]);
+  const terms = extractTerms(subject, 8).filter((term) => !questionTerms.has(term));
+  const mainTerm = terms.find((term) => term.length >= 4) ?? terms[0] ?? "";
+  if (!mainTerm) {
+    return language === "en" ? "the topic" : "ce sujet";
+  }
+  return language === "en" ? `the ${mainTerm}` : `un ${mainTerm}`;
+}
+
+function joinNaturalList(items: string[], language: ConversationState["language"]) {
+  if (items.length <= 1) {
+    return items[0] ?? "";
+  }
+  const conjunction = language === "en" ? " and " : " et ";
+  return `${items.slice(0, -1).join(", ")}${conjunction}${items[items.length - 1]}`;
+}
+
+function buildFragmentarySourceSynthesisRepair(args: {
+  answer: StudentAnswer;
+  tooling: ChatToolMetadata;
+  language: ConversationState["language"];
+}): StudentAnswer | null {
+  if (
+    !args.tooling.used ||
+    args.tooling.routing.toolType !== "research" ||
+    args.tooling.routing.intent !== "fact_check"
+  ) {
+    return null;
+  }
+
+  const fragments = args.tooling.verifiedFacts.flatMap(sourceFragmentItems);
+  const uniqueFragments = uniqueFactualSentences(fragments).slice(0, 4);
+  if (uniqueFragments.length < 2) {
+    return null;
+  }
+
+  const subject =
+    typeof args.tooling.routing.extractedArgs?.subject === "string"
+      ? args.tooling.routing.extractedArgs.subject
+      : "";
+  const subjectDisplay = sourceSubjectDisplay(subject, args.language);
+  const joined = joinNaturalList(uniqueFragments, args.language);
+  const answer =
+    args.language === "en"
+      ? `For ${subjectDisplay}, the sources highlight ${joined}.`
+      : `Pour ${subjectDisplay}, les sources mettent en avant ${joined}.`;
+
+  return {
+    ...args.answer,
+    answer: compactToCompleteSentence(answer, 300),
+    key_points: [...args.answer.key_points, "Fragmentary source synthesis repair"].slice(0, 6),
+    confidence: Math.max(args.answer.confidence, 84)
+  };
+}
+
 function buildSourceSynthesisQualityRepair(args: {
   answer: StudentAnswer;
   tooling: ChatToolMetadata;
@@ -1340,24 +1442,41 @@ function buildSourceSynthesisQualityRepair(args: {
     language: args.language,
     force: true
   });
-  if (!repaired) {
-    return null;
+  const candidates: StudentAnswer[] = [];
+
+  if (repaired) {
+    candidates.push(enforceSourceFactLabelPresence({ answer: repaired, tooling: args.tooling }));
   }
 
-  const withLabel = enforceSourceFactLabelPresence({ answer: repaired, tooling: args.tooling });
-  const repairedQuality = evaluateSourceSynthesisQuality({
-    answer: withLabel.answer,
-    language: args.language,
-    sourceBacked: true
-  });
-  if (repairedQuality.score < quality.score) {
+  const fragmentaryRepair = buildFragmentarySourceSynthesisRepair(args);
+  if (fragmentaryRepair) {
+    candidates.push(fragmentaryRepair);
+  }
+
+  let best: { answer: StudentAnswer; quality: ReturnType<typeof evaluateSourceSynthesisQuality> } | null = null;
+  for (const candidate of candidates) {
+    const candidateQuality = evaluateSourceSynthesisQuality({
+      answer: candidate.answer,
+      language: args.language,
+      sourceBacked: true
+    });
+    if (!best || candidateQuality.score > best.quality.score) {
+      best = { answer: candidate, quality: candidateQuality };
+    }
+    if (candidateQuality.passed) {
+      best = { answer: candidate, quality: candidateQuality };
+      break;
+    }
+  }
+
+  if (!best || best.quality.score < quality.score) {
     return null;
   }
 
   return {
-    ...withLabel,
-    key_points: [...withLabel.key_points, "Source synthesis quality repair"].slice(0, 6),
-    confidence: Math.max(withLabel.confidence, 84)
+    ...best.answer,
+    key_points: [...best.answer.key_points, "Source synthesis quality repair"].slice(0, 6),
+    confidence: Math.max(best.answer.confidence, 84)
   };
 }
 

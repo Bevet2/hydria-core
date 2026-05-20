@@ -369,6 +369,47 @@ test("chat runtime repairs off-topic source-backed list answers", async () => {
   assert.equal(response.conversationQuality.passed, true);
 });
 
+test("chat runtime rewrites source snippets that are copied question labels plus keyword lists", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult(
+          "Comment se forme un volcan: tectonique des plaques, 3 mecanismes de fusion, types d'eruptions, classification VEI, exemples historiques."
+        );
+      }
+    },
+    undefined,
+    {
+      async tryExecute(routing: ToolRoutingDecision) {
+        if (routing.toolType !== "research" || routing.intent !== "fact_check") {
+          return null;
+        }
+        return {
+          toolType: "research" as const,
+          intent: "fact_check",
+          summary: ["Contexte source sur les volcans."],
+          verifiedFacts: [
+            "Qu'est-ce qu'un volcan et comment ca marche ? Vulcania vous explique tout sur la formation d'un volcan et sur les eruptions volcaniques.",
+            "Il existe une multitude de volcans a la surface de la Terre, certains actifs, d'autres endormis. Si chacun presente ses propres specificites qui font qu'aucune eruption ne ressemble tout ...",
+            "Comment se forme un volcan : tectonique des plaques, 3 mecanismes de fusion, types d'eruptions, classification VEI, exemples historiques. -->"
+          ],
+          confidenceScore: 0.88,
+          resultLabel: "fact_check"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "Comment fonctionne un volcan ?" });
+
+  assert.match(response.answer.answer, /volcan/i);
+  assert.match(response.answer.answer, /tectonique des plaques/i);
+  assert.match(response.answer.answer, /mettent en avant/i);
+  assert.doesNotMatch(response.answer.answer, /^Comment se forme un volcan:/i);
+  assert.doesNotMatch(response.answer.answer, /-->/);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
 test("chat runtime drops broken trailing source sentences during source-backed repair", async () => {
   const service = new ChatRuntimeService(
     {

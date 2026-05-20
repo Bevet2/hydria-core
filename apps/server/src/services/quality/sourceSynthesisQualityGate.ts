@@ -106,7 +106,7 @@ function hasFragmentaryListSynthesis(answer: string) {
   const normalized = normalizeText(answer);
   const commaCount = (answer.match(/,/g) ?? []).length;
   const hasFiniteVerb =
-    /\b(?:est|sont|fonctionne|consiste|permet|provoque|forme|devient|is|are|was|were|means|causes|occurs|works|forms)\b/.test(
+    /\b(?:est|sont|fonctionne|consiste|permet|provoque|forme|devient|met|mettent|indique|indiquent|relie|relient|rattache|rattachent|is|are|was|were|means|causes|occurs|works|forms|highlights?|includes?)\b/.test(
       normalized
     );
   return commaCount >= 3 && !hasFiniteVerb;
