@@ -608,6 +608,8 @@ General answerability gate:
 
 ```bash
 npm run prod:general-answerability-gate -- --base-url=https://app.hydria.click --timeout-ms=180000
+npm run general:knowledge-reliability-gate
+npm run prod:general-knowledge-reliability-gate -- --base-url=https://app.hydria.click --limit=20 --timeout-ms=180000 --delay-ms=500
 ```
 
 This writes:
@@ -617,6 +619,22 @@ storage/training/general-answerability-gate-v1.json
 ```
 
 This gate checks the Answerability Orchestrator v1 surface: every chat turn must expose an `EvidenceCapsule`, the orchestration trace must include an `answerability` step, live/current questions must use tools or source-backed research, stable sourceable factual lookups must be source-backed, code and strategic questions must route through specialist synthesis, and direct practical answers must avoid static fallback or generic refusal. It also covers multi-turn memory recall and false-positive routing guards for weather, file, repository, and document-like wording.
+
+`general:knowledge-reliability-gate` writes:
+
+```text
+storage/training/general-knowledge-reliability-gate-v2.json
+```
+
+This validates Answerability v2 / General Knowledge Reliability v2. Stable person, history, science, and factual definition questions must route to source-backed answerability. Practical writing and recipes must remain direct. The runtime fact-check tool rewrites aliases such as `Louis 9`, `Louis neuf`, `Saint-Louis`, and common acronyms; rejects the first source immediately when it is off-subject; requires corroboration from at least two source families; tries Wikipedia, Wikidata, Britannica, then search fallback; and returns a source-safe abstention when no reliable corroboration exists.
+
+`prod:general-knowledge-reliability-gate` writes:
+
+```text
+storage/training/production-general-knowledge-reliability-gate-v2.json
+```
+
+This is the production end-to-end version of General Knowledge Reliability v2. It calls the real `/api/chat/message` route and fails a case when a factual/person/history/science answer is not source-backed, lacks the answerability trace, uses only one source family, misses the expected subject, falls back statically, switches language, or trips the conversation quality gate. For OVH CPU runs, use `--limit` and `--offset` to run safe batches; omit `--limit` only for the full 104-case pass.
 
 Chat model warmup:
 

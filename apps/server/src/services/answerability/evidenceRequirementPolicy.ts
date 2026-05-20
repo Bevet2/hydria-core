@@ -45,7 +45,11 @@ export type EvidenceRequirementPolicyInput = {
 };
 
 const DIRECT_FACT_LOOKUP_PATTERN =
-  /\b(?:who is|who was|what is|what are|tell me about|biography|history of|explain|describe|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce que|c[' ]?est quoi|biographie|histoire de|explique|define|definition|d[e\u00e9]finis)\b/i;
+  /\b(?:who is|who was|what is|what are|what was|what were|what causes|why was|tell me about|biography|history of|explain|describe|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce qu[' ]?(?:un|une|le|la|les)?|qu[' ]?est[- ]?ce que|c[' ]?est quoi|biographie|histoire de|fiche .* sur|explique|raconte|define|definition|d[e\u00e9]finis)\b/i;
+const GENERAL_KNOWLEDGE_FACT_PATTERN =
+  /\b(?:person|people|scientist|writer|king|queen|emperor|pope|biography|historical|history|war|revolution|empire|country|capital|science|biology|physics|chemistry|astronomy|math|mathematics|medicine|climate|planet|animal|plant|dinosaur|gravity|atoms?|molecules?|volcano|earthquakes?|database|printing press|silk road|restoration|personne|personnage|scientifique|ecrivain|[e\u00e9]crivain|roi|reine|empereur|pape|biographie|historique|histoire|guerre|r[e\u00e9]volution|empire|pays|capitale|science|biologie|physique|chimie|astronomie|maths|math[e\u00e9]matiques|m[e\u00e9]decine|climat|plan[e\u00e8]te|animal|plante|dinosaure|gravite|gravit[e\u00e9]|atomes?|mol[e\u00e9]cules?|volcan|s[e\u00e9]ismes?|tremblements?|base de donn[e\u00e9]es|base donnees|photosynth[e\u00e8]se|renaissance)\b/i;
+const FACTUAL_QUESTION_SHAPE_PATTERN =
+  /\b(?:who|what|when|where|why|how|qui|quoi|quand|ou|o[u\u00f9]|pourquoi|comment|quel|quelle|quels|quelles|qu[' ]?est[- ]?ce|explique|explain|define|definition|d[e\u00e9]finis|raconte|fiche)\b/i;
 const LIVE_OR_CURRENT_PATTERN =
   /\b(?:today|current|currently|latest|recent|this week|now|live|news|weather|price|stock|crypto|release|version|ceo|president|official|source|cite|verify|aujourd'hui|actuel|actuelle|dernier|derniere|derni[e\u00e8]re|r[e\u00e9]cent|cette semaine|maintenant|m[e\u00e9]t[e\u00e9]o|prix|bourse|crypto|version|sortie|pdg|pr[e\u00e9]sident|officiel|source|cite|v[e\u00e9]rifie)\b/i;
 const MEMORY_PATTERN =
@@ -69,11 +73,15 @@ function unique<T>(values: T[]) {
   return [...new Set(values)];
 }
 
-function normalizedText(input: EvidenceRequirementPolicyInput) {
-  return `${input.question}\n${input.userMessage}`
+function normalizeForPolicy(value: string) {
+  return value
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+}
+
+function normalizedText(input: EvidenceRequirementPolicyInput) {
+  return normalizeForPolicy(`${input.question}\n${input.userMessage}`);
 }
 
 function isResearchTool(toolRouting: ToolRoutingDecision) {
@@ -117,6 +125,7 @@ function modeFromRequirement(args: {
 
 export function decideEvidenceRequirement(input: EvidenceRequirementPolicyInput): EvidenceRequirementPlan {
   const text = normalizedText(input);
+  const questionText = normalizeForPolicy(input.question);
   const requiredEvidence: EvidenceKind[] = [];
   const preferredEvidence: EvidenceKind[] = [];
   const riskFlags: string[] = [];
@@ -128,6 +137,18 @@ export function decideEvidenceRequirement(input: EvidenceRequirementPolicyInput)
     CONCEPTUAL_SYSTEM_PATTERN.test(text) &&
     CONCEPTUAL_EXPLANATION_PATTERN.test(text) &&
     !DECISION_SYNTHESIS_PATTERN.test(text);
+  const isGeneralKnowledgeFactQuestion =
+    FACTUAL_QUESTION_SHAPE_PATTERN.test(text) &&
+    GENERAL_KNOWLEDGE_FACT_PATTERN.test(text) &&
+    !isPracticalEverydayTask &&
+    !isHydriaKnowledgeQuestion &&
+    !isConceptualSystemQuestion;
+  const isBareGeneralKnowledgeTopic =
+    GENERAL_KNOWLEDGE_FACT_PATTERN.test(text) &&
+    questionText.trim().split(/\s+/).filter(Boolean).length <= 4 &&
+    !isPracticalEverydayTask &&
+    !isHydriaKnowledgeQuestion &&
+    !isConceptualSystemQuestion;
 
   if (input.toolRouting.toolRequired) {
     requiredEvidence.push(toolEvidenceKind(input.toolRouting));
@@ -168,12 +189,18 @@ export function decideEvidenceRequirement(input: EvidenceRequirementPolicyInput)
     reasons.push("the question is a factual lookup that benefits from source-backed evidence");
   }
 
+  if (!input.toolRouting.toolRequired && (isGeneralKnowledgeFactQuestion || isBareGeneralKnowledgeTopic)) {
+    requiredEvidence.push("source_research");
+    riskFlags.push("general_knowledge_reliability_v2");
+    reasons.push("general knowledge v2 requires source-backed evidence for person, history, or science facts");
+  }
+
   if (isHydriaKnowledgeQuestion && !input.toolRouting.toolRequired) {
     preferredEvidence.push("governed_knowledge");
     reasons.push("the question may be answerable from Hydria governed knowledge");
   }
 
-  if (CODE_PATTERN.test(text)) {
+  if (CODE_PATTERN.test(text) && !isPracticalEverydayTask) {
     requiredEvidence.push("specialist_model");
     reasons.push("the question needs the code/debug specialist route");
   }

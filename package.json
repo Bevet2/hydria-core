@@ -54,6 +54,8 @@
     "prod:chat-capability-gate": "npm run prod:chat-capability-gate -w @hydria-arena/server --",
     "prod:chat-capability-gate:segmented": "npm run prod:chat-capability-gate:segmented -w @hydria-arena/server --",
     "prod:general-answerability-gate": "npm run prod:general-answerability-gate -w @hydria-arena/server --",
+    "general:knowledge-reliability-gate": "npm run general:knowledge-reliability-gate -w @hydria-arena/server --",
+    "prod:general-knowledge-reliability-gate": "npm run prod:general-knowledge-reliability-gate -w @hydria-arena/server --",
     "prod:chat-slo-gate": "npm run prod:chat-slo-gate -w @hydria-arena/server --",
     "prod:stable-factual-gate": "npm run prod:stable-factual-gate -w @hydria-arena/server --",
     "student:chat-prod-gate": "npm run student:chat-prod-gate -w @hydria-arena/server --",

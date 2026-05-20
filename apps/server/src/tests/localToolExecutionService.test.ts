@@ -517,6 +517,21 @@ test("local research fact-check tool uses Wikipedia summary for stable biographi
         { status: 200, headers: { "Content-Type": "application/json" } }
       );
     }
+    if (url.includes("wikidata.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          search: [
+            {
+              id: "Q7186",
+              label: "Marie Curie",
+              description: "physicienne et chimiste polonaise naturalisee francaise",
+              concepturi: "https://www.wikidata.org/wiki/Q7186"
+            }
+          ]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
     return new Response("not found", { status: 404 });
   }) as typeof fetch;
 
@@ -533,6 +548,7 @@ test("local research fact-check tool uses Wikipedia summary for stable biographi
   assert.match(result?.verifiedFacts.join(" "), /radioactivite/);
   assert.equal(result?.sources?.[0]?.retrievalOrigin, "known_endpoint");
   assert.equal(result?.sources?.[0]?.retrievalEngine, "known_endpoint");
+  assert.equal(result?.sources?.length, 2);
 });
 
 test("local research fact-check tool cleans presentation biography subjects before Wikipedia lookup", async (t) => {
@@ -575,6 +591,21 @@ test("local research fact-check tool cleans presentation biography subjects befo
         { status: 200, headers: { "Content-Type": "application/json" } }
       );
     }
+    if (url.includes("wikidata.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          search: [
+            {
+              id: "Q346",
+              label: "Louis IX",
+              description: "roi de France canonise sous le nom de Saint Louis",
+              concepturi: "https://www.wikidata.org/wiki/Q346"
+            }
+          ]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
     return new Response("not found", { status: 404 });
   }) as typeof fetch;
 
@@ -592,6 +623,119 @@ test("local research fact-check tool cleans presentation biography subjects befo
   assert.match(result?.verifiedFacts.join(" "), /Saint Louis/);
   assert.equal(requestedUrls.some((url) => decodeURIComponent(url.replace(/\+/g, " ")).includes("srsearch=Louis IX")), true);
   assert.equal(result?.sources?.[0]?.retrievalEngine, "known_endpoint");
+});
+
+test("local research fact-check tool abstains when only one source family is available", async (t) => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    if (url.includes("fr.wikipedia.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          query: {
+            search: [
+              {
+                title: "Marie Curie",
+                snippet: "Physicienne et chimiste."
+              }
+            ]
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("fr.wikipedia.org/api/rest_v1/page/summary/Marie_Curie")) {
+      return new Response(
+        JSON.stringify({
+          title: "Marie Curie",
+          description: "Physicienne et chimiste franco-polonaise",
+          extract:
+            "Marie Curie est une physicienne et chimiste franco-polonaise, pionniere des recherches sur la radioactivite.",
+          timestamp: "2026-05-01T12:00:00Z"
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const service = new LocalToolExecutionService();
+  const result = await service.tryExecute(buildFactCheckRouting("Marie Curie"));
+
+  assert.equal(result, null);
+});
+
+test("local research fact-check tool corroborates stable facts with Wikidata when available", async (t) => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    if (url.includes("fr.wikipedia.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          query: {
+            search: [
+              {
+                title: "Marie Curie",
+                snippet: "Physicienne et chimiste."
+              }
+            ]
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("fr.wikipedia.org/api/rest_v1/page/summary/Marie_Curie")) {
+      return new Response(
+        JSON.stringify({
+          title: "Marie Curie",
+          description: "Physicienne et chimiste franco-polonaise",
+          extract:
+            "Marie Curie est une physicienne et chimiste franco-polonaise, pionniere des recherches sur la radioactivite.",
+          timestamp: "2026-05-01T12:00:00Z",
+          content_urls: {
+            desktop: {
+              page: "https://fr.wikipedia.org/wiki/Marie_Curie"
+            }
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("wikidata.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          search: [
+            {
+              id: "Q7186",
+              label: "Marie Curie",
+              description: "physicienne et chimiste polonaise naturalisee francaise",
+              concepturi: "https://www.wikidata.org/wiki/Q7186"
+            }
+          ]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const service = new LocalToolExecutionService();
+  const result = await service.tryExecute(buildFactCheckRouting("Marie Curie"));
+
+  assert.equal(result?.toolType, "research");
+  assert.equal(result?.sources?.length, 2);
+  assert.equal(result?.sources?.some((source) => source.url.includes("wikidata.org/wiki/Q7186")), true);
+  assert.ok((result?.confidenceScore ?? 0) >= 0.9);
 });
 
 test("local research fact-check tool rejects off-subject Wikipedia summaries", async (t) => {
@@ -631,7 +775,7 @@ test("local research fact-check tool rejects off-subject Wikipedia summaries", a
     }
     if (url.includes("duckduckgo.com/html")) {
       return new Response(
-        `<html><body><div class="result"><a class="result__a" href="https://example.org/louis-ix">Louis IX</a><a class="result__snippet">Louis IX, also called Saint Louis, was king of France from 1226 to 1270.</a></div></body></html>`,
+        `<html><body><div class="result"><a class="result__a" href="https://www.britannica.com/biography/Louis-IX">Louis IX</a><a class="result__snippet">Louis IX, also called Saint Louis, was king of France from 1226 to 1270.</a></div><div class="result"><a class="result__a" href="https://example.org/louis-ix">Louis IX of France</a><a class="result__snippet">Louis IX was a Capetian king of France and later venerated as Saint Louis.</a></div></body></html>`,
         { status: 200, headers: { "Content-Type": "text/html" } }
       );
     }
@@ -661,7 +805,7 @@ test("local research fact-check tool falls back to web search snippets", async (
     }
     if (url.includes("duckduckgo.com/html")) {
       return new Response(
-        `<html><body><div class="result"><a class="result__a" href="https://example.org/ada">Ada Lovelace</a><a class="result__snippet">Ada Lovelace was an English mathematician known for early computing work.</a></div></body></html>`,
+        `<html><body><div class="result"><a class="result__a" href="https://example.org/ada">Ada Lovelace</a><a class="result__snippet">Ada Lovelace was an English mathematician known for early computing work.</a></div><div class="result"><a class="result__a" href="https://history.example.net/ada-lovelace">Ada Lovelace biography</a><a class="result__snippet">Ada Lovelace wrote notes about Charles Babbage's Analytical Engine and is linked to early programming history.</a></div></body></html>`,
         { status: 200, headers: { "Content-Type": "text/html" } }
       );
     }
@@ -680,4 +824,5 @@ test("local research fact-check tool falls back to web search snippets", async (
   assert.match(result?.verifiedFacts.join(" "), /early computing/);
   assert.equal(result?.sources?.[0]?.retrievalOrigin, "generic_search");
   assert.equal(result?.sources?.[0]?.retrievalEngine, "duckduckgo");
+  assert.equal(result?.sources?.length, 2);
 });

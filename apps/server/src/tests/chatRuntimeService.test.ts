@@ -130,7 +130,7 @@ test("chat runtime resolves bare entity corrections after biography requests", a
   assert.equal(calls[0]?.routingQuestion, "fait moi une biographie complete pour une presentation de Louis 9");
   assert.equal(calls[0]?.requiresExternalGrounding, true);
   const secondTurnCall = calls.find((call) => call.userMessage === "le roi louis 9 de france");
-  assert.equal(secondTurnCall?.routingQuestion, "biographie de louis ix de france");
+  assert.equal(secondTurnCall?.routingQuestion.toLowerCase(), "biographie de louis ix de france");
   assert.equal(secondTurnCall?.requiresExternalGrounding, true);
   assert.equal(secondTurnCall?.runtimeMode, "conversation");
   assert.match(secondTurnCall?.question ?? "", /Resolved current task to answer[\s\S]*biographie de louis ix de france/i);

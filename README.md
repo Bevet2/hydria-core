@@ -400,9 +400,15 @@ General answerability validation:
 
 ```bash
 npm run prod:general-answerability-gate -- --base-url=https://app.hydria.click --timeout-ms=180000
+npm run general:knowledge-reliability-gate
+npm run prod:general-knowledge-reliability-gate -- --base-url=https://app.hydria.click --limit=20 --timeout-ms=180000 --delay-ms=500
 ```
 
 This writes `storage/training/general-answerability-gate-v1.json`. The gate checks that every public chat turn has an `EvidenceCapsule` and an `answerability` trace step, and that Hydria chooses the correct evidence path before generation: live tool, source-backed research, governed knowledge, conversation state, direct model knowledge, or specialist synthesis. It also includes multi-turn memory recall and false-positive routing guards for weather, file, repository, and document-like wording.
+
+`general:knowledge-reliability-gate` writes `storage/training/general-knowledge-reliability-gate-v2.json`. It validates Answerability v2 on 100+ simple-but-critical cases: historical biographies, science/history definitions, ambiguous follow-ups, practical direct tasks, and live-tool questions. Stable factual/person/history/science questions must become source-backed; practical writing/recipes stay direct. Runtime fact-check research rejects off-subject sources, requires corroboration across at least two source families, tries Wikipedia/Wikidata/Britannica/search fallbacks, and abstains cleanly when corroboration is missing.
+
+`prod:general-knowledge-reliability-gate` writes `storage/training/production-general-knowledge-reliability-gate-v2.json`. It runs the same reliability intent against the real public chat route. Source-backed factual cases must expose the answerability trace, use the research tool, return the expected subject, and include at least two distinct source families; practical direct cases must not be over-routed to tools. Use `--limit`/`--offset` for CPU-safe OVH batches, or omit `--limit` for a full run.
 
 ### Learning Governance
 

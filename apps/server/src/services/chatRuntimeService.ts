@@ -47,6 +47,10 @@ import {
   type EvidenceCapsule,
   type EvidenceRequirementPlan
 } from "./answerability/answerabilityPlanner.js";
+import {
+  normalizeOrdinalAliases,
+  rewriteGeneralKnowledgeQuery
+} from "./research/generalKnowledgeQueryRewriter.js";
 
 type ChatRuntimeSession = {
   sessionId: string;
@@ -620,7 +624,14 @@ function extractAnswerabilityResearchSubject(question: string) {
     .replace(/\s+/g, " ")
     .trim();
 
-  return cleaned.length >= 2 ? compact(cleaned, 120) : compact(question, 120);
+  const rewrite = rewriteGeneralKnowledgeQuery({
+    question,
+    subject: cleaned.length >= 2 ? cleaned : question,
+    language: detectDirectLanguage(question) === "fr" ? "fr" : "en"
+  });
+  return rewrite.canonicalSubject.length >= 2
+    ? compact(rewrite.canonicalSubject, 120)
+    : compact(cleaned.length >= 2 ? cleaned : question, 120);
 }
 
 function extractConversationSubject(messages: ChatMessage[]) {
@@ -775,30 +786,7 @@ function normalizeResolvedSubjectReference(args: {
 }
 
 function normalizeShortOrdinalAliases(value: string) {
-  return value.replace(/\b([1-9]|[12][0-9]|30)\b/g, (match) => toRomanNumeral(Number(match)));
-}
-
-function toRomanNumeral(value: number) {
-  if (!Number.isFinite(value) || value <= 0 || value > 30) {
-    return String(value);
-  }
-
-  const numerals: Array<[number, string]> = [
-    [10, "x"],
-    [9, "ix"],
-    [5, "v"],
-    [4, "iv"],
-    [1, "i"]
-  ];
-  let remaining = value;
-  let output = "";
-  for (const [amount, numeral] of numerals) {
-    while (remaining >= amount) {
-      output += numeral;
-      remaining -= amount;
-    }
-  }
-  return output;
+  return normalizeOrdinalAliases(value);
 }
 
 function buildRoutingQuestionForHydria(args: {

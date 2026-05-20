@@ -135,6 +135,14 @@ test("tool router extracts French presentation biography subjects and ordinal al
   assert.equal(decision.fallbackAllowed, false);
   assert.equal(decision.extractedArgs.subject, "Louis IX");
   assert.equal(decision.extractedArgs.language, "fr");
+
+  const wordDecision = service.route({
+    question: "le roi Louis neuf de France, c'est qui ?",
+    category: "other"
+  });
+  assert.equal(wordDecision.toolRequired, true);
+  assert.equal(wordDecision.toolType, "research");
+  assert.equal(wordDecision.extractedArgs.subject, "Louis IX France");
 });
 
 test("tool router routes simple stable concept explanations to source-backed research", () => {
