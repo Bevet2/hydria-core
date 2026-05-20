@@ -1164,6 +1164,14 @@ function buildSourceBackedFactualRepair(args: {
     return null;
   }
 
+  if (
+    !args.force &&
+    countWords(args.answer.answer) >= 10 &&
+    /\b(?:doi\s*:?\s*10\.\d{4,9}\/|https?:\/\/)\S+/i.test(args.answer.answer)
+  ) {
+    return null;
+  }
+
   const subject =
     typeof args.tooling.routing.extractedArgs?.subject === "string"
       ? args.tooling.routing.extractedArgs.subject

@@ -102,6 +102,16 @@ function hasSourceArtifact(answer: string) {
   );
 }
 
+function hasFragmentaryListSynthesis(answer: string) {
+  const normalized = normalizeText(answer);
+  const commaCount = (answer.match(/,/g) ?? []).length;
+  const hasFiniteVerb =
+    /\b(?:est|sont|fonctionne|consiste|permet|provoque|forme|devient|is|are|was|were|means|causes|occurs|works|forms)\b/.test(
+      normalized
+    );
+  return commaCount >= 3 && !hasFiniteVerb;
+}
+
 function hasAwkwardLexicalArtifact(answer: string) {
   return /\b(?:propheteseuse|puissance qui surgit|tous ceux qui l entourent)\b/i.test(
     normalizeText(answer)
@@ -153,6 +163,9 @@ export function evaluateSourceSynthesisQuality(
   }
   if (hasSourceArtifact(answer)) {
     add("source_artifact", "answer includes source-page scaffolding or decorative artifacts");
+  }
+  if (hasFragmentaryListSynthesis(answer)) {
+    add("fragmentary_list_synthesis", "source-backed answer is only a keyword list, not a factual synthesis");
   }
   if (hasAwkwardLexicalArtifact(answer)) {
     add("awkward_lexical_artifact", "answer contains a suspicious lexical artifact from weak synthesis");

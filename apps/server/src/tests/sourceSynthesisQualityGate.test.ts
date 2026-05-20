@@ -61,6 +61,18 @@ test("source synthesis quality rejects question labels and source artifacts", ()
   assert.ok(result.issues.includes("source_artifact"));
 });
 
+test("source synthesis quality rejects keyword-list factual answers", () => {
+  const result = evaluateSourceSynthesisQuality({
+    answer:
+      "tectonique des plaques, 3 mecanismes de fusion, types d'eruptions, classification VEI, exemples historiques.",
+    language: "fr",
+    sourceBacked: true
+  });
+
+  assert.equal(result.passed, false);
+  assert.ok(result.issues.includes("fragmentary_list_synthesis"));
+});
+
 test("source synthesis quality rejects suspicious lexical artifacts", () => {
   const result = evaluateSourceSynthesisQuality({
     answer:
