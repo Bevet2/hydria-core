@@ -51,6 +51,43 @@ function buildFactCheckToolResult(fact: string) {
   };
 }
 
+test("chat runtime sends narrative French factual questions to research in French", async () => {
+  const routedLanguages: Array<unknown> = [];
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult("Charlemagne was King of the Franks and Emperor.");
+      }
+    },
+    undefined,
+    {
+      async tryExecute(routing: ToolRoutingDecision) {
+        routedLanguages.push(routing.extractedArgs?.language);
+        if (routing.toolType !== "research" || routing.intent !== "fact_check") {
+          return null;
+        }
+        return {
+          toolType: "research" as const,
+          intent: "fact_check",
+          summary: ["Contexte factuel source sur Charlemagne."],
+          verifiedFacts: [
+            "Charlemagne: Charlemagne est roi des Francs, roi des Lombards, puis empereur couronne a Rome en 800."
+          ],
+          confidenceScore: 0.88,
+          resultLabel: "fact_check"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "Raconte l'histoire de Charlemagne." });
+
+  assert.deepEqual(routedLanguages, ["fr"]);
+  assert.match(response.answer.answer, /Charlemagne/i);
+  assert.doesNotMatch(response.answer.answer, /\bwas King\b/i);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
 test("chat runtime keeps follow-up context in the direct student chat adapter", async () => {
   const calls: StudentChatAdapterInput[] = [];
   const service = new ChatRuntimeService(

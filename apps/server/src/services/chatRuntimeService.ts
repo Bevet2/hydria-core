@@ -3549,6 +3549,8 @@ export class ChatRuntimeService {
     }
 
     const subject = extractAnswerabilityResearchSubject(args.question);
+    const directLanguage = detectDirectLanguage(args.question);
+    const language = args.conversationState.language === "fr" || directLanguage === "fr" ? "fr" : "en";
     const routing: ToolRoutingDecision = {
       ...defaultToolRoutingDecision,
       considered: true,
@@ -3564,7 +3566,7 @@ export class ChatRuntimeService {
       extractedArgs: {
         query: args.question,
         subject,
-        language: args.conversationState.language === "fr" ? "fr" : "en"
+        language
       },
       toolResultUsed: false
     };

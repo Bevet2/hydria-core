@@ -136,6 +136,12 @@ test("context state tracker detects French short-answer instructions without acc
   assert.equal(updated.language, "fr");
 });
 
+test("context state tracker detects French narrative factual questions without accents", () => {
+  const updated = updateConversationState(createInitialState(), "Raconte l'histoire de Charlemagne.", "");
+
+  assert.equal(updated.language, "fr");
+});
+
 test("context state tracker does not treat weekly AI news recaps as deadline constraints", () => {
   const updated = updateConversationState(
     createInitialState(),
