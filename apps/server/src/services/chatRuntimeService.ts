@@ -2954,13 +2954,32 @@ export class ChatRuntimeService {
         ? normalizeDirectChatAnswer(draft.answer, conversationQuality)
         : draft.answer;
 
-    const forceSourceBackedRepair =
+    const hasSourceBackedFactCheck =
+      tooling.used && tooling.routing.toolType === "research" && tooling.routing.intent === "fact_check";
+    const routedFactSubject =
+      typeof tooling.routing.extractedArgs?.subject === "string" ? tooling.routing.extractedArgs.subject : "";
+    const routedFactSubjectTerms = extractTerms(routedFactSubject, 10).filter((term) => term.length >= 3);
+    const hasResolvableSubjectReference =
+      runtimeMode === "conversation" &&
+      Boolean(extractResolvedSubjectFromRoutingQuestion(draft.routingQuestion)) &&
+      /^\s*(?:sa biographie|son parcours|sa vie|his biography|her biography|their biography|his life|her life|their life)\b/i.test(
+        finalAnswer.answer
+      );
+    const hasSourceBackedSubjectOmission =
+      hasSourceBackedFactCheck &&
+      !hasResolvableSubjectReference &&
+      routedFactSubjectTerms.length > 0 &&
+      !answerMentionsAnyTerm(finalAnswer.answer, routedFactSubjectTerms);
+    const forceWrongLanguageRepair =
       conversationQuality.issues.includes("wrong_language_expected_en") ||
-      conversationQuality.issues.includes("wrong_language_expected_fr") ||
-      conversationQuality.issues.includes("off_topic_direct_answer");
+      conversationQuality.issues.includes("wrong_language_expected_fr");
+    const forceSourceBackedRepair =
+      forceWrongLanguageRepair ||
+      (conversationQuality.issues.includes("off_topic_direct_answer") && hasSourceBackedSubjectOmission);
     const shouldAttemptSourceBackedRepair =
       runtimeMode === "direct" ||
       draft.generation.provider === "fallback" ||
+      hasSourceBackedSubjectOmission ||
       forceSourceBackedRepair ||
       isLikelyTruncatedAnswer(finalAnswer.answer);
     const sourceBackedFactualRepair = shouldAttemptSourceBackedRepair
