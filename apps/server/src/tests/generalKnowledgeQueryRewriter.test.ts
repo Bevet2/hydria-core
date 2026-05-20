@@ -45,7 +45,8 @@ test("general knowledge rewriter normalizes common acronyms and hyphenated subje
   });
 
   assert.equal(dna.canonicalSubject, "DNA");
-  assert.equal(saintLouis.canonicalSubject, "Saint Louis");
+  assert.equal(saintLouis.canonicalSubject, "Louis IX");
+  assert.ok(saintLouis.candidates.includes("Saint Louis"));
 });
 
 test("general knowledge rewriter strips narrative history request wrappers", () => {

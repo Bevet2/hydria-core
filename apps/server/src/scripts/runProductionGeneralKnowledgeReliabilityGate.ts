@@ -263,6 +263,18 @@ function isGenericFailure(answer: string) {
   );
 }
 
+function isBrokenAnswer(answer: string) {
+  const trimmed = answer.trim();
+  if (!trimmed) {
+    return true;
+  }
+  const normalized = normalizeGateText(trimmed);
+  return (
+    /(?:[,;:]|\s[-–])$/.test(trimmed) ||
+    /\b(?:a|à|de|du|des|le|la|les|un|une|et|en|of|to|the|and|with|from)$/.test(normalized)
+  );
+}
+
 function hasAnswerabilityTrace(response: ChatResponse) {
   return response.orchestrationTrace?.steps?.some((step) => step.id === "answerability") === true;
 }
@@ -309,6 +321,9 @@ export function inspectProductionGeneralKnowledgeCase(
   }
   if (isGenericFailure(answer)) {
     issues.push("generic_failure_answer");
+  }
+  if (isBrokenAnswer(answer)) {
+    issues.push("broken_answer");
   }
   if (!termLooksPresent(answer, term)) {
     issues.push(`missing_expected_term:${term}`);

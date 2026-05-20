@@ -23,7 +23,7 @@ export type GeneralKnowledgeReliabilityCase = {
 const biographies = [
   ["louis_ix_digit_fr", "Fais-moi une biographie de Louis 9 pour une presentation.", "Louis IX"],
   ["louis_ix_word_fr", "Le roi Louis neuf de France, c'est qui ?", "Louis IX"],
-  ["saint_louis_fr", "Qui est Saint-Louis ?", "Saint Louis"],
+  ["saint_louis_fr", "Qui est Saint-Louis ?", "Louis IX"],
   ["marie_curie_fr", "Qui est Marie Curie ?", "Marie Curie"],
   ["charlemagne_fr", "Raconte l'histoire de Charlemagne.", "Charlemagne"],
   ["ada_lovelace_en", "Who was Ada Lovelace?", "Ada Lovelace"],

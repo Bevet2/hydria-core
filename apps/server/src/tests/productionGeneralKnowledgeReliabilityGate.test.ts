@@ -121,6 +121,48 @@ test("production general knowledge gate rejects wikipedia-only factual answers",
   assert.ok(result.issues.some((issue) => issue.startsWith("insufficient_source_families")));
 });
 
+test("production general knowledge gate rejects truncated source-backed answers", () => {
+  const result = inspectProductionGeneralKnowledgeCase(sourceBackedCase(), {
+    assistantMessage: {
+      content: "Louis IX de France, dit Saint Louis, etait roi de France de 1226 a"
+    },
+    evidenceCapsule: {
+      answerabilityMode: "source_backed",
+      missingEvidence: [],
+      sourceBound: true
+    },
+    generation: {
+      provider: "tool",
+      model: "research_general_knowledge",
+      usedStaticFallback: false
+    },
+    conversationQuality: {
+      passed: true,
+      issues: []
+    },
+    tooling: {
+      used: true,
+      route: "used",
+      routing: {
+        toolType: "research",
+        intent: "fact_check",
+        toolRequired: true,
+        toolResultUsed: true
+      },
+      sources: [
+        researchSource("https://fr.wikipedia.org/wiki/Louis_IX", "Louis IX", "Louis IX est roi de France."),
+        researchSource("https://www.wikidata.org/wiki/Q346", "Louis IX", "Louis IX, Saint Louis, roi de France.")
+      ]
+    },
+    orchestrationTrace: {
+      steps: [{ id: "answerability", status: "passed", summary: "source_backed" }]
+    }
+  });
+
+  assert.equal(result.passed, false);
+  assert.ok(result.issues.includes("broken_answer"));
+});
+
 test("production general knowledge gate rejects tools for direct practical tasks", () => {
   const testCase: GeneralKnowledgeReliabilityCase = {
     id: "direct_tiramisu_fr",

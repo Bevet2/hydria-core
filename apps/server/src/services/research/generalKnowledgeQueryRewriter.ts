@@ -131,6 +131,7 @@ function stripRequestTerms(value: string) {
   return normalizeSpace(
     value
       .replace(/['’]/g, " ")
+      .replace(/['\u2018\u2019]/g, " ")
       .replace(/[?]/g, " ")
       .replace(
         /\b(?:who is|who was|what is|what are|tell me about|give me|make me|explain|define|definition|history of|biography of|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce qu[' ]?(?:un|une|le|la|les)?|qu[' ]?est[- ]?ce que|quest ce que|c[' ]?est quoi|ce qu'est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:\s+l\s+histoire\s+de)?|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi,
@@ -174,6 +175,17 @@ function canonicalAlias(value: string) {
   return COMMON_ALIAS_CANONICALS[normalizeLooseText(value)] ?? null;
 }
 
+function contextualCanonicalAlias(args: { question: string; subject: string }) {
+  const combined = normalizeLooseText(`${args.question} ${args.subject}`);
+  const refersToSaintLouis =
+    /\bsaint louis\b/.test(combined) &&
+    !/\b(?:senegal|s[eé]n[eé]gal|missouri|ville|city|commune|fleuve|river|st louis)\b/.test(combined);
+  if (refersToSaintLouis && /\b(?:qui|who|roi|king|histor|biograph|france|personne|person)\b/.test(combined)) {
+    return "Louis IX";
+  }
+  return null;
+}
+
 export function rewriteGeneralKnowledgeQuery(input: {
   question: string;
   subject?: string | null;
@@ -186,13 +198,16 @@ export function rewriteGeneralKnowledgeQuery(input: {
     stripped.replace(DASH_PATTERN, " ").replace(/[.,;:!?]+/g, " ")
   );
   const cleanedSubject = stripRoleAndGlue(normalizedOrdinal);
+  const contextualAlias = contextualCanonicalAlias({ question: input.question, subject: original });
   const canonicalSubject =
+    contextualAlias ??
     canonicalAlias(cleanedSubject) ??
     canonicalAlias(normalizedOrdinal) ??
     titleCaseSubject(cleanedSubject.length >= 2 ? cleanedSubject : normalizedOrdinal);
   const noCountry = withoutCountrySuffix(canonicalSubject);
   const aliases = unique([
     canonicalSubject,
+    contextualAlias ? "Saint Louis" : "",
     noCountry,
     candidateWithSimpleSingular(canonicalSubject),
     candidateWithSimpleSingular(noCountry),

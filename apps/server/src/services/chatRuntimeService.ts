@@ -1048,6 +1048,15 @@ function isStaticGenerationFailureAnswer(answer: string) {
   );
 }
 
+function isLikelyTruncatedAnswer(answer: string) {
+  const trimmed = answer.trim();
+  const normalized = normalizeText(trimmed);
+  return (
+    /(?:[,;:]|\s[-–])$/.test(trimmed) ||
+    /\b(?:a|de|du|des|le|la|les|un|une|et|en|of|to|the|and|with|from)$/.test(normalized)
+  );
+}
+
 function buildSourceBackedFactualRepair(args: {
   answer: StudentAnswer;
   tooling: ChatToolMetadata;
@@ -1092,8 +1101,13 @@ function buildSourceBackedFactualRepair(args: {
   const sourceTermsUsed = sourceTerms.filter((term) => normalizedAnswer.includes(term)).length;
   const sourceTermsMissing = sourceTerms.length - sourceTermsUsed;
   const isStaticGenerationFailure = isStaticGenerationFailureAnswer(args.answer.answer);
+  const isTruncated = isLikelyTruncatedAnswer(args.answer.answer);
 
-  if (!args.force && ((!isStaticGenerationFailure && countWords(args.answer.answer) > 22) || sourceTermsMissing < 3)) {
+  if (
+    !args.force &&
+    !isTruncated &&
+    ((!isStaticGenerationFailure && countWords(args.answer.answer) > 22) || sourceTermsMissing < 3)
+  ) {
     return null;
   }
 
@@ -2867,17 +2881,22 @@ export class ChatRuntimeService {
         ? normalizeDirectChatAnswer(draft.answer, conversationQuality)
         : draft.answer;
 
-    const sourceBackedFactualRepair =
-      runtimeMode === "direct" || draft.generation.provider === "fallback"
-        ? buildSourceBackedFactualRepair({
-            answer: finalAnswer,
-            tooling,
-            force:
-              conversationQuality.issues.includes("wrong_language_expected_en") ||
-              conversationQuality.issues.includes("wrong_language_expected_fr") ||
-              conversationQuality.issues.includes("off_topic_direct_answer")
-          })
-        : null;
+    const forceSourceBackedRepair =
+      conversationQuality.issues.includes("wrong_language_expected_en") ||
+      conversationQuality.issues.includes("wrong_language_expected_fr") ||
+      conversationQuality.issues.includes("off_topic_direct_answer");
+    const shouldAttemptSourceBackedRepair =
+      runtimeMode === "direct" ||
+      draft.generation.provider === "fallback" ||
+      forceSourceBackedRepair ||
+      isLikelyTruncatedAnswer(finalAnswer.answer);
+    const sourceBackedFactualRepair = shouldAttemptSourceBackedRepair
+      ? buildSourceBackedFactualRepair({
+          answer: finalAnswer,
+          tooling,
+          force: forceSourceBackedRepair
+        })
+      : null;
     if (sourceBackedFactualRepair) {
       finalAnswer = sourceBackedFactualRepair;
       if (draft.generation.provider === "fallback") {

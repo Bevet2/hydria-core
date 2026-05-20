@@ -161,6 +161,28 @@ test("chat runtime repairs thin source-backed factual answers with verified fact
   assert.equal(response.conversationQuality.passed, true);
 });
 
+test("chat runtime repairs truncated source-backed factual answers with verified facts", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult("Louis IX de France, dit Saint Louis, etait roi de France de 1226 a");
+      }
+    },
+    undefined,
+    buildFactCheckToolResult(
+      "Louis IX: Louis IX, dit Saint Louis, est roi de France de 1226 a 1270. Il est canonise par l'Eglise catholique en 1297."
+    )
+  );
+
+  const response = await service.sendMessage({ message: "Le roi Louis neuf de France, c'est qui ?" });
+
+  assert.match(response.answer.answer, /1270/i);
+  assert.match(response.answer.answer, /canonise/i);
+  assert.doesNotMatch(response.answer.answer.trim(), /\ba$/i);
+  assert.equal(response.usedRetry, true);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
 test("chat runtime synthesizes from source-backed facts when the local model falls back", async () => {
   const service = new ChatRuntimeService(
     {
