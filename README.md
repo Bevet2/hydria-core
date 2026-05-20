@@ -12,6 +12,41 @@ It is not an agent OS and it does not directly execute arbitrary system actions.
 
 Hydria OS or any external executor is responsible for real execution. Hydria Core stays the brain.
 
+## Current Status
+
+Hydria Core is deployed on OVH at:
+
+```text
+https://app.hydria.click
+```
+
+Current production baseline:
+
+- Docker Compose on Ubuntu OVH VPS
+- Caddy HTTPS reverse proxy
+- PostgreSQL persistence on schema `hydria_prod`
+- public chat served by local Ollama models, not OpenRouter
+- OpenRouter reserved for controlled training/evaluation
+- multi-model local routing through Qwen, Qwen-Coder, DeepSeek-R1, Mistral, Phi, and BGE roles
+- governed tools, source-backed answerability, model telemetry, execution audit, and knowledge scheduler
+- GraphRAG v1 and DSPy-like optimization v1 added as gated contract layers
+
+Latest validated deployment:
+
+```text
+320be62 add graph rag and policy optimization gates
+```
+
+Latest validation set:
+
+```text
+npm run check                                      OK
+npm run test -w @hydria-arena/server               OK
+npm run knowledge:graph-gate                       OK
+npm run optimization:gate                          OK
+npm run prod:smoke -- --base-url=https://app.hydria.click --expected-schema=hydria_prod  OK
+```
+
 ## What Exists In The Repo
 
 The current codebase already includes:
@@ -24,8 +59,11 @@ The current codebase already includes:
 - a `tool candidate system` for detecting missing capabilities and proposing governed tool manifests
 - a `specialized agent system` that groups validated skills into domain-specific agent recommendations
 - a `model capability manifest` for routing Qwen, DeepSeek, Mistral/Mixtral, BGE, Phi, and Qwen-router roles
+- a `GraphRAG v1` contract with persistent typed graph nodes, typed edges, and hybrid graph/lexical retrieval
+- a `DSPy-like optimization v1` contract with traces, policy variants, A/B gate, and zero-regression promotion rules
+- dry-run execution governance contracts for browser/acquisition, sandbox commands, and dev-agent plans
 - a `learning loop` that turns observations into hotspots, hypotheses, policies, active memory, and regression monitoring
-- SQLite persistence with JSON projections and self-healing derived artifacts
+- SQLite/PostgreSQL persistence with JSON projections and self-healing derived artifacts
 - a React playground for arena, benchmark, student, persistence, workflow, and learning inspection
 
 ## Core Principles
@@ -389,6 +427,87 @@ Governance currently manages:
 - tool candidates / manifests
 - specialized agents
 
+### GraphRAG V1
+
+Hydria now has a gated GraphRAG layer above Knowledge Objects and the Markdown vault projection.
+
+It defines persistent graph nodes for:
+
+- concepts
+- sources
+- tools
+- skills
+- agents
+- decisions
+
+It also defines typed edges such as:
+
+- `derived_from`
+- `uses_skill`
+- `supports`
+- `depends_on`
+- `related_to`
+- `contradicts`
+
+Retrieval is hybrid:
+
+```text
+query
+-> lexical token match
+-> vector-like token cosine score
+-> graph path score
+-> evidence paths
+-> ranked graph hits
+```
+
+Validate the graph layer with:
+
+```bash
+npm run knowledge:graph-gate
+```
+
+This writes:
+
+```text
+storage/training/knowledge-graph-gate-v1.json
+```
+
+Current boundary: GraphRAG v1 is implemented as a governed retrieval contract and gate. It is not yet automatically replacing the current public chat retrieval path.
+
+### DSPy-Like Optimization V1
+
+Hydria now has a gated optimization layer for policies, prompts, routing, tools, retrieval, and model decisions.
+
+The flow is:
+
+```text
+runtime / gate traces
+-> failure labels
+-> candidate policy variants
+-> A/B evaluation
+-> promotion decision
+```
+
+Promotion is intentionally strict:
+
+- a candidate must improve at least one metric
+- `regressionCount` must be `0`
+- safety regressions block promotion
+- human approval is still required
+- no production policy is mutated automatically
+
+Validate it with:
+
+```bash
+npm run optimization:gate
+```
+
+This writes:
+
+```text
+storage/training/policy-optimization-gate-v1.json
+```
+
 ## Persistence Model
 
 SQLite is the default source of truth.
@@ -641,8 +760,15 @@ Workspace-level scripts:
 - `npm run conversation:strategic-conflict`
 - `npm run conversation:strategic-coherence`
 - `npm run runtime:release-gate`
+- `npm run knowledge:graph-gate`
+- `npm run optimization:gate`
 - `npm run models:routing-gate`
 - `npm run models:ops-gate`
+- `npm run browser:automation-gate`
+- `npm run execution:audit-gate`
+- `npm run execution:sensitive-gate`
+- `npm run execution:sandbox-gate`
+- `npm run dev:agent-gate`
 - `npm run tool:routing-eval`
 - `npm run dev:sh`
 - `npm run check:sh`
@@ -679,6 +805,17 @@ Server-only equivalents live in `apps/server/package.json`.
 
 - `GET /api/learning/report`
 - `GET /api/learning/queue`
+- `GET /api/learning/watchers`
+- `GET /api/learning/source-acquisition`
+- `GET /api/learning/knowledge-quality`
+- `GET /api/learning/knowledge-scheduler`
+- `GET /api/learning/promotion`
+- `GET /api/learning/training-queue`
+
+### Execution Audit
+
+- `GET /api/execution/audit`
+- `GET /api/execution/audit/:auditId`
 
 ### Local Model
 
@@ -750,6 +887,8 @@ Hydria Core does not:
 - directly browse or manipulate the local repo as an autonomous OS layer
 - auto-activate dangerous tools
 - bypass governance for skills, tools, or specialized agents
+- auto-promote GraphRAG hits into public chat without a dedicated gate
+- auto-apply DSPy-like optimization variants to production policy
 
 That separation is intentional.
 
