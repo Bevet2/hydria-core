@@ -124,7 +124,7 @@ test("production general knowledge gate rejects wikipedia-only factual answers",
 test("production general knowledge gate rejects truncated source-backed answers", () => {
   const result = inspectProductionGeneralKnowledgeCase(sourceBackedCase(), {
     assistantMessage: {
-      content: "Louis IX de France, dit Saint Louis, etait roi de France de 1226 a"
+      content: "Louis IX de France, dit Saint Louis, etait roi de France de 1226 a Il regna longtemps."
     },
     evidenceCapsule: {
       answerabilityMode: "source_backed",

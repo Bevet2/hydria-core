@@ -179,6 +179,7 @@ test("chat runtime repairs truncated source-backed factual answers with verified
   assert.match(response.answer.answer, /1270/i);
   assert.match(response.answer.answer, /canonise/i);
   assert.doesNotMatch(response.answer.answer.trim(), /\ba$/i);
+  assert.doesNotMatch(response.answer.answer, /\ba\s+Il\b/i);
   assert.equal(response.usedRetry, true);
   assert.equal(response.conversationQuality.passed, true);
 });

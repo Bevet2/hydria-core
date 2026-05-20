@@ -271,6 +271,9 @@ function isBrokenAnswer(answer: string) {
   const normalized = normalizeGateText(trimmed);
   return (
     /(?:[,;:]|\s[-–])$/.test(trimmed) ||
+    /\b(?:a|à|de|du|des|of|to|from)\s+(?:il|elle|it|he|she|they|considered|considere|considéré)\b/.test(
+      normalized
+    ) ||
     /\b(?:a|à|de|du|des|le|la|les|un|une|et|en|of|to|the|and|with|from)$/.test(normalized)
   );
 }

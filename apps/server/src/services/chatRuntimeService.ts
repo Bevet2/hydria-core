@@ -1121,6 +1121,7 @@ function buildSourceBackedFactualRepair(args: {
   const informativeSentences = firstSentenceIsMostlyDates ? sentences.slice(1, 3) : sentences.slice(0, 2);
   const shouldKeepModelLead =
     !args.force &&
+    !isTruncated &&
     countWords(args.answer.answer) >= 8 &&
     answerMentionsAnyTerm(args.answer.answer, subjectTerms.size > 0 ? [...subjectTerms] : extractTerms(fact, 4));
   const repaired = [
