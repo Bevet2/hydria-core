@@ -943,6 +943,33 @@ curl -fsS https://app.hydria.click/api/models/ops?limit=50
 
 The ops gate tracks p95 latency, retry rate, local Ollama usage, static fallbacks, cloud runtime events, deep-reasoning escalation, per-budget p95 latency, budget-exceeded events, and tool/model role distribution.
 
+## Governed execution contracts
+
+Hydria Core now exposes the governance layer for future Hydria OS execution, but it still does not execute shell, browser, filesystem writes, or autonomous dev-agent loops directly.
+
+Current contracts:
+
+- `ExecutionGovernanceService`: permission, risk, rollback, dry-run plan, and audit event.
+- `SandboxCommandPolicyService`: OpenInterpreter-like command contract with whitelist, dry-run requirement, cwd scope, timeout cap, structured logs, and destructive-command blocking.
+- `DevAgentPlanningService`: OpenDevin-like dev-agent contract for repo read, patch plan, apply-patch handoff, test-command handoff, fix-loop handoff, and final report.
+
+Safety baseline:
+
+- real command execution: disabled
+- filesystem writes: disabled
+- patch application: Hydria OS handoff only
+- test execution: Hydria OS sandbox handoff only
+- fix loop: planned only, no autonomous mutation
+- all sensitive plans emit execution audit events
+
+Validation:
+
+```bash
+npm run execution:sandbox-gate
+npm run dev:agent-gate
+npm run execution:sensitive-gate
+```
+
 ## Firewall
 
 Expected UFW rules:

@@ -16,6 +16,8 @@
     "browser:automation-gate": "tsx src/scripts/runBrowserAutomationGovernanceGate.ts",
     "execution:audit-gate": "tsx src/scripts/runExecutionAuditReadOnlyGate.ts",
     "execution:sensitive-gate": "tsx src/scripts/runExecutionSensitivePathGate.ts",
+    "execution:sandbox-gate": "tsx src/scripts/runSandboxExecutionGate.ts",
+    "dev:agent-gate": "tsx src/scripts/runDevAgentGate.ts",
     "knowledge:quality-gate": "tsx src/scripts/runKnowledgeQualityGate.ts",
     "watchers:run": "tsx src/scripts/runWatchers.ts",
     "knowledge:scheduler": "tsx src/scripts/runGovernedKnowledgeScheduler.ts",
