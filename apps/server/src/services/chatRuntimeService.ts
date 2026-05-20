@@ -3555,6 +3555,26 @@ export class ChatRuntimeService {
       usedRetry = true;
     }
 
+    const finalBrevityAdjustedAnswer = enforceActiveBrevityConstraint({
+      answer: finalAnswer,
+      activeConstraintCapsule,
+      newUserMessage: args.message
+    });
+    if (finalBrevityAdjustedAnswer.answer !== finalAnswer.answer) {
+      finalAnswer = finalBrevityAdjustedAnswer;
+      conversationQuality = this.analyzeQuality({
+        runtimeMode,
+        conversationState,
+        activeConstraintCapsule,
+        answerPolicy,
+        newUserMessage: args.message,
+        answer: finalAnswer.answer,
+        lastAssistantAnswer: session.lastAssistantAnswer,
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
+      });
+    }
+
     const assistantMessage: ChatMessage = {
       id: randomUUID(),
       role: "assistant",

@@ -1326,6 +1326,7 @@ test("chat runtime does not treat generic brevity constraints as strategic conte
   assert.notEqual(third.generation.model, "strategic_context_ack");
   assert.equal(third.generation.provider, "ollama");
   assert.match(third.answer.answer, /PostgreSQL/i);
+  assert.ok(third.answer.answer.split(/\s+/).filter(Boolean).length <= 24);
   assert.equal(third.conversationQuality.passed, true);
   assert.equal(second.generation.model, "context_ack");
 });
@@ -1384,6 +1385,7 @@ test("chat runtime repairs concise stable concept timeouts instead of returning 
   assert.ok(third.evidenceCapsule.usedEvidence.includes("tool:research/fact_check"));
   assert.ok(third.orchestrationTrace.steps.some((step) => step.id === "answerability"));
   assert.match(third.answer.answer, /PostgreSQL/i);
+  assert.ok(third.answer.answer.split(/\s+/).filter(Boolean).length <= 24);
   assert.doesNotMatch(third.answer.answer, /pas reussi|reformule/i);
   assert.equal(third.conversationQuality.passed, true);
 });
