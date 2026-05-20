@@ -72,6 +72,18 @@ test("source synthesis quality rejects copied question openings without colon", 
   assert.ok(result.issues.includes("question_label_artifact"));
 });
 
+test("source synthesis quality rejects runtime research trace leakage", () => {
+  const result = evaluateSourceSynthesisQuality({
+    answer:
+      "La gravite existe parce qu'elle est une force fondamentale, comme le montre la recherche factuelle v2 avec un score de corroboration de 76%.",
+    language: "fr",
+    sourceBacked: true
+  });
+
+  assert.equal(result.passed, false);
+  assert.ok(result.issues.includes("source_artifact"));
+});
+
 test("source synthesis quality rejects keyword-list factual answers", () => {
   const result = evaluateSourceSynthesisQuality({
     answer:

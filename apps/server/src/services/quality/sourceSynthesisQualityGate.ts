@@ -102,6 +102,9 @@ function hasSourceArtifact(answer: string) {
   const normalized = normalizeText(answer);
   return (
     normalized.includes("objectif comprendre") ||
+    normalized.includes("recherche factuelle v2") ||
+    normalized.includes("score de corroboration") ||
+    /\bsources? pertinentes?\b/.test(normalized) ||
     /\bqu est ce qu un\b/.test(normalized) ||
     /\b(?:retrieved from|read more|cliquez ici)\b/.test(normalized)
   );
