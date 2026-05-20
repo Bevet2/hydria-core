@@ -61,6 +61,17 @@ test("source synthesis quality rejects question labels and source artifacts", ()
   assert.ok(result.issues.includes("source_artifact"));
 });
 
+test("source synthesis quality rejects copied question openings without colon", () => {
+  const result = evaluateSourceSynthesisQuality({
+    answer: "¿ Pourquoi la gravité existe sur Terre? L'une des nombreuses questions que nous posons.",
+    language: "fr",
+    sourceBacked: true
+  });
+
+  assert.equal(result.passed, false);
+  assert.ok(result.issues.includes("question_label_artifact"));
+});
+
 test("source synthesis quality rejects keyword-list factual answers", () => {
   const result = evaluateSourceSynthesisQuality({
     answer:

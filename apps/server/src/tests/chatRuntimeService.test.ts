@@ -410,6 +410,45 @@ test("chat runtime rewrites source snippets that are copied question labels plus
   assert.equal(response.conversationQuality.passed, true);
 });
 
+test("chat runtime avoids copied question snippets when repairing source-backed science answers", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult(
+          "¿ Pourquoi la gravite existe sur Terre? L'une des nombreuses questions que nous avons souvent tendance a nous poser."
+        );
+      }
+    },
+    undefined,
+    {
+      async tryExecute(routing: ToolRoutingDecision) {
+        if (routing.toolType !== "research" || routing.intent !== "fact_check") {
+          return null;
+        }
+        return {
+          toolType: "research" as const,
+          intent: "fact_check",
+          summary: ["Contexte source sur la gravite."],
+          verifiedFacts: [
+            "La gravite est l'une des forces les plus fondamentales observees dans la nature. Elle faconne les orbites des corps celestes et la structure de l'univers.",
+            "D'ou vient la gravite ? La gravite est l'une des quatre forces fondamentales de la nature, avec l'electromagnetisme, la force forte et la force faible.",
+            "¿ Pourquoi la gravite existe sur Terre? L'une des nombreuses questions que nous avons souvent tendance a nous poser."
+          ],
+          confidenceScore: 0.88,
+          resultLabel: "fact_check"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "Pourquoi la gravite existe ?" });
+
+  assert.match(response.answer.answer, /force/i);
+  assert.match(response.answer.answer, /fondamentale|nature/i);
+  assert.doesNotMatch(response.answer.answer, /^¿?\s*Pourquoi la gravite existe/i);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
 test("chat runtime drops broken trailing source sentences during source-backed repair", async () => {
   const service = new ChatRuntimeService(
     {

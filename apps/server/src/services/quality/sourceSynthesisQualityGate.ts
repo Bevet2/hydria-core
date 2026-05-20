@@ -88,8 +88,13 @@ function hasBrokenEnding(answer: string) {
 }
 
 function hasQuestionLabelArtifact(answer: string) {
-  return /^\s*(?:comment|explique|raconte|pourquoi|qu[' ]?est[- ]?ce|c[' ]?est quoi|what is|what was|who was|who is|why|how)\b[^.!?]{0,80}:\s/iu.test(
-    answer
+  return (
+    /^\s*(?:comment|explique|raconte|pourquoi|qu[' ]?est[- ]?ce|c[' ]?est quoi|what is|what was|who was|who is|why|how)\b[^.!?]{0,80}:\s/iu.test(
+      answer
+    ) ||
+    /^\s*[¿?]?\s*(?:comment|explique|raconte|pourquoi|d[' ]?ou|d[' ]?où|qu[' ]?est[- ]?ce|c[' ]?est quoi|what is|what was|who was|who is|why|how)\b[^.!?]{0,110}\?\s+\p{Lu}/iu.test(
+      answer
+    )
   );
 }
 

@@ -1150,6 +1150,71 @@ function sourceFactLanguageScore(fact: string, language: ConversationState["lang
   return 0;
 }
 
+const SOURCE_SUBJECT_STOPWORDS = new Set([
+  "comment",
+  "fonctionne",
+  "fonctionner",
+  "forme",
+  "former",
+  "explique",
+  "expliquer",
+  "pourquoi",
+  "existe",
+  "existent",
+  "tombe",
+  "tombent",
+  "cause",
+  "causes",
+  "what",
+  "who",
+  "how",
+  "why",
+  "does",
+  "work",
+  "works",
+  "explain"
+]);
+
+function extractSourceSubjectTerms(subject: string, limit = 10) {
+  return extractTerms(subject, limit).filter((term) => !SOURCE_SUBJECT_STOPWORDS.has(term));
+}
+
+function sourceFactQualityPenalty(fact: string, language: ConversationState["language"]) {
+  const quality = evaluateSourceSynthesisQuality({
+    answer: fact,
+    language,
+    sourceBacked: true
+  });
+  const normalized = normalizeText(fact);
+  let penalty = quality.issues.length * 12;
+  if (/^\s*[¿?]/.test(fact)) {
+    penalty += 16;
+  }
+  if (/\b(?:vous explique|lire l article|read more|cliquez ici|retrieved from)\b/i.test(normalized)) {
+    penalty += 10;
+  }
+  if (/\.\.\.|…|-->/u.test(fact)) {
+    penalty += 6;
+  }
+  return penalty;
+}
+
+function sourceFactRelevanceScore(args: {
+  fact: string;
+  subjectTerms: Set<string>;
+  language: ConversationState["language"];
+}) {
+  const normalized = normalizeText(args.fact);
+  const subjectHits = [...args.subjectTerms].filter((term) => normalized.includes(term)).length;
+  const concreteTermCount = extractTerms(args.fact, 24).filter((term) => !args.subjectTerms.has(term)).length;
+  return (
+    subjectHits * 24 +
+    sourceFactLanguageScore(args.fact, args.language) * 4 +
+    Math.min(concreteTermCount, 8) -
+    sourceFactQualityPenalty(args.fact, args.language)
+  );
+}
+
 function buildSourceBackedFactualRepair(args: {
   answer: StudentAnswer;
   tooling: ChatToolMetadata;
@@ -1176,20 +1241,17 @@ function buildSourceBackedFactualRepair(args: {
     typeof args.tooling.routing.extractedArgs?.subject === "string"
       ? args.tooling.routing.extractedArgs.subject
       : "";
-  const subjectTerms = new Set(extractTerms(subject, 10));
+  const subjectTerms = new Set(extractSourceSubjectTerms(subject, 10));
   const fact =
     args.tooling.verifiedFacts
       .map((item) => item.replace(/\s+/g, " ").trim())
       .filter((item) => item.length >= 40)
-      .sort((left, right) => {
-        const rightHits = [...subjectTerms].filter((term) => normalizeText(right).includes(term)).length;
-        const leftHits = [...subjectTerms].filter((term) => normalizeText(left).includes(term)).length;
-        return (
-          rightHits - leftHits ||
-          sourceFactLanguageScore(right, args.language) - sourceFactLanguageScore(left, args.language) ||
+      .sort(
+        (left, right) =>
+          sourceFactRelevanceScore({ fact: right, subjectTerms, language: args.language }) -
+            sourceFactRelevanceScore({ fact: left, subjectTerms, language: args.language }) ||
           right.length - left.length
-        );
-      })[0] ?? "";
+      )[0] ?? "";
   if (!fact) {
     return null;
   }
@@ -1343,24 +1405,7 @@ function sourceFragmentItems(fact: string) {
 }
 
 function sourceSubjectDisplay(subject: string, language: ConversationState["language"]) {
-  const questionTerms = new Set([
-    "comment",
-    "fonctionne",
-    "fonctionner",
-    "forme",
-    "former",
-    "explique",
-    "expliquer",
-    "pourquoi",
-    "what",
-    "who",
-    "how",
-    "why",
-    "does",
-    "work",
-    "works"
-  ]);
-  const terms = extractTerms(subject, 8).filter((term) => !questionTerms.has(term));
+  const terms = extractSourceSubjectTerms(subject, 8);
   const mainTerm = terms.find((term) => term.length >= 4) ?? terms[0] ?? "";
   if (!mainTerm) {
     return language === "en" ? "the topic" : "ce sujet";
@@ -1444,13 +1489,13 @@ function buildSourceSynthesisQualityRepair(args: {
   });
   const candidates: StudentAnswer[] = [];
 
-  if (repaired) {
-    candidates.push(enforceSourceFactLabelPresence({ answer: repaired, tooling: args.tooling }));
-  }
-
   const fragmentaryRepair = buildFragmentarySourceSynthesisRepair(args);
   if (fragmentaryRepair) {
     candidates.push(fragmentaryRepair);
+  }
+
+  if (repaired) {
+    candidates.push(enforceSourceFactLabelPresence({ answer: repaired, tooling: args.tooling }));
   }
 
   let best: { answer: StudentAnswer; quality: ReturnType<typeof evaluateSourceSynthesisQuality> } | null = null;
@@ -3260,13 +3305,36 @@ export class ChatRuntimeService {
       hasSourceBackedLabelOmission ||
       forceSourceBackedRepair ||
       isLikelyTruncatedAnswer(finalAnswer.answer);
-    const sourceBackedFactualRepair = shouldAttemptSourceBackedRepair
-      ? buildSourceBackedFactualRepair({
-          answer: finalAnswer,
-          tooling,
+    const sourceSynthesisQualityBeforeRepair = hasSourceBackedFactCheck
+      ? evaluateSourceSynthesisQuality({
+          answer: finalAnswer.answer,
           language: conversationState.language,
-          force: forceSourceBackedRepair
+          sourceBacked: true
         })
+      : null;
+    const shouldUseSynthesisQualityRepairBeforeFactual =
+      sourceSynthesisQualityBeforeRepair?.issues.some((issue) =>
+        ["question_label_artifact", "source_artifact", "fragmentary_list_synthesis"].includes(issue)
+      ) ?? false;
+    const sourceBackedFactualRepair = shouldAttemptSourceBackedRepair
+      ? shouldUseSynthesisQualityRepairBeforeFactual
+        ? buildSourceSynthesisQualityRepair({
+            answer: finalAnswer,
+            tooling,
+            language: conversationState.language
+          }) ??
+          buildSourceBackedFactualRepair({
+            answer: finalAnswer,
+            tooling,
+            language: conversationState.language,
+            force: forceSourceBackedRepair
+          })
+        : buildSourceBackedFactualRepair({
+            answer: finalAnswer,
+            tooling,
+            language: conversationState.language,
+            force: forceSourceBackedRepair
+          })
       : null;
     if (sourceBackedFactualRepair) {
       finalAnswer = sourceBackedFactualRepair;
