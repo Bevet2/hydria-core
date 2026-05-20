@@ -57,3 +57,15 @@ test("general knowledge rewriter strips narrative history request wrappers", () 
 
   assert.equal(charlemagne.canonicalSubject, "Charlemagne");
 });
+
+test("general knowledge rewriter disambiguates Cleopatra person from title-only works", () => {
+  const cleopatra = rewriteGeneralKnowledgeQuery({
+    question: "Qui etait Cleopatre ?",
+    language: "fr"
+  });
+
+  assert.equal(cleopatra.canonicalSubject, "Cleopatra VII");
+  assert.ok(cleopatra.candidates.includes("Cléopâtre VII"));
+  assert.equal(subjectMatchesText("Cleopatra VII", "Cléopâtre is an opera by Jules Massenet."), false);
+  assert.equal(subjectMatchesText("Cleopatra VII", "Cléopâtre VII est la dernière reine d'Égypte."), true);
+});

@@ -163,6 +163,59 @@ test("production general knowledge gate rejects truncated source-backed answers"
   assert.ok(result.issues.includes("broken_answer"));
 });
 
+test("production general knowledge gate rejects ambiguous Cleopatra opera sources", () => {
+  const testCase: GeneralKnowledgeReliabilityCase = {
+    id: "bio_cleopatra_fr",
+    message: "Qui etait Cleopatre ?",
+    category: "other",
+    expected: {
+      kind: "source_backed",
+      term: "Cleopatra VII"
+    }
+  };
+
+  const result = inspectProductionGeneralKnowledgeCase(testCase, {
+    assistantMessage: {
+      content: "Cléopâtre is an opera by Jules Massenet which premiered in 1914."
+    },
+    evidenceCapsule: {
+      answerabilityMode: "source_backed",
+      missingEvidence: [],
+      sourceBound: true
+    },
+    generation: {
+      provider: "ollama",
+      model: "qwen2.5:3b",
+      usedStaticFallback: false
+    },
+    conversationQuality: {
+      passed: true,
+      issues: []
+    },
+    tooling: {
+      used: true,
+      route: "used",
+      routing: {
+        toolType: "research",
+        intent: "fact_check",
+        toolRequired: true,
+        toolResultUsed: true
+      },
+      sources: [
+        researchSource("https://fr.wikipedia.org/wiki/Cléopâtre_(Massenet)", "Cléopâtre", "Opéra de Massenet."),
+        researchSource("https://www.wikidata.org/wiki/Q2973190", "Cléopâtre", "opéra de Jules Massenet")
+      ]
+    },
+    orchestrationTrace: {
+      steps: [{ id: "answerability", status: "passed", summary: "source_backed" }]
+    }
+  });
+
+  assert.equal(result.passed, false);
+  assert.ok(result.issues.includes("missing_expected_term:Cleopatra VII"));
+  assert.ok(result.issues.includes("source_subject_mismatch:Cleopatra VII"));
+});
+
 test("production general knowledge gate rejects tools for direct practical tasks", () => {
   const testCase: GeneralKnowledgeReliabilityCase = {
     id: "direct_tiramisu_fr",

@@ -242,7 +242,16 @@ function termLooksPresent(value: string, term: string) {
     return true;
   }
   const tokens = normalizedTerm.split(" ").filter((token) => token.length > 1);
-  return tokens.length > 0 && tokens.every((token) => normalizedValue.includes(token));
+  return tokens.length > 0 && tokens.every((token) =>
+    gateTermVariants(token).some((variant) => normalizedValue.includes(variant))
+  );
+}
+
+function gateTermVariants(token: string) {
+  if (token === "cleopatra" || token === "cleopatre") {
+    return ["cleopatra", "cleopatre"];
+  }
+  return [token];
 }
 
 function sourceText(source: ResearchSource) {
@@ -266,6 +275,9 @@ function isGenericFailure(answer: string) {
 function isBrokenAnswer(answer: string) {
   const trimmed = answer.trim();
   if (!trimmed) {
+    return true;
+  }
+  if (/\.{3}$/.test(trimmed)) {
     return true;
   }
   const normalized = normalizeGateText(trimmed);

@@ -316,6 +316,20 @@ function splitAnswerSentences(answer: string) {
     .filter(Boolean);
 }
 
+function compactToCompleteSentence(value: string, maxChars: number) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxChars) {
+    return normalized;
+  }
+
+  const bounded = normalized.slice(0, maxChars).trim();
+  const lastSentenceEnd = Math.max(bounded.lastIndexOf("."), bounded.lastIndexOf("!"), bounded.lastIndexOf("?"));
+  if (lastSentenceEnd >= Math.floor(maxChars * 0.45)) {
+    return bounded.slice(0, lastSentenceEnd + 1).trim();
+  }
+  return `${bounded.replace(/\s+\S*$/, "").replace(/[,:;]+$/g, "").trim()}.`;
+}
+
 function isBrevityMetaSentence(sentence: string) {
   return /\b(?:contrainte|constraint|moins de|less than|mots?|words?|reponse courte|réponse courte|short answer|j[' ]?assume|assumption)\b/i.test(
     sentence
@@ -1050,6 +1064,9 @@ function isStaticGenerationFailureAnswer(answer: string) {
 
 function isLikelyTruncatedAnswer(answer: string) {
   const trimmed = answer.trim();
+  if (/\.{3}$/.test(trimmed)) {
+    return true;
+  }
   const normalized = normalizeText(trimmed);
   return (
     /(?:[,;:]|\s[-–])$/.test(trimmed) ||
@@ -1083,17 +1100,25 @@ function buildSourceBackedFactualRepair(args: {
     return null;
   }
 
-  const fact = args.tooling.verifiedFacts[0]?.replace(/\s+/g, " ").trim();
-  if (!fact || fact.length < 40) {
-    return null;
-  }
-
   const subject =
     typeof args.tooling.routing.extractedArgs?.subject === "string"
       ? args.tooling.routing.extractedArgs.subject
       : "";
-  const normalizedAnswer = normalizeText(args.answer.answer);
   const subjectTerms = new Set(extractTerms(subject, 10));
+  const fact =
+    args.tooling.verifiedFacts
+      .map((item) => item.replace(/\s+/g, " ").trim())
+      .filter((item) => item.length >= 40)
+      .sort((left, right) => {
+        const rightHits = [...subjectTerms].filter((term) => normalizeText(right).includes(term)).length;
+        const leftHits = [...subjectTerms].filter((term) => normalizeText(left).includes(term)).length;
+        return rightHits - leftHits || right.length - left.length;
+      })[0] ?? "";
+  if (!fact) {
+    return null;
+  }
+
+  const normalizedAnswer = normalizeText(args.answer.answer);
   const genericDescriptorTerms = new Set([
     "physicienne",
     "chimiste",
@@ -1159,7 +1184,7 @@ function buildSourceBackedFactualRepair(args: {
 
   return {
     ...args.answer,
-    answer: repaired.length <= 360 ? repaired : `${repaired.slice(0, 357).trim()}...`,
+    answer: compactToCompleteSentence(repaired, 360),
     key_points: [...args.answer.key_points, "Source-backed factual repair"].slice(0, 6),
     confidence: Math.max(args.answer.confidence, 82)
   };

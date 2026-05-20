@@ -795,6 +795,100 @@ test("local research fact-check tool rejects off-subject Wikipedia summaries", a
   assert.equal(result?.sources?.[0]?.retrievalEngine, "duckduckgo");
 });
 
+test("local research fact-check tool disambiguates Cleopatra from the opera", async (t) => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    const decoded = decodeURIComponent(url.replace(/\+/g, " "));
+    if (url.includes("fr.wikipedia.org/w/api.php") && decoded.includes("srsearch=Cleopatra VII")) {
+      return new Response(
+        JSON.stringify({
+          query: {
+            search: [
+              {
+                title: "Cléopâtre",
+                snippet: "Opéra de Jules Massenet."
+              }
+            ]
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("fr.wikipedia.org/w/api.php") && decoded.includes("srsearch=Cleopatre VII")) {
+      return new Response(
+        JSON.stringify({
+          query: {
+            search: [
+              {
+                title: "Cléopâtre VII",
+                snippet: "Reine d'Egypte antique."
+              }
+            ]
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("fr.wikipedia.org/api/rest_v1/page/summary/Cl%C3%A9op%C3%A2tre_VII")) {
+      return new Response(
+        JSON.stringify({
+          title: "Cléopâtre VII",
+          description: "Reine d'Egypte antique",
+          extract: "Cléopâtre VII est la dernière souveraine active du royaume ptolémaïque d'Egypte.",
+          timestamp: "2026-05-01T12:00:00Z",
+          content_urls: {
+            desktop: {
+              page: "https://fr.wikipedia.org/wiki/Cléopâtre_VII"
+            }
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("fr.wikipedia.org/api/rest_v1/page/summary/Cl%C3%A9op%C3%A2tre")) {
+      return new Response(
+        JSON.stringify({
+          title: "Cléopâtre",
+          description: "Opéra",
+          extract: "Cléopâtre est un opéra de Jules Massenet créé en 1914.",
+          timestamp: "2026-05-01T12:00:00Z"
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("wikidata.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          search: [
+            {
+              id: "Q635",
+              label: "Cleopatra VII",
+              description: "last active ruler of the Ptolemaic Kingdom of Egypt",
+              concepturi: "https://www.wikidata.org/wiki/Q635"
+            }
+          ]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const service = new LocalToolExecutionService();
+  const result = await service.tryExecute(buildFactCheckRouting("Cleopatre"));
+
+  assert.equal(result?.toolType, "research");
+  assert.equal(result?.resultLabel, "Cleopatra VII");
+  assert.match(result?.verifiedFacts.join(" "), /reine|ruler|Egypte|Egypt/i);
+  assert.doesNotMatch(result?.verifiedFacts.join(" "), /opéra|opera/i);
+});
+
 test("local research fact-check tool falls back to web search snippets", async (t) => {
   const originalFetch = globalThis.fetch;
 

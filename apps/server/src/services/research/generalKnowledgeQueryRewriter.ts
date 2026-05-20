@@ -78,7 +78,22 @@ const COMMON_ALIAS_CANONICALS: Record<string, string> = {
   tls: "TLS",
   cdn: "CDN",
   llm: "LLM",
-  llms: "LLM"
+  llms: "LLM",
+  cleopatre: "Cleopatra VII",
+  cleopatra: "Cleopatra VII",
+  "cleopatre vii": "Cleopatra VII",
+  "cleopatra vii": "Cleopatra VII",
+  "napoleon bonaparte": "Napoleon Bonaparte"
+};
+
+const SPECIAL_CANDIDATE_ALIASES: Record<string, string[]> = {
+  "cleopatra vii": ["Cleopatra VII", "Cleopatre VII", "Cléopâtre VII", "Cleopatra", "Cleopatre"],
+  "napoleon bonaparte": ["Napoleon Bonaparte", "Napoléon Ier", "Napoleon I", "Napoleon"]
+};
+
+const MATCH_TERM_ALIASES: Record<string, string[]> = {
+  cleopatra: ["cleopatra", "cleopatre"],
+  cleopatre: ["cleopatre", "cleopatra"]
 };
 
 function unique(values: string[]) {
@@ -205,8 +220,10 @@ export function rewriteGeneralKnowledgeQuery(input: {
     canonicalAlias(normalizedOrdinal) ??
     titleCaseSubject(cleanedSubject.length >= 2 ? cleanedSubject : normalizedOrdinal);
   const noCountry = withoutCountrySuffix(canonicalSubject);
+  const specialAliases = SPECIAL_CANDIDATE_ALIASES[normalizeLooseText(canonicalSubject)] ?? [];
   const aliases = unique([
     canonicalSubject,
+    ...specialAliases,
     contextualAlias ? "Saint Louis" : "",
     noCountry,
     candidateWithSimpleSingular(canonicalSubject),
@@ -232,6 +249,10 @@ export function meaningfulSubjectTerms(subject: string) {
     .filter((term) => term.length >= 2);
 }
 
+function matchTermVariants(term: string) {
+  return MATCH_TERM_ALIASES[term] ?? [term];
+}
+
 export function subjectMatchesText(subject: string, text: string) {
   const subjectTerms = meaningfulSubjectTerms(subject);
   if (subjectTerms.length === 0) {
@@ -239,6 +260,8 @@ export function subjectMatchesText(subject: string, text: string) {
   }
 
   const normalizedText = normalizeLooseText(text);
-  const hitCount = subjectTerms.filter((term) => normalizedText.includes(term)).length;
+  const hitCount = subjectTerms.filter((term) =>
+    matchTermVariants(term).some((variant) => normalizedText.includes(variant))
+  ).length;
   return hitCount >= Math.min(2, subjectTerms.length);
 }

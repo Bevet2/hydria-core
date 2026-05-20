@@ -222,6 +222,29 @@ test("chat runtime repairs truncated source-backed factual answers with verified
   assert.equal(response.conversationQuality.passed, true);
 });
 
+test("chat runtime repairs ellipsis-truncated source-backed factual answers", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult(
+          "Napoléon Ier, né le 15 août 1769 à Ajaccio et mort le 5 mai 1821 à Sainte-Hélène, était un militaire..."
+        );
+      }
+    },
+    undefined,
+    buildFactCheckToolResult(
+      "Napoleon Bonaparte: Napoléon Bonaparte, aussi appelé Napoléon Ier, est un militaire et homme d'Etat français, premier empereur des Français."
+    )
+  );
+
+  const response = await service.sendMessage({ message: "Biographie courte de Napoleon Bonaparte." });
+
+  assert.match(response.answer.answer, /Napol[eé]on/i);
+  assert.doesNotMatch(response.answer.answer.trim(), /\.{3}$/);
+  assert.equal(response.usedRetry, true);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
 test("chat runtime repairs unsupported proper nouns in source-backed factual answers", async () => {
   const service = new ChatRuntimeService(
     {
