@@ -23,6 +23,8 @@
     "knowledge:scheduler": "tsx src/scripts/runGovernedKnowledgeScheduler.ts",
     "knowledge:promote": "tsx src/scripts/runKnowledgePromotionGovernance.ts",
     "knowledge:retrieval-gate": "tsx src/scripts/runKnowledgeRetrievalGate.ts",
+    "knowledge:graph-gate": "tsx src/scripts/runKnowledgeGraphGate.ts",
+    "optimization:gate": "tsx src/scripts/runPolicyOptimizationGate.ts",
     "training:queue-validate": "tsx src/scripts/runTrainingQueueValidation.ts",
     "learning:dataset-expansion": "tsx src/scripts/runDatasetExpansionCampaign.ts",
     "learning:loop": "tsx src/scripts/runLearningLoop.ts",

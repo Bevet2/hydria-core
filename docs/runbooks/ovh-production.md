@@ -404,6 +404,59 @@ storage/training/knowledge-retrieval-gate-v1.json
 
 The gate checks that a source-acquired object can be retrieved and traced, that unrelated everyday chat such as a recipe does not receive off-topic knowledge, and that live tool questions keep tool priority. The Chat UI shows the public `Knowledge retrieval` trace step and the injected hit titles/summaries; this is a runtime trace, not private chain-of-thought.
 
+## GraphRAG and policy optimization
+
+Hydria now has a GraphRAG contract layer in addition to the existing Knowledge Objects and vault projection. This layer is still safe-by-default: it builds and queries a persistent graph, but it is not automatically promoted into public chat routing without a dedicated gate.
+
+GraphRAG v1:
+
+```text
+Knowledge Objects / governed seeds
+-> hydria-knowledge-graph-v1.json
+-> nodes: concepts, sources, tools, skills, agents, decisions
+-> typed edges: derived_from, uses_skill, related_to, supports, depends_on, etc.
+-> hybrid retrieval: lexical token score + vector-like token cosine + graph path score
+```
+
+Validate it with:
+
+```bash
+npm run knowledge:graph-gate
+```
+
+This writes:
+
+```text
+storage/training/knowledge-graph-gate-v1.json
+```
+
+The gate checks persistence, all six required node types, typed edges, graph evidence paths, and hybrid retrieval on operational concepts, decisions, tools, skills, and watcher/acquisition links.
+
+DSPy-like optimization v1 is also contract-only. It collects policy/routing/prompt traces, proposes bounded variants, evaluates A/B results, and blocks promotion if any metric regresses.
+
+```text
+runtime/gate traces
+-> policy optimization traces
+-> guarded variant proposals
+-> A/B evaluation
+-> promotion allowed only when regressionCount = 0
+-> human approval still required
+```
+
+Validate it with:
+
+```bash
+npm run optimization:gate
+```
+
+This writes:
+
+```text
+storage/training/policy-optimization-gate-v1.json
+```
+
+This gate verifies variant generation for language, tool/evidence routing, and runtime fallback failures. It also verifies that a clean candidate can become `promotable` and that a regressed candidate is blocked. The optimization layer does not mutate production policy, activate prompts, or train models by itself.
+
 External network checks are disabled by default. Enable only when the source-acquisition policy is ready:
 
 ```text

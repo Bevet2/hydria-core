@@ -27,6 +27,8 @@
     "knowledge:scheduler": "npm run knowledge:scheduler -w @hydria-arena/server --",
     "knowledge:promote": "npm run knowledge:promote -w @hydria-arena/server --",
     "knowledge:retrieval-gate": "npm run knowledge:retrieval-gate -w @hydria-arena/server --",
+    "knowledge:graph-gate": "npm run knowledge:graph-gate -w @hydria-arena/server --",
+    "optimization:gate": "npm run optimization:gate -w @hydria-arena/server --",
     "training:queue-validate": "npm run training:queue-validate -w @hydria-arena/server --",
     "learning:dataset-expansion": "npm run learning:dataset-expansion -w @hydria-arena/server --",
     "learning:loop": "npm run learning:loop -w @hydria-arena/server",
