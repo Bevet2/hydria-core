@@ -1253,10 +1253,11 @@ function buildSourceBackedFactualRepair(args: {
   const preferredSubjectPrefix = factLabel || subject;
   const subjectPrefix =
     subjectIsUnderspecified && preferredSubjectPrefix.trim().length > 0 ? `${preferredSubjectPrefix.trim()}:` : "";
+  const maxInformativeSentences = args.force && isLikelyTruncatedAnswer(args.answer.answer) ? 1 : 2;
   const repaired = [
     subjectPrefix,
     shouldKeepModelLead ? args.answer.answer : "",
-    ...informativeSentences
+    ...informativeSentences.slice(0, maxInformativeSentences)
   ]
     .filter(Boolean)
     .join(" ")
