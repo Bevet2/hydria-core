@@ -1106,9 +1106,33 @@ function hasUnsupportedProperNoun(answer: string, sourceFact: string) {
   });
 }
 
+function sourceFactLanguageScore(fact: string, language: ConversationState["language"]) {
+  const normalized = normalizeText(fact);
+  if (language === "fr") {
+    const frenchHits = (
+      normalized.match(
+        /\b(?:est|sont|une|des|dans|avec|pour|physicien|physicienne|ne|nee|mort|morte|siecle|traite|revolution)\b/g
+      ) ?? []
+    ).length;
+    const englishHits = (normalized.match(/\b(?:is|are|the|with|born|died|century|treaty|revolution)\b/g) ?? [])
+      .length;
+    return frenchHits - englishHits;
+  }
+  if (language === "en") {
+    const englishHits = (normalized.match(/\b(?:is|are|the|with|born|died|century|treaty|revolution)\b/g) ?? [])
+      .length;
+    const frenchHits = (
+      normalized.match(/\b(?:est|sont|une|des|dans|avec|pour|ne|nee|mort|morte|siecle|traite)\b/g) ?? []
+    ).length;
+    return englishHits - frenchHits;
+  }
+  return 0;
+}
+
 function buildSourceBackedFactualRepair(args: {
   answer: StudentAnswer;
   tooling: ChatToolMetadata;
+  language: ConversationState["language"];
   force?: boolean;
 }): StudentAnswer | null {
   if (
@@ -1131,12 +1155,18 @@ function buildSourceBackedFactualRepair(args: {
       .sort((left, right) => {
         const rightHits = [...subjectTerms].filter((term) => normalizeText(right).includes(term)).length;
         const leftHits = [...subjectTerms].filter((term) => normalizeText(left).includes(term)).length;
-        return rightHits - leftHits || right.length - left.length;
+        return (
+          rightHits - leftHits ||
+          sourceFactLanguageScore(right, args.language) - sourceFactLanguageScore(left, args.language) ||
+          right.length - left.length
+        );
       })[0] ?? "";
   if (!fact) {
     return null;
   }
 
+  const factLabel = fact.match(/^([^:]{2,90}):\s*/)?.[1]?.trim() ?? "";
+  const evidenceSubjectTerms = new Set([...subjectTerms, ...extractTerms(factLabel, 8)]);
   const normalizedAnswer = normalizeText(args.answer.answer);
   const genericDescriptorTerms = new Set([
     "physicienne",
@@ -1153,11 +1183,11 @@ function buildSourceBackedFactualRepair(args: {
     "writer"
   ]);
   const sourceTerms = extractTerms(fact, 24).filter(
-    (term) => !subjectTerms.has(term) && !genericDescriptorTerms.has(term)
+    (term) => !evidenceSubjectTerms.has(term) && !genericDescriptorTerms.has(term)
   );
   const sourceTermsUsed = sourceTerms.filter((term) => normalizedAnswer.includes(term)).length;
   const sourceTermsMissing = sourceTerms.length - sourceTermsUsed;
-  const concreteSubjectTerms = [...subjectTerms].filter((term) => term.length >= 3);
+  const concreteSubjectTerms = [...evidenceSubjectTerms].filter((term) => term.length >= 3);
   const subjectTermsUsed = concreteSubjectTerms.filter((term) => normalizedAnswer.includes(term)).length;
   const subjectIsUnderspecified =
     concreteSubjectTerms.length > 0 && subjectTermsUsed < Math.min(2, concreteSubjectTerms.length);
@@ -1184,7 +1214,7 @@ function buildSourceBackedFactualRepair(args: {
     );
   const firstSentenceNamesSubject = answerMentionsAnyTerm(
     sentences[0] ?? "",
-    subjectTerms.size > 0 ? [...subjectTerms] : extractTerms(fact, 4)
+    evidenceSubjectTerms.size > 0 ? [...evidenceSubjectTerms] : extractTerms(fact, 4)
   );
   const informativeSentences =
     firstSentenceIsMostlyDates && !firstSentenceNamesSubject ? sentences.slice(1, 3) : sentences.slice(0, 2);
@@ -1193,8 +1223,13 @@ function buildSourceBackedFactualRepair(args: {
     !isTruncated &&
     !hasUnsupportedEntity &&
     countWords(args.answer.answer) >= 8 &&
-    answerMentionsAnyTerm(args.answer.answer, subjectTerms.size > 0 ? [...subjectTerms] : extractTerms(fact, 4));
-  const subjectPrefix = subjectIsUnderspecified && subject.trim().length > 0 ? `${subject.trim()}:` : "";
+    answerMentionsAnyTerm(
+      args.answer.answer,
+      evidenceSubjectTerms.size > 0 ? [...evidenceSubjectTerms] : extractTerms(fact, 4)
+    );
+  const preferredSubjectPrefix = factLabel || subject;
+  const subjectPrefix =
+    subjectIsUnderspecified && preferredSubjectPrefix.trim().length > 0 ? `${preferredSubjectPrefix.trim()}:` : "";
   const repaired = [
     subjectPrefix,
     shouldKeepModelLead ? args.answer.answer : "",
@@ -2959,6 +2994,10 @@ export class ChatRuntimeService {
     const routedFactSubject =
       typeof tooling.routing.extractedArgs?.subject === "string" ? tooling.routing.extractedArgs.subject : "";
     const routedFactSubjectTerms = extractTerms(routedFactSubject, 10).filter((term) => term.length >= 3);
+    const sourceFactLabelTerms = tooling.verifiedFacts
+      .map((fact) => fact.match(/^([^:]{2,90}):\s*/)?.[1] ?? "")
+      .flatMap((label) => extractTerms(label, 8))
+      .filter((term) => term.length >= 3);
     const hasResolvableSubjectReference =
       runtimeMode === "conversation" &&
       Boolean(extractResolvedSubjectFromRoutingQuestion(draft.routingQuestion)) &&
@@ -2970,22 +3009,30 @@ export class ChatRuntimeService {
       !hasResolvableSubjectReference &&
       routedFactSubjectTerms.length > 0 &&
       !answerMentionsAnyTerm(finalAnswer.answer, routedFactSubjectTerms);
+    const hasSourceBackedLabelOmission =
+      hasSourceBackedFactCheck &&
+      !hasResolvableSubjectReference &&
+      sourceFactLabelTerms.length > 0 &&
+      !answerMentionsAnyTerm(finalAnswer.answer, sourceFactLabelTerms);
     const forceWrongLanguageRepair =
       conversationQuality.issues.includes("wrong_language_expected_en") ||
       conversationQuality.issues.includes("wrong_language_expected_fr");
     const forceSourceBackedRepair =
       forceWrongLanguageRepair ||
+      hasSourceBackedLabelOmission ||
       (conversationQuality.issues.includes("off_topic_direct_answer") && hasSourceBackedSubjectOmission);
     const shouldAttemptSourceBackedRepair =
       runtimeMode === "direct" ||
       draft.generation.provider === "fallback" ||
       hasSourceBackedSubjectOmission ||
+      hasSourceBackedLabelOmission ||
       forceSourceBackedRepair ||
       isLikelyTruncatedAnswer(finalAnswer.answer);
     const sourceBackedFactualRepair = shouldAttemptSourceBackedRepair
       ? buildSourceBackedFactualRepair({
           answer: finalAnswer,
           tooling,
+          language: conversationState.language,
           force: forceSourceBackedRepair
         })
       : null;
