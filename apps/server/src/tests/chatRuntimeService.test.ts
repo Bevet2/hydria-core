@@ -346,6 +346,52 @@ test("chat runtime repairs source-backed answers missing canonical subject terms
   assert.equal(response.usedRetry, true);
 });
 
+test("chat runtime repairs off-topic source-backed list answers", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult(
+          "tectonique des plaques, 3 mecanismes de fusion, types d'eruptions, classification VEI, exemples historiques."
+        );
+      }
+    },
+    undefined,
+    buildFactCheckToolResult(
+      "Volcan: Un volcan est une ouverture dans la croute terrestre par laquelle du magma, des gaz et des cendres peuvent atteindre la surface."
+    )
+  );
+
+  const response = await service.sendMessage({ message: "Comment fonctionne un volcan ?" });
+
+  assert.match(response.answer.answer, /volcan/i);
+  assert.match(response.answer.answer, /magma|croute terrestre/i);
+  assert.doesNotMatch(response.answer.answer, /^tectonique des plaques/i);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
+test("chat runtime drops broken trailing source sentences during source-backed repair", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult(
+          "Magna Carta, sometimes spelled Magna Charta, is a royal charter of rights sealed by King John of England at Runnymede, near Windsor, on 15 June 1215. First drafted by rebel barons, it."
+        );
+      }
+    },
+    undefined,
+    buildFactCheckToolResult(
+      "Magna Carta: Magna Carta, sometimes spelled Magna Charta, is a royal charter of rights sealed by King John of England at Runnymede, near Windsor, on 15 June 1215. First drafted by the Archbishop of Canterbury to make peace between the king and rebel barons, it."
+    )
+  );
+
+  const response = await service.sendMessage({ message: "What is the Magna Carta?" });
+
+  assert.match(response.answer.answer, /Magna Carta/i);
+  assert.doesNotMatch(response.answer.answer, /\bit\.$/i);
+  assert.doesNotMatch(response.answer.answer, /rebel barons, it/i);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
 test("chat runtime repairs unsupported proper nouns in source-backed factual answers", async () => {
   const service = new ChatRuntimeService(
     {

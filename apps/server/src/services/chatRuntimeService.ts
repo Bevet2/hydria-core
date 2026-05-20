@@ -1088,9 +1088,12 @@ function isLikelyTruncatedAnswer(answer: string) {
     return true;
   }
   const normalized = normalizeText(trimmed);
+  const lexicalEnding = normalized.replace(/[^a-z0-9]+$/g, "");
   return (
     /(?:[,;:]|\s[-–])$/.test(trimmed) ||
-    /\b(?:a|de|du|des|le|la|les|un|une|et|en|of|to|the|and|with|from)$/.test(normalized)
+    /\b(?:a|de|du|des|le|la|les|un|une|et|en|of|to|the|and|with|from|it|that|which|qui|que)$/.test(
+      lexicalEnding
+    )
   );
 }
 
@@ -1224,7 +1227,9 @@ function buildSourceBackedFactualRepair(args: {
   }
 
   const factText = fact.replace(/^[^:]{1,90}:\s*/, "").trim();
-  const sentences = uniqueFactualSentences(splitFactualSentences(factText));
+  const sourceSentences = uniqueFactualSentences(splitFactualSentences(factText));
+  const completeSentences = sourceSentences.filter((sentence) => !isLikelyTruncatedAnswer(sentence));
+  const sentences = completeSentences.length > 0 ? completeSentences : sourceSentences;
   const firstSentenceIsMostlyDates =
     sentences.length > 1 &&
     /\b(?:n(?:e|ee|é|ée)|born|mort(?:e)?|died|death|naissance|deces|d(?:e|\u00e9)c(?:e|\u00e8)s)\b/i.test(
@@ -3113,9 +3118,12 @@ export class ChatRuntimeService {
     const forceWrongLanguageRepair =
       conversationQuality.issues.includes("wrong_language_expected_en") ||
       conversationQuality.issues.includes("wrong_language_expected_fr");
+    const forceOffTopicSourceRepair =
+      hasSourceBackedFactCheck && conversationQuality.issues.includes("off_topic_direct_answer");
     const forceSourceBackedRepair =
       forceWrongLanguageRepair ||
       hasSourceBackedLabelOmission ||
+      forceOffTopicSourceRepair ||
       (conversationQuality.issues.includes("off_topic_direct_answer") && hasSourceBackedSubjectOmission);
     const shouldAttemptSourceBackedRepair =
       runtimeMode === "direct" ||
