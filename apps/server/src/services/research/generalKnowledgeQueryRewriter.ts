@@ -219,11 +219,16 @@ export function rewriteGeneralKnowledgeQuery(input: {
     canonicalAlias(cleanedSubject) ??
     canonicalAlias(normalizedOrdinal) ??
     titleCaseSubject(cleanedSubject.length >= 2 ? cleanedSubject : normalizedOrdinal);
-  const noCountry = withoutCountrySuffix(canonicalSubject);
+  const preferredCanonicalSubject =
+    language === "fr" && normalizeLooseText(canonicalSubject) === "cleopatra vii"
+      ? "Cléopâtre VII"
+      : canonicalSubject;
+  const noCountry = withoutCountrySuffix(preferredCanonicalSubject);
   const specialAliases = SPECIAL_CANDIDATE_ALIASES[normalizeLooseText(canonicalSubject)] ?? [];
   const aliases = unique([
-    canonicalSubject,
+    preferredCanonicalSubject,
     ...specialAliases,
+    canonicalSubject,
     contextualAlias ? "Saint Louis" : "",
     noCountry,
     candidateWithSimpleSingular(canonicalSubject),

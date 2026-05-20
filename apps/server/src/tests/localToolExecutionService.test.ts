@@ -801,6 +801,21 @@ test("local research fact-check tool disambiguates Cleopatra from the opera", as
   globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
     const url = String(input);
     const decoded = decodeURIComponent(url.replace(/\+/g, " "));
+    if (url.includes("fr.wikipedia.org/w/api.php") && decoded.includes("srsearch=Cléopâtre VII")) {
+      return new Response(
+        JSON.stringify({
+          query: {
+            search: [
+              {
+                title: "Cléopâtre VII",
+                snippet: "Reine d'Egypte antique."
+              }
+            ]
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
     if (url.includes("fr.wikipedia.org/w/api.php") && decoded.includes("srsearch=Cleopatra VII")) {
       return new Response(
         JSON.stringify({
@@ -884,7 +899,7 @@ test("local research fact-check tool disambiguates Cleopatra from the opera", as
   const result = await service.tryExecute(buildFactCheckRouting("Cleopatre"));
 
   assert.equal(result?.toolType, "research");
-  assert.equal(result?.resultLabel, "Cleopatra VII");
+  assert.equal(result?.resultLabel, "Cléopâtre VII");
   assert.match(result?.verifiedFacts.join(" "), /reine|ruler|Egypte|Egypt/i);
   assert.doesNotMatch(result?.verifiedFacts.join(" "), /opéra|opera/i);
 });
