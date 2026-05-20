@@ -1251,6 +1251,35 @@ function buildSourceBackedFactualRepair(args: {
   };
 }
 
+function enforceSourceFactLabelPresence(args: { answer: StudentAnswer; tooling: ChatToolMetadata }): StudentAnswer {
+  if (
+    !args.tooling.used ||
+    args.tooling.routing.toolType !== "research" ||
+    args.tooling.routing.intent !== "fact_check"
+  ) {
+    return args.answer;
+  }
+
+  const labels = args.tooling.verifiedFacts
+    .map((fact) => fact.match(/^([^:]{2,90}):\s*/)?.[1]?.trim() ?? "")
+    .filter((label) => /^[A-Z0-9][A-Z0-9 -]{1,14}$/.test(label));
+  const label = labels.find((candidate) => {
+    const terms = extractTerms(candidate, 8).filter((term) => term.length >= 3);
+    return terms.length > 0 && !answerMentionsAnyTerm(args.answer.answer, terms);
+  });
+
+  if (!label) {
+    return args.answer;
+  }
+
+  return {
+    ...args.answer,
+    answer: `${label}: ${args.answer.answer}`.replace(/\s+/g, " ").trim(),
+    key_points: [...args.answer.key_points, "Source label preserved"].slice(0, 6),
+    confidence: Math.max(args.answer.confidence, 82)
+  };
+}
+
 function extractFailingCommand(message: string) {
   const priorityCommand = message.match(/\b(?:npm\s+install|npm\s+ci|pnpm\s+install|yarn\s+install)\b/i)?.[0];
   if (priorityCommand) {
@@ -3409,6 +3438,22 @@ export class ChatRuntimeService {
     });
     if (brevityAdjustedAnswer.answer !== finalAnswer.answer) {
       finalAnswer = brevityAdjustedAnswer;
+      conversationQuality = this.analyzeQuality({
+        runtimeMode,
+        conversationState,
+        activeConstraintCapsule,
+        answerPolicy,
+        newUserMessage: args.message,
+        answer: finalAnswer.answer,
+        lastAssistantAnswer: session.lastAssistantAnswer,
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
+      });
+    }
+
+    const sourceLabelPreservedAnswer = enforceSourceFactLabelPresence({ answer: finalAnswer, tooling });
+    if (sourceLabelPreservedAnswer.answer !== finalAnswer.answer) {
+      finalAnswer = sourceLabelPreservedAnswer;
       conversationQuality = this.analyzeQuality({
         runtimeMode,
         conversationState,
