@@ -47,3 +47,12 @@ test("general knowledge rewriter normalizes common acronyms and hyphenated subje
   assert.equal(dna.canonicalSubject, "DNA");
   assert.equal(saintLouis.canonicalSubject, "Saint Louis");
 });
+
+test("general knowledge rewriter strips narrative history request wrappers", () => {
+  const charlemagne = rewriteGeneralKnowledgeQuery({
+    question: "Raconte l'histoire de Charlemagne.",
+    language: "fr"
+  });
+
+  assert.equal(charlemagne.canonicalSubject, "Charlemagne");
+});

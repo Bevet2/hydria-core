@@ -608,9 +608,10 @@ function extractIdentitySubjectFragment(message: string) {
 
 function extractAnswerabilityResearchSubject(question: string) {
   const cleaned = question
+    .replace(/['’]/g, " ")
     .replace(/[?]/g, " ")
     .replace(
-      /\b(?:who is|who was|what is|what are|tell me about|explain|define|definition|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce que|quest ce que|c[' ]?est quoi|explique(?: moi)?|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition)\b/gi,
+      /\b(?:who is|who was|what is|what are|tell me about|explain|define|definition|history of|biography of|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce que|quest ce que|c[' ]?est quoi|explique(?: moi)?|raconte(?:\s+l\s+histoire\s+de)?|raconte|biographie(?: de)?|histoire(?: de)?|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition)\b/gi,
       " "
     )
     .replace(

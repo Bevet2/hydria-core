@@ -58,7 +58,7 @@ const NUMBER_WORDS: Record<string, number> = {
 const COUNTRY_SUFFIX_PATTERN =
   /\b(?:france|angleterre|england|spain|espagne|italie|italy|germany|allemagne|portugal|russie|russia)\b$/i;
 const SUBJECT_STOPWORD_PATTERN =
-  /\b(?:roi|reine|king|queen|empereur|emperor|pape|pope|pharaon|pharaoh|prince|princesse|pour|for|de|du|des|d|d'|l'|of|about|sur|the|le|la|les|un|une|a|an|son|sa|ses|his|her|their|its)\b/gi;
+  /\b(?:roi|reine|king|queen|empereur|emperor|pape|pope|pharaon|pharaoh|prince|princesse|pour|for|de|du|des|d|l|of|about|sur|the|le|la|les|un|une|a|an|son|sa|ses|his|her|their|its)\b/gi;
 const MATCH_STOPWORD_PATTERN =
   /\b(?:roi|king|reine|queen|empereur|emperor|pape|pope|saint|sainte|de|du|des|d|of|the|le|la|les|france|french|english|anglais|francais|francaise|biographie|biography|history|histoire|definition|explain|explique)\b/g;
 const DASH_PATTERN = /[\u2010-\u2015-]+/g;
@@ -130,9 +130,10 @@ export function normalizeOrdinalAliases(value: string) {
 function stripRequestTerms(value: string) {
   return normalizeSpace(
     value
+      .replace(/['’]/g, " ")
       .replace(/[?]/g, " ")
       .replace(
-        /\b(?:who is|who was|what is|what are|tell me about|give me|make me|explain|define|definition|history of|biography of|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce qu[' ]?(?:un|une|le|la|les)?|qu[' ]?est[- ]?ce que|quest ce que|c[' ]?est quoi|ce qu'est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi,
+        /\b(?:who is|who was|what is|what are|tell me about|give me|make me|explain|define|definition|history of|biography of|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce qu[' ]?(?:un|une|le|la|les)?|qu[' ]?est[- ]?ce que|quest ce que|c[' ]?est quoi|ce qu'est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:\s+l\s+histoire\s+de)?|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi,
         " "
       )
       .replace(/\b(?:c[' ]?est qui|c[' ]?est quel|c[' ]?est quoi|etait[- ]?ce|what causes|what caused|what was|what were|used for)\b/gi, " ")
