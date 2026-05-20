@@ -51,6 +51,7 @@ import {
   normalizeOrdinalAliases,
   rewriteGeneralKnowledgeQuery
 } from "./research/generalKnowledgeQueryRewriter.js";
+import { evaluateSourceSynthesisQuality } from "./quality/sourceSynthesisQualityGate.js";
 
 type ChatRuntimeSession = {
   sessionId: string;
@@ -1106,6 +1107,23 @@ function hasUnsupportedProperNoun(answer: string, sourceFact: string) {
   });
 }
 
+function uniqueFactualSentences(sentences: string[]) {
+  const seen = new Set<string>();
+  const output: string[] = [];
+  for (const sentence of sentences) {
+    const key = normalizeText(sentence)
+      .split(" ")
+      .filter((token) => token.length > 2)
+      .join(" ");
+    if (!key || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    output.push(sentence);
+  }
+  return output;
+}
+
 function sourceFactLanguageScore(fact: string, language: ConversationState["language"]) {
   const normalized = normalizeText(fact);
   if (language === "fr") {
@@ -1206,7 +1224,7 @@ function buildSourceBackedFactualRepair(args: {
   }
 
   const factText = fact.replace(/^[^:]{1,90}:\s*/, "").trim();
-  const sentences = splitFactualSentences(factText);
+  const sentences = uniqueFactualSentences(splitFactualSentences(factText));
   const firstSentenceIsMostlyDates =
     sentences.length > 1 &&
     /\b(?:n(?:e|ee|é|ée)|born|mort(?:e)?|died|death|naissance|deces|d(?:e|\u00e9)c(?:e|\u00e8)s)\b/i.test(
@@ -1277,6 +1295,55 @@ function enforceSourceFactLabelPresence(args: { answer: StudentAnswer; tooling: 
     answer: `${label}: ${args.answer.answer}`.replace(/\s+/g, " ").trim(),
     key_points: [...args.answer.key_points, "Source label preserved"].slice(0, 6),
     confidence: Math.max(args.answer.confidence, 82)
+  };
+}
+
+function buildSourceSynthesisQualityRepair(args: {
+  answer: StudentAnswer;
+  tooling: ChatToolMetadata;
+  language: ConversationState["language"];
+}): StudentAnswer | null {
+  if (
+    !args.tooling.used ||
+    args.tooling.routing.toolType !== "research" ||
+    args.tooling.routing.intent !== "fact_check"
+  ) {
+    return null;
+  }
+
+  const quality = evaluateSourceSynthesisQuality({
+    answer: args.answer.answer,
+    language: args.language,
+    sourceBacked: true
+  });
+  if (quality.passed) {
+    return null;
+  }
+
+  const repaired = buildSourceBackedFactualRepair({
+    answer: args.answer,
+    tooling: args.tooling,
+    language: args.language,
+    force: true
+  });
+  if (!repaired) {
+    return null;
+  }
+
+  const withLabel = enforceSourceFactLabelPresence({ answer: repaired, tooling: args.tooling });
+  const repairedQuality = evaluateSourceSynthesisQuality({
+    answer: withLabel.answer,
+    language: args.language,
+    sourceBacked: true
+  });
+  if (repairedQuality.score < quality.score) {
+    return null;
+  }
+
+  return {
+    ...withLabel,
+    key_points: [...withLabel.key_points, "Source synthesis quality repair"].slice(0, 6),
+    confidence: Math.max(withLabel.confidence, 84)
   };
 }
 
@@ -3465,6 +3532,27 @@ export class ChatRuntimeService {
         recentMessages: session.messages,
         toolRouting: tooling.routing
       });
+    }
+
+    const sourceSynthesisQualityRepair = buildSourceSynthesisQualityRepair({
+      answer: finalAnswer,
+      tooling,
+      language: conversationState.language
+    });
+    if (sourceSynthesisQualityRepair) {
+      finalAnswer = sourceSynthesisQualityRepair;
+      conversationQuality = this.analyzeQuality({
+        runtimeMode,
+        conversationState,
+        activeConstraintCapsule,
+        answerPolicy,
+        newUserMessage: args.message,
+        answer: finalAnswer.answer,
+        lastAssistantAnswer: session.lastAssistantAnswer,
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
+      });
+      usedRetry = true;
     }
 
     const assistantMessage: ChatMessage = {
