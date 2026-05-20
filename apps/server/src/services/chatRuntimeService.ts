@@ -47,6 +47,10 @@ import {
   type EvidenceCapsule,
   type EvidenceRequirementPlan
 } from "./answerability/answerabilityPlanner.js";
+import {
+  normalizeOrdinalAliases,
+  rewriteGeneralKnowledgeQuery
+} from "./research/generalKnowledgeQueryRewriter.js";
 
 type ChatRuntimeSession = {
   sessionId: string;
@@ -310,6 +314,36 @@ function splitAnswerSentences(answer: string) {
     .split(/(?<=[.!?])\s+|\n+/u)
     .map((sentence) => sentence.trim())
     .filter(Boolean);
+}
+
+function protectFactualSentenceAbbreviations(value: string) {
+  return value.replace(/\b(?:av|apr)\.\s*J\.-C\./gi, (match) => match.replace(/\./g, "<dot>"));
+}
+
+function restoreFactualSentenceAbbreviations(value: string) {
+  return value.replace(/<dot>/g, ".");
+}
+
+function splitFactualSentences(value: string) {
+  const protectedValue = protectFactualSentenceAbbreviations(value);
+  const sentences = protectedValue.match(/[^.!?]+[.!?]+/g)?.map((sentence) =>
+    restoreFactualSentenceAbbreviations(sentence).trim()
+  );
+  return sentences && sentences.length > 0 ? sentences : [value.trim()].filter(Boolean);
+}
+
+function compactToCompleteSentence(value: string, maxChars: number) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxChars) {
+    return normalized;
+  }
+
+  const bounded = normalized.slice(0, maxChars).trim();
+  const lastSentenceEnd = Math.max(bounded.lastIndexOf("."), bounded.lastIndexOf("!"), bounded.lastIndexOf("?"));
+  if (lastSentenceEnd >= Math.floor(maxChars * 0.45)) {
+    return bounded.slice(0, lastSentenceEnd + 1).trim();
+  }
+  return `${bounded.replace(/\s+\S*$/, "").replace(/[,:;]+$/g, "").trim()}.`;
 }
 
 function isBrevityMetaSentence(sentence: string) {
@@ -604,9 +638,10 @@ function extractIdentitySubjectFragment(message: string) {
 
 function extractAnswerabilityResearchSubject(question: string) {
   const cleaned = question
+    .replace(/['’]/g, " ")
     .replace(/[?]/g, " ")
     .replace(
-      /\b(?:who is|who was|what is|what are|tell me about|explain|define|definition|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce que|quest ce que|c[' ]?est quoi|explique(?: moi)?|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition)\b/gi,
+      /\b(?:who is|who was|what is|what are|tell me about|explain|define|definition|history of|biography of|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce que|quest ce que|c[' ]?est quoi|explique(?: moi)?|raconte(?:\s+l\s+histoire\s+de)?|raconte|biographie(?: de)?|histoire(?: de)?|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition)\b/gi,
       " "
     )
     .replace(
@@ -620,7 +655,14 @@ function extractAnswerabilityResearchSubject(question: string) {
     .replace(/\s+/g, " ")
     .trim();
 
-  return cleaned.length >= 2 ? compact(cleaned, 120) : compact(question, 120);
+  const rewrite = rewriteGeneralKnowledgeQuery({
+    question,
+    subject: cleaned.length >= 2 ? cleaned : question,
+    language: detectDirectLanguage(question) === "fr" ? "fr" : "en"
+  });
+  return rewrite.canonicalSubject.length >= 2
+    ? compact(rewrite.canonicalSubject, 120)
+    : compact(cleaned.length >= 2 ? cleaned : question, 120);
 }
 
 function extractConversationSubject(messages: ChatMessage[]) {
@@ -775,30 +817,7 @@ function normalizeResolvedSubjectReference(args: {
 }
 
 function normalizeShortOrdinalAliases(value: string) {
-  return value.replace(/\b([1-9]|[12][0-9]|30)\b/g, (match) => toRomanNumeral(Number(match)));
-}
-
-function toRomanNumeral(value: number) {
-  if (!Number.isFinite(value) || value <= 0 || value > 30) {
-    return String(value);
-  }
-
-  const numerals: Array<[number, string]> = [
-    [10, "x"],
-    [9, "ix"],
-    [5, "v"],
-    [4, "iv"],
-    [1, "i"]
-  ];
-  let remaining = value;
-  let output = "";
-  for (const [amount, numeral] of numerals) {
-    while (remaining >= amount) {
-      output += numeral;
-      remaining -= amount;
-    }
-  }
-  return output;
+  return normalizeOrdinalAliases(value);
 }
 
 function buildRoutingQuestionForHydria(args: {
@@ -1059,6 +1078,34 @@ function isStaticGenerationFailureAnswer(answer: string) {
   );
 }
 
+function isLikelyTruncatedAnswer(answer: string) {
+  const trimmed = answer.trim();
+  if (/\.{3}$/.test(trimmed)) {
+    return true;
+  }
+  if (/\b(?:av|apr)\.\s*J\.?$/i.test(trimmed)) {
+    return true;
+  }
+  const normalized = normalizeText(trimmed);
+  return (
+    /(?:[,;:]|\s[-–])$/.test(trimmed) ||
+    /\b(?:a|de|du|des|le|la|les|un|une|et|en|of|to|the|and|with|from)$/.test(normalized)
+  );
+}
+
+function hasUnsupportedProperNoun(answer: string, sourceFact: string) {
+  const normalizedFact = normalizeText(sourceFact);
+  const properNouns = answer.match(/\b[A-Z][A-Za-zÀ-ÖØ-öø-ÿ'’-]{3,}\b/g) ?? [];
+  return properNouns.some((term) => {
+    const normalizedTerm = normalizeText(term);
+    return (
+      normalizedTerm.length >= 4 &&
+      !["louis", "saint"].includes(normalizedTerm) &&
+      !normalizedFact.includes(normalizedTerm)
+    );
+  });
+}
+
 function buildSourceBackedFactualRepair(args: {
   answer: StudentAnswer;
   tooling: ChatToolMetadata;
@@ -1072,17 +1119,25 @@ function buildSourceBackedFactualRepair(args: {
     return null;
   }
 
-  const fact = args.tooling.verifiedFacts[0]?.replace(/\s+/g, " ").trim();
-  if (!fact || fact.length < 40) {
-    return null;
-  }
-
   const subject =
     typeof args.tooling.routing.extractedArgs?.subject === "string"
       ? args.tooling.routing.extractedArgs.subject
       : "";
-  const normalizedAnswer = normalizeText(args.answer.answer);
   const subjectTerms = new Set(extractTerms(subject, 10));
+  const fact =
+    args.tooling.verifiedFacts
+      .map((item) => item.replace(/\s+/g, " ").trim())
+      .filter((item) => item.length >= 40)
+      .sort((left, right) => {
+        const rightHits = [...subjectTerms].filter((term) => normalizeText(right).includes(term)).length;
+        const leftHits = [...subjectTerms].filter((term) => normalizeText(left).includes(term)).length;
+        return rightHits - leftHits || right.length - left.length;
+      })[0] ?? "";
+  if (!fact) {
+    return null;
+  }
+
+  const normalizedAnswer = normalizeText(args.answer.answer);
   const genericDescriptorTerms = new Set([
     "physicienne",
     "chimiste",
@@ -1103,21 +1158,35 @@ function buildSourceBackedFactualRepair(args: {
   const sourceTermsUsed = sourceTerms.filter((term) => normalizedAnswer.includes(term)).length;
   const sourceTermsMissing = sourceTerms.length - sourceTermsUsed;
   const isStaticGenerationFailure = isStaticGenerationFailureAnswer(args.answer.answer);
+  const isTruncated = isLikelyTruncatedAnswer(args.answer.answer);
+  const hasUnsupportedEntity = hasUnsupportedProperNoun(args.answer.answer, fact);
 
-  if (!args.force && ((!isStaticGenerationFailure && countWords(args.answer.answer) > 22) || sourceTermsMissing < 3)) {
+  if (
+    !args.force &&
+    !isTruncated &&
+    !hasUnsupportedEntity &&
+    ((!isStaticGenerationFailure && countWords(args.answer.answer) > 22) || sourceTermsMissing < 3)
+  ) {
     return null;
   }
 
   const factText = fact.replace(/^[^:]{1,90}:\s*/, "").trim();
-  const sentences = factText.match(/[^.!?]+[.!?]+/g)?.map((sentence) => sentence.trim()) ?? [factText];
+  const sentences = splitFactualSentences(factText);
   const firstSentenceIsMostlyDates =
     sentences.length > 1 &&
     /\b(?:n(?:e|ee|é|ée)|born|mort(?:e)?|died|death|naissance|deces|d(?:e|\u00e9)c(?:e|\u00e8)s)\b/i.test(
       normalizeText(sentences[0] ?? "")
     );
-  const informativeSentences = firstSentenceIsMostlyDates ? sentences.slice(1, 3) : sentences.slice(0, 2);
+  const firstSentenceNamesSubject = answerMentionsAnyTerm(
+    sentences[0] ?? "",
+    subjectTerms.size > 0 ? [...subjectTerms] : extractTerms(fact, 4)
+  );
+  const informativeSentences =
+    firstSentenceIsMostlyDates && !firstSentenceNamesSubject ? sentences.slice(1, 3) : sentences.slice(0, 2);
   const shouldKeepModelLead =
     !args.force &&
+    !isTruncated &&
+    !hasUnsupportedEntity &&
     countWords(args.answer.answer) >= 8 &&
     answerMentionsAnyTerm(args.answer.answer, subjectTerms.size > 0 ? [...subjectTerms] : extractTerms(fact, 4));
   const repaired = [
@@ -1134,7 +1203,7 @@ function buildSourceBackedFactualRepair(args: {
 
   return {
     ...args.answer,
-    answer: repaired.length <= 360 ? repaired : `${repaired.slice(0, 357).trim()}...`,
+    answer: compactToCompleteSentence(repaired, 360),
     key_points: [...args.answer.key_points, "Source-backed factual repair"].slice(0, 6),
     confidence: Math.max(args.answer.confidence, 82)
   };
@@ -2878,17 +2947,22 @@ export class ChatRuntimeService {
         ? normalizeDirectChatAnswer(draft.answer, conversationQuality)
         : draft.answer;
 
-    const sourceBackedFactualRepair =
-      runtimeMode === "direct" || draft.generation.provider === "fallback"
-        ? buildSourceBackedFactualRepair({
-            answer: finalAnswer,
-            tooling,
-            force:
-              conversationQuality.issues.includes("wrong_language_expected_en") ||
-              conversationQuality.issues.includes("wrong_language_expected_fr") ||
-              conversationQuality.issues.includes("off_topic_direct_answer")
-          })
-        : null;
+    const forceSourceBackedRepair =
+      conversationQuality.issues.includes("wrong_language_expected_en") ||
+      conversationQuality.issues.includes("wrong_language_expected_fr") ||
+      conversationQuality.issues.includes("off_topic_direct_answer");
+    const shouldAttemptSourceBackedRepair =
+      runtimeMode === "direct" ||
+      draft.generation.provider === "fallback" ||
+      forceSourceBackedRepair ||
+      isLikelyTruncatedAnswer(finalAnswer.answer);
+    const sourceBackedFactualRepair = shouldAttemptSourceBackedRepair
+      ? buildSourceBackedFactualRepair({
+          answer: finalAnswer,
+          tooling,
+          force: forceSourceBackedRepair
+        })
+      : null;
     if (sourceBackedFactualRepair) {
       finalAnswer = sourceBackedFactualRepair;
       if (draft.generation.provider === "fallback") {
@@ -3446,10 +3520,13 @@ export class ChatRuntimeService {
     question: string;
     category: QuestionCategory;
   }): Promise<ChatToolMetadata> {
-    const routing = this.toolRoutingService.route({
-      question: args.question,
-      category: args.category
-    });
+    const routing = this.normalizeRoutedToolLanguage(
+      this.toolRoutingService.route({
+        question: args.question,
+        category: args.category
+      }),
+      args.question
+    );
 
     if (!routing.toolRequired && !routing.toolRecommended) {
       return {
@@ -3503,6 +3580,29 @@ export class ChatRuntimeService {
     };
   }
 
+  private normalizeRoutedToolLanguage(routing: ToolRoutingDecision, question: string): ToolRoutingDecision {
+    if (!routing.toolRequired && !routing.toolRecommended) {
+      return routing;
+    }
+
+    if (!["research", "web", "weather", "finance", "calculator"].includes(routing.toolType)) {
+      return routing;
+    }
+
+    const directLanguage = detectDirectLanguage(question);
+    if (directLanguage === "unknown" || routing.extractedArgs.language === directLanguage) {
+      return routing;
+    }
+
+    return {
+      ...routing,
+      extractedArgs: {
+        ...routing.extractedArgs,
+        language: directLanguage
+      }
+    };
+  }
+
   private async ensureAnswerabilityTooling(args: {
     question: string;
     category: QuestionCategory;
@@ -3519,6 +3619,8 @@ export class ChatRuntimeService {
     }
 
     const subject = extractAnswerabilityResearchSubject(args.question);
+    const directLanguage = detectDirectLanguage(args.question);
+    const language = args.conversationState.language === "fr" || directLanguage === "fr" ? "fr" : "en";
     const routing: ToolRoutingDecision = {
       ...defaultToolRoutingDecision,
       considered: true,
@@ -3534,7 +3636,7 @@ export class ChatRuntimeService {
       extractedArgs: {
         query: args.question,
         subject,
-        language: args.conversationState.language === "fr" ? "fr" : "en"
+        language
       },
       toolResultUsed: false
     };

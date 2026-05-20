@@ -2,11 +2,16 @@ import { randomUUID } from "node:crypto";
 import { readdir } from "node:fs/promises";
 import { relative } from "node:path";
 import { load } from "cheerio";
-import type { ResearchToolLog, ToolRoutingDecision } from "../../types/arena.js";
+import type { ResearchSource, ResearchToolLog, ToolRoutingDecision } from "../../types/arena.js";
 import type { ExecutionGovernanceRequestInput } from "../../types/execution.js";
 import { projectRoot } from "../../utils/env.js";
 import { logger } from "../../utils/logger.js";
 import { ExecutionGovernanceService } from "../execution/executionGovernanceService.js";
+import {
+  normalizeLooseText,
+  rewriteGeneralKnowledgeQuery,
+  subjectMatchesText
+} from "../research/generalKnowledgeQueryRewriter.js";
 
 export type LocalToolExecutionResult = {
   toolType: ToolRoutingDecision["toolType"];
@@ -141,10 +146,31 @@ type WikipediaSummaryResponse = {
   };
 };
 
+type WikidataSearchResponse = {
+  search?: Array<{
+    id?: string;
+    label?: string;
+    description?: string;
+    concepturi?: string;
+  }>;
+};
+
 type SearchResult = {
   title: string;
   url: string;
   snippet: string;
+};
+
+type GeneralKnowledgeEvidence = {
+  title: string;
+  url: string;
+  snippet: string;
+  excerpt: string;
+  engine: ResearchSource["retrievalEngine"];
+  origin: ResearchSource["retrievalOrigin"];
+  confidence: number;
+  modifiedAt?: string | null;
+  dateSource?: ResearchSource["dateSource"];
 };
 
 const CITY_TIMEZONES: Record<string, string> = {
@@ -571,44 +597,8 @@ function stripHtml(value: string) {
     .trim();
 }
 
-function normalizeLoose(value: string) {
-  return value
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 function normalizeSpaces(value: string) {
   return value.replace(/\s+/g, " ").trim();
-}
-
-function normalizeRegnalOrdinalAliases(value: string) {
-  return value.replace(/\b([1-9]|[12][0-9]|30)\b/g, (match) => toRomanNumeral(Number(match)));
-}
-
-function toRomanNumeral(value: number) {
-  if (!Number.isFinite(value) || value <= 0 || value > 30) {
-    return String(value);
-  }
-
-  const numerals: Array<[number, string]> = [
-    [10, "X"],
-    [9, "IX"],
-    [5, "V"],
-    [4, "IV"],
-    [1, "I"]
-  ];
-  let remaining = value;
-  let output = "";
-  for (const [amount, symbol] of numerals) {
-    while (remaining >= amount) {
-      output += symbol;
-      remaining -= amount;
-    }
-  }
-  return output;
 }
 
 function isAiRecentUpdatesRoute(args: ToolRoutingDecision) {
@@ -618,7 +608,7 @@ function isAiRecentUpdatesRoute(args: ToolRoutingDecision) {
     extractStringArg(args, "rawQuestion")
   ].filter(Boolean).join(" ");
   return /\b(?:ai|ia|llm|openai|anthropic|hugging\s*face|deepmind|google\s+ai|intelligence artificielle|artificial intelligence|modeles?\s+ia|mod[eè]les?\s+ia)\b/i.test(
-    normalizeLoose(subject)
+    normalizeLooseText(subject)
   );
 }
 
@@ -745,16 +735,22 @@ function extractResearchSubject(args: ToolRoutingDecision) {
     extractStringArg(args, "query") ??
     extractStringArg(args, "rawQuestion") ??
     "";
-  const subject = normalizeSpaces(
-    raw
-      .replace(/[?]/g, " ")
-      .replace(/\b(?:who is|who was|tell me about|give me|make me|qui est|qui etait|qui (?:e|\u00e9)tait|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi|sa biographie|son histoire|biographie|biography|known for|connu(?:e)? pour|cherche(?:r)? sur internet|recherche web|verifie|v(?:e|\u00e9)rifie|source|sources|cite)\b/gi, " ")
-      .replace(/\b(?:complete|compl(?:e|\u00e8)te|complet|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9)|diaporama|slides?)\b/gi, " ")
-      .replace(/\b(?:roi|reine|king|queen|empereur|emperor|pape|pope|pour|for|de|du|des|d'|of|about|sur|le|la|les|un|une|sa|son|his|her)\b/gi, " ")
-      .replace(/[?.!,]+$/g, " ")
-  );
-  const normalized = normalizeRegnalOrdinalAliases(subject);
-  return normalized.length >= 2 ? normalized : raw.trim();
+  const language = extractLanguage(args);
+  const rewrite = rewriteGeneralKnowledgeQuery({
+    question: extractStringArg(args, "query") ?? raw,
+    subject: raw,
+    language
+  });
+  return rewrite.canonicalSubject.length >= 2 ? rewrite.canonicalSubject : raw.trim();
+}
+
+function rewriteResearchQuery(args: ToolRoutingDecision) {
+  const subject = extractResearchSubject(args);
+  return rewriteGeneralKnowledgeQuery({
+    question: extractStringArg(args, "query") ?? subject,
+    subject,
+    language: extractLanguage(args)
+  });
 }
 
 function wikipediaLanguageOrder(language: WeatherLanguage) {
@@ -797,7 +793,7 @@ async function fetchWikipediaSummary(subject: string, language: string) {
     : null;
   const excerpt = normalizeSpaces(summary.extract);
   const description = summary.description ? normalizeSpaces(summary.description) : null;
-  if (!wikipediaSummaryMatchesSubject(subject, `${pageTitle} ${description ?? ""} ${excerpt}`)) {
+  if (!subjectMatchesText(subject, `${pageTitle} ${description ?? ""} ${excerpt}`)) {
     return null;
   }
   return {
@@ -807,20 +803,6 @@ async function fetchWikipediaSummary(subject: string, language: string) {
     excerpt,
     timestamp
   };
-}
-
-function wikipediaSummaryMatchesSubject(subject: string, text: string) {
-  const subjectTerms = normalizeLoose(normalizeRegnalOrdinalAliases(subject))
-    .replace(/\b(?:roi|king|reine|queen|saint|sainte|de|du|des|of|the|le|la|les|france)\b/g, " ")
-    .split(/\s+/)
-    .filter((term) => term.length >= 2);
-  if (subjectTerms.length === 0) {
-    return true;
-  }
-
-  const normalizedText = normalizeLoose(text);
-  const hitCount = subjectTerms.filter((term) => normalizedText.includes(term)).length;
-  return hitCount >= Math.min(2, subjectTerms.length);
 }
 
 function unwrapDuckDuckGoUrl(rawUrl: string) {
@@ -860,88 +842,233 @@ async function searchDuckDuckGo(query: string): Promise<SearchResult[]> {
   return results.slice(0, 3);
 }
 
+async function fetchWikidataEntity(subject: string, language: string): Promise<GeneralKnowledgeEvidence | null> {
+  const url = new URL("https://www.wikidata.org/w/api.php");
+  url.searchParams.set("action", "wbsearchentities");
+  url.searchParams.set("search", subject);
+  url.searchParams.set("language", language === "fr" ? "fr" : "en");
+  url.searchParams.set("uselang", language === "fr" ? "fr" : "en");
+  url.searchParams.set("format", "json");
+  url.searchParams.set("origin", "*");
+  url.searchParams.set("limit", "1");
+
+  const body = await fetchJson<WikidataSearchResponse>(url);
+  const match = body?.search?.[0];
+  if (!match) {
+    return null;
+  }
+  const label = match?.label?.trim();
+  const description = match?.description?.trim();
+  const id = match?.id?.trim();
+  if (!label || !description || !id) {
+    return null;
+  }
+
+  const excerpt = normalizeSpaces(`${label}: ${description}.`);
+  if (!subjectMatchesText(subject, excerpt)) {
+    return null;
+  }
+
+  return {
+    title: `Wikidata: ${label}`,
+    url: match.concepturi ?? `https://www.wikidata.org/wiki/${id}`,
+    snippet: description,
+    excerpt,
+    engine: "known_endpoint",
+    origin: "known_endpoint",
+    confidence: 0.82,
+    modifiedAt: null,
+    dateSource: "unknown"
+  };
+}
+
+async function searchBritannica(subject: string): Promise<GeneralKnowledgeEvidence | null> {
+  const results = await searchDuckDuckGo(`site:britannica.com ${subject}`);
+  const match = results.find((result) => {
+    try {
+      const host = new URL(result.url).hostname.replace(/^www\./, "");
+      return host.endsWith("britannica.com") && subjectMatchesText(subject, `${result.title} ${result.snippet}`);
+    } catch {
+      return false;
+    }
+  });
+  if (!match) {
+    return null;
+  }
+
+  return {
+    title: match.title,
+    url: match.url,
+    snippet: match.snippet,
+    excerpt: match.snippet,
+    engine: "duckduckgo",
+    origin: "generic_search",
+    confidence: 0.74,
+    modifiedAt: null,
+    dateSource: "search_result"
+  };
+}
+
+async function searchGenericFactSources(subject: string): Promise<GeneralKnowledgeEvidence[]> {
+  const results = await searchDuckDuckGo(subject);
+  return results
+    .filter((result) => subjectMatchesText(subject, `${result.title} ${result.snippet}`))
+    .slice(0, 3)
+    .map((result) => ({
+      title: result.title,
+      url: result.url,
+      snippet: result.snippet,
+      excerpt: result.snippet,
+      engine: "duckduckgo",
+      origin: "generic_search" as const,
+      confidence: 0.64,
+      modifiedAt: null,
+      dateSource: "search_result" as const
+    }));
+}
+
+function evidenceKey(evidence: GeneralKnowledgeEvidence) {
+  return `${evidence.engine}:${evidence.url}`;
+}
+
+function evidenceFamily(evidence: GeneralKnowledgeEvidence) {
+  try {
+    const host = new URL(evidence.url).hostname.replace(/^www\./, "");
+    if (host.endsWith("wikipedia.org")) {
+      return "wikipedia";
+    }
+    if (host.endsWith("wikidata.org")) {
+      return "wikidata";
+    }
+    if (host.endsWith("britannica.com")) {
+      return "britannica";
+    }
+    return host;
+  } catch {
+    return evidence.engine;
+  }
+}
+
+function hasReliableGeneralKnowledgeEvidence(evidence: GeneralKnowledgeEvidence[]) {
+  const sourceFamilies = new Set(evidence.map(evidenceFamily));
+  return sourceFamilies.size >= 2;
+}
+
+function addEvidence(list: GeneralKnowledgeEvidence[], evidence: GeneralKnowledgeEvidence | null) {
+  if (!evidence) {
+    return;
+  }
+  if (!list.some((current) => evidenceKey(current) === evidenceKey(evidence))) {
+    list.push(evidence);
+  }
+}
+
+function evidenceToSource(evidence: GeneralKnowledgeEvidence): ResearchSource {
+  return {
+    title: evidence.title,
+    url: evidence.url,
+    snippet: evidence.snippet,
+    excerpt: evidence.excerpt,
+    publishedAt: null,
+    modifiedAt: evidence.modifiedAt ?? null,
+    effectiveDate: evidence.modifiedAt ?? null,
+    dateSource: evidence.dateSource ?? "unknown",
+    retrievalChannel: "live",
+    retrievalOrigin: evidence.origin,
+    retrievalEngine: evidence.engine
+  };
+}
+
+function corroborationScore(evidence: GeneralKnowledgeEvidence[]) {
+  const uniqueFamilies = new Set(evidence.map(evidenceFamily)).size;
+  const base = Math.max(...evidence.map((item) => item.confidence), 0);
+  const corroborationBonus = Math.min(0.12, Math.max(0, uniqueFamilies - 1) * 0.06);
+  return Math.min(0.96, base + corroborationBonus);
+}
+
 async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<LocalToolExecutionResult | null> {
-  const subject = extractResearchSubject(args);
+  const rewrite = rewriteResearchQuery(args);
+  const subject = rewrite.canonicalSubject;
   if (!subject || subject.length < 2) {
     return null;
   }
 
   const language = extractLanguage(args);
-  for (const wikipediaLanguage of wikipediaLanguageOrder(language)) {
-    const summary = await fetchWikipediaSummary(subject, wikipediaLanguage);
-    if (!summary) {
-      continue;
+  const evidence: GeneralKnowledgeEvidence[] = [];
+  for (const candidate of rewrite.candidates) {
+    for (const wikipediaLanguage of wikipediaLanguageOrder(language)) {
+      const summary = await fetchWikipediaSummary(candidate, wikipediaLanguage);
+      if (!summary) {
+        continue;
+      }
+      addEvidence(evidence, {
+        title: `Wikipedia: ${summary.title}`,
+        url: summary.url,
+        snippet: summary.description || summary.excerpt.slice(0, 180),
+        excerpt: `${summary.title}: ${summary.excerpt}`,
+        engine: "known_endpoint",
+        origin: "known_endpoint",
+        confidence: 0.88,
+        modifiedAt: summary.timestamp,
+        dateSource: summary.timestamp ? "meta" : "unknown"
+      });
+      break;
     }
-    const fact =
-      language === "fr"
-        ? `${summary.title}: ${summary.excerpt}`
-        : `${summary.title}: ${summary.excerpt}`;
-    const sourceLabel =
-      language === "fr"
-        ? `Recherche factuelle: source encyclopedique trouvee pour ${summary.title}.`
-        : `Factual research: encyclopedia source found for ${summary.title}.`;
-
-    return {
-      toolType: "research",
-      intent: args.intent,
-      summary: [
-        sourceLabel,
-        summary.description
-          ? language === "fr"
-            ? `Description source: ${summary.description}.`
-            : `Source description: ${summary.description}.`
-          : ""
-      ].filter(Boolean),
-      verifiedFacts: [fact],
-      confidenceScore: 0.88,
-      resultLabel: summary.title,
-      sources: [
-        {
-          title: `Wikipedia: ${summary.title}`,
-          url: summary.url,
-          snippet: summary.description || summary.excerpt.slice(0, 180),
-          excerpt: summary.excerpt,
-          publishedAt: null,
-          modifiedAt: summary.timestamp,
-          effectiveDate: summary.timestamp,
-          dateSource: summary.timestamp ? "meta" : "unknown",
-          retrievalChannel: "live",
-          retrievalOrigin: "known_endpoint",
-          retrievalEngine: "known_endpoint"
-        }
-      ]
-    };
+    if (evidence.length > 0) {
+      break;
+    }
   }
 
-  const searchResults = await searchDuckDuckGo(subject);
-  if (searchResults.length === 0) {
+  for (const candidate of rewrite.candidates) {
+    addEvidence(evidence, await fetchWikidataEntity(candidate, language));
+    if (evidence.length >= 2) {
+      break;
+    }
+  }
+
+  if (evidence.length < 2) {
+    for (const candidate of rewrite.candidates) {
+      addEvidence(evidence, await searchBritannica(candidate));
+      if (evidence.length >= 2) {
+        break;
+      }
+    }
+  }
+
+  if (evidence.length < 2) {
+    for (const candidate of rewrite.candidates) {
+      for (const item of await searchGenericFactSources(candidate)) {
+        addEvidence(evidence, item);
+      }
+      if (evidence.length >= 2) {
+        break;
+      }
+    }
+  }
+
+  if (!hasReliableGeneralKnowledgeEvidence(evidence)) {
     return null;
   }
+
+  const confidenceScore = corroborationScore(evidence);
+  const topEvidence = evidence.slice(0, 5);
+  const sourceLabel =
+    language === "fr"
+      ? `Recherche factuelle v2: ${topEvidence.length} source(s) pertinente(s) trouvee(s) pour ${subject}; score de corroboration ${Math.round(
+          confidenceScore * 100
+        )}%.`
+      : `Factual research v2: ${topEvidence.length} relevant source(s) found for ${subject}; corroboration score ${Math.round(
+          confidenceScore * 100
+        )}%.`;
 
   return {
     toolType: "research",
     intent: args.intent,
-    summary: [
-      language === "fr"
-        ? `Recherche factuelle: ${searchResults.length} resultat(s) web trouve(s) pour ${subject}.`
-        : `Factual research: ${searchResults.length} web result(s) found for ${subject}.`
-    ],
-    verifiedFacts: searchResults.map((result) => `${result.title}: ${result.snippet}`),
-    confidenceScore: 0.64,
+    summary: [sourceLabel],
+    verifiedFacts: topEvidence.map((item) => item.excerpt),
+    confidenceScore,
     resultLabel: subject,
-    sources: searchResults.map((result) => ({
-      title: result.title,
-      url: result.url,
-      snippet: result.snippet,
-      excerpt: result.snippet,
-      publishedAt: null,
-      modifiedAt: null,
-      effectiveDate: null,
-      dateSource: "search_result",
-      retrievalChannel: "live",
-      retrievalOrigin: "generic_search",
-      retrievalEngine: "duckduckgo"
-    }))
+    sources: topEvidence.map(evidenceToSource)
   };
 }
 

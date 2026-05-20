@@ -1,6 +1,7 @@
 import type { QuestionCategory, ToolRoutingDecision } from "../../types/arena.js";
 import { defaultToolRoutingDecision } from "../../types/arena.js";
 import { normalizeSpace } from "../research/common.js";
+import { rewriteGeneralKnowledgeQuery } from "../research/generalKnowledgeQueryRewriter.js";
 import { detectTemporalQuery } from "../research/temporal.js";
 
 const WRITING_OR_BRAINSTORM_PATTERN =
@@ -111,7 +112,7 @@ function isConversationPlanningCategory(category: QuestionCategory | null | unde
 }
 
 function detectQuestionLanguage(question: string) {
-  return /\b(?:fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|recap|r(?:e|\u00e9)cap|nouveaut(?:e|\u00e9)s?|sorties?|semaine|quel|quelle|quels|temps|aujourd|meteo|m(?:e|\u00e9|\u00c3\u00a9|\ufffd)t(?:e|\u00e9|\u00c3\u00a9|\ufffd)o|pluie|vent|neige|fait-il|fait il|qui est|biographie|presentation|pr(?:e|\u00e9)sentation|expos(?:e|\u00e9)|calcule|calculer|combien|convertis|convertir|euros?|dollars?|taux)\b/i.test(
+  return /\b(?:fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|recap|r(?:e|\u00e9)cap|nouveaut(?:e|\u00e9)s?|sorties?|semaine|quel|quelle|quels|temps|aujourd|meteo|m(?:e|\u00e9|\u00c3\u00a9|\ufffd)t(?:e|\u00e9|\u00c3\u00a9|\ufffd)o|pluie|vent|neige|fait-il|fait il|qui est|qui etait|qui (?:e|\u00e9)tait|biographie|presentation|pr(?:e|\u00e9)sentation|expos(?:e|\u00e9)|calcule|calculer|combien|convertis|convertir|euros?|dollars?|taux)\b/i.test(
     question
   )
     ? "fr"
@@ -276,7 +277,11 @@ function extractEntitySubject(question: string) {
       .replace(/\b(?:roi|reine|king|queen|empereur|emperor|pape|pope|pour|for|ce|que|de|du|des|d'|of|the|le|la|les|un|une)\b/gi, " ")
   );
 
-  const normalized = normalizeRegnalOrdinalAliases(stripped);
+  const normalized = rewriteGeneralKnowledgeQuery({
+    question,
+    subject: stripped,
+    language: detectQuestionLanguage(question)
+  }).canonicalSubject;
   return normalized.length >= 2 ? normalized : extractQuotedOrTrailingName(question) ?? "";
 }
 
@@ -288,7 +293,11 @@ function cleanFactualLookupSubject(question: string) {
       .replace(/[?.!,]+$/g, " ")
   );
 
-  const normalized = normalizeRegnalOrdinalAliases(cleaned);
+  const normalized = rewriteGeneralKnowledgeQuery({
+    question,
+    subject: cleaned,
+    language: detectQuestionLanguage(question)
+  }).canonicalSubject;
   return normalized.length >= 2 ? normalized : extractQuotedOrTrailingName(question) ?? question;
 }
 
@@ -301,33 +310,6 @@ function cleanSubject(value: string) {
       .replace(/^(?:de|du|des|d'|of|the|le|la|les|un|une)\b\s*/gi, " ")
       .replace(/\b(?:de|du|des|d'|of|the|le|la|les|un|une)\b$/gi, " ")
   );
-}
-
-function normalizeRegnalOrdinalAliases(value: string) {
-  return value.replace(/\b([1-9]|[12][0-9]|30)\b/g, (match) => toRomanNumeral(Number(match)));
-}
-
-function toRomanNumeral(value: number) {
-  if (!Number.isFinite(value) || value <= 0 || value > 30) {
-    return String(value);
-  }
-
-  const numerals: Array<[number, string]> = [
-    [10, "X"],
-    [9, "IX"],
-    [5, "V"],
-    [4, "IV"],
-    [1, "I"]
-  ];
-  let remaining = value;
-  let output = "";
-  for (const [amount, symbol] of numerals) {
-    while (remaining >= amount) {
-      output += symbol;
-      remaining -= amount;
-    }
-  }
-  return output;
 }
 
 function extractCurrentRole(question: string) {
@@ -679,7 +661,9 @@ function isStatusPageQuestion(question: string) {
 }
 
 function isIdentityOrBiographyLookup(question: string) {
-  return /\b(?:who is|who was|qui est|qui etait|qui (?:e|\u00e9)tait|biographie|biography|sa biographie|son histoire|his biography|her biography|known for|connu(?:e)? pour)\b/i.test(
+  return /\b(?:who is|who was|who was|c[' ]?est qui|qui est|qui etait|qui (?:e|\u00e9)tait|biographie|biography|sa biographie|son histoire|his biography|her biography|known for|connu(?:e)? pour)\b/i.test(
+    question
+  ) || /\b(?:roi|reine|king|queen|empereur|emperor|pape|pope)\b/i.test(
     question
   );
 }

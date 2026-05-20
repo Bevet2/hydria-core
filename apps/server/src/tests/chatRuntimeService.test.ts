@@ -51,6 +51,100 @@ function buildFactCheckToolResult(fact: string) {
   };
 }
 
+test("chat runtime sends narrative French factual questions to research in French", async () => {
+  const routedLanguages: Array<unknown> = [];
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult("Charlemagne was King of the Franks and Emperor.");
+      }
+    },
+    undefined,
+    {
+      async tryExecute(routing: ToolRoutingDecision) {
+        routedLanguages.push(routing.extractedArgs?.language);
+        if (routing.toolType !== "research" || routing.intent !== "fact_check") {
+          return null;
+        }
+        return {
+          toolType: "research" as const,
+          intent: "fact_check",
+          summary: ["Contexte factuel source sur Charlemagne."],
+          verifiedFacts: [
+            "Charlemagne: Charlemagne est roi des Francs, roi des Lombards, puis empereur couronne a Rome en 800."
+          ],
+          confidenceScore: 0.88,
+          resultLabel: "fact_check"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "Raconte l'histoire de Charlemagne." });
+
+  assert.deepEqual(routedLanguages, ["fr"]);
+  assert.match(response.answer.answer, /Charlemagne/i);
+  assert.doesNotMatch(response.answer.answer, /\bwas King\b/i);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
+test("chat runtime corrects routed research language from French user message before execution", async () => {
+  const routedLanguages: Array<unknown> = [];
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult("Cleopatre VII est la derniere reine de l'Egypte ptolemaique.");
+      }
+    },
+    {
+      route() {
+        return {
+          ...defaultToolRoutingDecision,
+          considered: true,
+          toolRequired: true,
+          toolRecommended: false,
+          toolType: "research",
+          intent: "fact_check",
+          confidence: 0.83,
+          fallbackAllowed: false,
+          reason: "test routing with stale language",
+          extractedArgs: {
+            subject: "Cleopatra VII",
+            query: "Qui etait Cleopatre ?",
+            language: "en"
+          },
+          toolResultUsed: false
+        };
+      }
+    },
+    {
+      async tryExecute(routing: ToolRoutingDecision) {
+        routedLanguages.push(routing.extractedArgs.language);
+        if (routing.toolType !== "research" || routing.intent !== "fact_check") {
+          return null;
+        }
+        return {
+          toolType: "research" as const,
+          intent: "fact_check",
+          summary: ["Contexte factuel source sur Cleopatre VII."],
+          verifiedFacts: [
+            "Cleopatre VII: derniere reine de l'Egypte ptolemaique, figure centrale des guerres civiles romaines."
+          ],
+          confidenceScore: 0.88,
+          resultLabel: "fact_check"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "Qui etait Cleopatre ?" });
+
+  assert.deepEqual(routedLanguages, ["fr"]);
+  assert.equal(response.tooling.routing.extractedArgs.language, "fr");
+  assert.match(response.answer.answer, /Cleopatre|Cl[eé]op[aâ]tre/i);
+  assert.doesNotMatch(response.answer.answer, /\bwas Queen\b/i);
+});
+
 test("chat runtime keeps follow-up context in the direct student chat adapter", async () => {
   const calls: StudentChatAdapterInput[] = [];
   const service = new ChatRuntimeService(
@@ -130,7 +224,7 @@ test("chat runtime resolves bare entity corrections after biography requests", a
   assert.equal(calls[0]?.routingQuestion, "fait moi une biographie complete pour une presentation de Louis 9");
   assert.equal(calls[0]?.requiresExternalGrounding, true);
   const secondTurnCall = calls.find((call) => call.userMessage === "le roi louis 9 de france");
-  assert.equal(secondTurnCall?.routingQuestion, "biographie de louis ix de france");
+  assert.equal(secondTurnCall?.routingQuestion.toLowerCase(), "biographie de louis ix de france");
   assert.equal(secondTurnCall?.requiresExternalGrounding, true);
   assert.equal(secondTurnCall?.runtimeMode, "conversation");
   assert.match(secondTurnCall?.question ?? "", /Resolved current task to answer[\s\S]*biographie de louis ix de france/i);
@@ -159,6 +253,97 @@ test("chat runtime repairs thin source-backed factual answers with verified fact
   assert.equal(response.tooling.used, true);
   assert.equal(response.usedRetry, true);
   assert.equal(response.conversationQuality.passed, true);
+});
+
+test("chat runtime repairs truncated source-backed factual answers with verified facts", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult("Louis IX de France, dit Saint Louis, etait roi de France de 1226 a");
+      }
+    },
+    undefined,
+    buildFactCheckToolResult(
+      "Louis IX: Louis IX, roi de France, ne le 25 avril 1214 et mort le 25 aout 1270. Il est canonise par l'Eglise catholique en 1297."
+    )
+  );
+
+  const response = await service.sendMessage({ message: "Le roi Louis neuf de France, c'est qui ?" });
+
+  assert.match(response.answer.answer, /Louis IX/i);
+  assert.match(response.answer.answer, /1270/i);
+  assert.match(response.answer.answer, /canonise/i);
+  assert.doesNotMatch(response.answer.answer.trim(), /\ba$/i);
+  assert.doesNotMatch(response.answer.answer, /\ba\s+Il\b/i);
+  assert.equal(response.usedRetry, true);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
+test("chat runtime repairs ellipsis-truncated source-backed factual answers", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult(
+          "Napoléon Ier, né le 15 août 1769 à Ajaccio et mort le 5 mai 1821 à Sainte-Hélène, était un militaire..."
+        );
+      }
+    },
+    undefined,
+    buildFactCheckToolResult(
+      "Napoleon Bonaparte: Napoléon Bonaparte, aussi appelé Napoléon Ier, est un militaire et homme d'Etat français, premier empereur des Français."
+    )
+  );
+
+  const response = await service.sendMessage({ message: "Biographie courte de Napoleon Bonaparte." });
+
+  assert.match(response.answer.answer, /Napol[eé]on/i);
+  assert.doesNotMatch(response.answer.answer.trim(), /\.{3}$/);
+  assert.equal(response.usedRetry, true);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
+test("chat runtime repairs BCE abbreviation truncation in source-backed biographies", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult("Cleopatre VII Philopator, nee vers 69 av. J.");
+      }
+    },
+    undefined,
+    buildFactCheckToolResult(
+      "Cleopatra VII: Cleopatre VII Philopator, nee vers 69 av. J.-C. et morte le 10 aout 30 av. J.-C., est la derniere reine d'Egypte de la dynastie lagide."
+    )
+  );
+
+  const response = await service.sendMessage({ message: "Qui etait Cleopatre ?" });
+
+  assert.match(response.answer.answer, /J\.-C\./);
+  assert.match(response.answer.answer, /derniere reine/i);
+  assert.doesNotMatch(response.answer.answer.trim(), /\bav\. J\.?$/i);
+  assert.equal(response.usedRetry, true);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
+test("chat runtime repairs unsupported proper nouns in source-backed factual answers", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult(
+          "Louis IX, roi de France, est ne a Poissy et mort en 1270 a Cartouche."
+        );
+      }
+    },
+    undefined,
+    buildFactCheckToolResult(
+      "Louis IX: Louis IX, roi de France, est ne a Poissy et mort en 1270 a Carthage, pres de Tunis."
+    )
+  );
+
+  const response = await service.sendMessage({ message: "Fais-moi une biographie de Louis 9." });
+
+  assert.match(response.answer.answer, /Carthage/i);
+  assert.doesNotMatch(response.answer.answer, /Cartouche/i);
+  assert.equal(response.usedRetry, true);
 });
 
 test("chat runtime synthesizes from source-backed facts when the local model falls back", async () => {

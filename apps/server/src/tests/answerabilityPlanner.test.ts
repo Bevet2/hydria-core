@@ -170,6 +170,27 @@ test("answerability planner treats English explain turns as sourceable factual l
   assert.equal(plan.requiresResearch, true);
 });
 
+test("answerability planner v2 requires sources for history and science facts", () => {
+  for (const question of [
+    "Raconte la Renaissance en quelques points.",
+    "Explique la photosynthese simplement.",
+    "Le roi Louis neuf de France, c'est qui ?"
+  ]) {
+    const plan = planner.planRequirement({
+      question,
+      userMessage: question,
+      category: "other",
+      toolRouting: route({}),
+      conversationState: createInitialState(),
+      hasPriorConversation: false
+    });
+
+    assert.equal(plan.answerabilityMode, "source_backed");
+    assert.equal(plan.requiresResearch, true);
+    assert.equal(plan.sourceBound, true);
+  }
+});
+
 test("answerability planner keeps conceptual streaming architecture on direct model routing", () => {
   const plan = planner.planRequirement({
     question: "Explique le traitement temps reel dans une architecture streaming.",

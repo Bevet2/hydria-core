@@ -123,6 +123,18 @@ test("tool router routes stable biography lookups to source-backed research", ()
   assert.equal(decision.extractedArgs.language, "fr");
 });
 
+test("tool router keeps French language on unaccented past-tense biography lookups", () => {
+  const decision = service.route({
+    question: "Qui etait Cleopatre ?",
+    category: "other"
+  });
+
+  assert.equal(decision.toolRequired, true);
+  assert.equal(decision.toolType, "research");
+  assert.equal(decision.intent, "fact_check");
+  assert.equal(decision.extractedArgs.language, "fr");
+});
+
 test("tool router extracts French presentation biography subjects and ordinal aliases", () => {
   const decision = service.route({
     question: "fait moi une biographie complete pour une presentation de Louis 9",
@@ -135,6 +147,14 @@ test("tool router extracts French presentation biography subjects and ordinal al
   assert.equal(decision.fallbackAllowed, false);
   assert.equal(decision.extractedArgs.subject, "Louis IX");
   assert.equal(decision.extractedArgs.language, "fr");
+
+  const wordDecision = service.route({
+    question: "le roi Louis neuf de France, c'est qui ?",
+    category: "other"
+  });
+  assert.equal(wordDecision.toolRequired, true);
+  assert.equal(wordDecision.toolType, "research");
+  assert.equal(wordDecision.extractedArgs.subject, "Louis IX France");
 });
 
 test("tool router routes simple stable concept explanations to source-backed research", () => {

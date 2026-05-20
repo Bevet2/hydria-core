@@ -21,6 +21,9 @@ import {
   formatIsoDayForSearch
 } from "./temporal.js";
 import { TERM_DOMAIN_HINTS } from "./trust.js";
+import {
+  rewriteGeneralKnowledgeQuery
+} from "./generalKnowledgeQueryRewriter.js";
 
 export class ResearchPlanner {
   buildPlan(
@@ -859,31 +862,12 @@ export class ResearchPlanner {
         .replace(/\b(?:complete|compl(?:e|\u00e8)te|complet|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9)|diaporama|slides?)\b/gi, " ")
         .replace(/\b(?:roi|reine|king|queen|empereur|emperor|pape|pope|pour|for|details?|en dire plus|dire plus|more about|sa|son|ses|his|her|their|its)\b/gi, " ")
     );
-    const normalizedOrdinal = this.normalizeOrdinalNumbers(stripped);
-    return normalizedOrdinal.length >= 2 ? normalizedOrdinal : null;
-  }
-
-  private normalizeOrdinalNumbers(value: string) {
-    return value.replace(/\b([1-9]|[12][0-9]|30)\b/gi, (match) => this.toRomanNumeral(Number(match)));
-  }
-
-  private toRomanNumeral(value: number) {
-    const numerals: Array<[number, string]> = [
-      [10, "X"],
-      [9, "IX"],
-      [5, "V"],
-      [4, "IV"],
-      [1, "I"]
-    ];
-    let remaining = value;
-    let output = "";
-    for (const [amount, symbol] of numerals) {
-      while (remaining >= amount) {
-        output += symbol;
-        remaining -= amount;
-      }
-    }
-    return output;
+    const normalized = rewriteGeneralKnowledgeQuery({
+      question,
+      subject: stripped,
+      language: this.isLikelyFrenchQuestion(question) ? "fr" : "en"
+    }).canonicalSubject;
+    return normalized.length >= 2 ? normalized : null;
   }
 
   private extractCurrentStatusRoleTerms(question: string) {
