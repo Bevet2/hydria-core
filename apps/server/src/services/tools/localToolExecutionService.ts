@@ -584,6 +584,33 @@ function normalizeSpaces(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function normalizeRegnalOrdinalAliases(value: string) {
+  return value.replace(/\b([1-9]|[12][0-9]|30)\b/g, (match) => toRomanNumeral(Number(match)));
+}
+
+function toRomanNumeral(value: number) {
+  if (!Number.isFinite(value) || value <= 0 || value > 30) {
+    return String(value);
+  }
+
+  const numerals: Array<[number, string]> = [
+    [10, "X"],
+    [9, "IX"],
+    [5, "V"],
+    [4, "IV"],
+    [1, "I"]
+  ];
+  let remaining = value;
+  let output = "";
+  for (const [amount, symbol] of numerals) {
+    while (remaining >= amount) {
+      output += symbol;
+      remaining -= amount;
+    }
+  }
+  return output;
+}
+
 function isAiRecentUpdatesRoute(args: ToolRoutingDecision) {
   const subject = [
     extractStringArg(args, "subject"),
@@ -721,11 +748,13 @@ function extractResearchSubject(args: ToolRoutingDecision) {
   const subject = normalizeSpaces(
     raw
       .replace(/[?]/g, " ")
-      .replace(/\b(?:who is|who was|tell me about|qui est|qui etait|qui (?:e|\u00e9)tait|donne(?:-|\s)?moi|sa biographie|son histoire|biographie|biography|known for|connu(?:e)? pour|cherche(?:r)? sur internet|recherche web|verifie|v(?:e|\u00e9)rifie|source|sources|cite)\b/gi, " ")
-      .replace(/\b(?:de|du|des|d'|of|about|sur|le|la|les|un|une|sa|son|his|her)\b/gi, " ")
+      .replace(/\b(?:who is|who was|tell me about|give me|make me|qui est|qui etait|qui (?:e|\u00e9)tait|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi|sa biographie|son histoire|biographie|biography|known for|connu(?:e)? pour|cherche(?:r)? sur internet|recherche web|verifie|v(?:e|\u00e9)rifie|source|sources|cite)\b/gi, " ")
+      .replace(/\b(?:complete|compl(?:e|\u00e8)te|complet|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9)|diaporama|slides?)\b/gi, " ")
+      .replace(/\b(?:roi|reine|king|queen|empereur|emperor|pape|pope|pour|for|de|du|des|d'|of|about|sur|le|la|les|un|une|sa|son|his|her)\b/gi, " ")
       .replace(/[?.!,]+$/g, " ")
   );
-  return subject.length >= 2 ? subject : raw.trim();
+  const normalized = normalizeRegnalOrdinalAliases(subject);
+  return normalized.length >= 2 ? normalized : raw.trim();
 }
 
 function wikipediaLanguageOrder(language: WeatherLanguage) {
@@ -768,6 +797,9 @@ async function fetchWikipediaSummary(subject: string, language: string) {
     : null;
   const excerpt = normalizeSpaces(summary.extract);
   const description = summary.description ? normalizeSpaces(summary.description) : null;
+  if (!wikipediaSummaryMatchesSubject(subject, `${pageTitle} ${description ?? ""} ${excerpt}`)) {
+    return null;
+  }
   return {
     title: pageTitle,
     url: pageUrl,
@@ -775,6 +807,20 @@ async function fetchWikipediaSummary(subject: string, language: string) {
     excerpt,
     timestamp
   };
+}
+
+function wikipediaSummaryMatchesSubject(subject: string, text: string) {
+  const subjectTerms = normalizeLoose(normalizeRegnalOrdinalAliases(subject))
+    .replace(/\b(?:roi|king|reine|queen|saint|sainte|de|du|des|of|the|le|la|les|france)\b/g, " ")
+    .split(/\s+/)
+    .filter((term) => term.length >= 2);
+  if (subjectTerms.length === 0) {
+    return true;
+  }
+
+  const normalizedText = normalizeLoose(text);
+  const hitCount = subjectTerms.filter((term) => normalizedText.includes(term)).length;
+  return hitCount >= Math.min(2, subjectTerms.length);
 }
 
 function unwrapDuckDuckGoUrl(rawUrl: string) {

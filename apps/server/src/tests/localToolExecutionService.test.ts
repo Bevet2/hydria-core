@@ -535,6 +535,122 @@ test("local research fact-check tool uses Wikipedia summary for stable biographi
   assert.equal(result?.sources?.[0]?.retrievalEngine, "known_endpoint");
 });
 
+test("local research fact-check tool cleans presentation biography subjects before Wikipedia lookup", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    requestedUrls.push(url);
+
+    if (url.includes("fr.wikipedia.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          query: {
+            search: [
+              {
+                title: "Louis IX",
+                snippet: "Roi de France."
+              }
+            ]
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("fr.wikipedia.org/api/rest_v1/page/summary/Louis_IX")) {
+      return new Response(
+        JSON.stringify({
+          title: "Louis IX",
+          description: "Roi de France",
+          extract:
+            "Louis IX, dit Saint Louis, est un roi de France capetien qui a regne de 1226 a 1270 et a ete canonise.",
+          timestamp: "2026-05-01T12:00:00Z",
+          content_urls: {
+            desktop: {
+              page: "https://fr.wikipedia.org/wiki/Louis_IX"
+            }
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const service = new LocalToolExecutionService();
+  const result = await service.tryExecute(
+    buildFactCheckRouting("fait moi une biographie complete pour une presentation de Louis 9")
+  );
+
+  assert.equal(result?.toolType, "research");
+  assert.equal(result?.resultLabel, "Louis IX");
+  assert.match(result?.verifiedFacts.join(" "), /Saint Louis/);
+  assert.equal(requestedUrls.some((url) => decodeURIComponent(url.replace(/\+/g, " ")).includes("srsearch=Louis IX")), true);
+  assert.equal(result?.sources?.[0]?.retrievalEngine, "known_endpoint");
+});
+
+test("local research fact-check tool rejects off-subject Wikipedia summaries", async (t) => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    if (url.includes("fr.wikipedia.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          query: {
+            search: [
+              {
+                title: "The Bordeaux copy of the Essays",
+                snippet: "Montaigne."
+              }
+            ]
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("fr.wikipedia.org/api/rest_v1/page/summary/The_Bordeaux_copy_of_the_Essays")) {
+      return new Response(
+        JSON.stringify({
+          title: "The Bordeaux copy of the Essays",
+          description: "Edition of Michel de Montaigne's Essays",
+          extract:
+            "The Bordeaux copy of the Essays is a 1588 edition of Michel de Montaigne's Essays held by the Bibliotheque municipale de Bordeaux.",
+          timestamp: "2026-05-01T12:00:00Z"
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("en.wikipedia.org")) {
+      return new Response("not found", { status: 404 });
+    }
+    if (url.includes("duckduckgo.com/html")) {
+      return new Response(
+        `<html><body><div class="result"><a class="result__a" href="https://example.org/louis-ix">Louis IX</a><a class="result__snippet">Louis IX, also called Saint Louis, was king of France from 1226 to 1270.</a></div></body></html>`,
+        { status: 200, headers: { "Content-Type": "text/html" } }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const service = new LocalToolExecutionService();
+  const result = await service.tryExecute(buildFactCheckRouting("Louis 9"));
+
+  assert.equal(result?.toolType, "research");
+  assert.doesNotMatch(result?.verifiedFacts.join(" ") ?? "", /Montaigne|Essays/);
+  assert.match(result?.verifiedFacts.join(" "), /Saint Louis/);
+  assert.equal(result?.sources?.[0]?.retrievalEngine, "duckduckgo");
+});
+
 test("local research fact-check tool falls back to web search snippets", async (t) => {
   const originalFetch = globalThis.fetch;
 

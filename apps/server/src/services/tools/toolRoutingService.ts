@@ -111,7 +111,7 @@ function isConversationPlanningCategory(category: QuestionCategory | null | unde
 }
 
 function detectQuestionLanguage(question: string) {
-  return /\b(?:fais(?:-|\s)?moi|donne(?:-|\s)?moi|recap|r(?:e|\u00e9)cap|nouveaut(?:e|\u00e9)s?|sorties?|semaine|quel|quelle|quels|temps|aujourd|meteo|m(?:e|\u00e9|\u00c3\u00a9|\ufffd)t(?:e|\u00e9|\u00c3\u00a9|\ufffd)o|pluie|vent|neige|fait-il|fait il|qui est|calcule|calculer|combien|convertis|convertir|euros?|dollars?|taux)\b/i.test(
+  return /\b(?:fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|recap|r(?:e|\u00e9)cap|nouveaut(?:e|\u00e9)s?|sorties?|semaine|quel|quelle|quels|temps|aujourd|meteo|m(?:e|\u00e9|\u00c3\u00a9|\ufffd)t(?:e|\u00e9|\u00c3\u00a9|\ufffd)o|pluie|vent|neige|fait-il|fait il|qui est|biographie|presentation|pr(?:e|\u00e9)sentation|expos(?:e|\u00e9)|calcule|calculer|combien|convertis|convertir|euros?|dollars?|taux)\b/i.test(
     question
   )
     ? "fr"
@@ -269,24 +269,27 @@ function extractEntitySubject(question: string) {
   const stripped = normalizeSpace(
     question
       .replace(/[?]/g, " ")
-      .replace(/\b(?:who is|what is|what are|show me|find|lookup|look up|tell me|explain|define|definition|qui est|quel est|quelle est|quels sont|quelles sont|qu'est[- ]ce que|quest ce que|c'est quoi|c est quoi|ce qu'est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition)\b/gi, " ")
+      .replace(/\b(?:who is|what is|what are|show me|find|lookup|look up|tell me|give me|make me|explain|define|definition|qui est|quel est|quelle est|quels sont|quelles sont|qu'est[- ]ce que|quest ce que|c'est quoi|c est quoi|ce qu'est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi, " ")
       .replace(/\b(?:simply|simplement)\b/gi, " ")
+      .replace(/\b(?:complete|compl(?:e|\u00e8)te|complet|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9)|diaporama|slides?)\b/gi, " ")
       .replace(/\b(?:current|currently|actuel|actuelle|latest|official|github|repository|repo|website|site|ceo|president|pr(?:e|\u00e9)sident|version|release|announcements?|docs?|documentation)\b/gi, " ")
-      .replace(/\b(?:ce|que|de|du|des|d'|of|the|le|la|les|un|une)\b/gi, " ")
+      .replace(/\b(?:roi|reine|king|queen|empereur|emperor|pape|pope|pour|for|ce|que|de|du|des|d'|of|the|le|la|les|un|une)\b/gi, " ")
   );
 
-  return stripped.length >= 2 ? stripped : extractQuotedOrTrailingName(question) ?? "";
+  const normalized = normalizeRegnalOrdinalAliases(stripped);
+  return normalized.length >= 2 ? normalized : extractQuotedOrTrailingName(question) ?? "";
 }
 
 function cleanFactualLookupSubject(question: string) {
   const cleaned = normalizeSpace(
     extractEntitySubject(question)
-      .replace(/\b(?:biographie|biography|histoire|story|known for|connu(?:e)? pour|fact[-\s]?check|verify|verifie|v(?:e|\u00e9)rifie|source|sources|cite|citation|cherche(?:r)? sur internet|recherche web)\b/gi, " ")
-      .replace(/\b(?:sa|son|his|her|their|de|du|des|d'|of|about|sur)\b/gi, " ")
+      .replace(/\b(?:biographie|biography|histoire|story|known for|connu(?:e)? pour|fact[-\s]?check|verify|verifie|v(?:e|\u00e9)rifie|source|sources|cite|citation|cherche(?:r)? sur internet|recherche web|complete|compl(?:e|\u00e8)te|complet|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9))\b/gi, " ")
+      .replace(/\b(?:sa|son|his|her|their|roi|reine|king|queen|empereur|emperor|pape|pope|de|du|des|d'|of|about|sur)\b/gi, " ")
       .replace(/[?.!,]+$/g, " ")
   );
 
-  return cleaned.length >= 2 ? cleaned : extractQuotedOrTrailingName(question) ?? question;
+  const normalized = normalizeRegnalOrdinalAliases(cleaned);
+  return normalized.length >= 2 ? normalized : extractQuotedOrTrailingName(question) ?? question;
 }
 
 function cleanSubject(value: string) {
@@ -298,6 +301,33 @@ function cleanSubject(value: string) {
       .replace(/^(?:de|du|des|d'|of|the|le|la|les|un|une)\b\s*/gi, " ")
       .replace(/\b(?:de|du|des|d'|of|the|le|la|les|un|une)\b$/gi, " ")
   );
+}
+
+function normalizeRegnalOrdinalAliases(value: string) {
+  return value.replace(/\b([1-9]|[12][0-9]|30)\b/g, (match) => toRomanNumeral(Number(match)));
+}
+
+function toRomanNumeral(value: number) {
+  if (!Number.isFinite(value) || value <= 0 || value > 30) {
+    return String(value);
+  }
+
+  const numerals: Array<[number, string]> = [
+    [10, "X"],
+    [9, "IX"],
+    [5, "V"],
+    [4, "IV"],
+    [1, "I"]
+  ];
+  let remaining = value;
+  let output = "";
+  for (const [amount, symbol] of numerals) {
+    while (remaining >= amount) {
+      output += symbol;
+      remaining -= amount;
+    }
+  }
+  return output;
 }
 
 function extractCurrentRole(question: string) {

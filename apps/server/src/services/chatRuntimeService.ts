@@ -483,6 +483,10 @@ function isIdentityLookup(message: string) {
   return IDENTITY_LOOKUP_PATTERN.test(message);
 }
 
+function isIdentityOrBiographyLookup(message: string) {
+  return isIdentityLookup(message) || BIOGRAPHY_REQUEST_PATTERN.test(message);
+}
+
 function shouldUseExternalGroundingForChat(args: {
   userMessage: string;
   routingQuestion: string;
@@ -553,15 +557,46 @@ function extractCorrectionSubject(message: string) {
   return cleaned.slice(0, 120);
 }
 
+function extractEntityCorrectionFragment(message: string) {
+  const normalized = message.replace(/\s+/g, " ").trim();
+  if (
+    !normalized ||
+    extractCorrectionSubject(normalized) ||
+    isIdentityOrBiographyLookup(normalized) ||
+    countWords(normalized) > 9
+  ) {
+    return "";
+  }
+
+  const looksLikeEntityFragment =
+    /\b(?:roi|reine|king|queen|empereur|emperor|saint|sainte|pape|pope|pharaon|pharaoh)\b/i.test(normalized) ||
+    /\b(?:[1-9]|[12][0-9]|30|[ivxlcdm]{2,})\b/i.test(normalized) ||
+    /[A-Z][\p{L}'-]{2,}/u.test(normalized);
+  if (!looksLikeEntityFragment) {
+    return "";
+  }
+
+  const cleaned = normalized
+    .replace(/[?.!]+$/g, "")
+    .replace(/^(?:de|du|des|d'|la|le|les|un|une|the|about|sur)\s+/i, "")
+    .replace(/^(?:roi|reine|king|queen|empereur|emperor|pape|pope)\s+/i, "")
+    .trim();
+  return cleaned.length >= 2 ? cleaned.slice(0, 120) : "";
+}
+
 function extractIdentitySubjectFragment(message: string) {
-  if (!isIdentityLookup(message)) {
+  if (!isIdentityOrBiographyLookup(message)) {
     return "";
   }
 
   return message
     .replace(/[?]/g, " ")
     .replace(IDENTITY_LOOKUP_PATTERN, " ")
+    .replace(BIOGRAPHY_REQUEST_PATTERN, " ")
+    .replace(/\b(?:give me|make me|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi, " ")
+    .replace(/\b(?:complete|compl(?:e|\u00e8)te|complet|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9)|diaporama|slides?)\b/gi, " ")
     .replace(/\b(?:please|svp|s'il te plait|s'il vous plait|about|sur)\b/gi, " ")
+    .replace(/\b(?:roi|reine|king|queen|empereur|emperor|pape|pope|pour|for|de|du|des|d'|of|the|le|la|les|un|une)\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 120);
@@ -776,9 +811,14 @@ function buildRoutingQuestionForHydria(args: {
   }
 
   const correctionSubject = extractCorrectionSubject(args.userMessage);
-  if (correctionSubject && isIdentityLookup(previousUserMessage)) {
-    const correctedSubject = normalizeShortOrdinalAliases(correctionSubject);
-    return /^\s*(?:qui|qu')\b/i.test(previousUserMessage)
+  const entityCorrectionSubject = correctionSubject || extractEntityCorrectionFragment(args.userMessage);
+  if (entityCorrectionSubject && isIdentityOrBiographyLookup(previousUserMessage)) {
+    const correctedSubject = normalizeShortOrdinalAliases(entityCorrectionSubject);
+    const frenchLike = isFrenchLikeMessage(args.userMessage, args.session) || isFrenchLikeMessage(previousUserMessage, args.session);
+    if (BIOGRAPHY_REQUEST_PATTERN.test(previousUserMessage)) {
+      return frenchLike ? `biographie de ${correctedSubject}` : `biography of ${correctedSubject}`;
+    }
+    return frenchLike || /^\s*(?:qui|qu')\b/i.test(previousUserMessage)
       ? `qui est ${correctedSubject}`
       : `who is ${correctedSubject}`;
   }

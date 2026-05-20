@@ -102,6 +102,42 @@ test("chat runtime keeps follow-up context in the direct student chat adapter", 
   );
 });
 
+test("chat runtime resolves bare entity corrections after biography requests", async () => {
+  const calls: StudentChatAdapterInput[] = [];
+  const service = new ChatRuntimeService(
+    {
+      async answer(input) {
+        calls.push(input);
+        return buildAdapterResult(
+          calls.length === 1
+            ? "Je n'ai pas assez d'information verifiee."
+            : "Louis IX, aussi appele Saint Louis, est un roi de France capetien qui a regne de 1226 a 1270."
+        );
+      }
+    },
+    undefined,
+    buildFactCheckToolResult("Louis IX, aussi appele Saint Louis, est un roi de France capetien.")
+  );
+
+  const first = await service.sendMessage({
+    message: "fait moi une biographie complete pour une presentation de Louis 9"
+  });
+  const second = await service.sendMessage({
+    sessionId: first.sessionId,
+    message: "le roi louis 9 de france"
+  });
+
+  assert.equal(calls[0]?.routingQuestion, "fait moi une biographie complete pour une presentation de Louis 9");
+  assert.equal(calls[0]?.requiresExternalGrounding, true);
+  const secondTurnCall = calls.find((call) => call.userMessage === "le roi louis 9 de france");
+  assert.equal(secondTurnCall?.routingQuestion, "biographie de louis ix de france");
+  assert.equal(secondTurnCall?.requiresExternalGrounding, true);
+  assert.equal(secondTurnCall?.runtimeMode, "conversation");
+  assert.match(secondTurnCall?.question ?? "", /Resolved current task to answer[\s\S]*biographie de louis ix de france/i);
+  assert.match(second.answer.answer, /Louis IX/i);
+  assert.match(second.answer.answer, /Saint Louis/i);
+});
+
 test("chat runtime repairs thin source-backed factual answers with verified facts", async () => {
   const service = new ChatRuntimeService(
     {

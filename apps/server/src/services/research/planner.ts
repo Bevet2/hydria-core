@@ -855,24 +855,25 @@ export class ResearchPlanner {
         .replace(/\b(?:biography of|biography|biographie(?:\s+(?:de|d['’]))?|life of|vie de|parcours de|career of)\b/gi, " ")
         .replace(/[?]/g, " ")
         .replace(/\b(?:who is|who was|who are|qui est|qui etait|qui était|qui sont)\b/gi, " ")
-        .replace(/\b(?:please|svp|s'il te plait|s'il vous plait|explique|explain|raconte|tell me about)\b/gi, " ")
-        .replace(/\b(?:donne moi|donne-moi|give me|details?|en dire plus|dire plus|more about|sa|son|ses|his|her|their|its)\b/gi, " ")
+        .replace(/\b(?:please|svp|s'il te plait|s'il vous plait|explique|explain|raconte|tell me about|give me|make me|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi, " ")
+        .replace(/\b(?:complete|compl(?:e|\u00e8)te|complet|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9)|diaporama|slides?)\b/gi, " ")
+        .replace(/\b(?:roi|reine|king|queen|empereur|emperor|pape|pope|pour|for|details?|en dire plus|dire plus|more about|sa|son|ses|his|her|their|its)\b/gi, " ")
     );
-    const normalizedOrdinal = this.normalizeTrailingOrdinalNumber(stripped);
+    const normalizedOrdinal = this.normalizeOrdinalNumbers(stripped);
     return normalizedOrdinal.length >= 2 ? normalizedOrdinal : null;
   }
 
-  private normalizeTrailingOrdinalNumber(value: string) {
-    return value.replace(/\b([1-9]|[12][0-9]|30)\b$/i, (match) => this.toRomanNumeral(Number(match)));
+  private normalizeOrdinalNumbers(value: string) {
+    return value.replace(/\b([1-9]|[12][0-9]|30)\b/gi, (match) => this.toRomanNumeral(Number(match)));
   }
 
   private toRomanNumeral(value: number) {
     const numerals: Array<[number, string]> = [
-      [10, "x"],
-      [9, "ix"],
-      [5, "v"],
-      [4, "iv"],
-      [1, "i"]
+      [10, "X"],
+      [9, "IX"],
+      [5, "V"],
+      [4, "IV"],
+      [1, "I"]
     ];
     let remaining = value;
     let output = "";
