@@ -404,9 +404,44 @@ test("chat runtime rewrites source snippets that are copied question labels plus
 
   assert.match(response.answer.answer, /volcan/i);
   assert.match(response.answer.answer, /tectonique des plaques/i);
-  assert.match(response.answer.answer, /mettent en avant/i);
+  assert.match(response.answer.answer, /fonctionnement|mettent en avant/i);
   assert.doesNotMatch(response.answer.answer, /^Comment se forme un volcan:/i);
   assert.doesNotMatch(response.answer.answer, /-->/);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
+test("chat runtime repairs source-backed mechanism questions that only answer existence", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult("Il existe une multitude de volcans a la surface de la Terre.");
+      }
+    },
+    undefined,
+    {
+      async tryExecute(routing: ToolRoutingDecision) {
+        if (routing.toolType !== "research" || routing.intent !== "fact_check") {
+          return null;
+        }
+        return {
+          toolType: "research" as const,
+          intent: "fact_check",
+          summary: ["Contexte source sur les volcans."],
+          verifiedFacts: [
+            "Comment se forme un volcan : tectonique des plaques, 3 mecanismes de fusion, types d'eruptions, classification VEI, exemples historiques. -->"
+          ],
+          confidenceScore: 0.88,
+          resultLabel: "fact_check"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "Comment fonctionne un volcan ?" });
+
+  assert.match(response.answer.answer, /fonctionnement/i);
+  assert.match(response.answer.answer, /tectonique des plaques/i);
+  assert.doesNotMatch(response.answer.answer, /^Il existe une multitude/i);
   assert.equal(response.conversationQuality.passed, true);
 });
 

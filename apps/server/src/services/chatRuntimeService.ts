@@ -1446,10 +1446,15 @@ function buildFragmentarySourceSynthesisRepair(args: {
       : "";
   const subjectDisplay = sourceSubjectDisplay(subject, args.language);
   const joined = joinNaturalList(uniqueFragments, args.language);
+  const asksMechanism = /\b(?:comment|fonctionne|fonctionnement|how|works?)\b/.test(normalizeText(subject));
   const answer =
     args.language === "en"
-      ? `For ${subjectDisplay}, the sources highlight ${joined}.`
-      : `Pour ${subjectDisplay}, les sources mettent en avant ${joined}.`;
+      ? asksMechanism
+        ? `For ${subjectDisplay}, the mechanism is mainly described through ${joined}.`
+        : `For ${subjectDisplay}, the sources highlight ${joined}.`
+      : asksMechanism
+        ? `Pour ${subjectDisplay}, le fonctionnement s'explique surtout par ${joined}.`
+        : `Pour ${subjectDisplay}, les sources mettent en avant ${joined}.`;
 
   return {
     ...args.answer,
@@ -1457,6 +1462,38 @@ function buildFragmentarySourceSynthesisRepair(args: {
     key_points: [...args.answer.key_points, "Fragmentary source synthesis repair"].slice(0, 6),
     confidence: Math.max(args.answer.confidence, 84)
   };
+}
+
+function asksForMechanism(value: string) {
+  return /\b(?:comment fonctionne|fonctionnement|pourquoi|how does|how do|why does|what causes|causes?)\b/i.test(
+    normalizeText(value)
+  );
+}
+
+function answersMechanism(value: string) {
+  return /\b(?:fonctionne|fonctionnement|grace|parce|cause|provoque|mecanisme|explique|expliquee|due|depend|liee|attire|works|because|causes?|mechanism|due|depends|explains?)\b/i.test(
+    normalizeText(value)
+  );
+}
+
+function buildSourceBackedMechanismRepair(args: {
+  answer: StudentAnswer;
+  tooling: ChatToolMetadata;
+  language: ConversationState["language"];
+  userMessage: string;
+}): StudentAnswer | null {
+  if (!asksForMechanism(args.userMessage) || answersMechanism(args.answer.answer)) {
+    return null;
+  }
+  return (
+    buildFragmentarySourceSynthesisRepair(args) ??
+    buildSourceBackedFactualRepair({
+      answer: args.answer,
+      tooling: args.tooling,
+      language: args.language,
+      force: true
+    })
+  );
 }
 
 function buildSourceSynthesisQualityRepair(args: {
@@ -3745,6 +3782,30 @@ export class ChatRuntimeService {
     });
     if (sourceSynthesisQualityRepair) {
       finalAnswer = sourceSynthesisQualityRepair;
+      conversationQuality = this.analyzeQuality({
+        runtimeMode,
+        conversationState,
+        activeConstraintCapsule,
+        answerPolicy,
+        newUserMessage: args.message,
+        answer: finalAnswer.answer,
+        lastAssistantAnswer: session.lastAssistantAnswer,
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
+      });
+      usedRetry = true;
+    }
+
+    const sourceBackedMechanismRepair = hasSourceBackedFactCheck
+      ? buildSourceBackedMechanismRepair({
+          answer: finalAnswer,
+          tooling,
+          language: conversationState.language,
+          userMessage: args.message
+        })
+      : null;
+    if (sourceBackedMechanismRepair && sourceBackedMechanismRepair.answer !== finalAnswer.answer) {
+      finalAnswer = sourceBackedMechanismRepair;
       conversationQuality = this.analyzeQuality({
         runtimeMode,
         conversationState,
