@@ -18,6 +18,30 @@ test("source answer relevance accepts causal Berlin Wall answers", () => {
   assert.equal(result.intent, "cause");
 });
 
+test("source answer relevance accepts causal science wording from sourced facts", () => {
+  const earthquake = evaluateSourceAnswerRelevance({
+    question: "What causes earthquakes?",
+    subject: "earthquake",
+    answer:
+      "An earthquake is the shaking of Earth's surface resulting from a sudden release of energy in the lithosphere that creates seismic waves.",
+    verifiedFacts: [
+      "Earthquake: shaking resulting from sudden energy release in the lithosphere that creates seismic waves."
+    ],
+    language: "en"
+  });
+  const gravity = evaluateSourceAnswerRelevance({
+    question: "Pourquoi la gravite existe ?",
+    subject: "gravitation",
+    answer:
+      "La gravitation est l'interaction physique responsable de l'attraction des corps massifs.",
+    verifiedFacts: ["Gravitation: interaction responsable de l'attraction des corps massifs."],
+    language: "fr"
+  });
+
+  assert.equal(earthquake.passed, true);
+  assert.equal(gravity.passed, true);
+});
+
 test("source answer relevance rejects definitions when a why question needs a cause", () => {
   const result = evaluateSourceAnswerRelevance({
     question: "Why did the Berlin Wall fall?",

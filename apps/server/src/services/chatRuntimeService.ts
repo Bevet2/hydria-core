@@ -386,6 +386,10 @@ function compactToCompleteSentence(value: string, maxChars: number) {
   if (lastSentenceEnd >= Math.floor(maxChars * 0.45)) {
     return bounded.slice(0, lastSentenceEnd + 1).trim();
   }
+  const lastClauseEnd = Math.max(bounded.lastIndexOf(";"), bounded.lastIndexOf(":"));
+  if (lastClauseEnd >= Math.floor(maxChars * 0.45)) {
+    return `${bounded.slice(0, lastClauseEnd).replace(/[,:;]+$/g, "").trim()}.`;
+  }
   return `${bounded.replace(/\s+\S*$/, "").replace(/[,:;]+$/g, "").trim()}.`;
 }
 
@@ -1560,7 +1564,7 @@ function semanticIntentCueHits(value: string, intent: SourceAnswerIntent) {
   if (intent === "cause") {
     return (
       normalized.match(
-        /\b(?:because|cause|caused|causes|due|fell|led|opened|ouverture|parce|political|politique|pressure|pression|protests|provoque|reforms|reformes|reason|explique)\b/g
+        /\b(?:because|cause|caused|causes|due|fell|led|opened|ouverture|parce|political|politique|pressure|pression|protests|provoque|release|released|responsable|responsible|resulting|results|reforms|reformes|reason|explique)\b/g
       ) ?? []
     ).length;
   }
