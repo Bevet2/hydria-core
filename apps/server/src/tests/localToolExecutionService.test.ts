@@ -777,6 +777,78 @@ test("local research fact-check tool rejects adjacent Wikipedia titles and uses 
   assert.equal(result?.sources?.some((source) => source.title.includes("Automobile hybride")), false);
 });
 
+test("local research fact-check tool rejects off-topic earthquake sports pages", async (t) => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    const decoded = decodeURIComponent(url);
+
+    if (url.includes("wikipedia.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          query: {
+            search: [
+              {
+                title: "Earthquakes de San José",
+                snippet: "Club de soccer professionnel."
+              }
+            ]
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (decoded.includes("api/rest_v1/page/summary/Earthquakes_de_San_Jos")) {
+      return new Response(
+        JSON.stringify({
+          title: "Earthquakes de San José",
+          description: "Club de soccer",
+          extract:
+            "Les Earthquakes de San José est un club de soccer professionnel basé à San José.",
+          timestamp: "2026-05-01T12:00:00Z"
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("wikidata.org/w/api.php")) {
+      return new Response("not found", { status: 404 });
+    }
+    if (url.includes("duckduckgo.com/html")) {
+      if (decoded.includes("site:britannica.com")) {
+        return new Response(
+          `<html><body><div class="result"><a class="result__a" href="https://www.britannica.com/science/earthquake-geology">Earthquake | Britannica</a><a class="result__snippet">Earthquakes are sudden shaking caused by seismic waves through Earth's rocks and occur along geologic faults.</a></div></body></html>`,
+          { status: 200, headers: { "Content-Type": "text/html" } }
+        );
+      }
+      return new Response(
+        `<html><body><div class="result"><a class="result__a" href="https://www.bgs.ac.uk/discovering-geology/earth-hazards/earthquakes/what-causes-earthquakes/">What causes earthquakes?</a><a class="result__snippet">Earthquakes are caused by sudden movement along faults within the Earth, releasing stored energy as seismic waves.</a></div></body></html>`,
+        { status: 200, headers: { "Content-Type": "text/html" } }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const service = new LocalToolExecutionService();
+  const result = await service.tryExecute({
+    ...buildFactCheckRouting("earthquakes"),
+    extractedArgs: {
+      subject: "earthquakes",
+      query: "What causes earthquakes?",
+      language: "en"
+    }
+  });
+
+  assert.equal(result?.toolType, "research");
+  assert.match(result?.verifiedFacts.join(" "), /faults|seismic waves|geologic faults/i);
+  assert.doesNotMatch(result?.verifiedFacts.join(" "), /soccer|San José/i);
+  assert.equal(result?.sources?.some((source) => /San_Jos|soccer/i.test(`${source.url} ${source.excerpt}`)), false);
+});
+
 test("local research fact-check tool cleans presentation biography subjects before Wikipedia lookup", async (t) => {
   const originalFetch = globalThis.fetch;
   const requestedUrls: string[] = [];

@@ -925,6 +925,26 @@ function wikipediaSummarySubjectTitleMatches(subject: string, title: string, des
   return hitCount >= Math.min(2, subjectTerms.length);
 }
 
+function isIntentSpecificOffTopicSummary(args: ToolRoutingDecision, summary: { title: string; description: string | null; excerpt: string }) {
+  if (!shouldFetchIntentSpecificEvidence(args)) {
+    return false;
+  }
+
+  const text = normalizeLooseText(`${summary.title} ${summary.description ?? ""} ${summary.excerpt}`);
+  const asksGeology = /\b(?:earthquake|earthquakes|seisme|seismes|tremblement|tremblements)\b/.test(
+    normalizeLooseText(`${extractStringArg(args, "query") ?? ""} ${extractStringArg(args, "subject") ?? ""}`)
+  );
+  if (!asksGeology) {
+    return false;
+  }
+
+  const hasGeologySignal = /\b(?:geolog|seismic|seisme|seismes|tectonic|tectonique|fault|failles?|crust|croute|rocks?|ground|terre|earth|magnitude)\b/.test(
+    text
+  );
+  const hasEntityOrSportsSignal = /\b(?:club|soccer|football|team|equipe|sports?|mls|stadium|franchise)\b/.test(text);
+  return hasEntityOrSportsSignal && !hasGeologySignal;
+}
+
 async function searchWikipediaTitle(subject: string, language: string) {
   const searchUrl = new URL(`https://${language}.wikipedia.org/w/api.php`);
   searchUrl.searchParams.set("action", "query");
@@ -1110,10 +1130,24 @@ function isBlockedGeneralKnowledgeHost(url: string) {
   }
 }
 
+function isWeakGeneralKnowledgeSnippet(value: string) {
+  const normalized = normalizeLooseText(value);
+  const startsLikeNavigation = /^(?:learn about|find out|read about|decouvrez|d[eé]couvrez|en savoir plus)\b/.test(
+    normalized
+  );
+  if (!startsLikeNavigation) {
+    return false;
+  }
+  return !/\b(?:is|are|was|were|means|cause|caused|causes|due|occur|occurs|release|movement|fault|tectonic|est|sont|signifie|provoque|cause|causes|du a|due a|se produit|libere|mouvement)\b/.test(
+    normalized
+  );
+}
+
 async function searchGenericFactSources(subject: string, query = subject): Promise<GeneralKnowledgeEvidence[]> {
   const results = await searchDuckDuckGo(query);
   return results
     .filter((result) => !isBlockedGeneralKnowledgeHost(result.url))
+    .filter((result) => !isWeakGeneralKnowledgeSnippet(result.snippet))
     .filter((result) => subjectMatchesText(subject, `${result.title} ${result.snippet}`))
     .slice(0, 3)
     .map((result) => ({
@@ -1221,6 +1255,9 @@ async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<L
     for (const wikipediaLanguage of wikipediaLanguageOrder(language)) {
       const summary = await fetchWikipediaSummary(candidate, wikipediaLanguage);
       if (!summary) {
+        continue;
+      }
+      if (isIntentSpecificOffTopicSummary(args, summary)) {
         continue;
       }
       addEvidence(evidence, {

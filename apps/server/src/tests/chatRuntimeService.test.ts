@@ -692,6 +692,44 @@ test("chat runtime repairs wrong-language source-backed concept answers from ver
   assert.equal(response.conversationQuality.passed, true);
 });
 
+test("chat runtime repairs navigational snippets for source-backed causal answers", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult(
+          "Learn about the science of earthquakes, the tectonic plates, the San Andreas Fault, and the types of seismic events."
+        );
+      }
+    },
+    undefined,
+    {
+      async tryExecute(routing: ToolRoutingDecision) {
+        if (routing.toolType !== "research" || routing.intent !== "fact_check") {
+          return null;
+        }
+        return {
+          toolType: "research" as const,
+          intent: "fact_check",
+          summary: ["Source-backed causal context for earthquakes."],
+          verifiedFacts: [
+            "Earthquake: any sudden shaking of the ground caused by seismic waves through Earth's rocks; earthquakes occur most often along geologic faults.",
+            "What causes earthquakes?: Earthquakes are caused by sudden movement along faults within the Earth, releasing stored energy as seismic waves."
+          ],
+          confidenceScore: 0.9,
+          resultLabel: "earthquakes"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "What causes earthquakes?" });
+
+  assert.match(response.answer.answer, /caused|because|faults|seismic waves/i);
+  assert.doesNotMatch(response.answer.answer, /^Learn about/i);
+  assert.equal(response.usedRetry, true);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
 test("chat runtime repairs source-backed factual fallbacks inside a conversation", async () => {
   const service = new ChatRuntimeService(
     {

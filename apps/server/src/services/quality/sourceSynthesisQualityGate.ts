@@ -106,7 +106,7 @@ function hasSourceArtifact(answer: string) {
     normalized.includes("score de corroboration") ||
     /\bsources? pertinentes?\b/.test(normalized) ||
     /\bqu est ce qu un\b/.test(normalized) ||
-    /\b(?:retrieved from|read more|cliquez ici)\b/.test(normalized)
+    /\b(?:retrieved from|read more|learn about|find out|cliquez ici)\b/.test(normalized)
   );
 }
 
