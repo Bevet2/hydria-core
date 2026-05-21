@@ -822,7 +822,7 @@ test("local research fact-check tool rejects off-topic earthquake sports pages",
         );
       }
       return new Response(
-        `<html><body><div class="result"><a class="result__a" href="https://www.bgs.ac.uk/discovering-geology/earth-hazards/earthquakes/what-causes-earthquakes/">What causes earthquakes?</a><a class="result__snippet">Earthquakes are caused by sudden movement along faults within the Earth, releasing stored energy as seismic waves.</a></div></body></html>`,
+        `<html><body><div class="result"><a class="result__a" href="https://earthquake.usgs.gov/earthquakes/map/">Latest Earthquakes</a><a class="result__snippet">Track recent earthquakes worldwide with details on locations and epicenters.</a></div><div class="result"><a class="result__a" href="https://www.usgs.gov/faqs/what-earthquake-and-what-causes-them-happen">What is an earthquake and what causes them to happen?</a><a class="result__snippet">Learn about the science of earthquakes, tectonic plates, and the San Andreas Fault. Find out how earthquakes are measured.</a></div><div class="result"><a class="result__a" href="https://www.bgs.ac.uk/discovering-geology/earth-hazards/earthquakes/what-causes-earthquakes/">What causes earthquakes?</a><a class="result__snippet">Earthquakes are caused by sudden movement along faults within the Earth, releasing stored energy as seismic waves.</a></div></body></html>`,
         { status: 200, headers: { "Content-Type": "text/html" } }
       );
     }
@@ -845,8 +845,8 @@ test("local research fact-check tool rejects off-topic earthquake sports pages",
 
   assert.equal(result?.toolType, "research");
   assert.match(result?.verifiedFacts.join(" "), /faults|seismic waves|geologic faults/i);
-  assert.doesNotMatch(result?.verifiedFacts.join(" "), /soccer|San José/i);
-  assert.equal(result?.sources?.some((source) => /San_Jos|soccer/i.test(`${source.url} ${source.excerpt}`)), false);
+  assert.doesNotMatch(result?.verifiedFacts.join(" "), /soccer|San José|Track recent|Learn about/i);
+  assert.equal(result?.sources?.some((source) => /San_Jos|soccer|earthquakes\/map|Learn about/i.test(`${source.url} ${source.excerpt}`)), false);
 });
 
 test("local research fact-check tool cleans presentation biography subjects before Wikipedia lookup", async (t) => {

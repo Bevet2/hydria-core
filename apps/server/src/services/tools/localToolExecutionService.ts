@@ -1132,15 +1132,54 @@ function isBlockedGeneralKnowledgeHost(url: string) {
 
 function isWeakGeneralKnowledgeSnippet(value: string) {
   const normalized = normalizeLooseText(value);
-  const startsLikeNavigation = /^(?:learn about|find out|read about|decouvrez|d[eé]couvrez|en savoir plus)\b/.test(
+  if (
+    /\b(?:track recent|track earthquakes|live earthquake|live map|tracker|today|epicenters?)\b/.test(normalized) &&
+    !/\b(?:cause|caused|causes|due|release|released|movement|geologic faults?|seismic waves)\b/.test(normalized)
+  ) {
+    return true;
+  }
+
+  const looksLikeNavigation = /\b(?:learn about|find out|read about|decouvrez|d[eé]couvrez|en savoir plus)\b/.test(
     normalized
   );
-  if (!startsLikeNavigation) {
+  if (!looksLikeNavigation) {
     return false;
   }
-  return !/\b(?:is|are|was|were|means|cause|caused|causes|due|occur|occurs|release|movement|fault|tectonic|est|sont|signifie|provoque|cause|causes|du a|due a|se produit|libere|mouvement)\b/.test(
+  return !/\b(?:cause|caused|causes|due|occur|occurs|release|released|movement|provoque|du a|due a|se produit|libere|mouvement)\b/.test(
     normalized
   );
+}
+
+function isUsefulIntentSpecificSearchResult(query: string, result: SearchResult) {
+  const normalizedQuery = normalizeLooseText(query);
+  const normalizedResult = normalizeLooseText(`${result.title} ${result.snippet}`);
+  if (/\b(?:why|what causes|what caused|pourquoi|cause|causes)\b/.test(normalizedQuery)) {
+    if (
+      /\b(?:track|tracker|live|latest|recent|today|map|epicenters?)\b/.test(normalizedResult) &&
+      !/\b(?:because|cause|caused|causes|due|fault|faults|seismic waves|release|released|movement|geologic)\b/.test(
+        normalizedResult
+      )
+    ) {
+      return false;
+    }
+    if (
+      /\b(?:learn about|find out|read about|en savoir plus)\b/.test(normalizedResult) &&
+      !/\b(?:because|cause|caused|causes|due|release|released|movement|geologic|seismic waves)\b/.test(
+        normalizedResult
+      )
+    ) {
+      return false;
+    }
+    return /\b(?:because|cause|caused|causes|due|reason|fault|faults|faille|failles|tectonic|tectonique|seismic|seisme|release|released|movement|mouvement|waves|ondes|geologic|geolog)\b/.test(
+      normalizedResult
+    );
+  }
+  if (/\b(?:comment fonctionne|fonctionnement|how does|how do|how .* work|used for)\b/.test(normalizedQuery)) {
+    return /\b(?:works?|function|fonctionne|fonctionnement|mechanism|mecanisme|process|processus|through|par|via|allows|enables|sert|used)\b/.test(
+      normalizedResult
+    );
+  }
+  return true;
 }
 
 async function searchGenericFactSources(subject: string, query = subject): Promise<GeneralKnowledgeEvidence[]> {
@@ -1148,6 +1187,7 @@ async function searchGenericFactSources(subject: string, query = subject): Promi
   return results
     .filter((result) => !isBlockedGeneralKnowledgeHost(result.url))
     .filter((result) => !isWeakGeneralKnowledgeSnippet(result.snippet))
+    .filter((result) => isUsefulIntentSpecificSearchResult(query, result))
     .filter((result) => subjectMatchesText(subject, `${result.title} ${result.snippet}`))
     .slice(0, 3)
     .map((result) => ({
@@ -1296,7 +1336,7 @@ async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<L
 
   if (evidence.length < 2) {
     for (const candidate of rewrite.candidates) {
-      for (const item of await searchGenericFactSources(candidate)) {
+      for (const item of await searchGenericFactSources(candidate, extractStringArg(args, "query") ?? candidate)) {
         addEvidence(evidence, item);
       }
       if (evidence.length >= 2) {

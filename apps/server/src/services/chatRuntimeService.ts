@@ -1245,7 +1245,7 @@ function sourceFactQualityPenalty(fact: string, language: ConversationState["lan
   if (/^\s*[¿?]/.test(fact)) {
     penalty += 16;
   }
-  if (/\b(?:vous explique|lire l article|read more|cliquez ici|retrieved from)\b/i.test(normalized)) {
+  if (/\b(?:vous explique|lire l article|read more|learn about|find out|cliquez ici|retrieved from)\b/i.test(normalized)) {
     penalty += 10;
   }
   if (/\b(?:ebay|classifieds?|best deals?|for sale|buy now|shopping|marketplace)\b/i.test(normalized)) {
@@ -2664,6 +2664,38 @@ function sourceCueForKnowledgeHit(hit: ChatKnowledgeRetrievalMetadata["hits"][nu
   return doiSource ?? hit.sourceUris[0] ?? hit.title;
 }
 
+function extractDoiCue(value: string) {
+  return value.match(/\b10\.\d{4,9}\/[^\s)]+/i)?.[0]?.replace(/[.,;]+$/g, "") ?? null;
+}
+
+function preserveKnowledgeRetrievalSourceCue(args: {
+  answer: StudentAnswer;
+  knowledgeRetrieval: ChatKnowledgeRetrievalMetadata;
+  language: ConversationState["language"];
+}): StudentAnswer {
+  const hit = args.knowledgeRetrieval.hits[0];
+  if (!args.knowledgeRetrieval.used || !hit) {
+    return args.answer;
+  }
+
+  const sourceCue = sourceCueForKnowledgeHit(hit);
+  const doiCue = extractDoiCue(sourceCue) ?? extractDoiCue(hit.content) ?? extractDoiCue(hit.summary);
+  if (!doiCue || new RegExp(doiCue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(args.answer.answer)) {
+    return args.answer;
+  }
+
+  const suffix =
+    args.language === "fr"
+      ? ` Source gouvernee: DOI ${doiCue}.`
+      : ` Governed source: DOI ${doiCue}.`;
+  return {
+    ...args.answer,
+    answer: compactToCompleteSentence(`${args.answer.answer.replace(/\s+/g, " ").trim()}${suffix}`, 460),
+    key_points: [...args.answer.key_points, "Governed source preserved"].slice(0, 6),
+    confidence: Math.max(args.answer.confidence, 84)
+  };
+}
+
 function buildKnowledgeRetrievalFallbackDraft(args: {
   knowledgeRetrieval: ChatKnowledgeRetrievalMetadata;
   category: QuestionCategory;
@@ -3422,12 +3454,6 @@ export class ChatRuntimeService {
         language: conversationState.language,
         routingQuestion
       }) ??
-      buildRequiredToolUnavailableDraft({
-        tooling,
-        category,
-        language: conversationState.language,
-        routingQuestion
-      }) ??
       buildRuntimeProductKnowledgeDraft({
         userMessage: args.message,
         language: conversationState.language,
@@ -3446,6 +3472,14 @@ export class ChatRuntimeService {
         category,
         routingQuestion
       }) ??
+      (knowledgeRetrieval.used
+        ? null
+        : buildRequiredToolUnavailableDraft({
+            tooling,
+            category,
+            language: conversationState.language,
+            routingQuestion
+          })) ??
       buildContextSetupDraft({
         conversationState,
         newUserMessage: args.message,
@@ -4181,6 +4215,26 @@ export class ChatRuntimeService {
         toolRouting: tooling.routing
       });
       usedRetry = true;
+    }
+
+    const sourceCuePreservedAnswer = preserveKnowledgeRetrievalSourceCue({
+      answer: finalAnswer,
+      knowledgeRetrieval,
+      language: conversationState.language
+    });
+    if (sourceCuePreservedAnswer.answer !== finalAnswer.answer) {
+      finalAnswer = sourceCuePreservedAnswer;
+      conversationQuality = this.analyzeQuality({
+        runtimeMode,
+        conversationState,
+        activeConstraintCapsule,
+        answerPolicy,
+        newUserMessage: args.message,
+        answer: finalAnswer.answer,
+        lastAssistantAnswer: session.lastAssistantAnswer,
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
+      });
     }
 
     const assistantMessage: ChatMessage = {
