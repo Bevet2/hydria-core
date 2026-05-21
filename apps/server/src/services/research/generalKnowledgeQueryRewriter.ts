@@ -68,6 +68,8 @@ const COMMON_ALIAS_CANONICALS: Record<string, string> = {
   dna: "DNA",
   ia: "Intelligence Artificielle",
   ai: "Artificial Intelligence",
+  "apollo xi": "Apollo 11",
+  "apollo 11": "Apollo 11",
   api: "API",
   apis: "API",
   http: "HTTP",
@@ -93,6 +95,7 @@ const ADDITIONAL_COMMON_ALIAS_CANONICALS: Record<string, string> = {
   electricity: "electricity",
   evolution: "evolution",
   "biological evolution": "evolution",
+  blood: "blood",
   earthquakes: "earthquake",
   earthquake: "earthquake",
   gravite: "gravitation",
@@ -101,7 +104,9 @@ const ADDITIONAL_COMMON_ALIAS_CANONICALS: Record<string, string> = {
   molecule: "molecule",
   neurone: "neurone",
   "plate tectonics": "plate tectonics",
+  "printing press": "printing press",
   "principe vaccination": "vaccination",
+  sang: "sang",
   "systeme immunitaire": "systeme immunitaire",
   "systeme solaire": "systeme solaire",
   telescope: "telescope",
@@ -131,6 +136,8 @@ const ADDITIONAL_SPECIAL_CANDIDATE_ALIASES: Record<string, string[]> = {
   molecule: ["molecule", "mol\u00e9cule"],
   neurone: ["neurone", "neuron"],
   "plate tectonics": ["plate tectonics", "tectonique des plaques"],
+  "printing press": ["printing press", "imprimerie", "press printing"],
+  sang: ["sang", "blood"],
   vaccination: ["vaccination", "Vaccination", "vaccine"],
   "systeme immunitaire": ["systeme immunitaire", "syst\u00e8me immunitaire", "immune system"],
   "systeme solaire": ["systeme solaire", "syst\u00e8me solaire", "solar system"],
@@ -211,10 +218,10 @@ function stripRequestTerms(value: string) {
       .replace(/['\u2018\u2019]/g, " ")
       .replace(/[?]/g, " ")
       .replace(
-        /\b(?:who is|who was|what is|what are|what causes|what caused|how does|how do|tell me about|give me|make me|explain|define|definition|history of|biography of|qui est|qui etait|qui \u00e9tait|pourquoi|comment fonctionne|comment se forme|qu[' ]?est[- ]?ce qu[' ]?(?:un|une|le|la|les)?|qu[' ]?est[- ]?ce que|quest ce que|c[' ]?est quoi|ce qu'est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition|fais|fait|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:\s+l\s+histoire\s+de)?|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi,
+        /\b(?:who is|who was|what is|what are|what causes|what caused|what was|what were|why was|why were|how does|how do|tell me about|give me|make me|explain|define|definition|history of|biography of|qui est|qui etait|qui \u00e9tait|pourquoi|a quoi sert|comment fonctionne|comment se forme|qu[' ]?est[- ]?ce qu[' ]?(?:un|une|le|la|les)?|qu[' ]?est[- ]?ce que|quest ce que|c[' ]?est quoi|ce qu'est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition|fais|fait|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:\s+l\s+histoire\s+de)?|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi,
         " "
       )
-      .replace(/\b(?:c[' ]?est qui|c[' ]?est quel|c[' ]?est quoi|c[' ]?etait qui|c[' ]?etait quoi|etait[- ]?ce|what was|what were|used for|used|exists?|existe|travel|formed?|forms?)\b/gi, " ")
+      .replace(/\b(?:c[' ]?est qui|c[' ]?est quel|c[' ]?est quoi|c[' ]?etait qui|c[' ]?etait quoi|etait[- ]?ce|important|used for|used|exists?|existe|travel|formed?|forms?)\b/gi, " ")
       .replace(
         /\b(?:sa biographie|son histoire|biographie|biography|histoire|history|known for|connu(?:e)? pour|complete|compl(?:e|\u00e8)te|complet|courte?|fiche|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9)|diaporama|slides?|simple|simplement|simply|principe|please|svp|s'il te plait|s'il vous plait|historiquement)\b/gi,
         " "

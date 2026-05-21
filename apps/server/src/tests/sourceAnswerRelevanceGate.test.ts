@@ -120,3 +120,15 @@ test("source answer relevance tolerates French mojibake variants for Cleopatra",
   assert.equal(result.passed, true);
   assert.equal(result.intent, "biography");
 });
+
+test("source answer relevance tolerates missing accent in Moyen Age answers", () => {
+  const result = evaluateSourceAnswerRelevance({
+    question: "Explique le Moyen Age.",
+    subject: "Moyen Age",
+    answer: "Moyen ge: Le Moyen ge est une periode de l'histoire de l'Europe.",
+    verifiedFacts: ["Moyen Âge: période de l'histoire de l'Europe."],
+    language: "fr"
+  });
+
+  assert.equal(result.passed, true);
+});

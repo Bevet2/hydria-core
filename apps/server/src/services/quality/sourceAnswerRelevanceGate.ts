@@ -201,6 +201,7 @@ function repairCommonMojibake(value: string) {
 
 function normalizeText(value: string) {
   return repairCommonMojibake(value)
+    .replace(/\bMoyen\s+ge\b/gi, "Moyen Age")
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()

@@ -112,7 +112,7 @@ function isConversationPlanningCategory(category: QuestionCategory | null | unde
 }
 
 function detectQuestionLanguage(question: string) {
-  return /\b(?:fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|recap|r(?:e|\u00e9)cap|nouveaut(?:e|\u00e9)s?|sorties?|semaine|quel|quelle|quels|qu[' ]?est[- ]?ce|quest ce|c[' ]?est quoi|explique|pourquoi|comment|principe|fonctionne|forme|temps|aujourd|meteo|m(?:e|\u00e9|\u00c3\u00a9|\ufffd)t(?:e|\u00e9|\u00c3\u00a9|\ufffd)o|pluie|vent|neige|fait-il|fait il|qui est|qui etait|qui (?:e|\u00e9)tait|c[' ]?etait qui|c[' ]?(?:e|\u00e9)tait qui|biographie|presentation|pr(?:e|\u00e9)sentation|expos(?:e|\u00e9)|calcule|calculer|combien|convertis|convertir|euros?|dollars?|taux)\b/i.test(
+  return /\b(?:fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|recap|r(?:e|\u00e9)cap|nouveaut(?:e|\u00e9)s?|sorties?|semaine|quel|quelle|quels|qu[' ]?est[- ]?ce|quest ce|c[' ]?est quoi|a quoi|explique|pourquoi|comment|principe|fonctionne|forme|temps|aujourd|meteo|m(?:e|\u00e9|\u00c3\u00a9|\ufffd)t(?:e|\u00e9|\u00c3\u00a9|\ufffd)o|pluie|vent|neige|fait-il|fait il|qui est|qui etait|qui (?:e|\u00e9)tait|c[' ]?etait qui|c[' ]?(?:e|\u00e9)tait qui|biographie|presentation|pr(?:e|\u00e9)sentation|expos(?:e|\u00e9)|calcule|calculer|combien|convertis|convertir|euros?|dollars?|taux)\b/i.test(
     question
   )
     ? "fr"
@@ -698,7 +698,7 @@ function isSourceBackedConceptLookup(question: string) {
 
 function isSourceBackedScienceQuestion(question: string) {
   const hasScienceTerm =
-    /\b(?:gravity|gravite|gravitation|evolution|systeme solaire|solar system|cellule|cell|vaccination|vaccine|plate tectonics|tectonique|antibiotique|antibiotic|electricity|electricite|magnetisme|magnetism|atome|atom|molecule|climate|volcan|volcano|earthquakes?|seisme|systeme immunitaire|immune system|neurone|neuron|telescope|arc[- ]en[- ]ciel|rainbow|sound|son|saisons|seasons|tides|marees|photosynthese|photosynthesis|respiration|ozone|radioactivity|crispr|quantum)\b/i.test(
+    /\b(?:blood|sang|gravity|gravite|gravitation|evolution|systeme solaire|solar system|cellule|cell|vaccination|vaccine|plate tectonics|tectonique|antibiotique|antibiotic|electricity|electricite|magnetisme|magnetism|atome|atom|molecule|climate|volcan|volcano|earthquakes?|seisme|systeme immunitaire|immune system|neurone|neuron|telescope|arc[- ]en[- ]ciel|rainbow|sound|son|saisons|seasons|tides|marees|photosynthese|photosynthesis|respiration|ozone|radioactivity|crispr|quantum)\b/i.test(
       question
     );
   if (
@@ -715,6 +715,19 @@ function isSourceBackedScienceQuestion(question: string) {
   );
 }
 
+function isSourceBackedHistoryQuestion(question: string) {
+  const hasHistoryTerm =
+    /\b(?:apollo\s*11|printing press|imprimerie|renaissance|revolution|empire|war|guerre|moyen age|middle ages|cold war|rome|roman|egypt|athen|versailles|silk road|magna carta|crusades|meiji|haitian|ottoman|inquisition|black death|decolonization|sumer|marshall plan)\b/i.test(
+      question
+    );
+  if (!hasHistoryTerm) {
+    return false;
+  }
+  return /\b(?:what was|why was|why did|explain|explique|raconte|c'est quoi|c est quoi|qu'est-ce que|quest ce que)\b/i.test(
+    question
+  );
+}
+
 function shouldUseGeneralFactResearch(question: string, category: QuestionCategory | null | undefined) {
   if (isConversationPlanningCategory(category)) {
     return false;
@@ -728,6 +741,7 @@ function shouldUseGeneralFactResearch(question: string, category: QuestionCatego
   return (
     isIdentityOrBiographyLookup(question) ||
     isSourceBackedScienceQuestion(question) ||
+    isSourceBackedHistoryQuestion(question) ||
     isSourceBackedConceptLookup(question) ||
     EXPLICIT_FACTUAL_RESEARCH_PATTERN.test(question)
   );

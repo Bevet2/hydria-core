@@ -184,6 +184,7 @@ test("tool router routes simple stable concept explanations to source-backed res
 test("tool router routes science cause and mechanism questions to source-backed research", () => {
   const cases = [
     ["Pourquoi la gravite existe ?", "Gravitation", "fr"],
+    ["A quoi sert le sang ?", "sang", "fr"],
     ["Explain biological evolution.", "evolution", "en"],
     ["What causes earthquakes?", "earthquake", "en"],
     ["How does sound travel?", "Sound", "en"],
@@ -196,6 +197,22 @@ test("tool router routes science cause and mechanism questions to source-backed 
     assert.equal(decision.toolType, "research", question);
     assert.equal(decision.intent, "fact_check", question);
     assert.equal(decision.fallbackAllowed, false, question);
+    assert.equal(decision.extractedArgs.subject, subject, question);
+    assert.equal(decision.extractedArgs.language, language, question);
+  }
+});
+
+test("tool router routes simple history what/why questions to source-backed research", () => {
+  const cases = [
+    ["Why was the printing press important?", "printing press", "en"],
+    ["What was Apollo 11?", "Apollo 11", "en"]
+  ] as const;
+
+  for (const [question, subject, language] of cases) {
+    const decision = service.route({ question, category: "other" });
+    assert.equal(decision.toolRequired, true, question);
+    assert.equal(decision.toolType, "research", question);
+    assert.equal(decision.intent, "fact_check", question);
     assert.equal(decision.extractedArgs.subject, subject, question);
     assert.equal(decision.extractedArgs.language, language, question);
   }
