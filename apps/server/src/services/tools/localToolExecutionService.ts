@@ -125,6 +125,22 @@ type RecentUpdateEntry = {
   publishedAt: string | null;
 };
 
+type NvdCveResponse = {
+  vulnerabilities?: Array<{
+    cve?: {
+      id?: string;
+      published?: string;
+      lastModified?: string;
+      vulnStatus?: string;
+      cisaVulnerabilityName?: string;
+      descriptions?: Array<{
+        lang?: string;
+        value?: string;
+      }>;
+    };
+  }>;
+};
+
 type WikipediaSearchResponse = {
   query?: {
     search?: Array<{
@@ -681,6 +697,47 @@ function parseRecentFeedEntries(feed: RecentUpdateFeed, body: string): RecentUpd
   return entries.filter((entry) => entry.title.length > 0);
 }
 
+function dateWithoutZulu(value: Date) {
+  return value.toISOString().replace(/Z$/, "");
+}
+
+async function fetchRecentNvdEntries(now = new Date()): Promise<RecentUpdateEntry[]> {
+  const end = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const start = new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000);
+  const url = new URL("https://services.nvd.nist.gov/rest/json/cves/2.0/");
+  url.searchParams.set("lastModStartDate", dateWithoutZulu(start));
+  url.searchParams.set("lastModEndDate", dateWithoutZulu(end));
+  url.searchParams.set("resultsPerPage", "8");
+
+  const body = await fetchJson<NvdCveResponse>(url);
+  const feed = {
+    id: "nvd-cve-api",
+    title: "NVD CVE",
+    url: "https://nvd.nist.gov/vuln/search"
+  };
+  return (body?.vulnerabilities ?? [])
+    .map((item) => {
+      const cve = item.cve;
+      if (!cve) {
+        return null;
+      }
+      const id = cve?.id?.trim();
+      if (!id) {
+        return null;
+      }
+      const description = cve.descriptions?.find((entry) => entry.lang === "en")?.value?.trim() ?? "";
+      const label = cve.cisaVulnerabilityName?.trim() || id;
+      return {
+        feed,
+        title: `${id}: ${label}`,
+        url: `https://nvd.nist.gov/vuln/detail/${encodeURIComponent(id)}`,
+        summary: normalizeSpaces(description || `${id} ${cve.vulnStatus ?? "CVE record"}`),
+        publishedAt: cve.lastModified ?? cve.published ?? null
+      } satisfies RecentUpdateEntry;
+    })
+    .filter((entry): entry is RecentUpdateEntry => Boolean(entry));
+}
+
 function isRecentEnoughForThisWeek(entry: RecentUpdateEntry, now = new Date()) {
   if (!entry.publishedAt) {
     return false;
@@ -698,6 +755,47 @@ function formatRecentUpdateDate(value: string | null) {
     return "date non precisee";
   }
   return value.slice(0, 10);
+}
+
+function recentEntryFamily(entry: RecentUpdateEntry) {
+  try {
+    return new URL(entry.url).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return entry.feed.id;
+  }
+}
+
+function selectDiverseRecentEntries(entries: RecentUpdateEntry[], limit: number) {
+  const sorted = entries
+    .filter((entry) => isRecentEnoughForThisWeek(entry))
+    .sort((left, right) => (right.publishedAt ?? "").localeCompare(left.publishedAt ?? ""))
+    .filter((entry, index, list) => {
+      const key = `${entry.title.toLowerCase()}|${entry.url.toLowerCase()}`;
+      return list.findIndex((candidate) => `${candidate.title.toLowerCase()}|${candidate.url.toLowerCase()}` === key) === index;
+    });
+  const selected: RecentUpdateEntry[] = [];
+  const selectedFamilies = new Set<string>();
+  for (const entry of sorted) {
+    const family = recentEntryFamily(entry);
+    if (selectedFamilies.has(family)) {
+      continue;
+    }
+    selected.push(entry);
+    selectedFamilies.add(family);
+    if (selected.length >= limit) {
+      return selected;
+    }
+  }
+  for (const entry of sorted) {
+    if (selected.some((current) => current.title === entry.title && current.url === entry.url)) {
+      continue;
+    }
+    selected.push(entry);
+    if (selected.length >= limit) {
+      break;
+    }
+  }
+  return selected;
 }
 
 async function tryFetchRecentUpdates(args: ToolRoutingDecision): Promise<LocalToolExecutionResult | null> {
@@ -719,14 +817,10 @@ async function tryFetchRecentUpdates(args: ToolRoutingDecision): Promise<LocalTo
     }
     return parseRecentFeedEntries(outcome.value.feed, outcome.value.body);
   });
-  const recentEntries = allEntries
-    .filter((entry) => isRecentEnoughForThisWeek(entry))
-    .sort((left, right) => (right.publishedAt ?? "").localeCompare(left.publishedAt ?? ""))
-    .filter((entry, index, list) => {
-      const key = `${entry.title.toLowerCase()}|${entry.url.toLowerCase()}`;
-      return list.findIndex((candidate) => `${candidate.title.toLowerCase()}|${candidate.url.toLowerCase()}` === key) === index;
-    })
-    .slice(0, 6);
+  if (selectedFeeds.label === "cybersecurity") {
+    allEntries.push(...(await fetchRecentNvdEntries()));
+  }
+  const recentEntries = selectDiverseRecentEntries(allEntries, 6);
 
   if (recentEntries.length === 0) {
     return null;

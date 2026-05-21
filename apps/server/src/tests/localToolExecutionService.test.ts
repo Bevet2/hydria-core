@@ -511,6 +511,29 @@ test("local research tool resolves recent cybersecurity updates from official fe
         { status: 200, headers: { "Content-Type": "application/rss+xml" } }
       );
     }
+    if (url.includes("services.nvd.nist.gov/rest/json/cves/2.0")) {
+      return new Response(
+        JSON.stringify({
+          vulnerabilities: [
+            {
+              cve: {
+                id: "CVE-2026-0001",
+                lastModified: yesterday.toISOString(),
+                vulnStatus: "Analyzed",
+                cisaVulnerabilityName: "Example product vulnerability",
+                descriptions: [
+                  {
+                    lang: "en",
+                    value: "Example CVE entry updated by NVD for a cybersecurity vulnerability."
+                  }
+                ]
+              }
+            }
+          ]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
     return new Response("not found", { status: 404 });
   }) as typeof fetch;
 
@@ -525,6 +548,11 @@ test("local research tool resolves recent cybersecurity updates from official fe
   assert.equal(result?.intent, "recent_updates");
   assert.match(result?.verifiedFacts.join(" "), /Cybersecurity update/);
   assert.match(result?.verifiedFacts.join(" "), /CISA adds known exploited vulnerabilities/);
+  assert.match(result?.verifiedFacts.join(" "), /CVE-2026-0001/);
+  assert.deepEqual(
+    [...new Set(result?.sources?.map((source) => new URL(source.url).hostname.replace(/^www\./, "")) ?? [])].sort(),
+    ["cisa.gov", "nvd.nist.gov"]
+  );
   assert.equal(result?.sources?.[0]?.retrievalOrigin, "known_endpoint");
 });
 

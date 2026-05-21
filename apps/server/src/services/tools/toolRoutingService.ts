@@ -112,7 +112,7 @@ function isConversationPlanningCategory(category: QuestionCategory | null | unde
 }
 
 function detectQuestionLanguage(question: string) {
-  return /\b(?:fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|recap|r(?:e|\u00e9)cap|nouveaut(?:e|\u00e9)s?|sorties?|semaine|quel|quelle|quels|temps|aujourd|meteo|m(?:e|\u00e9|\u00c3\u00a9|\ufffd)t(?:e|\u00e9|\u00c3\u00a9|\ufffd)o|pluie|vent|neige|fait-il|fait il|qui est|qui etait|qui (?:e|\u00e9)tait|biographie|presentation|pr(?:e|\u00e9)sentation|expos(?:e|\u00e9)|calcule|calculer|combien|convertis|convertir|euros?|dollars?|taux)\b/i.test(
+  return /\b(?:fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|recap|r(?:e|\u00e9)cap|nouveaut(?:e|\u00e9)s?|sorties?|semaine|quel|quelle|quels|temps|aujourd|meteo|m(?:e|\u00e9|\u00c3\u00a9|\ufffd)t(?:e|\u00e9|\u00c3\u00a9|\ufffd)o|pluie|vent|neige|fait-il|fait il|qui est|qui etait|qui (?:e|\u00e9)tait|c[' ]?etait qui|c[' ]?(?:e|\u00e9)tait qui|biographie|presentation|pr(?:e|\u00e9)sentation|expos(?:e|\u00e9)|calcule|calculer|combien|convertis|convertir|euros?|dollars?|taux)\b/i.test(
     question
   )
     ? "fr"
@@ -270,7 +270,7 @@ function extractEntitySubject(question: string) {
   const stripped = normalizeSpace(
     question
       .replace(/[?]/g, " ")
-      .replace(/\b(?:who is|what is|what are|show me|find|lookup|look up|tell me|give me|make me|explain|define|definition|qui est|quel est|quelle est|quels sont|quelles sont|qu'est[- ]ce que|quest ce que|c'est quoi|c est quoi|ce qu'est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi, " ")
+      .replace(/\b(?:who is|what is|what are|show me|find|lookup|look up|tell me|give me|make me|explain|define|definition|qui est|quel est|quelle est|quels sont|quelles sont|qu'est[- ]ce que|quest ce que|c'est quoi|c est quoi|c'est qui|c est qui|c'etait qui|c etait qui|ce qu'est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi, " ")
       .replace(/\b(?:simply|simplement)\b/gi, " ")
       .replace(/\b(?:complete|compl(?:e|\u00e8)te|complet|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9)|diaporama|slides?)\b/gi, " ")
       .replace(/\b(?:current|currently|actuel|actuelle|latest|official|github|repository|repo|website|site|ceo|president|pr(?:e|\u00e9)sident|version|release|announcements?|docs?|documentation)\b/gi, " ")

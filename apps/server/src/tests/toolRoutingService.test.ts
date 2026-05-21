@@ -133,6 +133,17 @@ test("tool router keeps French language on unaccented past-tense biography looku
   assert.equal(decision.toolType, "research");
   assert.equal(decision.intent, "fact_check");
   assert.equal(decision.extractedArgs.language, "fr");
+
+  const compactDecision = service.route({
+    question: "Mozart, c'etait qui ?",
+    category: "other"
+  });
+
+  assert.equal(compactDecision.toolRequired, true);
+  assert.equal(compactDecision.toolType, "research");
+  assert.equal(compactDecision.intent, "fact_check");
+  assert.equal(compactDecision.extractedArgs.subject, "Mozart");
+  assert.equal(compactDecision.extractedArgs.language, "fr");
 });
 
 test("tool router extracts French presentation biography subjects and ordinal aliases", () => {

@@ -172,7 +172,7 @@ function stripRequestTerms(value: string) {
         /\b(?:who is|who was|what is|what are|tell me about|give me|make me|explain|define|definition|history of|biography of|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce qu[' ]?(?:un|une|le|la|les)?|qu[' ]?est[- ]?ce que|quest ce que|c[' ]?est quoi|ce qu'est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition|fais|fait|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:\s+l\s+histoire\s+de)?|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi,
         " "
       )
-      .replace(/\b(?:c[' ]?est qui|c[' ]?est quel|c[' ]?est quoi|etait[- ]?ce|what causes|what caused|what was|what were|used for)\b/gi, " ")
+      .replace(/\b(?:c[' ]?est qui|c[' ]?est quel|c[' ]?est quoi|c[' ]?etait qui|c[' ]?etait quoi|etait[- ]?ce|what causes|what caused|what was|what were|used for)\b/gi, " ")
       .replace(
         /\b(?:sa biographie|son histoire|biographie|biography|histoire|history|known for|connu(?:e)? pour|complete|compl(?:e|\u00e8)te|complet|courte?|fiche|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9)|diaporama|slides?|simple|simplement|simply|principe|please|svp|s'il te plait|s'il vous plait|historiquement)\b/gi,
         " "
