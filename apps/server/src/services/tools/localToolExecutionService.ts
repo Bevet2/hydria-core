@@ -118,6 +118,9 @@ type RecentUpdateFeed = {
   url: string;
 };
 
+const PUBLIC_RESEARCH_USER_AGENT =
+  "HydriaCore/1.0 (source-backed answerability; https://app.hydria.click)";
+
 type RecentUpdateEntry = {
   feed: RecentUpdateFeed;
   title: string;
@@ -551,7 +554,8 @@ async function fetchJson<T>(url: URL): Promise<T | null> {
   try {
     const response = await fetch(url, {
       headers: {
-        Accept: "application/json"
+        Accept: "application/json",
+        "User-Agent": PUBLIC_RESEARCH_USER_AGENT
       },
       signal: AbortSignal.timeout(8000)
     });
@@ -570,7 +574,8 @@ async function fetchText(url: string): Promise<string | null> {
   try {
     const response = await fetch(url, {
       headers: {
-        Accept: "application/rss+xml,application/xml,text/xml,text/html,text/plain"
+        Accept: "application/rss+xml,application/xml,text/xml,text/html,text/plain",
+        "User-Agent": PUBLIC_RESEARCH_USER_AGENT
       },
       signal: AbortSignal.timeout(8000)
     });
@@ -1071,6 +1076,16 @@ async function fetchWikidataEntity(subject: string, language: string): Promise<G
   const description = match?.description?.trim();
   const id = match?.id?.trim();
   if (!label || !description || !id) {
+    return null;
+  }
+  const normalizedDescription = normalizeLooseText(description);
+  const normalizedSubject = normalizeLooseText(subject);
+  if (
+    /\b(?:academic journal|scientific journal|journal|magazine|film|book|novel|song|album|opera|play)\b/.test(
+      normalizedDescription
+    ) &&
+    !/\b(?:journal|magazine|film|book|novel|song|album|opera|play)\b/.test(normalizedSubject)
+  ) {
     return null;
   }
 
