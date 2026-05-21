@@ -1308,7 +1308,7 @@ function buildSourceBackedFactualRepair(args: {
   }
 
   const factText = fact.replace(/^[^:]{1,90}:\s*/, "").trim();
-  const sourceSentences = uniqueFactualSentences(splitFactualSentences(factText));
+  const sourceSentences = uniqueFactualSentences(splitFactualSentences(factText).map(stripSourceQuestionLabel));
   const completeSentences = sourceSentences.filter((sentence) => !isLikelyTruncatedAnswer(sentence));
   const sentences = completeSentences.length > 0 ? completeSentences : sourceSentences;
   const firstSentenceIsMostlyDates =
@@ -1389,7 +1389,11 @@ function stripSourceQuestionLabel(value: string) {
   return value
     .replace(/\s*-->\s*/g, " ")
     .replace(
-      /^\s*(?:comment|explique|raconte|pourquoi|qu[' ]?est[- ]?ce|c[' ]?est quoi|what is|what was|who was|who is|why|how)\b[^:]{0,120}:\s*/iu,
+      /^\s*(?:comment|explique|raconte|pourquoi|quand|qu[' ]?est[- ]?ce|c[' ]?est quoi|what is|what was|who was|who is|why|how|when)\b[^:]{0,120}:\s*/iu,
+      ""
+    )
+    .replace(
+      /^\s*(?:comment|explique|raconte|pourquoi|quand|qu[' ]?est[- ]?ce|c[' ]?est quoi|what is|what was|who was|who is|why|how|when)\b[^?]{0,140}\?\s*/iu,
       ""
     )
     .replace(/\s+/g, " ")
@@ -1580,7 +1584,7 @@ function buildSemanticSourceSynthesis(args: {
   const sentences = uniqueFactualSentences(
     facts.flatMap((fact) => {
       const withoutLabel = fact.replace(/^[^:]{2,90}:\s*/, "").trim();
-      return splitFactualSentences(withoutLabel).concat(sourceFragmentItems(fact));
+      return splitFactualSentences(withoutLabel).map(stripSourceQuestionLabel).concat(sourceFragmentItems(fact));
     })
   )
     .filter((sentence) => countWords(sentence) >= 6)

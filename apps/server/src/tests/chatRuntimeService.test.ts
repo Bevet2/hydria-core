@@ -480,7 +480,7 @@ test("chat runtime repairs source-backed why questions that only define the subj
     },
     undefined,
     buildFactCheckToolResult(
-      "Berlin Wall: The Berlin Wall fell because East German political pressure, mass protests, reforms, and the opening of border crossings made the barrier impossible to maintain."
+      "Berlin Wall: When did the Berlin Wall fall? The Berlin Wall fell because East German political pressure, mass protests, reforms, and the opening of border crossings made the barrier impossible to maintain."
     )
   );
 
@@ -489,6 +489,7 @@ test("chat runtime repairs source-backed why questions that only define the subj
   assert.match(response.answer.answer, /Berlin Wall/i);
   assert.match(response.answer.answer, /because|pressure|protests|reforms|opening/i);
   assert.doesNotMatch(response.answer.answer, /guarded concrete barrier/i);
+  assert.doesNotMatch(response.answer.answer, /When did the Berlin Wall fall/i);
   assert.equal(response.usedRetry, true);
   assert.equal(response.conversationQuality.passed, true);
 });
