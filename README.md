@@ -403,6 +403,7 @@ npm run prod:general-answerability-gate -- --base-url=https://app.hydria.click -
 npm run general:knowledge-reliability-gate
 npm run prod:general-knowledge-reliability-gate -- --base-url=https://app.hydria.click --limit=20 --timeout-ms=180000 --delay-ms=500
 npm run prod:semantic-answer-relevance-gate -- --base-url=https://app.hydria.click --case-ids=science_electric_motor_fr,history_berlin_wall_en --timeout-ms=180000 --delay-ms=500
+npm run prod:semantic-answerability-phased-gate -- --base-url=https://app.hydria.click --phases=50,100 --timeout-ms=180000 --delay-ms=500
 ```
 
 This writes `storage/training/general-answerability-gate-v1.json`. The gate checks that every public chat turn has an `EvidenceCapsule` and an `answerability` trace step, and that Hydria chooses the correct evidence path before generation: live tool, source-backed research, governed knowledge, conversation state, direct model knowledge, or specialist synthesis. It also includes multi-turn memory recall and false-positive routing guards for weather, file, repository, and document-like wording.
@@ -412,6 +413,8 @@ This writes `storage/training/general-answerability-gate-v1.json`. The gate chec
 `prod:general-knowledge-reliability-gate` writes `storage/training/production-general-knowledge-reliability-gate-v2.json`. It runs the same reliability intent against the real public chat route. Source-backed factual cases must expose the answerability trace, use the research tool, return the expected subject, and include at least two distinct source families; practical direct cases must not be over-routed to tools. Use `--limit`/`--offset` for CPU-safe OVH batches, or omit `--limit` for a full run.
 
 `prod:semantic-answer-relevance-gate` writes `storage/training/production-semantic-answer-relevance-gate-v1.json`. It checks the next reliability layer: source-backed answers must answer the question intent, not just mention the right source. It fails definition-instead-of-cause answers, mechanism questions answered by adjacent topics, weak subject anchoring, and source-backed answers with poor overlap against verified facts.
+
+`prod:semantic-answerability-phased-gate` writes `storage/training/production-semantic-answerability-phased-gate-v1.json` plus one phase report per limit. The default phases are `50,100`: run 50 source-backed humiliating factual cases first, stop on failure, then broaden to 100 when clean. This keeps OVH CPU runs controlled while proving that semantic answerability generalizes beyond targeted repairs.
 
 ### Learning Governance
 

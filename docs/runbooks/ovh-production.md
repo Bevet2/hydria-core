@@ -611,6 +611,7 @@ npm run prod:general-answerability-gate -- --base-url=https://app.hydria.click -
 npm run general:knowledge-reliability-gate
 npm run prod:general-knowledge-reliability-gate -- --base-url=https://app.hydria.click --limit=20 --timeout-ms=180000 --delay-ms=500
 npm run prod:semantic-answer-relevance-gate -- --base-url=https://app.hydria.click --case-ids=science_electric_motor_fr,history_berlin_wall_en --timeout-ms=180000 --delay-ms=500
+npm run prod:semantic-answerability-phased-gate -- --base-url=https://app.hydria.click --phases=50,100 --timeout-ms=180000 --delay-ms=500
 ```
 
 This writes:
@@ -644,6 +645,16 @@ storage/training/production-semantic-answer-relevance-gate-v1.json
 ```
 
 This gate validates that a source-backed answer answers the actual intent of the question. It catches cases where Hydria has sources but answers the wrong semantic shape, for example a definition instead of a cause, a nearby topic instead of the requested mechanism, weak subject anchoring, or an answer with poor overlap against verified facts. Use `--case-ids` for targeted checks on OVH, then broaden with `--limit` once the targeted failures are clean.
+
+`prod:semantic-answerability-phased-gate` writes:
+
+```text
+storage/training/production-semantic-answerability-phased-gate-v1.json
+storage/training/production-semantic-answerability-phased-gate-v1-limit50.json
+storage/training/production-semantic-answerability-phased-gate-v1-limit100.json
+```
+
+This is the promotion-style version of the semantic gate. It runs the first 50 source-backed humiliating factual cases, stops immediately if any case fails, then expands to 100. Use `--phases=50` for a shorter smoke, `--phases=50,100` for the normal production pass, and `--continue-on-fail` only when you need a diagnostic report across all phases despite failures.
 
 Chat model warmup:
 
