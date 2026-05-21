@@ -241,8 +241,39 @@ function allowedBrevityWords(limit: number) {
   return limit + Math.min(8, Math.max(3, Math.ceil(limit * 0.5)));
 }
 
-function normalizeText(value: string) {
+function repairCommonMojibakeText(value: string) {
   return value
+    .replace(/ÃƒÂ©|ÃƒÂ¨|ÃƒÂª|ÃƒÂ«/g, "e")
+    .replace(/ÃƒÂ‰|ÃƒÂˆ|ÃƒÂŠ|ÃƒÂ‹/g, "E")
+    .replace(/ÃƒÂ |ÃƒÂ¡|ÃƒÂ¢|ÃƒÂ¤/g, "a")
+    .replace(/ÃƒÂ€|ÃƒÂ|ÃƒÂ‚|ÃƒÂ„/g, "A")
+    .replace(/ÃƒÂ®|ÃƒÂ¯/g, "i")
+    .replace(/ÃƒÂ´|ÃƒÂ¶/g, "o")
+    .replace(/ÃƒÂ¹|ÃƒÂ»|ÃƒÂ¼/g, "u")
+    .replace(/ÃƒÂ§/g, "c")
+    .replace(/Ã‚/g, "")
+    .replace(/Ã©|Ã¨|Ãª|Ã«/g, "e")
+    .replace(/Ã‰|Ãˆ|ÃŠ|Ã‹/g, "E")
+    .replace(/Ã |Ã¡|Ã¢|Ã¤/g, "a")
+    .replace(/Ã€|Ã|Ã‚|Ã„/g, "A")
+    .replace(/Ã®|Ã¯/g, "i")
+    .replace(/ÃŽ|Ã/g, "I")
+    .replace(/Ã´|Ã¶/g, "o")
+    .replace(/Ã”|Ã–/g, "O")
+    .replace(/Ã¹|Ã»|Ã¼/g, "u")
+    .replace(/Ã™|Ã›|Ãœ/g, "U")
+    .replace(/Ã§/g, "c")
+    .replace(/Ã‡/g, "C")
+    .replace(/Â¿|Â¡/g, "")
+    .replace(/Â\s*/g, " ")
+    .replace(/â€™|â€˜/g, "'")
+    .replace(/â€œ|â€/g, "\"")
+    .replace(/â€“|â€”/g, "-")
+    .replace(/â€¦/g, "...");
+}
+
+function normalizeText(value: string) {
+  return repairCommonMojibakeText(value)
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
@@ -1084,6 +1115,19 @@ function normalizeDirectChatAnswer(answer: StudentAnswer, quality: ConversationQ
   };
 }
 
+function repairMojibakeAnswer(answer: StudentAnswer): StudentAnswer {
+  const repaired = repairCommonMojibakeText(answer.answer).replace(/\s+/g, " ").trim();
+  if (!repaired || repaired === answer.answer) {
+    return answer;
+  }
+  return {
+    ...answer,
+    answer: repaired,
+    key_points: [...answer.key_points, "Mojibake repair"].slice(0, 6),
+    confidence: Math.max(answer.confidence, 70)
+  };
+}
+
 function isStaticGenerationFailureAnswer(answer: string) {
   return /\b(?:je n'ai pas reussi a generer|i could not generate|generation indisponible|reformule la question|rephrase the question)\b/.test(
     normalizeText(answer)
@@ -1203,6 +1247,12 @@ function sourceFactQualityPenalty(fact: string, language: ConversationState["lan
   }
   if (/\b(?:vous explique|lire l article|read more|cliquez ici|retrieved from)\b/i.test(normalized)) {
     penalty += 10;
+  }
+  if (/\b(?:ebay|classifieds?|best deals?|for sale|buy now|shopping|marketplace)\b/i.test(normalized)) {
+    penalty += 90;
+  }
+  if (/^\s*(?:d[' ]?ou vient|d ou vient)\b/i.test(normalized)) {
+    penalty += 16;
   }
   if (/\.\.\.|…|-->/u.test(fact)) {
     penalty += 6;
@@ -1399,11 +1449,11 @@ function stripSourceQuestionLabel(value: string) {
   return value
     .replace(/\s*-->\s*/g, " ")
     .replace(
-      /^\s*(?:comment|explique|raconte|pourquoi|quand|qu[' ]?est[- ]?ce|c[' ]?est quoi|what is|what was|who was|who is|why|how|when)\b[^:]{0,120}:\s*/iu,
+      /^\s*(?:comment|explique|raconte|pourquoi|quand|d[' ]?ou vient|qu[' ]?est[- ]?ce|c[' ]?est quoi|what is|what was|who was|who is|why|how|when)\b[^:]{0,120}:\s*/iu,
       ""
     )
     .replace(
-      /^\s*(?:comment|explique|raconte|pourquoi|quand|qu[' ]?est[- ]?ce|c[' ]?est quoi|what is|what was|who was|who is|why|how|when)\b[^?]{0,140}\?\s*/iu,
+      /^\s*(?:comment|explique|raconte|pourquoi|quand|d[' ]?ou vient|qu[' ]?est[- ]?ce|c[' ]?est quoi|what is|what was|who was|who is|why|how|when)\b[^?]{0,140}\?\s*/iu,
       ""
     )
     .replace(/\s+/g, " ")
@@ -1523,6 +1573,12 @@ function semanticIntentCueHits(value: string, intent: SourceAnswerIntent) {
       []
     ).length;
   }
+  if (intent === "purpose") {
+    return (
+      normalized.match(/\b(?:allows|enables|form|forme|function|purpose|role|sert|serves|transporte|used|utile)\b/g) ??
+      []
+    ).length;
+  }
   return 0;
 }
 
@@ -1557,6 +1613,9 @@ function semanticRepairPrefix(intent: SourceAnswerIntent, language: Conversation
     if (intent === "biography") {
       return "In short:";
     }
+    if (intent === "purpose") {
+      return "It is used to:";
+    }
     return "";
   }
   if (intent === "cause") {
@@ -1567,6 +1626,9 @@ function semanticRepairPrefix(intent: SourceAnswerIntent, language: Conversation
   }
   if (intent === "biography") {
     return "En bref :";
+  }
+  if (intent === "purpose") {
+    return "Cela sert a :";
   }
   return "";
 }
@@ -4102,6 +4164,23 @@ export class ChatRuntimeService {
         recentMessages: session.messages,
         toolRouting: tooling.routing
       });
+    }
+
+    const mojibakeRepairedAnswer = repairMojibakeAnswer(finalAnswer);
+    if (mojibakeRepairedAnswer.answer !== finalAnswer.answer) {
+      finalAnswer = mojibakeRepairedAnswer;
+      conversationQuality = this.analyzeQuality({
+        runtimeMode,
+        conversationState,
+        activeConstraintCapsule,
+        answerPolicy,
+        newUserMessage: args.message,
+        answer: finalAnswer.answer,
+        lastAssistantAnswer: session.lastAssistantAnswer,
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
+      });
+      usedRetry = true;
     }
 
     const assistantMessage: ChatMessage = {

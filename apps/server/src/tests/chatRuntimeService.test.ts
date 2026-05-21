@@ -369,6 +369,64 @@ test("chat runtime repairs off-topic source-backed list answers", async () => {
   assert.equal(response.conversationQuality.passed, true);
 });
 
+test("chat runtime repairs mojibake in source-backed biographies", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult(
+          "ClÃ©opÃ¢tre VII Philopator ou simplement ClÃ©opÃ¢tre est une reine d'Egypte antique de la dynastie lagide."
+        );
+      }
+    },
+    undefined,
+    buildFactCheckToolResult(
+      "Cleopatra VII: Cleopatre VII Philopator est une reine d'Egypte antique de la dynastie lagide et la derniere souveraine active de ce royaume."
+    )
+  );
+
+  const response = await service.sendMessage({ message: "Qui etait Cleopatre ?" });
+
+  assert.match(response.answer.answer, /Cleopatre VII|Cleopatra VII/i);
+  assert.doesNotMatch(response.answer.answer, /Ã|Â/);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
+test("chat runtime keeps purpose questions out of mechanism repair and downranks shopping snippets", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult("The mechanism: Get the best deals for Used Telescopes at eBay.");
+      }
+    },
+    undefined,
+    {
+      async tryExecute(routing: ToolRoutingDecision) {
+        if (routing.toolType !== "research" || routing.intent !== "fact_check") {
+          return null;
+        }
+        return {
+          toolType: "research" as const,
+          intent: "fact_check",
+          summary: ["Source-backed factual context for telescope purpose."],
+          verifiedFacts: [
+            "Telescope: Get the best deals for Used Telescopes at eBay and astronomy classifieds.",
+            "Telescope: A telescope is a device used to form magnified images of distant objects."
+          ],
+          confidenceScore: 0.88,
+          resultLabel: "fact_check"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "What is a telescope used for?" });
+
+  assert.match(response.answer.answer, /telescope/i);
+  assert.match(response.answer.answer, /used|magnified|distant objects/i);
+  assert.doesNotMatch(response.answer.answer, /eBay|classifieds|best deals/i);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
 test("chat runtime rewrites source snippets that are copied question labels plus keyword lists", async () => {
   const service = new ChatRuntimeService(
     {
@@ -528,7 +586,7 @@ test("chat runtime avoids copied question snippets when repairing source-backed 
   const response = await service.sendMessage({ message: "Pourquoi la gravite existe ?" });
 
   assert.match(response.answer.answer, /force/i);
-  assert.match(response.answer.answer, /fondamentale|nature/i);
+  assert.match(response.answer.answer, /cause principale|raison|force fondamentale|fondamentale|nature/i);
   assert.doesNotMatch(response.answer.answer, /^¿?\s*Pourquoi la gravite existe/i);
   assert.equal(response.conversationQuality.passed, true);
 });

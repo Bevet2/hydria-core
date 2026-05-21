@@ -1102,7 +1102,7 @@ async function searchBritannica(subject: string, query = subject): Promise<Gener
 function isBlockedGeneralKnowledgeHost(url: string) {
   try {
     const host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
-    return /(?:^|\.)quoteinvestigator\.com$|(?:^|\.)azquotes\.com$|(?:^|\.)socratic-method\.com$|(?:^|\.)brainyquote\.com$|(?:^|\.)goodreads\.com$/.test(
+    return /(?:^|\.)quoteinvestigator\.com$|(?:^|\.)azquotes\.com$|(?:^|\.)socratic-method\.com$|(?:^|\.)brainyquote\.com$|(?:^|\.)goodreads\.com$|(?:^|\.)ebay\.com$|(?:^|\.)amazon\.com$|(?:^|\.)etsy\.com$/.test(
       host
     );
   } catch {

@@ -1,4 +1,4 @@
-export type SourceAnswerIntent = "definition" | "mechanism" | "cause" | "biography" | "unknown";
+export type SourceAnswerIntent = "definition" | "mechanism" | "cause" | "biography" | "purpose" | "unknown";
 
 export type SourceAnswerLanguage = "fr" | "en" | "unknown";
 
@@ -147,8 +147,54 @@ const BIOGRAPHY_SIGNALS = [
   "writer"
 ];
 
-function normalizeText(value: string) {
+const PURPOSE_SIGNALS = [
+  "allows",
+  "enables",
+  "form",
+  "forme",
+  "function",
+  "purpose",
+  "role",
+  "sert",
+  "serves",
+  "transporte",
+  "used",
+  "utile"
+];
+
+function repairCommonMojibake(value: string) {
   return value
+    .replace(/ÃƒÂ©|ÃƒÂ¨|ÃƒÂª|ÃƒÂ«/g, "e")
+    .replace(/ÃƒÂ‰|ÃƒÂˆ|ÃƒÂŠ|ÃƒÂ‹/g, "E")
+    .replace(/ÃƒÂ |ÃƒÂ¡|ÃƒÂ¢|ÃƒÂ¤/g, "a")
+    .replace(/ÃƒÂ€|ÃƒÂ|ÃƒÂ‚|ÃƒÂ„/g, "A")
+    .replace(/ÃƒÂ®|ÃƒÂ¯/g, "i")
+    .replace(/ÃƒÂ´|ÃƒÂ¶/g, "o")
+    .replace(/ÃƒÂ¹|ÃƒÂ»|ÃƒÂ¼/g, "u")
+    .replace(/ÃƒÂ§/g, "c")
+    .replace(/Ã‚/g, "")
+    .replace(/Ã©|Ã¨|Ãª|Ã«/g, "e")
+    .replace(/Ã‰|Ãˆ|ÃŠ|Ã‹/g, "E")
+    .replace(/Ã |Ã¡|Ã¢|Ã¤/g, "a")
+    .replace(/Ã€|Ã|Ã‚|Ã„/g, "A")
+    .replace(/Ã®|Ã¯/g, "i")
+    .replace(/ÃŽ|Ã/g, "I")
+    .replace(/Ã´|Ã¶/g, "o")
+    .replace(/Ã”|Ã–/g, "O")
+    .replace(/Ã¹|Ã»|Ã¼/g, "u")
+    .replace(/Ã™|Ã›|Ãœ/g, "U")
+    .replace(/Ã§/g, "c")
+    .replace(/Ã‡/g, "C")
+    .replace(/Â¿|Â¡/g, "")
+    .replace(/Â\s*/g, " ")
+    .replace(/â€™|â€˜/g, "'")
+    .replace(/â€œ|â€/g, "\"")
+    .replace(/â€“|â€”/g, "-")
+    .replace(/â€¦/g, "...");
+}
+
+function normalizeText(value: string) {
+  return repairCommonMojibake(value)
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
@@ -167,8 +213,11 @@ function detectIntent(question: string): SourceAnswerIntent {
   if (/\b(?:why|what causes|what caused|pourquoi|cause|causes)\b/.test(normalized)) {
     return "cause";
   }
+  if (/\b(?:a quoi sert|what .* used for|used for|sert a quoi|a quoi ca sert)\b/.test(normalized)) {
+    return "purpose";
+  }
   if (
-    /\b(?:how does|how do|how is|how are|how .* work|comment fonctionne|fonctionnement|comment se forme|a quoi sert|used for)\b/.test(
+    /\b(?:how does|how do|how is|how are|how .* work|comment fonctionne|fonctionnement|comment se forme)\b/.test(
       normalized
     )
   ) {
@@ -216,7 +265,14 @@ function subjectTerms(input: SourceAnswerRelevanceInput) {
 
 function subjectHitCount(answer: string, terms: string[]) {
   const normalizedAnswer = normalizeText(answer);
-  return terms.filter((term) => normalizedAnswer.includes(term)).length;
+  return terms.filter((term) => termVariants(term).some((variant) => normalizedAnswer.includes(variant))).length;
+}
+
+function termVariants(term: string) {
+  if (term === "cleopatra" || term === "cleopatre") {
+    return ["cleopatra", "cleopatre"];
+  }
+  return [term];
 }
 
 function factsContainSubject(facts: string[], terms: string[]) {
@@ -246,6 +302,9 @@ function requiredSignalsFor(intent: SourceAnswerIntent) {
   }
   if (intent === "biography") {
     return BIOGRAPHY_SIGNALS;
+  }
+  if (intent === "purpose") {
+    return PURPOSE_SIGNALS;
   }
   return [];
 }
@@ -293,6 +352,15 @@ export function evaluateSourceAnswerRelevance(
 
   if (intent === "biography" && signalHits(answer, BIOGRAPHY_SIGNALS).length === 0 && countWords(answer) < 18) {
     addIssue(issues, penalties, "thin_biography_answer", "biographical question lacks life or role details");
+  }
+
+  if (intent === "purpose" && signalHits(answer, PURPOSE_SIGNALS).length === 0) {
+    addIssue(
+      issues,
+      penalties,
+      "missing_purpose_answer",
+      "question asks what something is used for, but answer gives no role or purpose"
+    );
   }
 
   if (

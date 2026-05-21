@@ -67,3 +67,32 @@ test("source answer relevance accepts electric motor mechanism answers", () => {
   assert.equal(result.intent, "mechanism");
 });
 
+test("source answer relevance treats used-for questions as purpose, not mechanism", () => {
+  const result = evaluateSourceAnswerRelevance({
+    question: "What is a telescope used for?",
+    subject: "telescope",
+    answer: "A telescope is used to form magnified images of distant objects so astronomers can observe them.",
+    verifiedFacts: ["Telescope: device used to form magnified images of distant objects."],
+    language: "en"
+  });
+
+  assert.equal(result.passed, true);
+  assert.equal(result.intent, "purpose");
+  assert.equal(result.issues.includes("missing_mechanism_answer"), false);
+});
+
+test("source answer relevance tolerates French mojibake variants for Cleopatra", () => {
+  const result = evaluateSourceAnswerRelevance({
+    question: "Qui etait Cleopatre ?",
+    subject: "Cleopatra VII",
+    answer:
+      "ClÃ©opÃ¢tre VII Philopator, nee vers 69 av. J.-C. a Alexandrie, est une reine d'Egypte antique de la dynastie lagide.",
+    verifiedFacts: [
+      "Cleopatra VII: Cleopatre VII Philopator, reine d'Egypte antique de la dynastie lagide, est nee vers 69 av. J.-C. a Alexandrie."
+    ],
+    language: "fr"
+  });
+
+  assert.equal(result.passed, true);
+  assert.equal(result.intent, "biography");
+});
