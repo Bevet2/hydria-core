@@ -327,10 +327,13 @@ export function rewriteGeneralKnowledgeQuery(input: {
 }
 
 export function meaningfulSubjectTerms(subject: string) {
-  return normalizeLooseText(normalizeOrdinalAliases(subject))
-    .replace(MATCH_STOPWORD_PATTERN, " ")
-    .split(/\s+/)
-    .filter((term) => term.length >= 2);
+  const terms = [subject, normalizeOrdinalAliases(subject)].flatMap((variant) =>
+    normalizeLooseText(variant)
+      .replace(MATCH_STOPWORD_PATTERN, " ")
+      .split(/\s+/)
+      .filter((term) => term.length >= 2)
+  );
+  return [...new Set(terms)];
 }
 
 function matchTermVariants(term: string) {

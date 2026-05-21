@@ -78,6 +78,10 @@ test("general knowledge source matching rejects off-subject snippets", () => {
     subjectMatchesText("Louis IX", "Louis IX, also called Saint Louis, was king of France from 1226 to 1270."),
     true
   );
+  assert.equal(
+    subjectMatchesText("Apollo 11", "Apollo 11 was the American spaceflight that first landed humans on the Moon."),
+    true
+  );
 });
 
 test("general knowledge rewriter normalizes common acronyms and hyphenated subjects", () => {
