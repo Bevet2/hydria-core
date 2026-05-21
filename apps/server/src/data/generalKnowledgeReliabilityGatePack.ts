@@ -166,6 +166,34 @@ const ambiguousButSourceable = [
   ["saturn_fr", "Saturne, la planete, c'est quoi ?", "Saturne"]
 ] as const;
 
+const fuzzyAndCorrectionSourceable = [
+  ["einstein_typo_fr", "Qui etait Albert Eintein ?", "Albert Einstein"],
+  ["marie_curie_typo_fr", "Qui etait Maire Curie ?", "Marie Curie"],
+  ["napoleon_typo_fr", "Napoelon Bonaparte, c'etait qui ?", "Napoleon Bonaparte"],
+  ["leonardo_typo_en", "Who was Leonardo da Vichi?", "Leonardo da Vinci"],
+  ["cleopatra_opera_correction_fr", "Je veux Cleopatre VII, pas l'opera: qui etait-elle ?", "Cleopatra VII"],
+  ["louis_ix_correction_fr", "Correction: je voulais dire Louis IX, pas Louis XIV. Qui etait-il ?", "Louis IX"],
+  ["saint_louis_king_correction_fr", "Je corrige: Saint Louis le roi, pas la ville. Qui est-ce ?", "Louis IX"],
+  ["java_language_correction_en", "I meant Java the programming language, not the island. What is it?", "Java"],
+  ["mercury_planet_correction_en", "I mean Mercury the planet, not the element. What is it?", "Mercury"],
+  ["python_language_correction_fr", "Je parle de Python le langage, pas du serpent: c'est quoi ?", "Python"],
+  ["photosynthesis_typo_fr", "C'est quoi la fotosynthese ?", "photosynthese"],
+  ["earthquake_typo_en", "What causes eartquakes?", "earthquake"],
+  ["electric_motor_typo_fr", "Comment fonctionne un moteur elecrique ?", "moteur electrique"],
+  ["immune_system_typo_fr", "Explique le systeme imunitaire.", "systeme immunitaire"],
+  ["vaccination_typo_fr", "C'est quoi la vacination ?", "vaccination"],
+  ["d_day_en", "What was D-Day?", "D-Day"],
+  ["hundred_years_war_fr", "Raconte la guerre de Cent Ans.", "guerre de Cent Ans"],
+  ["byzantine_empire_fr", "Explique l'empire byzantin.", "empire byzantin"],
+  ["space_race_en", "What was the Space Race?", "Space Race"],
+  ["silk_road_fr_alias", "C'est quoi la route de la soie ?", "route de la soie"],
+  ["constantinople_fr", "Explique la chute de Constantinople.", "Constantinople"],
+  ["manhattan_project_en", "What was the Manhattan Project?", "Manhattan Project"],
+  ["great_depression_en", "What was the Great Depression?", "Great Depression"],
+  ["louis_xvi_fr", "Qui etait Louis 16 ?", "Louis XVI"],
+  ["marie_antoinette_fr", "Marie Antoinette, c'etait qui ?", "Marie Antoinette"]
+] as const;
+
 const practicalDirect = [
   ["tiramisu_fr", "Donne-moi une recette de tiramisu simple.", "tiramisu"],
   ["omelette_fr", "Comment faire une omelette rapide ?", "omelette"],
@@ -259,6 +287,7 @@ export const GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES: GeneralKnowledgeReliabili
   ...sourceCases(history, "history"),
   ...sourceCases(stableDefinitions, "definition"),
   ...sourceCases(ambiguousButSourceable, "ambiguous"),
+  ...sourceCases(fuzzyAndCorrectionSourceable, "adversarial"),
   ...directCases(practicalDirect),
   ...toolCases()
 ];

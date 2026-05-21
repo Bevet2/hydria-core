@@ -108,6 +108,25 @@ test("general knowledge rewriter strips narrative history request wrappers", () 
   assert.equal(charlemagne.canonicalSubject, "Charlemagne");
 });
 
+test("general knowledge rewriter normalizes fuzzy aliases and explicit corrections", () => {
+  const einstein = rewriteGeneralKnowledgeQuery({
+    question: "Qui etait Albert Eintein ?",
+    language: "fr"
+  });
+  const louis = rewriteGeneralKnowledgeQuery({
+    question: "Correction: je voulais dire Louis IX, pas Louis XIV. Qui etait-il ?",
+    language: "fr"
+  });
+  const java = rewriteGeneralKnowledgeQuery({
+    question: "I meant Java the programming language, not the island. What is it?",
+    language: "en"
+  });
+
+  assert.equal(einstein.canonicalSubject, "Albert Einstein");
+  assert.equal(louis.canonicalSubject, "Louis IX");
+  assert.equal(java.canonicalSubject, "Java");
+});
+
 test("general knowledge rewriter disambiguates Cleopatra person from title-only works", () => {
   const cleopatra = rewriteGeneralKnowledgeQuery({
     question: "Qui etait Cleopatre ?",

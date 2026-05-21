@@ -1,7 +1,10 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { GeneralKnowledgeReliabilityCase } from "../data/generalKnowledgeReliabilityGatePack.js";
+import {
+  GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES,
+  type GeneralKnowledgeReliabilityCase
+} from "../data/generalKnowledgeReliabilityGatePack.js";
 import {
   evaluateSourceAnswerRelevance,
   type SourceAnswerLanguage
@@ -224,11 +227,21 @@ function inspectCase(testCase: GeneralKnowledgeReliabilityCase, response: ChatRe
 }
 
 function semanticCases(args: Args) {
-  return selectProductionGeneralKnowledgeCases(args).filter(
+  if (args.caseIds.length > 0) {
+    return selectProductionGeneralKnowledgeCases(args).filter(
+      (testCase) =>
+        testCase.expected.kind === "source_backed" ||
+        (testCase.expected.kind === "tool_first" && testCase.expected.toolType === "research")
+    );
+  }
+  const cases = GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES.filter(
     (testCase) =>
       testCase.expected.kind === "source_backed" ||
       (testCase.expected.kind === "tool_first" && testCase.expected.toolType === "research")
   );
+  const start = Math.max(0, args.offset);
+  const end = args.limit === null ? undefined : start + Math.max(0, args.limit);
+  return cases.slice(start, end);
 }
 
 export async function runProductionSemanticAnswerRelevanceGate(args = parseArgs()) {

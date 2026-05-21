@@ -185,6 +185,8 @@ test("tool router routes science cause and mechanism questions to source-backed 
   const cases = [
     ["Pourquoi la gravite existe ?", "Gravitation", "fr"],
     ["A quoi sert le sang ?", "sang", "fr"],
+    ["C'est quoi la fotosynthese ?", "photosynthese", "fr"],
+    ["What causes eartquakes?", "earthquake", "en"],
     ["Explain biological evolution.", "evolution", "en"],
     ["What causes earthquakes?", "earthquake", "en"],
     ["How does sound travel?", "Sound", "en"],
@@ -205,7 +207,9 @@ test("tool router routes science cause and mechanism questions to source-backed 
 test("tool router routes simple history what/why questions to source-backed research", () => {
   const cases = [
     ["Why was the printing press important?", "printing press", "en"],
-    ["What was Apollo 11?", "Apollo 11", "en"]
+    ["What was Apollo 11?", "Apollo 11", "en"],
+    ["What was D-Day?", "D-Day", "en"],
+    ["Raconte la guerre de Cent Ans.", "guerre de Cent Ans", "fr"]
   ] as const;
 
   for (const [question, subject, language] of cases) {

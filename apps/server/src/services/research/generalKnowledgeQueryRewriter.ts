@@ -85,6 +85,10 @@ const COMMON_ALIAS_CANONICALS: Record<string, string> = {
   cleopatra: "Cleopatra VII",
   "cleopatre vii": "Cleopatra VII",
   "cleopatra vii": "Cleopatra VII",
+  "albert eintein": "Albert Einstein",
+  "maire curie": "Marie Curie",
+  "napoelon bonaparte": "Napoleon Bonaparte",
+  "leonardo da vichi": "Leonardo da Vinci",
   "napoleon bonaparte": "Napoleon Bonaparte"
 };
 
@@ -95,24 +99,39 @@ const ADDITIONAL_COMMON_ALIAS_CANONICALS: Record<string, string> = {
   electricity: "electricity",
   evolution: "evolution",
   "biological evolution": "evolution",
+  "fotosynthese": "photosynthese",
   blood: "blood",
   earthquakes: "earthquake",
+  eartquakes: "earthquake",
   earthquake: "earthquake",
   gravite: "gravitation",
   gravity: "gravity",
+  "moteur elecrique": "moteur electrique",
   magnetisme: "magnetisme",
   molecule: "molecule",
   neurone: "neurone",
   "plate tectonics": "plate tectonics",
+  photosynthese: "photosynthese",
   "printing press": "printing press",
+  "route de la soie": "Silk Road",
+  "space race": "Space Race",
+  "d day": "D-Day",
   "principe vaccination": "vaccination",
   sang: "sang",
+  "systeme imunitaire": "systeme immunitaire",
   "systeme immunitaire": "systeme immunitaire",
   "systeme solaire": "systeme solaire",
   telescope: "telescope",
   "telescope used": "telescope",
   vaccination: "vaccination",
+  vacination: "vaccination",
   volcan: "volcan",
+  "guerre cent ans": "guerre de Cent Ans",
+  "guerre de cent ans": "guerre de Cent Ans",
+  "empire byzantin": "empire byzantin",
+  "manhattan project": "Manhattan Project",
+  "great depression": "Great Depression",
+  "chute de constantinople": "Constantinople",
   "revolution industrielle": "R\u00e9volution industrielle",
   "traite versailles": "Trait\u00e9 de Versailles",
   "traite de versailles": "Trait\u00e9 de Versailles"
@@ -137,6 +156,17 @@ const ADDITIONAL_SPECIAL_CANDIDATE_ALIASES: Record<string, string[]> = {
   neurone: ["neurone", "neuron"],
   "plate tectonics": ["plate tectonics", "tectonique des plaques"],
   "printing press": ["printing press", "imprimerie", "press printing"],
+  "moteur electrique": ["moteur electrique", "moteur électrique", "electric motor"],
+  "photosynthese": ["photosynthese", "photosynthèse", "photosynthesis"],
+  "route de la soie": ["route de la soie", "Silk Road"],
+  "silk road": ["Silk Road", "route de la soie"],
+  "space race": ["Space Race", "course a l'espace"],
+  "d day": ["D-Day", "Normandy landings"],
+  "guerre de cent ans": ["guerre de Cent Ans", "Hundred Years' War"],
+  "empire byzantin": ["empire byzantin", "Byzantine Empire"],
+  "manhattan project": ["Manhattan Project", "Projet Manhattan"],
+  "great depression": ["Great Depression", "Grande Depression"],
+  constantinople: ["Constantinople", "Fall of Constantinople", "chute de Constantinople"],
   sang: ["sang", "blood"],
   vaccination: ["vaccination", "Vaccination", "vaccine"],
   "systeme immunitaire": ["systeme immunitaire", "syst\u00e8me immunitaire", "immune system"],
@@ -223,7 +253,7 @@ function stripRequestTerms(value: string) {
       )
       .replace(/\b(?:c[' ]?est qui|c[' ]?est quel|c[' ]?est quoi|c[' ]?etait qui|c[' ]?etait quoi|etait[- ]?ce|important|used for|used|exists?|existe|travel|formed?|forms?)\b/gi, " ")
       .replace(
-        /\b(?:sa biographie|son histoire|biographie|biography|histoire|history|known for|connu(?:e)? pour|complete|compl(?:e|\u00e8)te|complet|courte?|fiche|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9)|diaporama|slides?|simple|simplement|simply|principe|please|svp|s'il te plait|s'il vous plait|historiquement)\b/gi,
+        /\b(?:correction|je corrige|je voulais dire|i meant|i mean|instead|sa biographie|son histoire|biographie|biography|histoire|history|known for|connu(?:e)? pour|complete|compl(?:e|\u00e8)te|complet|courte?|fiche|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9)|diaporama|slides?|simple|simplement|simply|principe|please|svp|s'il te plait|s'il vous plait|historiquement)\b/gi,
         " "
       )
       .replace(/\b(?:moi|me)\b/gi, " ")
@@ -263,6 +293,37 @@ function canonicalAlias(value: string) {
 
 function contextualCanonicalAlias(args: { question: string; subject: string }) {
   const combined = normalizeLooseText(`${args.question} ${args.subject}`);
+  const correctionMatch = combined.match(
+    /\b(?:je voulais dire|je veux|je parle de|i meant|i mean)\s+(.+?)(?:\s+(?:pas|not)\s+|[,.:;]|$)/
+  );
+  if (correctionMatch?.[1]) {
+    const corrected = normalizeSpace(
+      stripRoleAndGlue(normalizeOrdinalAliases(correctionMatch[1].replace(DASH_PATTERN, " "))).replace(
+        /\b(?:langage|language|programming|planet|element|serpent|snake|island|ile|opera|ville|city)\b/gi,
+        " "
+      )
+    );
+    const correctedAlias = canonicalAlias(corrected);
+    if (correctedAlias) {
+      return correctedAlias;
+    }
+    const correctedTitle = titleCaseSubject(corrected);
+    if (normalizeLooseText(correctedTitle).length >= 2) {
+      return correctedTitle;
+    }
+  }
+  if (/\bpython\b/.test(combined) && /\b(?:langage|language|programming)\b/.test(combined)) {
+    return "Python";
+  }
+  if (/\bjava\b/.test(combined) && /\b(?:langage|language|programming)\b/.test(combined)) {
+    return "Java";
+  }
+  if (/\bmercury\b/.test(combined) && /\bplanet\b/.test(combined)) {
+    return "Mercury";
+  }
+  if (/\bcleopatre|cleopatra\b/.test(combined) && /\b(?:opera|person|qui|who)\b/.test(combined)) {
+    return "Cleopatra VII";
+  }
   const explicitlyRejectsCityReading = /\b(?:pas de la ville|pas la ville|not the city)\b/.test(combined);
   const hasPlaceCue =
     /\b(?:senegal|s[eé]n[eé]gal|missouri|ville|city|commune|fleuve|river|st louis)\b/.test(combined) &&

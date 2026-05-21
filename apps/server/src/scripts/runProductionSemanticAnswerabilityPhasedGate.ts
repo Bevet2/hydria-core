@@ -75,7 +75,7 @@ function booleanOption(argv: string[], name: string) {
 }
 
 export function parseSemanticAnswerabilityPhases(value: string | undefined) {
-  const phases = (value ?? "50,100")
+  const phases = (value ?? "50,100,150")
     .split(",")
     .map((item) => Number(item.trim()))
     .filter((item) => Number.isFinite(item) && item > 0);

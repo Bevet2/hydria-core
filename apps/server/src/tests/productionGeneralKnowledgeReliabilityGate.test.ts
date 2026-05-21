@@ -52,7 +52,7 @@ test("general knowledge reliability pack keeps broad humiliating-question covera
 
   assert.equal(GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES.length >= 150, true);
   assert.equal(GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES.length <= 200, true);
-  assert.equal(sourceBacked.length >= 120, true);
+  assert.equal(sourceBacked.length >= 150, true);
   assert.equal(direct.length >= 25, true);
   assert.equal(tools.length >= 10, true);
   assert.ok(GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES.some((testCase) => testCase.id === "science_volcano_fr"));
@@ -63,6 +63,12 @@ test("general knowledge reliability pack keeps broad humiliating-question covera
   );
   assert.ok(GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES.some((testCase) => testCase.id === "direct_tiramisu_fr"));
   assert.ok(GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES.some((testCase) => testCase.id === "tool_ai_week_fr"));
+  assert.ok(GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES.some((testCase) => testCase.id === "adversarial_einstein_typo_fr"));
+  assert.ok(
+    GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES.some(
+      (testCase) => testCase.id === "adversarial_louis_ix_correction_fr"
+    )
+  );
 });
 
 test("production general knowledge gate accepts corroborated source-backed research", () => {
