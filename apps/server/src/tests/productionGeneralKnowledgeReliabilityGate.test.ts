@@ -298,6 +298,55 @@ test("production general knowledge gate rejects tools for direct practical tasks
   assert.ok(result.issues.includes("unexpected_tool_provider_for_direct"));
 });
 
+test("production general knowledge gate accepts verified live weather without source list", () => {
+  const testCase: GeneralKnowledgeReliabilityCase = {
+    id: "tool_weather_marseille_fr",
+    message: "Meteo actuelle a Marseille ?",
+    category: "other",
+    expected: {
+      kind: "tool_first",
+      toolType: "weather",
+      term: "Marseille"
+    }
+  };
+
+  const result = inspectProductionGeneralKnowledgeCase(testCase, {
+    assistantMessage: {
+      content: "Meteo actuelle pour Marseille: ciel degage, temperature 21 °C."
+    },
+    evidenceCapsule: {
+      answerabilityMode: "tool_first",
+      missingEvidence: [],
+      sourceBound: true
+    },
+    generation: {
+      provider: "tool",
+      model: "weather",
+      usedStaticFallback: false
+    },
+    conversationQuality: {
+      passed: true,
+      issues: []
+    },
+    tooling: {
+      used: true,
+      route: "used",
+      routing: {
+        toolType: "weather",
+        intent: "current_weather",
+        toolRequired: true,
+        toolResultUsed: true
+      },
+      sources: []
+    },
+    orchestrationTrace: {
+      steps: [{ id: "answerability", status: "passed", summary: "tool_first" }]
+    }
+  });
+
+  assert.equal(result.passed, true);
+});
+
 test("production general knowledge gate selection supports explicit case ids", () => {
   const selected = selectProductionGeneralKnowledgeCases({
     offset: 0,

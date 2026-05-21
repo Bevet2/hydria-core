@@ -75,9 +75,19 @@ function unique(values: string[]) {
   });
 }
 
+function isOperationalWritingArtifact(text: string, category: QuestionCategory) {
+  if (category !== "operational_writing") {
+    return false;
+  }
+  return /\b(?:release notes?|status update|announcement|email|mail|message|copy|memo|summary|slogan|pitch)\b/.test(text);
+}
+
 function containsCodeSignal(text: string, category: QuestionCategory) {
   if (category === "debug_diagnostic") {
     return true;
+  }
+  if (isOperationalWritingArtifact(text, category)) {
+    return false;
   }
   const explicitImplementationSignal =
     /\b(?:code|typescript|javascript|python|react|node|stack trace|erreur|error|bug|debug|repo|repository|dockerfile|docker-compose|compose\.ya?ml|docker build|docker run|container logs?|schema|test|compile|fonction|function|classe|class|component|composant)\b/.test(

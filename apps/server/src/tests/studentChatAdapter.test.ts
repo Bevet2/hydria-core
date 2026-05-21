@@ -538,6 +538,44 @@ test("student chat adapter routes English writing tasks through plain Mistral", 
   assert.match(result.answer.answer, /migration/);
 });
 
+test("student chat adapter keeps English release-note writing on the English writer route", async () => {
+  let selectedModel = "";
+  const baseInput = buildInput();
+  const input = {
+    ...baseInput,
+    category: "operational_writing" as const,
+    routingQuestion: "Write a short release note for a bug fix.",
+    userMessage: "Write a short release note for a bug fix.",
+    question: "Write a short release note for a bug fix.",
+    runtimeMode: "direct" as const,
+    requiresExternalGrounding: false,
+    activeConstraintCapsule: {
+      ...baseInput.activeConstraintCapsule,
+      language: "en" as const
+    }
+  };
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "qwen2.5:14b";
+    },
+    async testPrompt(_prompt, _system, options) {
+      selectedModel = options?.modelName ?? "";
+      return {
+        provider: "ollama",
+        model: selectedModel,
+        response: "Fixed a bug that could interrupt the workflow; update to get the corrected behavior.",
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer(input);
+
+  assert.equal(selectedModel, "mistral:7b");
+  assert.equal(result.runtimeBudget?.profile, "writing_chat");
+  assert.match(result.answer.answer, /Fixed a bug/);
+});
+
 test("student chat adapter routes French recipe requests through practical writing path", async () => {
   const selectedModels: string[] = [];
   let timeoutMs = 0;

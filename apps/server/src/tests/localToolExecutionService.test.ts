@@ -175,6 +175,25 @@ function buildAiRecentUpdatesRouting(): ToolRoutingDecision {
   };
 }
 
+function buildCyberRecentUpdatesRouting(): ToolRoutingDecision {
+  return {
+    considered: true,
+    toolRequired: true,
+    toolRecommended: false,
+    toolType: "research",
+    intent: "recent_updates",
+    confidence: 0.91,
+    fallbackAllowed: false,
+    reason: "Recent cybersecurity updates require fresh source retrieval.",
+    extractedArgs: {
+      subject: "cybersecurity updates this week",
+      temporalFocus: "this_week",
+      language: "en"
+    },
+    toolResultUsed: false
+  };
+}
+
 function buildFactCheckRouting(subject = "Marie Curie"): ToolRoutingDecision {
   return {
     considered: true,
@@ -477,6 +496,35 @@ test("local research tool resolves recent AI updates from official feeds", async
   assert.equal(result?.intent, "recent_updates");
   assert.match(result?.verifiedFacts.join(" "), /OpenAI ships a new agents update/);
   assert.match(result?.verifiedFacts.join(" "), /New open model leaderboard/);
+  assert.equal(result?.sources?.[0]?.retrievalOrigin, "known_endpoint");
+});
+
+test("local research tool resolves recent cybersecurity updates from official feeds", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    if (url.includes("cisa.gov/cybersecurity-advisories/all.xml")) {
+      return new Response(
+        `<?xml version="1.0"?><rss><channel><item><title>CISA adds known exploited vulnerabilities</title><link>https://www.cisa.gov/news-events/alerts/test</link><pubDate>${yesterday.toUTCString()}</pubDate><description>Official cybersecurity advisory update.</description></item></channel></rss>`,
+        { status: 200, headers: { "Content-Type": "application/rss+xml" } }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const service = new LocalToolExecutionService();
+  const result = await service.tryExecute(buildCyberRecentUpdatesRouting());
+
+  assert.equal(result?.toolType, "research");
+  assert.equal(result?.intent, "recent_updates");
+  assert.match(result?.verifiedFacts.join(" "), /Cybersecurity update/);
+  assert.match(result?.verifiedFacts.join(" "), /CISA adds known exploited vulnerabilities/);
   assert.equal(result?.sources?.[0]?.retrievalOrigin, "known_endpoint");
 });
 

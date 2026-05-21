@@ -149,6 +149,7 @@ const DIRECT_FRENCH_MARKERS = [
   "combien",
   "pourquoi",
   "donne",
+  "voici",
   "peux",
   "moi",
   "est",
@@ -168,6 +169,8 @@ const DIRECT_FRENCH_MARKERS = [
 const DIRECT_ENGLISH_MARKERS = [
   "i",
   "you",
+  "write",
+  "short",
   "who",
   "what",
   "how",
@@ -178,6 +181,10 @@ const DIRECT_ENGLISH_MARKERS = [
   "define",
   "explain",
   "give",
+  "release",
+  "note",
+  "bug",
+  "fix",
   "tell",
   "me",
   "more",
@@ -2577,14 +2584,19 @@ function buildRecentUpdatesToolDraft(args: {
 
   const effectiveLanguage = extractedToolLanguage(args.tooling) ?? args.language;
   const isEnglish = effectiveLanguage === "en";
+  const joinedEvidence = [...args.tooling.summary, ...args.tooling.verifiedFacts].join(" ");
+  const isCybersecurity = /\b(?:cybersecurity|cybersecurite|cyber|cisa|cert|cve|vulnerabilit)\b/i.test(
+    normalizeText(joinedEvidence)
+  );
+  const topicLabel = isCybersecurity ? (isEnglish ? "cybersecurity" : "cybersecurite") : isEnglish ? "AI" : "IA";
   const lines = args.tooling.verifiedFacts.slice(0, 6).map((fact) => `- ${fact}`);
   const sourceLimit = isEnglish
-    ? "Scope: these are the dated official feeds available to this runtime, not an exhaustive map of every AI release on the web."
-    : "Limite : ce sont les flux officiels dates disponibles dans ce runtime, pas une carte exhaustive de toutes les sorties IA du web.";
+    ? `Scope: these are the dated official ${topicLabel} feeds available to this runtime, not an exhaustive map of every update on the web.`
+    : `Limite : ce sont les flux officiels dates ${topicLabel} disponibles dans ce runtime, pas une carte exhaustive de toutes les nouveautes du web.`;
   const answerText = [
     isEnglish
-      ? "Here is the source-backed AI update recap I can verify for this week:"
-      : "Voici le recap IA source que je peux verifier pour cette semaine :",
+      ? `Here is the source-backed ${topicLabel} update recap I can verify for this week:`
+      : `Voici le recap ${topicLabel} source que je peux verifier pour cette semaine :`,
     ...lines,
     sourceLimit
   ].join("\n");

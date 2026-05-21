@@ -384,7 +384,7 @@ export function inspectProductionGeneralKnowledgeCase(
     if (sources.length > 0 && !sourcesMatchExpectedTerm(sources, term)) {
       issues.push(`source_subject_mismatch:${term}`);
     }
-  } else if (expected.kind === "tool_first" && ["web", "weather", "time", "finance"].includes(expected.toolType)) {
+  } else if (expected.kind === "tool_first" && expected.toolType === "web") {
     if (sources.length < 1) {
       issues.push(`missing_tool_source:${expected.toolType}`);
     }

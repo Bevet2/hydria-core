@@ -264,6 +264,19 @@ const AI_RECENT_UPDATE_FEEDS: RecentUpdateFeed[] = [
   }
 ];
 
+const CYBER_RECENT_UPDATE_FEEDS: RecentUpdateFeed[] = [
+  {
+    id: "cisa-cybersecurity-advisories",
+    title: "CISA Cybersecurity Advisories",
+    url: "https://www.cisa.gov/cybersecurity-advisories/all.xml"
+  },
+  {
+    id: "cert-fr",
+    title: "CERT-FR",
+    url: "https://www.cert.ssi.gouv.fr/feed/"
+  }
+];
+
 const WEATHER_CODE_LABELS: Record<number, { en: string; fr: string }> = {
   0: { en: "clear sky", fr: "ciel d\u00e9gag\u00e9" },
   1: { en: "mainly clear", fr: "ciel plutot d\u00e9gag\u00e9" },
@@ -605,11 +618,34 @@ function isAiRecentUpdatesRoute(args: ToolRoutingDecision) {
   const subject = [
     extractStringArg(args, "subject"),
     extractStringArg(args, "topic"),
-    extractStringArg(args, "rawQuestion")
+    extractStringArg(args, "rawQuestion"),
+    extractStringArg(args, "query")
   ].filter(Boolean).join(" ");
   return /\b(?:ai|ia|llm|openai|anthropic|hugging\s*face|deepmind|google\s+ai|intelligence artificielle|artificial intelligence|modeles?\s+ia|mod[eè]les?\s+ia)\b/i.test(
     normalizeLooseText(subject)
   );
+}
+
+function isCyberRecentUpdatesRoute(args: ToolRoutingDecision) {
+  const subject = [
+    extractStringArg(args, "subject"),
+    extractStringArg(args, "topic"),
+    extractStringArg(args, "rawQuestion"),
+    extractStringArg(args, "query")
+  ].filter(Boolean).join(" ");
+  return /\b(?:cyber|cybersecurity|security|vulnerabilit|vulnerability|vulnerabilities|cve|cisa|cert|ssi|securite|s[eè]curit[eé])\b/i.test(
+    normalizeLooseText(subject)
+  );
+}
+
+function recentUpdateFeedsForRoute(args: ToolRoutingDecision): { label: "AI" | "cybersecurity"; feeds: RecentUpdateFeed[] } | null {
+  if (isAiRecentUpdatesRoute(args)) {
+    return { label: "AI", feeds: AI_RECENT_UPDATE_FEEDS };
+  }
+  if (isCyberRecentUpdatesRoute(args)) {
+    return { label: "cybersecurity", feeds: CYBER_RECENT_UPDATE_FEEDS };
+  }
+  return null;
 }
 
 function parseRecentFeedEntries(feed: RecentUpdateFeed, body: string): RecentUpdateEntry[] {
@@ -665,13 +701,14 @@ function formatRecentUpdateDate(value: string | null) {
 }
 
 async function tryFetchRecentUpdates(args: ToolRoutingDecision): Promise<LocalToolExecutionResult | null> {
-  if (!isAiRecentUpdatesRoute(args)) {
+  const selectedFeeds = recentUpdateFeedsForRoute(args);
+  if (!selectedFeeds) {
     return null;
   }
 
   const language = extractLanguage(args);
   const fetchedFeeds = await Promise.allSettled(
-    AI_RECENT_UPDATE_FEEDS.map(async (feed) => ({
+    selectedFeeds.feeds.map(async (feed) => ({
       feed,
       body: await fetchText(feed.url)
     }))
@@ -697,14 +734,24 @@ async function tryFetchRecentUpdates(args: ToolRoutingDecision): Promise<LocalTo
 
   const verifiedFacts = recentEntries.map((entry) => {
     const date = formatRecentUpdateDate(entry.publishedAt);
+    const topicPrefix =
+      selectedFeeds.label === "cybersecurity"
+        ? language === "fr"
+          ? "Actualite cybersecurite"
+          : "Cybersecurity update"
+        : language === "fr"
+          ? "Actualite IA"
+          : "AI update";
     return language === "fr"
-      ? `${entry.feed.title} a publie "${entry.title}" le ${date}.`
-      : `${entry.feed.title} published "${entry.title}" on ${date}.`;
+      ? `${topicPrefix}: ${entry.feed.title} a publie "${entry.title}" le ${date}.`
+      : `${topicPrefix}: ${entry.feed.title} published "${entry.title}" on ${date}.`;
   });
   const summary =
     language === "fr"
-      ? [`Recherche IA recente: ${recentEntries.length} entree(s) datee(s) trouvee(s) dans des flux officiels.`]
-      : [`Recent AI research/news: ${recentEntries.length} dated entries found in official feeds.`];
+      ? [
+          `Recherche ${selectedFeeds.label === "AI" ? "IA" : "cybersecurite"} recente: ${recentEntries.length} entree(s) datee(s) trouvee(s) dans des flux officiels.`
+        ]
+      : [`Recent ${selectedFeeds.label} research/news: ${recentEntries.length} dated entries found in official feeds.`];
 
   return {
     toolType: "research",
@@ -712,7 +759,7 @@ async function tryFetchRecentUpdates(args: ToolRoutingDecision): Promise<LocalTo
     summary,
     verifiedFacts,
     confidenceScore: 0.84,
-    resultLabel: `${recentEntries.length} recent AI updates`,
+    resultLabel: `${recentEntries.length} recent ${selectedFeeds.label} updates`,
     sources: recentEntries.map((entry) => ({
       title: `${entry.feed.title}: ${entry.title}`,
       url: entry.url,
