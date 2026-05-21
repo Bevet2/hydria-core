@@ -1210,6 +1210,15 @@ function sourceFactQualityPenalty(fact: string, language: ConversationState["lan
   return penalty;
 }
 
+function isAdjacentElectricHybridSentence(sentence: string, subjectTerms: Set<string>) {
+  if (!subjectTerms.has("moteur") || !subjectTerms.has("electrique")) {
+    return false;
+  }
+  return /\b(?:automobile hybride|vehicule hybride|hybrid vehicle|hybrid car|moteur thermique)\b/.test(
+    normalizeText(sentence)
+  );
+}
+
 function sourceFactRelevanceScore(args: {
   fact: string;
   subjectTerms: Set<string>;
@@ -1222,7 +1231,8 @@ function sourceFactRelevanceScore(args: {
     subjectHits * 24 +
     sourceFactLanguageScore(args.fact, args.language) * 4 +
     Math.min(concreteTermCount, 8) -
-    sourceFactQualityPenalty(args.fact, args.language)
+    sourceFactQualityPenalty(args.fact, args.language) -
+    (isAdjacentElectricHybridSentence(args.fact, args.subjectTerms) ? 180 : 0)
   );
 }
 
@@ -1531,7 +1541,8 @@ function semanticSourceSentenceScore(args: {
     cueHits * 18 +
     sourceFactLanguageScore(args.sentence, args.language) * 3 +
     Math.min(concreteTermCount, 8) -
-    sourceFactQualityPenalty(args.sentence, args.language)
+    sourceFactQualityPenalty(args.sentence, args.language) -
+    (isAdjacentElectricHybridSentence(args.sentence, args.subjectTerms) ? 180 : 0)
   );
 }
 
