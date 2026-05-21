@@ -87,8 +87,27 @@ const COMMON_ALIAS_CANONICALS: Record<string, string> = {
 };
 
 const ADDITIONAL_COMMON_ALIAS_CANONICALS: Record<string, string> = {
+  "arc en ciel": "arc en ciel",
+  "cellule en biologie": "cellule",
+  "climate change": "climate change",
+  electricity: "electricity",
+  evolution: "evolution",
+  "biological evolution": "evolution",
+  earthquakes: "earthquake",
+  earthquake: "earthquake",
+  gravite: "gravitation",
+  gravity: "gravity",
+  magnetisme: "magnetisme",
+  molecule: "molecule",
+  neurone: "neurone",
+  "plate tectonics": "plate tectonics",
   "principe vaccination": "vaccination",
+  "systeme immunitaire": "systeme immunitaire",
+  "systeme solaire": "systeme solaire",
+  telescope: "telescope",
+  "telescope used": "telescope",
   vaccination: "vaccination",
+  volcan: "volcan",
   "revolution industrielle": "R\u00e9volution industrielle",
   "traite versailles": "Trait\u00e9 de Versailles",
   "traite de versailles": "Trait\u00e9 de Versailles"
@@ -100,7 +119,23 @@ const SPECIAL_CANDIDATE_ALIASES: Record<string, string[]> = {
 };
 
 const ADDITIONAL_SPECIAL_CANDIDATE_ALIASES: Record<string, string[]> = {
+  "arc en ciel": ["arc en ciel", "arc-en-ciel", "rainbow"],
+  cellule: ["cellule", "cellule (biologie)", "cell biology"],
+  "climate change": ["climate change", "global warming"],
+  electricity: ["electricity", "electrical energy"],
+  evolution: ["evolution", "biological evolution"],
+  earthquake: ["earthquake", "earthquakes", "seism"],
+  gravitation: ["gravitation", "gravite", "gravity"],
+  gravity: ["gravity", "gravitation"],
+  magnetisme: ["magnetisme", "magn\u00e9tisme", "magnetism"],
+  molecule: ["molecule", "mol\u00e9cule"],
+  neurone: ["neurone", "neuron"],
+  "plate tectonics": ["plate tectonics", "tectonique des plaques"],
   vaccination: ["vaccination", "Vaccination", "vaccine"],
+  "systeme immunitaire": ["systeme immunitaire", "syst\u00e8me immunitaire", "immune system"],
+  "systeme solaire": ["systeme solaire", "syst\u00e8me solaire", "solar system"],
+  telescope: ["telescope", "t\u00e9lescope"],
+  volcan: ["volcan", "volcano"],
   "revolution industrielle": ["R\u00e9volution industrielle", "revolution industrielle", "Industrial Revolution"],
   "traite de versailles": ["Trait\u00e9 de Versailles", "traite de versailles", "Treaty of Versailles"]
 };
@@ -115,6 +150,13 @@ function unique(values: string[]) {
 }
 
 const ADDITIONAL_MATCH_TERM_ALIASES: Record<string, string[]> = {
+  ciel: ["ciel", "rainbow"],
+  gravitation: ["gravitation", "gravity", "gravite"],
+  gravite: ["gravite", "gravity", "gravitation"],
+  magnetisme: ["magnetisme", "magnetism"],
+  molecule: ["molecule", "molecules"],
+  solaire: ["solaire", "solar"],
+  systeme: ["systeme", "system", "systeme"],
   traite: ["traite", "treaty"],
   industrielle: ["industrielle", "industrial"],
   vaccination: ["vaccination", "vaccine"]
@@ -169,10 +211,10 @@ function stripRequestTerms(value: string) {
       .replace(/['\u2018\u2019]/g, " ")
       .replace(/[?]/g, " ")
       .replace(
-        /\b(?:who is|who was|what is|what are|tell me about|give me|make me|explain|define|definition|history of|biography of|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce qu[' ]?(?:un|une|le|la|les)?|qu[' ]?est[- ]?ce que|quest ce que|c[' ]?est quoi|ce qu'est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition|fais|fait|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:\s+l\s+histoire\s+de)?|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi,
+        /\b(?:who is|who was|what is|what are|what causes|what caused|how does|how do|tell me about|give me|make me|explain|define|definition|history of|biography of|qui est|qui etait|qui \u00e9tait|pourquoi|comment fonctionne|comment se forme|qu[' ]?est[- ]?ce qu[' ]?(?:un|une|le|la|les)?|qu[' ]?est[- ]?ce que|quest ce que|c[' ]?est quoi|ce qu'est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition|fais|fait|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:\s+l\s+histoire\s+de)?|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi,
         " "
       )
-      .replace(/\b(?:c[' ]?est qui|c[' ]?est quel|c[' ]?est quoi|c[' ]?etait qui|c[' ]?etait quoi|etait[- ]?ce|what causes|what caused|what was|what were|used for)\b/gi, " ")
+      .replace(/\b(?:c[' ]?est qui|c[' ]?est quel|c[' ]?est quoi|c[' ]?etait qui|c[' ]?etait quoi|etait[- ]?ce|what was|what were|used for|used|exists?|existe|travel|formed?|forms?)\b/gi, " ")
       .replace(
         /\b(?:sa biographie|son histoire|biographie|biography|histoire|history|known for|connu(?:e)? pour|complete|compl(?:e|\u00e8)te|complet|courte?|fiche|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9)|diaporama|slides?|simple|simplement|simply|principe|please|svp|s'il te plait|s'il vous plait|historiquement)\b/gi,
         " "

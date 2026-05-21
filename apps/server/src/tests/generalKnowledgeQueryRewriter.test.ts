@@ -42,6 +42,30 @@ test("general knowledge rewriter strips prompt adjectives and normalizes common 
   assert.equal(subjectMatchesText("Trait\u00e9 de Versailles", "Treaty of Versailles ended the state of war."), true);
 });
 
+test("general knowledge rewriter normalizes source-backed science questions", () => {
+  const gravity = rewriteGeneralKnowledgeQuery({
+    question: "Pourquoi la gravite existe ?",
+    language: "fr"
+  });
+  const earthquake = rewriteGeneralKnowledgeQuery({
+    question: "What causes earthquakes?",
+    language: "en"
+  });
+  const telescope = rewriteGeneralKnowledgeQuery({
+    question: "What is a telescope used for?",
+    language: "en"
+  });
+  const sound = rewriteGeneralKnowledgeQuery({
+    question: "How does sound travel?",
+    language: "en"
+  });
+
+  assert.equal(gravity.canonicalSubject, "gravitation");
+  assert.equal(earthquake.canonicalSubject, "earthquake");
+  assert.equal(telescope.canonicalSubject, "telescope");
+  assert.equal(sound.canonicalSubject, "Sound");
+});
+
 test("general knowledge source matching rejects off-subject snippets", () => {
   assert.equal(
     subjectMatchesText(

@@ -112,7 +112,7 @@ function isConversationPlanningCategory(category: QuestionCategory | null | unde
 }
 
 function detectQuestionLanguage(question: string) {
-  return /\b(?:fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|recap|r(?:e|\u00e9)cap|nouveaut(?:e|\u00e9)s?|sorties?|semaine|quel|quelle|quels|temps|aujourd|meteo|m(?:e|\u00e9|\u00c3\u00a9|\ufffd)t(?:e|\u00e9|\u00c3\u00a9|\ufffd)o|pluie|vent|neige|fait-il|fait il|qui est|qui etait|qui (?:e|\u00e9)tait|c[' ]?etait qui|c[' ]?(?:e|\u00e9)tait qui|biographie|presentation|pr(?:e|\u00e9)sentation|expos(?:e|\u00e9)|calcule|calculer|combien|convertis|convertir|euros?|dollars?|taux)\b/i.test(
+  return /\b(?:fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|recap|r(?:e|\u00e9)cap|nouveaut(?:e|\u00e9)s?|sorties?|semaine|quel|quelle|quels|qu[' ]?est[- ]?ce|quest ce|c[' ]?est quoi|explique|pourquoi|comment|principe|fonctionne|forme|temps|aujourd|meteo|m(?:e|\u00e9|\u00c3\u00a9|\ufffd)t(?:e|\u00e9|\u00c3\u00a9|\ufffd)o|pluie|vent|neige|fait-il|fait il|qui est|qui etait|qui (?:e|\u00e9)tait|c[' ]?etait qui|c[' ]?(?:e|\u00e9)tait qui|biographie|presentation|pr(?:e|\u00e9)sentation|expos(?:e|\u00e9)|calcule|calculer|combien|convertis|convertir|euros?|dollars?|taux)\b/i.test(
     question
   )
     ? "fr"
@@ -685,19 +685,41 @@ function isSourceBackedConceptLookup(question: string) {
 
   const termCount = question.match(/[A-Za-z0-9\u00c0-\u00ff]{2,}/g)?.length ?? 0;
   const asksShortDefinition =
-    /\b(?:what is|what are|qu'est-ce que|quest ce que|c'est quoi|c est quoi|define|definition|explique simplement|explain simply)\b/i.test(
+    /\b(?:what is|what are|qu'est-ce que|quest ce que|c'est quoi|c est quoi|define|definition|explique(?:\s+(?:le|la|les|l'|un|une))?|explique simplement|explain(?:\s+[A-Za-z])?|explain simply)\b/i.test(
       question
     );
   const asksScenarioExplanation =
-    /\b(?:dans|in|with|using|architecture|systemes|syst(?:e|\u00e8)mes|systems|example|exemple|practical|pratique|tradeoff|debug|diagnostic)\b/i.test(
+    /\b(?:comment|how|how to|dans|in|with|using|architecture|systemes|syst(?:e|\u00e8)mes|systems|example|exemple|practical|pratique|tradeoff|debug|diagnostic|structurer|nettoyer|clean|produced?|forecasts?)\b/i.test(
       question
     );
 
   return asksShortDefinition && termCount <= 10 && !asksScenarioExplanation;
 }
 
+function isSourceBackedScienceQuestion(question: string) {
+  const hasScienceTerm =
+    /\b(?:gravity|gravite|gravitation|evolution|systeme solaire|solar system|cellule|cell|vaccination|vaccine|plate tectonics|tectonique|antibiotique|antibiotic|electricity|electricite|magnetisme|magnetism|atome|atom|molecule|climate|volcan|volcano|earthquakes?|seisme|systeme immunitaire|immune system|neurone|neuron|telescope|arc[- ]en[- ]ciel|rainbow|sound|son|saisons|seasons|tides|marees|photosynthese|photosynthesis|respiration|ozone|radioactivity|crispr|quantum)\b/i.test(
+      question
+    );
+  if (
+    /\b(?:what causes|what caused|why|pourquoi|comment fonctionne|comment se forme|how does|how do|how .* travel|used for|a quoi sert)\b/i.test(
+      question
+    )
+  ) {
+    return hasScienceTerm;
+  }
+
+  return (
+    /\b(?:explain|explique|what is|what are|qu'est-ce que|quest ce que|c'est quoi|c est quoi)\b/i.test(question) &&
+    hasScienceTerm
+  );
+}
+
 function shouldUseGeneralFactResearch(question: string, category: QuestionCategory | null | undefined) {
   if (isConversationPlanningCategory(category)) {
+    return false;
+  }
+  if (/\b(?:ma contrainte|mes contraintes|my constraint|my constraints|respectant ma contrainte|respecting my constraint)\b/i.test(question)) {
     return false;
   }
   if (WRITING_OR_BRAINSTORM_PATTERN.test(question)) {
@@ -705,6 +727,7 @@ function shouldUseGeneralFactResearch(question: string, category: QuestionCatego
   }
   return (
     isIdentityOrBiographyLookup(question) ||
+    isSourceBackedScienceQuestion(question) ||
     isSourceBackedConceptLookup(question) ||
     EXPLICIT_FACTUAL_RESEARCH_PATTERN.test(question)
   );

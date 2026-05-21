@@ -1519,9 +1519,13 @@ function buildFragmentarySourceSynthesisRepair(args: {
     typeof args.tooling.routing.extractedArgs?.subject === "string"
       ? args.tooling.routing.extractedArgs.subject
       : "";
+  const sourceQuery =
+    typeof args.tooling.routing.extractedArgs?.query === "string"
+      ? args.tooling.routing.extractedArgs.query
+      : "";
   const subjectDisplay = sourceSubjectDisplay(subject, args.language);
   const joined = joinNaturalList(uniqueFragments, args.language);
-  const asksMechanism = /\b(?:comment|fonctionne|fonctionnement|how|works?)\b/.test(normalizeText(subject));
+  const asksMechanism = asksForMechanism(`${subject} ${sourceQuery}`);
   const answer =
     args.language === "en"
       ? asksMechanism
