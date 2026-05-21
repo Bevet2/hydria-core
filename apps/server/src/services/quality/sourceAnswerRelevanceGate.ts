@@ -199,7 +199,14 @@ function extractTerms(value: string, limit = 10) {
 
 function signalHits(value: string, signals: string[]) {
   const normalized = normalizeText(value);
-  return signals.filter((signal) => normalized.includes(normalizeText(signal)));
+  return signals.filter((signal) => {
+    const normalizedSignal = normalizeText(signal);
+    if (!normalizedSignal) {
+      return false;
+    }
+    const escaped = normalizedSignal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+    return new RegExp(`\\b${escaped}\\b`).test(normalized);
+  });
 }
 
 function subjectTerms(input: SourceAnswerRelevanceInput) {

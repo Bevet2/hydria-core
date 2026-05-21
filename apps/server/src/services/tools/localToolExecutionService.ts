@@ -8,6 +8,7 @@ import { projectRoot } from "../../utils/env.js";
 import { logger } from "../../utils/logger.js";
 import { ExecutionGovernanceService } from "../execution/executionGovernanceService.js";
 import {
+  meaningfulSubjectTerms,
   normalizeLooseText,
   rewriteGeneralKnowledgeQuery,
   subjectMatchesText
@@ -902,6 +903,28 @@ function wikipediaPageUrl(language: string, title: string) {
   return `https://${language}.wikipedia.org/wiki/${encodeURIComponent(title.replace(/\s+/g, "_"))}`;
 }
 
+function titleTermVariants(term: string) {
+  if (term === "moteur") {
+    return ["moteur", "machine", "motor"];
+  }
+  if (term === "electrique") {
+    return ["electrique", "electric"];
+  }
+  return [term];
+}
+
+function wikipediaSummarySubjectTitleMatches(subject: string, title: string, description: string | null) {
+  const subjectTerms = meaningfulSubjectTerms(subject).filter((term) => term.length >= 3);
+  if (subjectTerms.length === 0) {
+    return true;
+  }
+  const normalizedTitle = normalizeLooseText(`${title} ${description ?? ""}`);
+  const hitCount = subjectTerms.filter((term) =>
+    titleTermVariants(term).some((variant) => normalizedTitle.includes(variant))
+  ).length;
+  return hitCount >= Math.min(2, subjectTerms.length);
+}
+
 async function searchWikipediaTitle(subject: string, language: string) {
   const searchUrl = new URL(`https://${language}.wikipedia.org/w/api.php`);
   searchUrl.searchParams.set("action", "query");
@@ -944,7 +967,11 @@ async function fetchWikipediaSummaryByTitle(title: string, language: string) {
 
 async function fetchWikipediaSummary(subject: string, language: string) {
   const exact = await fetchWikipediaSummaryByTitle(subject, language);
-  if (exact && subjectMatchesText(subject, `${exact.title} ${exact.description ?? ""} ${exact.excerpt}`)) {
+  if (
+    exact &&
+    wikipediaSummarySubjectTitleMatches(subject, exact.title, exact.description) &&
+    subjectMatchesText(subject, `${exact.title} ${exact.description ?? ""} ${exact.excerpt}`)
+  ) {
     return exact;
   }
 
@@ -957,6 +984,9 @@ async function fetchWikipediaSummary(subject: string, language: string) {
   }
   const summary = await fetchWikipediaSummaryByTitle(title, language);
   if (!summary) {
+    return null;
+  }
+  if (!wikipediaSummarySubjectTitleMatches(subject, summary.title, summary.description)) {
     return null;
   }
   if (!subjectMatchesText(subject, `${summary.title} ${summary.description ?? ""} ${summary.excerpt}`)) {
@@ -1042,8 +1072,8 @@ async function fetchWikidataEntity(subject: string, language: string): Promise<G
   };
 }
 
-async function searchBritannica(subject: string): Promise<GeneralKnowledgeEvidence | null> {
-  const results = await searchDuckDuckGo(`site:britannica.com ${subject}`);
+async function searchBritannica(subject: string, query = subject): Promise<GeneralKnowledgeEvidence | null> {
+  const results = await searchDuckDuckGo(`site:britannica.com ${query}`);
   const match = results.find((result) => {
     try {
       const host = new URL(result.url).hostname.replace(/^www\./, "");
@@ -1080,8 +1110,8 @@ function isBlockedGeneralKnowledgeHost(url: string) {
   }
 }
 
-async function searchGenericFactSources(subject: string): Promise<GeneralKnowledgeEvidence[]> {
-  const results = await searchDuckDuckGo(subject);
+async function searchGenericFactSources(subject: string, query = subject): Promise<GeneralKnowledgeEvidence[]> {
+  const results = await searchDuckDuckGo(query);
   return results
     .filter((result) => !isBlockedGeneralKnowledgeHost(result.url))
     .filter((result) => subjectMatchesText(subject, `${result.title} ${result.snippet}`))
@@ -1097,6 +1127,26 @@ async function searchGenericFactSources(subject: string): Promise<GeneralKnowled
       modifiedAt: null,
       dateSource: "search_result" as const
     }));
+}
+
+function shouldFetchIntentSpecificEvidence(args: ToolRoutingDecision) {
+  const query = normalizeLooseText(extractStringArg(args, "query") ?? extractStringArg(args, "subject") ?? "");
+  return /\b(?:why|what causes|what caused|pourquoi|cause|causes|comment fonctionne|fonctionnement|how does|how do|how .* work|used for)\b/.test(
+    query
+  );
+}
+
+function intentSpecificResearchQueries(args: ToolRoutingDecision, subject: string) {
+  const query = extractStringArg(args, "query") ?? subject;
+  const normalized = normalizeLooseText(query);
+  const queries = [query];
+  if (/\b(?:why|what causes|what caused|pourquoi|cause|causes)\b/.test(normalized)) {
+    queries.push(`why ${subject}`, `${subject} causes`, `${subject} reason`);
+  }
+  if (/\b(?:comment fonctionne|fonctionnement|how does|how do|how .* work|used for)\b/.test(normalized)) {
+    queries.push(`comment fonctionne ${subject}`, `${subject} fonctionnement`, `how does ${subject} work`);
+  }
+  return [...new Set(queries.map((item) => normalizeSpaces(item)).filter((item) => item.length >= 3))].slice(0, 5);
 }
 
 function evidenceKey(evidence: GeneralKnowledgeEvidence) {
@@ -1213,6 +1263,18 @@ async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<L
         addEvidence(evidence, item);
       }
       if (evidence.length >= 2) {
+        break;
+      }
+    }
+  }
+
+  if (shouldFetchIntentSpecificEvidence(args) && evidence.length < 5) {
+    for (const query of intentSpecificResearchQueries(args, subject)) {
+      addEvidence(evidence, await searchBritannica(subject, query));
+      for (const item of await searchGenericFactSources(subject, query)) {
+        addEvidence(evidence, item);
+      }
+      if (evidence.length >= 5) {
         break;
       }
     }

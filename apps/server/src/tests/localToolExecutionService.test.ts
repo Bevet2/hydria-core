@@ -690,6 +690,93 @@ test("local research fact-check tool tries exact Wikipedia title before generic 
   assert.equal(result?.sources?.length, 2);
 });
 
+test("local research fact-check tool rejects adjacent Wikipedia titles and uses intent-specific search", async (t) => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    const decoded = decodeURIComponent(url);
+
+    if (decoded.includes("fr.wikipedia.org/api/rest_v1/page/summary/Moteur_Electrique")) {
+      return new Response("not found", { status: 404 });
+    }
+    if (url.includes("fr.wikipedia.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          query: {
+            search: [
+              {
+                title: "Automobile hybride electrique",
+                snippet: "Vehicule hybride."
+              }
+            ]
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (decoded.includes("fr.wikipedia.org/api/rest_v1/page/summary/Automobile_hybride_electrique")) {
+      return new Response(
+        JSON.stringify({
+          title: "Automobile hybride electrique",
+          description: "Vehicule automobile",
+          extract:
+            "Une automobile hybride electrique associe un moteur electrique a un moteur thermique pour se mouvoir.",
+          timestamp: "2026-05-01T12:00:00Z"
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("wikidata.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          search: [
+            {
+              id: "Q7239",
+              label: "Moteur electrique",
+              description: "machine qui convertit l'energie electrique en energie mecanique",
+              concepturi: "https://www.wikidata.org/wiki/Q7239"
+            }
+          ]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("duckduckgo.com/html")) {
+      if (decoded.includes("site:britannica.com")) {
+        return new Response("<html><body></body></html>", {
+          status: 200,
+          headers: { "Content-Type": "text/html" }
+        });
+      }
+      return new Response(
+        `<html><body><div class="result"><a class="result__a" href="https://example.edu/moteur-electrique">Moteur electrique fonctionnement</a><a class="result__snippet">Un moteur electrique convertit l'energie electrique en energie mecanique grace a un champ magnetique et un courant.</a></div></body></html>`,
+        { status: 200, headers: { "Content-Type": "text/html" } }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const service = new LocalToolExecutionService();
+  const result = await service.tryExecute({
+    ...buildFactCheckRouting("moteur electrique"),
+    extractedArgs: {
+      subject: "moteur electrique",
+      query: "Comment fonctionne un moteur electrique ?",
+      language: "fr"
+    }
+  });
+
+  assert.equal(result?.toolType, "research");
+  assert.match(result?.verifiedFacts.join(" "), /champ magnetique|energie mecanique/i);
+  assert.doesNotMatch(result?.verifiedFacts.join(" "), /automobile hybride|moteur thermique/i);
+  assert.equal(result?.sources?.some((source) => source.title.includes("Automobile hybride")), false);
+});
+
 test("local research fact-check tool cleans presentation biography subjects before Wikipedia lookup", async (t) => {
   const originalFetch = globalThis.fetch;
   const requestedUrls: string[] = [];
