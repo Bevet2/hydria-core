@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { GeneralKnowledgeReliabilityCase } from "../data/generalKnowledgeReliabilityGatePack.js";
+import {
+  GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES,
+  type GeneralKnowledgeReliabilityCase
+} from "../data/generalKnowledgeReliabilityGatePack.js";
 import {
   inspectProductionGeneralKnowledgeCase,
   selectProductionGeneralKnowledgeCases,
@@ -35,6 +38,32 @@ function sourceBackedCase(): GeneralKnowledgeReliabilityCase {
     }
   };
 }
+
+test("general knowledge reliability pack keeps broad humiliating-question coverage", () => {
+  const sourceBacked = GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES.filter(
+    (testCase) => testCase.expected.kind === "source_backed"
+  );
+  const direct = GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES.filter(
+    (testCase) => testCase.expected.kind === "direct_model"
+  );
+  const tools = GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES.filter(
+    (testCase) => testCase.expected.kind === "tool_first"
+  );
+
+  assert.equal(GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES.length >= 150, true);
+  assert.equal(GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES.length <= 200, true);
+  assert.equal(sourceBacked.length >= 120, true);
+  assert.equal(direct.length >= 25, true);
+  assert.equal(tools.length >= 10, true);
+  assert.ok(GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES.some((testCase) => testCase.id === "science_volcano_fr"));
+  assert.ok(
+    GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES.some(
+      (testCase) => testCase.id === "ambiguous_saint_louis_not_city_fr"
+    )
+  );
+  assert.ok(GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES.some((testCase) => testCase.id === "direct_tiramisu_fr"));
+  assert.ok(GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES.some((testCase) => testCase.id === "tool_ai_week_fr"));
+});
 
 test("production general knowledge gate accepts corroborated source-backed research", () => {
   const result = inspectProductionGeneralKnowledgeCase(sourceBackedCase(), {

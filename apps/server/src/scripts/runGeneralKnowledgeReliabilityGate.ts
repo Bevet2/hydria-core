@@ -7,7 +7,12 @@ import {
 } from "../data/generalKnowledgeReliabilityGatePack.js";
 import { AnswerabilityPlanner } from "../services/answerability/answerabilityPlanner.js";
 import { createInitialState } from "../services/context/contextStateTracker.js";
-import { rewriteGeneralKnowledgeQuery, normalizeLooseText } from "../services/research/generalKnowledgeQueryRewriter.js";
+import {
+  meaningfulSubjectTerms,
+  normalizeLooseText,
+  normalizeOrdinalAliases,
+  rewriteGeneralKnowledgeQuery
+} from "../services/research/generalKnowledgeQueryRewriter.js";
 import { ToolRoutingService } from "../services/tools/toolRoutingService.js";
 
 type GateResult = {
@@ -65,8 +70,16 @@ function selectedCases(args: Args) {
 }
 
 function termPresent(term: string, values: string[]) {
-  const normalizedTerm = normalizeLooseText(term);
-  return values.some((value) => normalizeLooseText(value).includes(normalizedTerm));
+  const normalizedTerm = normalizeLooseText(normalizeOrdinalAliases(term));
+  const normalizedValues = values.map((value) => normalizeLooseText(normalizeOrdinalAliases(value)));
+  if (normalizedValues.some((value) => value.includes(normalizedTerm))) {
+    return true;
+  }
+  const meaningfulTerms = meaningfulSubjectTerms(term);
+  return (
+    meaningfulTerms.length > 0 &&
+    normalizedValues.some((value) => meaningfulTerms.every((termPart) => value.includes(termPart)))
+  );
 }
 
 function evaluateCase(testCase: GeneralKnowledgeReliabilityCase): GateResult {

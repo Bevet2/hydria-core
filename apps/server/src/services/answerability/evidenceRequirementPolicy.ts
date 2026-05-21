@@ -45,11 +45,13 @@ export type EvidenceRequirementPolicyInput = {
 };
 
 const DIRECT_FACT_LOOKUP_PATTERN =
-  /\b(?:who is|who was|what is|what are|what was|what were|what causes|why was|tell me about|biography|history of|explain|describe|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce qu[' ]?(?:un|une|le|la|les)?|qu[' ]?est[- ]?ce que|c[' ]?est quoi|biographie|histoire de|fiche .* sur|explique|raconte|define|definition|d[e\u00e9]finis)\b/i;
+  /\b(?:who is|who was|what is|what are|what was|what were|what causes|why was|tell me about|biography|history of|explain|describe|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce qu[' ]?(?:un|une|le|la|les)?|qu[' ]?est[- ]?ce que|c[' ]?est quoi|c[' ]?etait qui|c[' ]?\u00e9tait qui|biographie|histoire de|fiche .* sur|explique|raconte|define|definition|d[e\u00e9]finis)\b/i;
 const GENERAL_KNOWLEDGE_FACT_PATTERN =
   /\b(?:person|people|scientist|writer|king|queen|emperor|pope|biography|historical|history|war|revolution|empire|country|capital|science|biology|physics|chemistry|astronomy|math|mathematics|medicine|climate|planet|animal|plant|dinosaur|gravity|atoms?|molecules?|volcano|earthquakes?|database|printing press|silk road|restoration|personne|personnage|scientifique|ecrivain|[e\u00e9]crivain|roi|reine|empereur|pape|biographie|historique|histoire|guerre|r[e\u00e9]volution|empire|pays|capitale|science|biologie|physique|chimie|astronomie|maths|math[e\u00e9]matiques|m[e\u00e9]decine|climat|plan[e\u00e8]te|animal|plante|dinosaure|gravite|gravit[e\u00e9]|atomes?|mol[e\u00e9]cules?|volcan|s[e\u00e9]ismes?|tremblements?|base de donn[e\u00e9]es|base donnees|photosynth[e\u00e8]se|renaissance)\b/i;
 const FACTUAL_QUESTION_SHAPE_PATTERN =
   /\b(?:who|what|when|where|why|how|qui|quoi|quand|ou|o[u\u00f9]|pourquoi|comment|quel|quelle|quels|quelles|qu[' ]?est[- ]?ce|explique|explain|define|definition|d[e\u00e9]finis|raconte|fiche)\b/i;
+const CAUSAL_OR_MECHANISM_FACT_PATTERN =
+  /\b(?:how does|how do|how .* works?|what causes?|why does|why do|why did|comment .*fonctionne|comment .*se forme|pourquoi|a quoi sert|qu[' ]?est[- ]?ce qui cause|qu[' ]?est[- ]?ce qui provoque)\b/i;
 const LIVE_OR_CURRENT_PATTERN =
   /\b(?:today|current|currently|latest|recent|this week|now|live|news|weather|price|stock|crypto|release|version|ceo|president|official|source|cite|verify|aujourd'hui|actuel|actuelle|dernier|derniere|derni[e\u00e8]re|r[e\u00e9]cent|cette semaine|maintenant|m[e\u00e9]t[e\u00e9]o|prix|bourse|crypto|version|sortie|pdg|pr[e\u00e9]sident|officiel|source|cite|v[e\u00e9]rifie)\b/i;
 const MEMORY_PATTERN =
@@ -57,7 +59,7 @@ const MEMORY_PATTERN =
 const KNOWLEDGE_PATTERN =
   /\b(?:hydria|core|watcher|knowledge|memoire|m[e\u00e9]moire|base de connaissance|runtime|dataset|benchmark|gate|student lab|obsidian)\b/i;
 const PRACTICAL_EVERYDAY_PATTERN =
-  /\b(?:recipe|recipes|cook|cooking|meal|dessert|cake|email|mail|message|draft|recette|cuisine|plat|dessert|gateau|g[a\u00e2]teau|tiramisu|r[e\u00e9]dige|ecris|ecrit|[e\u00e9]cris|[e\u00e9]crit|message)\b/i;
+  /\b(?:recipe|recipes|cook|cooking|meal|dessert|cake|email|mail|message|draft|release note|recette|cuisine|plat|dessert|gateau|g[a\u00e2]teau|tiramisu|r[e\u00e9]dige|ecris|ecrit|[e\u00e9]cris|[e\u00e9]crit|message)\b/i;
 const CODE_PATTERN =
   /\b(?:code|debug|bug|stack trace|typescript|javascript|python|docker build|npm install|sql|postgres|api error|implementation|repo|repository|fonction|erreur|corrige|d[e\u00e9]bug)\b/i;
 const STRATEGIC_PATTERN =
@@ -171,7 +173,12 @@ export function decideEvidenceRequirement(input: EvidenceRequirementPolicyInput)
     reasons.push("the question targets Hydria governed knowledge or runtime memory");
   }
 
-  if (!input.toolRouting.toolRequired && LIVE_OR_CURRENT_PATTERN.test(text) && !isHydriaKnowledgeQuestion) {
+  if (
+    !input.toolRouting.toolRequired &&
+    LIVE_OR_CURRENT_PATTERN.test(text) &&
+    !isHydriaKnowledgeQuestion &&
+    !isPracticalEverydayTask
+  ) {
     requiredEvidence.push("source_research");
     riskFlags.push("freshness_required");
     reasons.push("the question asks for current, dated, official, or source-backed facts");
@@ -193,6 +200,19 @@ export function decideEvidenceRequirement(input: EvidenceRequirementPolicyInput)
     requiredEvidence.push("source_research");
     riskFlags.push("general_knowledge_reliability_v2");
     reasons.push("general knowledge v2 requires source-backed evidence for person, history, or science facts");
+  }
+
+  if (
+    !input.toolRouting.toolRequired &&
+    CAUSAL_OR_MECHANISM_FACT_PATTERN.test(text) &&
+    !MEMORY_PATTERN.test(text) &&
+    !isHydriaKnowledgeQuestion &&
+    !isPracticalEverydayTask &&
+    !isConceptualSystemQuestion
+  ) {
+    requiredEvidence.push("source_research");
+    riskFlags.push("general_knowledge_reliability_v2");
+    reasons.push("causal or mechanism questions need source-backed evidence when they ask about public facts");
   }
 
   if (isHydriaKnowledgeQuestion && !input.toolRouting.toolRequired) {

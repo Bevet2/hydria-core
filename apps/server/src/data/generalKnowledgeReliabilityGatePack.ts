@@ -36,7 +36,19 @@ const biographies = [
   ["mandela_en", "Who was Nelson Mandela?", "Nelson Mandela"],
   ["kahlo_fr", "Qui est Frida Kahlo ?", "Frida Kahlo"],
   ["simone_veil_fr", "Biographie de Simone Veil.", "Simone Veil"],
-  ["louis_xiv_fr", "Le roi Louis 14, qui etait-ce ?", "Louis XIV"]
+  ["louis_xiv_fr", "Le roi Louis 14, qui etait-ce ?", "Louis XIV"],
+  ["julius_caesar_fr", "Qui etait Jules Cesar ?", "Jules Cesar"],
+  ["alexander_en", "Who was Alexander the Great?", "Alexander"],
+  ["leonardo_fr", "Leonard de Vinci, c'est qui ?", "Leonard de Vinci"],
+  ["rosa_parks_en", "Who was Rosa Parks?", "Rosa Parks"],
+  ["victor_hugo_fr", "Fais une courte biographie de Victor Hugo.", "Victor Hugo"],
+  ["darwin_en", "Tell me about Charles Darwin.", "Charles Darwin"],
+  ["malala_fr", "Qui est Malala Yousafzai ?", "Malala Yousafzai"],
+  ["tesla_fr", "Qui etait Nikola Tesla ?", "Nikola Tesla"],
+  ["aristotle_en", "Who was Aristotle?", "Aristotle"],
+  ["mozart_fr", "Mozart, c'etait qui ?", "Mozart"],
+  ["emilie_chatelet_fr", "Qui etait Emilie du Chatelet ?", "Emilie du Chatelet"],
+  ["turing_en", "Who was Alan Turing?", "Alan Turing"]
 ] as const;
 
 const science = [
@@ -59,7 +71,19 @@ const science = [
   ["earthquake_en", "What causes earthquakes?", "earthquake"],
   ["immune_system_fr", "Explique le systeme immunitaire.", "systeme immunitaire"],
   ["neuron_fr", "C'est quoi un neurone ?", "neurone"],
-  ["telescope_en", "What is a telescope used for?", "telescope"]
+  ["telescope_en", "What is a telescope used for?", "telescope"],
+  ["rainbow_fr", "Comment se forme un arc-en-ciel ?", "arc en ciel"],
+  ["sound_en", "How does sound travel?", "sound"],
+  ["seasons_fr", "Pourquoi il y a des saisons ?", "saisons"],
+  ["tidal_forces_en", "What causes tides?", "tides"],
+  ["electric_motor_fr", "Comment fonctionne un moteur electrique ?", "moteur electrique"],
+  ["photosynthesis_mechanism_en", "How does photosynthesis work?", "photosynthesis"],
+  ["blood_fr", "A quoi sert le sang ?", "sang"],
+  ["respiration_en", "What is cellular respiration?", "cellular respiration"],
+  ["ozone_fr", "C'est quoi la couche d'ozone ?", "ozone"],
+  ["radioactivity_en", "What is radioactivity?", "radioactivity"],
+  ["crisper_fr", "Explique CRISPR simplement.", "CRISPR"],
+  ["quantum_fr", "C'est quoi la physique quantique ?", "physique quantique"]
 ] as const;
 
 const history = [
@@ -78,7 +102,17 @@ const history = [
   ["silk_road_en", "What was the Silk Road?", "Silk Road"],
   ["magna_carta_en", "What is the Magna Carta?", "Magna Carta"],
   ["crusades_fr", "Explique les croisades simplement.", "croisades"],
-  ["meiji_en", "What was the Meiji Restoration?", "Meiji Restoration"]
+  ["meiji_en", "What was the Meiji Restoration?", "Meiji Restoration"],
+  ["athens_fr", "C'est quoi la democratie athenienne ?", "democratie athenienne"],
+  ["berlin_wall_en", "Why did the Berlin Wall fall?", "Berlin Wall"],
+  ["haitian_revolution_fr", "Explique la revolution haitienne.", "revolution haitienne"],
+  ["ottoman_empire_en", "What was the Ottoman Empire?", "Ottoman Empire"],
+  ["inquisition_fr", "C'est quoi l'Inquisition ?", "Inquisition"],
+  ["apollo_11_en", "What was Apollo 11?", "Apollo 11"],
+  ["black_death_fr", "Explique la peste noire.", "peste noire"],
+  ["decolonization_en", "What is decolonization?", "decolonization"],
+  ["sumer_fr", "Qu'est-ce que Sumer ?", "Sumer"],
+  ["marshall_plan_en", "What was the Marshall Plan?", "Marshall Plan"]
 ] as const;
 
 const stableDefinitions = [
@@ -96,7 +130,17 @@ const stableDefinitions = [
   ["latency_en", "What is latency in computing?", "latency"],
   ["cdn_fr", "C'est quoi un CDN ?", "CDN"],
   ["ssl_en", "What is TLS?", "TLS"],
-  ["queue_fr", "C'est quoi une file de messages ?", "file messages"]
+  ["queue_fr", "C'est quoi une file de messages ?", "file messages"],
+  ["webhook_fr", "C'est quoi un webhook ?", "webhook"],
+  ["load_balancer_en", "What is a load balancer?", "load balancer"],
+  ["rate_limit_fr", "Explique le rate limiting.", "rate limiting"],
+  ["embedding_en", "What is an embedding in AI?", "embedding"],
+  ["vector_db_fr", "C'est quoi une base vectorielle ?", "base vectorielle"],
+  ["jwt_en", "What is a JWT?", "JWT"],
+  ["rest_fr", "C'est quoi une API REST ?", "REST"],
+  ["websocket_en", "What is a WebSocket?", "WebSocket"],
+  ["etl_fr", "C'est quoi un pipeline ETL ?", "ETL"],
+  ["orm_en", "What is an ORM?", "ORM"]
 ] as const;
 
 const ambiguousButSourceable = [
@@ -111,7 +155,15 @@ const ambiguousButSourceable = [
   ["ww1_fr", "Explique la Premiere Guerre mondiale.", "Guerre mondiale"],
   ["internet_fr", "C'est quoi Internet ?", "Internet"],
   ["photosynthesis_short", "Photosynthese ?", "Photosynthese"],
-  ["database_short", "Base de donnees ?", "Base donnees"]
+  ["database_short", "Base de donnees ?", "Base donnees"],
+  ["saint_louis_not_city_fr", "Je parle du roi Saint Louis, pas de la ville: qui est-ce ?", "Louis IX"],
+  ["mercury_planet_en", "Mercury the planet, not the element: what is it?", "Mercury"],
+  ["python_language_fr", "Python le langage, pas le serpent: c'est quoi ?", "Python"],
+  ["java_language_en", "Java the programming language, not the island: what is it?", "Java"],
+  ["apple_company_fr", "Apple l'entreprise, c'est quoi ?", "Apple"],
+  ["washington_person_en", "George Washington the person, not the state: who was he?", "George Washington"],
+  ["turkey_country_en", "Turkey the country, not the bird: what is it?", "Turkey"],
+  ["saturn_fr", "Saturne, la planete, c'est quoi ?", "Saturne"]
 ] as const;
 
 const practicalDirect = [
@@ -134,7 +186,15 @@ const practicalDirect = [
   ["polite_reply_fr", "Redige une reponse polie a un refus.", "refus"],
   ["cleaning_plan_en", "Make a quick apartment cleaning plan.", "cleaning"],
   ["interview_questions_fr", "Propose cinq questions d'entretien.", "entretien"],
-  ["habit_plan_en", "Suggest a simple habit tracker routine.", "habit"]
+  ["habit_plan_en", "Suggest a simple habit tracker routine.", "habit"],
+  ["cookies_fr", "Donne une recette simple de cookies.", "cookies"],
+  ["salad_en", "Give me a quick salad recipe.", "salad"],
+  ["apology_email_fr", "Redige un mail d'excuse professionnel.", "excuse"],
+  ["release_note_en", "Write a short release note for a bug fix.", "bug"],
+  ["meeting_agenda_fr", "Fais un ordre du jour simple pour une reunion produit.", "reunion"],
+  ["tweet_en", "Write a short tweet announcing a beta launch.", "beta"],
+  ["debug_checklist_fr", "Fais une checklist rapide pour diagnostiquer une app lente.", "app"],
+  ["slogan_en", "Brainstorm five slogans for a privacy app.", "privacy"]
 ] as const;
 
 const liveTools = [
@@ -142,7 +202,15 @@ const liveTools = [
   ["time_tokyo_fr", "Quelle heure est-il a Tokyo maintenant ?", "time", "Tokyo"],
   ["bitcoin_en", "What is the current Bitcoin price?", "finance", "Bitcoin"],
   ["node_release_en", "What is the latest stable Node.js release today?", "web", "Node"],
-  ["ai_week_fr", "Quelles sont les nouveautes IA cette semaine ?", "research", "IA"]
+  ["ai_week_fr", "Quelles sont les nouveautes IA cette semaine ?", "research", "IA"],
+  ["weather_marseille_fr", "Meteo actuelle a Marseille ?", "weather", "Marseille"],
+  ["time_new_york_en", "What time is it in New York now?", "time", "New York"],
+  ["ethereum_en", "What is the current Ethereum price?", "finance", "Ethereum"],
+  ["python_release_en", "What is the latest Python release today?", "web", "Python"],
+  ["cyber_week_en", "What are the latest cybersecurity updates this week?", "research", "cybersecurity"],
+  ["github_status_en", "Is GitHub status reporting incidents right now?", "web", "GitHub"],
+  ["weather_london_en", "What is the weather in London today?", "weather", "London"],
+  ["ai_news_en", "What are the latest AI model announcements this week?", "research", "AI"]
 ] as const;
 
 function sourceCases(

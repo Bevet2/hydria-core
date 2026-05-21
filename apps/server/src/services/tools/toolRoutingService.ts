@@ -661,7 +661,7 @@ function isStatusPageQuestion(question: string) {
 }
 
 function isIdentityOrBiographyLookup(question: string) {
-  return /\b(?:who is|who was|who was|c[' ]?est qui|qui est|qui etait|qui (?:e|\u00e9)tait|biographie|biography|sa biographie|son histoire|his biography|her biography|known for|connu(?:e)? pour)\b/i.test(
+  return /\b(?:who is|who was|who was|c[' ]?est qui|c[' ]?etait qui|c[' ]?\u00e9tait qui|qui est|qui etait|qui (?:e|\u00e9)tait|biographie|biography|sa biographie|son histoire|his biography|her biography|known for|connu(?:e)? pour)\b/i.test(
     question
   ) || /\b(?:roi|reine|king|queen|empereur|emperor|pape|pope)\b/i.test(
     question

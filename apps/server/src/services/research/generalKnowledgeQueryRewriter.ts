@@ -214,9 +214,13 @@ function canonicalAlias(value: string) {
 
 function contextualCanonicalAlias(args: { question: string; subject: string }) {
   const combined = normalizeLooseText(`${args.question} ${args.subject}`);
+  const explicitlyRejectsCityReading = /\b(?:pas de la ville|pas la ville|not the city)\b/.test(combined);
+  const hasPlaceCue =
+    /\b(?:senegal|s[eé]n[eé]gal|missouri|ville|city|commune|fleuve|river|st louis)\b/.test(combined) &&
+    !explicitlyRejectsCityReading;
   const refersToSaintLouis =
     /\bsaint louis\b/.test(combined) &&
-    !/\b(?:senegal|s[eé]n[eé]gal|missouri|ville|city|commune|fleuve|river|st louis)\b/.test(combined);
+    !hasPlaceCue;
   if (refersToSaintLouis && /\b(?:qui|who|roi|king|histor|biograph|france|personne|person)\b/.test(combined)) {
     return "Louis IX";
   }
