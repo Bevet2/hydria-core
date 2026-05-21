@@ -610,6 +610,7 @@ General answerability gate:
 npm run prod:general-answerability-gate -- --base-url=https://app.hydria.click --timeout-ms=180000
 npm run general:knowledge-reliability-gate
 npm run prod:general-knowledge-reliability-gate -- --base-url=https://app.hydria.click --limit=20 --timeout-ms=180000 --delay-ms=500
+npm run prod:semantic-answer-relevance-gate -- --base-url=https://app.hydria.click --case-ids=science_electric_motor_fr,history_berlin_wall_en --timeout-ms=180000 --delay-ms=500
 ```
 
 This writes:
@@ -635,6 +636,14 @@ storage/training/production-general-knowledge-reliability-gate-v2.json
 ```
 
 This is the production end-to-end version of General Knowledge Reliability v2. It calls the real `/api/chat/message` route and fails a case when a factual/person/history/science answer is not source-backed, lacks the answerability trace, uses only one source family, misses the expected subject, falls back statically, switches language, or trips the conversation quality gate. For OVH CPU runs, use `--limit` and `--offset` to run safe batches; omit `--limit` only for the full 104-case pass.
+
+`prod:semantic-answer-relevance-gate` writes:
+
+```text
+storage/training/production-semantic-answer-relevance-gate-v1.json
+```
+
+This gate validates that a source-backed answer answers the actual intent of the question. It catches cases where Hydria has sources but answers the wrong semantic shape, for example a definition instead of a cause, a nearby topic instead of the requested mechanism, weak subject anchoring, or an answer with poor overlap against verified facts. Use `--case-ids` for targeted checks on OVH, then broaden with `--limit` once the targeted failures are clean.
 
 Chat model warmup:
 

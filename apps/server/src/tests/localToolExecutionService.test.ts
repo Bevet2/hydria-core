@@ -627,6 +627,69 @@ test("local research fact-check tool uses Wikipedia summary for stable biographi
   assert.equal(result?.sources?.length, 2);
 });
 
+test("local research fact-check tool tries exact Wikipedia title before generic search", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    requestedUrls.push(url);
+
+    if (decodeURIComponent(url).includes("fr.wikipedia.org/api/rest_v1/page/summary/Moteur_Electrique")) {
+      return new Response(
+        JSON.stringify({
+          title: "Moteur electrique",
+          description: "Machine electrique",
+          extract:
+            "Un moteur electrique convertit l'energie electrique en energie mecanique par l'action d'un champ magnetique sur un courant.",
+          timestamp: "2026-05-01T12:00:00Z",
+          content_urls: {
+            desktop: {
+              page: "https://fr.wikipedia.org/wiki/Moteur_%C3%A9lectrique"
+            }
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("wikidata.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          search: [
+            {
+              id: "Q7239",
+              label: "Moteur electrique",
+              description: "machine qui convertit l'energie electrique en energie mecanique",
+              concepturi: "https://www.wikidata.org/wiki/Q7239"
+            }
+          ]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("fr.wikipedia.org/w/api.php")) {
+      throw new Error("generic Wikipedia search should not run when exact title summary matches");
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const service = new LocalToolExecutionService();
+  const result = await service.tryExecute(buildFactCheckRouting("moteur electrique"));
+
+  assert.equal(result?.toolType, "research");
+  assert.match(result?.verifiedFacts.join(" "), /champ magnetique|energie mecanique/i);
+  assert.equal(
+    requestedUrls.some((url) => decodeURIComponent(url).includes("api/rest_v1/page/summary/Moteur_Electrique")),
+    true
+  );
+  assert.equal(requestedUrls.some((url) => url.includes("fr.wikipedia.org/w/api.php")), false);
+  assert.equal(result?.sources?.length, 2);
+});
+
 test("local research fact-check tool cleans presentation biography subjects before Wikipedia lookup", async (t) => {
   const originalFetch = globalThis.fetch;
   const requestedUrls: string[] = [];
@@ -697,7 +760,10 @@ test("local research fact-check tool cleans presentation biography subjects befo
   assert.equal(result?.toolType, "research");
   assert.equal(result?.resultLabel, "Louis IX");
   assert.match(result?.verifiedFacts.join(" "), /Saint Louis/);
-  assert.equal(requestedUrls.some((url) => decodeURIComponent(url.replace(/\+/g, " ")).includes("srsearch=Louis IX")), true);
+  assert.equal(
+    requestedUrls.some((url) => decodeURIComponent(url).includes("api/rest_v1/page/summary/Louis_IX")),
+    true
+  );
   assert.equal(result?.sources?.[0]?.retrievalEngine, "known_endpoint");
 });
 

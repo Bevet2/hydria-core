@@ -54,6 +54,7 @@
     "general:knowledge-reliability-gate": "tsx src/scripts/runGeneralKnowledgeReliabilityGate.ts",
     "prod:general-knowledge-reliability-gate": "tsx src/scripts/runProductionGeneralKnowledgeReliabilityGate.ts",
     "prod:source-synthesis-quality-gate": "tsx src/scripts/runProductionSourceSynthesisQualityGate.ts",
+    "prod:semantic-answer-relevance-gate": "tsx src/scripts/runProductionSemanticAnswerRelevanceGate.ts",
     "prod:chat-slo-gate": "tsx src/scripts/runChatRuntimeSloGate.ts",
     "prod:stable-factual-gate": "tsx src/scripts/runStableFactualChatGate.ts",
     "student:chat-prod-gate": "tsx src/scripts/runStudentChatProductionGate.ts",

@@ -5,6 +5,7 @@ import {
   GENERAL_KNOWLEDGE_RELIABILITY_GATE_CASES,
   type GeneralKnowledgeReliabilityCase
 } from "../data/generalKnowledgeReliabilityGatePack.js";
+import { evaluateSourceAnswerRelevance } from "../services/quality/sourceAnswerRelevanceGate.js";
 import type { ResearchSource } from "../types/arena.js";
 
 type Language = "fr" | "en";
@@ -78,6 +79,8 @@ type CaseResult = {
   toolUsed: boolean;
   sourceCount: number;
   sourceFamilies: string[];
+  semanticRelevanceScore: number;
+  semanticIntent: string;
   durationMs: number;
   usedStaticFallback: boolean;
 };
@@ -390,6 +393,22 @@ export function inspectProductionGeneralKnowledgeCase(
     }
   }
 
+  const shouldCheckSemanticRelevance =
+    expected.kind === "source_backed" ||
+    (expected.kind === "tool_first" && expected.toolType === "research" && toolUsed);
+  const semanticRelevance = shouldCheckSemanticRelevance
+    ? evaluateSourceAnswerRelevance({
+        question: testCase.message,
+        subject: term,
+        answer,
+        verifiedFacts: response.tooling?.verifiedFacts ?? [],
+        language
+      })
+    : null;
+  if (semanticRelevance && !semanticRelevance.passed) {
+    issues.push(...semanticRelevance.issues.map((issue) => `semantic_${issue}`));
+  }
+
   return {
     id: testCase.id,
     passed: issues.length === 0,
@@ -407,6 +426,8 @@ export function inspectProductionGeneralKnowledgeCase(
     toolUsed,
     sourceCount: sources.length,
     sourceFamilies: families,
+    semanticRelevanceScore: semanticRelevance?.score ?? 100,
+    semanticIntent: semanticRelevance?.intent ?? "not_evaluated",
     durationMs: response.durationMs ?? 0,
     usedStaticFallback: response.generation?.usedStaticFallback === true
   };
@@ -484,6 +505,8 @@ export async function runProductionGeneralKnowledgeReliabilityGate(args = parseA
         toolUsed: false,
         sourceCount: 0,
         sourceFamilies: [],
+        semanticRelevanceScore: 0,
+        semanticIntent: "request_failed",
         durationMs: 0,
         usedStaticFallback: false
       });
@@ -526,6 +549,9 @@ export async function runProductionGeneralKnowledgeReliabilityGate(args = parseA
     insufficientSourceCount: issueCounts.insufficient_source_count ?? 0,
     insufficientSourceFamilyCount: issueCounts.insufficient_source_families ?? 0,
     sourceSubjectMismatchCount: issueCounts.source_subject_mismatch ?? 0,
+    semanticRelevanceFailureCount: Object.entries(issueCounts)
+      .filter(([issue]) => issue.startsWith("semantic_"))
+      .reduce((total, [, count]) => total + count, 0),
     qualityFailureCount: issueCounts.quality ?? 0,
     avgDurationMs,
     durationMs: Date.now() - startedAt,

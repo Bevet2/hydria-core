@@ -914,8 +914,7 @@ async function searchWikipediaTitle(subject: string, language: string) {
   return search?.query?.search?.[0]?.title?.trim() || subject;
 }
 
-async function fetchWikipediaSummary(subject: string, language: string) {
-  const title = await searchWikipediaTitle(subject, language);
+async function fetchWikipediaSummaryByTitle(title: string, language: string) {
   if (!title) {
     return null;
   }
@@ -934,9 +933,6 @@ async function fetchWikipediaSummary(subject: string, language: string) {
     : null;
   const excerpt = normalizeSpaces(summary.extract);
   const description = summary.description ? normalizeSpaces(summary.description) : null;
-  if (!subjectMatchesText(subject, `${pageTitle} ${description ?? ""} ${excerpt}`)) {
-    return null;
-  }
   return {
     title: pageTitle,
     url: pageUrl,
@@ -944,6 +940,29 @@ async function fetchWikipediaSummary(subject: string, language: string) {
     excerpt,
     timestamp
   };
+}
+
+async function fetchWikipediaSummary(subject: string, language: string) {
+  const exact = await fetchWikipediaSummaryByTitle(subject, language);
+  if (exact && subjectMatchesText(subject, `${exact.title} ${exact.description ?? ""} ${exact.excerpt}`)) {
+    return exact;
+  }
+
+  const title = await searchWikipediaTitle(subject, language);
+  if (!title) {
+    return null;
+  }
+  if (exact && normalizeLooseText(title) === normalizeLooseText(subject)) {
+    return exact;
+  }
+  const summary = await fetchWikipediaSummaryByTitle(title, language);
+  if (!summary) {
+    return null;
+  }
+  if (!subjectMatchesText(subject, `${summary.title} ${summary.description ?? ""} ${summary.excerpt}`)) {
+    return null;
+  }
+  return summary;
 }
 
 function unwrapDuckDuckGoUrl(rawUrl: string) {

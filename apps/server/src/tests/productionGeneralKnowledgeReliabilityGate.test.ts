@@ -192,6 +192,63 @@ test("production general knowledge gate rejects truncated source-backed answers"
   assert.ok(result.issues.includes("broken_answer"));
 });
 
+test("production general knowledge gate rejects semantically off-target source-backed answers", () => {
+  const testCase: GeneralKnowledgeReliabilityCase = {
+    id: "history_berlin_wall_en",
+    message: "Why did the Berlin Wall fall?",
+    category: "other",
+    expected: {
+      kind: "source_backed",
+      term: "Berlin Wall"
+    }
+  };
+
+  const result = inspectProductionGeneralKnowledgeCase(testCase, {
+    assistantMessage: {
+      content:
+        "The Berlin Wall was a guarded concrete barrier that separated West Berlin from East Berlin during the Cold War."
+    },
+    evidenceCapsule: {
+      answerabilityMode: "source_backed",
+      missingEvidence: [],
+      sourceBound: true
+    },
+    generation: {
+      provider: "ollama",
+      model: "qwen2.5:14b",
+      usedStaticFallback: false
+    },
+    conversationQuality: {
+      passed: true,
+      issues: []
+    },
+    tooling: {
+      used: true,
+      route: "used",
+      verifiedFacts: [
+        "Berlin Wall: The Berlin Wall fell after East German political pressure, mass protests, reforms, and the opening of border crossings."
+      ],
+      routing: {
+        toolType: "research",
+        intent: "fact_check",
+        toolRequired: true,
+        toolResultUsed: true
+      },
+      sources: [
+        researchSource("https://en.wikipedia.org/wiki/Berlin_Wall", "Berlin Wall", "The Berlin Wall fell in 1989."),
+        researchSource("https://www.wikidata.org/wiki/Q5086", "Berlin Wall", "barrier around West Berlin")
+      ]
+    },
+    orchestrationTrace: {
+      steps: [{ id: "answerability", status: "passed", summary: "source_backed" }]
+    }
+  });
+
+  assert.equal(result.passed, false);
+  assert.ok(result.issues.includes("semantic_missing_causal_answer"));
+  assert.ok(result.issues.includes("semantic_definition_instead_of_cause"));
+});
+
 test("production general knowledge gate rejects ambiguous Cleopatra opera sources", () => {
   const testCase: GeneralKnowledgeReliabilityCase = {
     id: "bio_cleopatra_fr",

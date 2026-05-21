@@ -445,6 +445,54 @@ test("chat runtime repairs source-backed mechanism questions that only answer ex
   assert.equal(response.conversationQuality.passed, true);
 });
 
+test("chat runtime repairs source-backed electric motor answers that describe hybrid vehicles", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult(
+          "Une automobile hybride combine un moteur thermique et un moteur electrique pour reduire la consommation."
+        );
+      }
+    },
+    undefined,
+    buildFactCheckToolResult(
+      "Moteur electrique: Un moteur electrique convertit l'energie electrique en energie mecanique par l'action d'un champ magnetique sur un courant, ce qui produit une rotation."
+    )
+  );
+
+  const response = await service.sendMessage({ message: "Comment fonctionne un moteur electrique ?" });
+
+  assert.match(response.answer.answer, /moteur electrique/i);
+  assert.match(response.answer.answer, /champ magnetique|courant|rotation|energie mecanique/i);
+  assert.doesNotMatch(response.answer.answer, /automobile hybride|moteur thermique/i);
+  assert.equal(response.usedRetry, true);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
+test("chat runtime repairs source-backed why questions that only define the subject", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult(
+          "The Berlin Wall was a guarded concrete barrier that separated West Berlin from East Berlin during the Cold War."
+        );
+      }
+    },
+    undefined,
+    buildFactCheckToolResult(
+      "Berlin Wall: The Berlin Wall fell because East German political pressure, mass protests, reforms, and the opening of border crossings made the barrier impossible to maintain."
+    )
+  );
+
+  const response = await service.sendMessage({ message: "Why did the Berlin Wall fall?" });
+
+  assert.match(response.answer.answer, /Berlin Wall/i);
+  assert.match(response.answer.answer, /because|pressure|protests|reforms|opening/i);
+  assert.doesNotMatch(response.answer.answer, /guarded concrete barrier/i);
+  assert.equal(response.usedRetry, true);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
 test("chat runtime avoids copied question snippets when repairing source-backed science answers", async () => {
   const service = new ChatRuntimeService(
     {

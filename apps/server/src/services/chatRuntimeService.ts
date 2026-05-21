@@ -51,6 +51,10 @@ import {
   normalizeOrdinalAliases,
   rewriteGeneralKnowledgeQuery
 } from "./research/generalKnowledgeQueryRewriter.js";
+import {
+  evaluateSourceAnswerRelevance,
+  type SourceAnswerIntent
+} from "./quality/sourceAnswerRelevanceGate.js";
 import { evaluateSourceSynthesisQuality } from "./quality/sourceSynthesisQualityGate.js";
 
 type ChatRuntimeSession = {
@@ -1481,6 +1485,215 @@ function answersMechanism(value: string) {
   return /\b(?:fonctionne|fonctionnement|grace|parce|cause|provoque|mecanisme|explique|expliquee|due|depend|liee|attire|works|because|causes?|mechanism|due|depends|explains?)\b/i.test(
     normalizeText(value)
   );
+}
+
+function semanticIntentCueHits(value: string, intent: SourceAnswerIntent) {
+  const normalized = normalizeText(value);
+  if (intent === "cause") {
+    return (
+      normalized.match(
+        /\b(?:because|cause|caused|causes|due|fell|led|opened|ouverture|parce|political|politique|pressure|pression|protests|provoque|reforms|reformes|reason|explique)\b/g
+      ) ?? []
+    ).length;
+  }
+  if (intent === "mechanism") {
+    return (
+      normalized.match(
+        /\b(?:action|champ|convertit|converts|courant|current|electric|electrique|energy|energie|field|fonctionne|fonctionnement|force|forme|forms|grace|magnetic|magnetique|mecanique|mecanisme|produces|provoque|refraction|rotation|through|works)\b/g
+      ) ?? []
+    ).length;
+  }
+  if (intent === "biography") {
+    return (
+      normalized.match(/\b(?:born|career|died|etait|known|mort|morte|naissance|ne|nee|regne|scientist|writer)\b/g) ??
+      []
+    ).length;
+  }
+  return 0;
+}
+
+function semanticSourceSentenceScore(args: {
+  sentence: string;
+  intent: SourceAnswerIntent;
+  subjectTerms: Set<string>;
+  language: ConversationState["language"];
+}) {
+  const normalized = normalizeText(args.sentence);
+  const subjectHits = [...args.subjectTerms].filter((term) => normalized.includes(term)).length;
+  const cueHits = semanticIntentCueHits(args.sentence, args.intent);
+  const concreteTermCount = extractTerms(args.sentence, 24).filter((term) => !args.subjectTerms.has(term)).length;
+  return (
+    subjectHits * 22 +
+    cueHits * 18 +
+    sourceFactLanguageScore(args.sentence, args.language) * 3 +
+    Math.min(concreteTermCount, 8) -
+    sourceFactQualityPenalty(args.sentence, args.language)
+  );
+}
+
+function semanticRepairPrefix(intent: SourceAnswerIntent, language: ConversationState["language"]) {
+  if (language === "en") {
+    if (intent === "cause") {
+      return "The main reason:";
+    }
+    if (intent === "mechanism") {
+      return "The mechanism:";
+    }
+    if (intent === "biography") {
+      return "In short:";
+    }
+    return "";
+  }
+  if (intent === "cause") {
+    return "La cause principale :";
+  }
+  if (intent === "mechanism") {
+    return "Le mecanisme :";
+  }
+  if (intent === "biography") {
+    return "En bref :";
+  }
+  return "";
+}
+
+function buildSemanticSourceSynthesis(args: {
+  tooling: ChatToolMetadata;
+  language: ConversationState["language"];
+  userMessage: string;
+  intent: SourceAnswerIntent;
+}) {
+  const subject =
+    typeof args.tooling.routing.extractedArgs?.subject === "string"
+      ? args.tooling.routing.extractedArgs.subject
+      : "";
+  const factLabel =
+    args.tooling.verifiedFacts.map((fact) => fact.match(/^([^:]{2,90}):\s*/)?.[1]?.trim() ?? "").find(Boolean) ??
+    "";
+  const subjectTerms = new Set([
+    ...extractSourceSubjectTerms(subject, 10),
+    ...extractSourceSubjectTerms(factLabel, 10),
+    ...extractSourceSubjectTerms(args.userMessage, 10)
+  ]);
+  const facts = args.tooling.verifiedFacts
+    .map((fact) => fact.replace(/\s+/g, " ").trim())
+    .filter((fact) => fact.length >= 30);
+  const sentences = uniqueFactualSentences(
+    facts.flatMap((fact) => {
+      const withoutLabel = fact.replace(/^[^:]{2,90}:\s*/, "").trim();
+      return splitFactualSentences(withoutLabel).concat(sourceFragmentItems(fact));
+    })
+  )
+    .filter((sentence) => countWords(sentence) >= 6)
+    .filter((sentence) => !isLikelyTruncatedAnswer(sentence))
+    .sort(
+      (left, right) =>
+        semanticSourceSentenceScore({
+          sentence: right,
+          intent: args.intent,
+          subjectTerms,
+          language: args.language
+        }) -
+        semanticSourceSentenceScore({
+          sentence: left,
+          intent: args.intent,
+          subjectTerms,
+          language: args.language
+        })
+    );
+
+  const selected = sentences.slice(0, args.intent === "definition" ? 2 : 3);
+  if (selected.length === 0) {
+    return "";
+  }
+
+  const prefix = semanticRepairPrefix(args.intent, args.language);
+  const subjectLabel = factLabel || subject.trim();
+  let repaired = [prefix, ...selected].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+  if (subjectLabel && !answerMentionsAnyTerm(repaired, extractSourceSubjectTerms(subjectLabel, 8))) {
+    repaired = `${subjectLabel}: ${repaired}`;
+  }
+  return compactToCompleteSentence(repaired, 420);
+}
+
+function buildSourceAnswerRelevanceRepair(args: {
+  answer: StudentAnswer;
+  tooling: ChatToolMetadata;
+  language: ConversationState["language"];
+  userMessage: string;
+}): StudentAnswer | null {
+  if (
+    !args.tooling.used ||
+    args.tooling.routing.toolType !== "research" ||
+    args.tooling.routing.intent !== "fact_check"
+  ) {
+    return null;
+  }
+
+  const subject =
+    typeof args.tooling.routing.extractedArgs?.subject === "string"
+      ? args.tooling.routing.extractedArgs.subject
+      : "";
+  const currentRelevance = evaluateSourceAnswerRelevance({
+    question: args.userMessage,
+    subject,
+    answer: args.answer.answer,
+    verifiedFacts: args.tooling.verifiedFacts,
+    language: args.language
+  });
+  if (currentRelevance.passed) {
+    return null;
+  }
+
+  const synthesized = buildSemanticSourceSynthesis({
+    tooling: args.tooling,
+    language: args.language,
+    userMessage: args.userMessage,
+    intent: currentRelevance.intent
+  });
+  const fallback =
+    buildSourceBackedFactualRepair({
+      answer: args.answer,
+      tooling: args.tooling,
+      language: args.language,
+      force: true
+    })?.answer ?? "";
+  const candidates = [synthesized, fallback].filter(Boolean);
+
+  let best: { answer: string; score: number; passed: boolean } | null = null;
+  for (const candidate of candidates) {
+    const quality = evaluateSourceSynthesisQuality({
+      answer: candidate,
+      language: args.language,
+      sourceBacked: true
+    });
+    if (!quality.passed) {
+      continue;
+    }
+    const relevance = evaluateSourceAnswerRelevance({
+      question: args.userMessage,
+      subject,
+      answer: candidate,
+      verifiedFacts: args.tooling.verifiedFacts,
+      language: args.language
+    });
+    if (!best || relevance.score > best.score || (relevance.passed && !best.passed)) {
+      best = { answer: candidate, score: relevance.score, passed: relevance.passed };
+    }
+    if (relevance.passed) {
+      break;
+    }
+  }
+
+  if (!best || best.score <= currentRelevance.score) {
+    return null;
+  }
+
+  return {
+    ...args.answer,
+    answer: best.answer,
+    key_points: [...args.answer.key_points, "Source answer relevance repair"].slice(0, 6),
+    confidence: Math.max(args.answer.confidence, best.passed ? 88 : 84)
+  };
 }
 
 function buildSourceBackedMechanismRepair(args: {
@@ -3794,6 +4007,30 @@ export class ChatRuntimeService {
     });
     if (sourceSynthesisQualityRepair) {
       finalAnswer = sourceSynthesisQualityRepair;
+      conversationQuality = this.analyzeQuality({
+        runtimeMode,
+        conversationState,
+        activeConstraintCapsule,
+        answerPolicy,
+        newUserMessage: args.message,
+        answer: finalAnswer.answer,
+        lastAssistantAnswer: session.lastAssistantAnswer,
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
+      });
+      usedRetry = true;
+    }
+
+    const sourceAnswerRelevanceRepair = hasSourceBackedFactCheck
+      ? buildSourceAnswerRelevanceRepair({
+          answer: finalAnswer,
+          tooling,
+          language: conversationState.language,
+          userMessage: args.message
+        })
+      : null;
+    if (sourceAnswerRelevanceRepair && sourceAnswerRelevanceRepair.answer !== finalAnswer.answer) {
+      finalAnswer = sourceAnswerRelevanceRepair;
       conversationQuality = this.analyzeQuality({
         runtimeMode,
         conversationState,

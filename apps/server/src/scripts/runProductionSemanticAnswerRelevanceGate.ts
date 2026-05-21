@@ -2,11 +2,10 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { GeneralKnowledgeReliabilityCase } from "../data/generalKnowledgeReliabilityGatePack.js";
-import { evaluateSourceAnswerRelevance } from "../services/quality/sourceAnswerRelevanceGate.js";
 import {
-  evaluateSourceSynthesisQuality,
-  type SourceSynthesisLanguage
-} from "../services/quality/sourceSynthesisQualityGate.js";
+  evaluateSourceAnswerRelevance,
+  type SourceAnswerLanguage
+} from "../services/quality/sourceAnswerRelevanceGate.js";
 import type { ResearchSource } from "../types/arena.js";
 import {
   normalizeGateText,
@@ -29,7 +28,6 @@ type ChatResponse = {
   durationMs?: number;
   assistantMessage?: { content?: string };
   answer?: { answer?: string };
-  conversationQuality?: { passed?: boolean; issues?: string[] };
   evidenceCapsule?: {
     answerabilityMode?: string;
     sourceBound?: boolean;
@@ -55,16 +53,14 @@ type CaseResult = {
   passed: boolean;
   issues: string[];
   message: string;
-  expectedLanguage: SourceSynthesisLanguage;
+  expectedLanguage: SourceAnswerLanguage;
   answer: string;
-  answerabilityMode: string;
   provider: string;
   model: string;
   sourceCount: number;
   sourceFamilies: string[];
-  qualityScore: number;
-  semanticRelevanceScore: number;
   semanticIntent: string;
+  semanticRelevanceScore: number;
   durationMs: number;
 };
 
@@ -74,7 +70,7 @@ const defaultOutput = resolve(
   projectRoot,
   "storage",
   "training",
-  "production-source-synthesis-quality-gate-v1.json"
+  "production-semantic-answer-relevance-gate-v1.json"
 );
 
 function readOption(argv: string[], name: string) {
@@ -131,7 +127,7 @@ function parseArgs(argv = process.argv.slice(2)): Args {
   };
 }
 
-function expectedLanguage(testCase: GeneralKnowledgeReliabilityCase): SourceSynthesisLanguage {
+function expectedLanguage(testCase: GeneralKnowledgeReliabilityCase): SourceAnswerLanguage {
   const id = testCase.id.toLowerCase();
   if (id.endsWith("_en") || id.includes("_en_")) {
     return "en";
@@ -185,36 +181,26 @@ function countBy(values: string[]) {
 
 function inspectCase(testCase: GeneralKnowledgeReliabilityCase, response: ChatResponse): CaseResult {
   const answer = answerText(response);
-  const language = expectedLanguage(testCase);
-  const quality = evaluateSourceSynthesisQuality({
-    answer,
-    language,
-    sourceBacked: true
-  });
   const sources = response.tooling?.sources ?? [];
-  const issues = [...quality.issues];
-  const semanticRelevance = evaluateSourceAnswerRelevance({
+  const expected = testCase.expected;
+  const language = expectedLanguage(testCase);
+  const relevance = evaluateSourceAnswerRelevance({
     question: testCase.message,
-    subject: testCase.expected.term,
+    subject: expected.term,
     answer,
     verifiedFacts: response.tooling?.verifiedFacts ?? [],
     language
   });
-  if (!semanticRelevance.passed) {
-    issues.push(...semanticRelevance.issues.map((issue) => `semantic_${issue}`));
-  }
+  const issues = relevance.issues.map((issue) => `semantic_${issue}`);
 
   if (response.evidenceCapsule?.answerabilityMode !== "source_backed") {
     issues.push(`answerability_mode:${response.evidenceCapsule?.answerabilityMode ?? "missing"}`);
   }
-  if (response.evidenceCapsule?.sourceBound !== true) {
-    issues.push("source_not_bound");
-  }
   if (response.tooling?.used !== true || response.tooling.routing?.toolType !== "research") {
     issues.push(`research_not_used:${response.tooling?.routing?.toolType ?? "none"}`);
   }
-  if (response.conversationQuality?.passed === false) {
-    issues.push(`runtime_quality:${response.conversationQuality.issues?.join("|") ?? "failed"}`);
+  if (response.evidenceCapsule?.sourceBound !== true) {
+    issues.push("source_not_bound");
   }
   if (response.generation?.usedStaticFallback) {
     issues.push("static_fallback");
@@ -227,26 +213,27 @@ function inspectCase(testCase: GeneralKnowledgeReliabilityCase, response: ChatRe
     message: testCase.message,
     expectedLanguage: language,
     answer,
-    answerabilityMode: response.evidenceCapsule?.answerabilityMode ?? "missing",
     provider: response.generation?.provider ?? "unknown",
     model: response.generation?.model ?? "unknown",
     sourceCount: sources.length,
     sourceFamilies: [...new Set(sources.map(sourceFamily))],
-    qualityScore: quality.score,
-    semanticRelevanceScore: semanticRelevance.score,
-    semanticIntent: semanticRelevance.intent,
+    semanticIntent: relevance.intent,
+    semanticRelevanceScore: relevance.score,
     durationMs: response.durationMs ?? 0
   };
 }
 
-function sourceBackedCases(args: Args) {
-  const selected = selectProductionGeneralKnowledgeCases(args);
-  return selected.filter((testCase) => testCase.expected.kind === "source_backed");
+function semanticCases(args: Args) {
+  return selectProductionGeneralKnowledgeCases(args).filter(
+    (testCase) =>
+      testCase.expected.kind === "source_backed" ||
+      (testCase.expected.kind === "tool_first" && testCase.expected.toolType === "research")
+  );
 }
 
-export async function runProductionSourceSynthesisQualityGate(args = parseArgs()) {
+export async function runProductionSemanticAnswerRelevanceGate(args = parseArgs()) {
   const startedAt = Date.now();
-  const selectedCases = sourceBackedCases(args);
+  const selectedCases = semanticCases(args);
   const results: CaseResult[] = [];
 
   for (const [index, testCase] of selectedCases.entries()) {
@@ -267,14 +254,12 @@ export async function runProductionSourceSynthesisQualityGate(args = parseArgs()
         message: testCase.message,
         expectedLanguage: expectedLanguage(testCase),
         answer: "",
-        answerabilityMode: "request_failed",
         provider: "request_failed",
         model: "request_failed",
         sourceCount: 0,
         sourceFamilies: [],
-        qualityScore: 0,
-        semanticRelevanceScore: 0,
         semanticIntent: "request_failed",
+        semanticRelevanceScore: 0,
         durationMs: 0
       });
     }
@@ -286,17 +271,19 @@ export async function runProductionSourceSynthesisQualityGate(args = parseArgs()
   const passed = results.filter((result) => result.passed).length;
   const failed = results.length - passed;
   const issueCounts = countBy(results.flatMap((result) => result.issues.map((issue) => issue.split(":")[0] ?? issue)));
-  const avgQualityScore =
+  const avgSemanticRelevanceScore =
     results.length === 0
       ? 0
-      : Number((results.reduce((total, result) => total + result.qualityScore, 0) / results.length).toFixed(1));
+      : Number(
+          (results.reduce((total, result) => total + result.semanticRelevanceScore, 0) / results.length).toFixed(1)
+        );
   const avgDurationMs =
     results.length === 0
       ? 0
       : Math.round(results.reduce((total, result) => total + result.durationMs, 0) / results.length);
 
   const report = {
-    version: "production-source-synthesis-quality-gate-v1",
+    version: "production-semantic-answer-relevance-gate-v1",
     createdAt: new Date().toISOString(),
     baseUrl: args.baseUrl,
     caseCount: selectedCases.length,
@@ -304,18 +291,12 @@ export async function runProductionSourceSynthesisQualityGate(args = parseArgs()
     passed,
     failed,
     passRate: rate(passed, results.length),
-    avgQualityScore,
-    repeatedSourceSentenceCount: issueCounts.repeated_source_sentence ?? 0,
-    brokenSynthesisCount: issueCounts.broken_or_truncated_synthesis ?? 0,
-    questionLabelArtifactCount: issueCounts.question_label_artifact ?? 0,
-    sourceArtifactCount: issueCounts.source_artifact ?? 0,
-    awkwardLexicalArtifactCount: issueCounts.awkward_lexical_artifact ?? 0,
-    languageDriftCount: issueCounts.language_drift ?? 0,
-    semanticRelevanceFailureCount: Object.entries(issueCounts)
-      .filter(([issue]) => issue.startsWith("semantic_"))
-      .reduce((total, [, count]) => total + count, 0),
-    runtimeQualityFailureCount: issueCounts.runtime_quality ?? 0,
-    staticFallbackCount: issueCounts.static_fallback ?? 0,
+    avgSemanticRelevanceScore,
+    subjectNotAnsweredCount: issueCounts.semantic_subject_not_answered ?? 0,
+    missingCausalAnswerCount: issueCounts.semantic_missing_causal_answer ?? 0,
+    missingMechanismAnswerCount: issueCounts.semantic_missing_mechanism_answer ?? 0,
+    offTopicHybridVehicleCount: issueCounts.semantic_off_topic_hybrid_vehicle ?? 0,
+    definitionInsteadOfCauseCount: issueCounts.semantic_definition_instead_of_cause ?? 0,
     avgDurationMs,
     durationMs: Date.now() - startedAt,
     issueCounts,
@@ -343,8 +324,9 @@ export async function runProductionSourceSynthesisQualityGate(args = parseArgs()
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === currentFilePath) {
-  runProductionSourceSynthesisQualityGate().catch((error) => {
+  runProductionSemanticAnswerRelevanceGate().catch((error) => {
     console.error(error);
     process.exitCode = 1;
   });
 }
+
