@@ -270,11 +270,13 @@ function extractEntitySubject(question: string) {
   const stripped = normalizeSpace(
     question
       .replace(/[?]/g, " ")
-      .replace(/\b(?:who is|what is|what are|show me|find|lookup|look up|tell me|give me|make me|explain|define|definition|qui est|quel est|quelle est|quels sont|quelles sont|qu'est[- ]ce que|quest ce que|c'est quoi|c est quoi|c'est qui|c est qui|c'etait qui|c etait qui|ce qu'est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi, " ")
+      .replace(/\b(?:r[e\u00e9]ponds?|answer|respond)\s+(?:en|in)\s+(?:fran[c\u00e7]ais|french|anglais|english)\b.*$/gi, " ")
+      .replace(/\b(?:avec|with)\s+(?:des\s+)?(?:sources?|citations?)\b.*$/gi, " ")
+      .replace(/\b(?:who is|who was|who|was|why|important|what is|what are|what was|what|causes?|show me|find|lookup|look up|tell me|give me|make me|explain|define|definition|verify|reliable|sources?|citations?|qui est|qui etait|qui \u00e9tait|quel est|quelle est|quels sont|quelles sont|qu'est[- ]ce que|quest ce que|c'est quoi|c est quoi|c'est qui|c est qui|c'etait qui|c etait qui|ce qu'est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi, " ")
       .replace(/\b(?:simply|simplement)\b/gi, " ")
       .replace(/\b(?:complete|compl(?:e|\u00e8)te|complet|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9)|diaporama|slides?)\b/gi, " ")
       .replace(/\b(?:current|currently|actuel|actuelle|latest|official|github|repository|repo|website|site|ceo|president|pr(?:e|\u00e9)sident|version|release|announcements?|docs?|documentation)\b/gi, " ")
-      .replace(/\b(?:roi|reine|king|queen|empereur|emperor|pape|pope|pour|for|ce|que|de|du|des|d'|of|the|le|la|les|un|une)\b/gi, " ")
+      .replace(/\b(?:roi|reine|king|queen|empereur|emperor|pape|pope|pour|for|with|ce|que|de|du|des|d'|of|the|le|la|les|un|une)\b/gi, " ")
   );
 
   const normalized = rewriteGeneralKnowledgeQuery({
@@ -288,6 +290,8 @@ function extractEntitySubject(question: string) {
 function cleanFactualLookupSubject(question: string) {
   const cleaned = normalizeSpace(
     extractEntitySubject(question)
+      .replace(/\b(?:r[e\u00e9]ponds?|answer|respond)\s+(?:en|in)\s+(?:fran[c\u00e7]ais|french|anglais|english)\b.*$/gi, " ")
+      .replace(/\b(?:avec|with)\s+(?:des\s+)?(?:sources?|citations?)\b.*$/gi, " ")
       .replace(/\b(?:biographie|biography|histoire|story|known for|connu(?:e)? pour|fact[-\s]?check|verify|verifie|v(?:e|\u00e9)rifie|source|sources|cite|citation|cherche(?:r)? sur internet|recherche web|complete|compl(?:e|\u00e8)te|complet|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9))\b/gi, " ")
       .replace(/\b(?:sa|son|his|her|their|roi|reine|king|queen|empereur|emperor|pape|pope|de|du|des|d'|of|about|sur)\b/gi, " ")
       .replace(/[?.!,]+$/g, " ")

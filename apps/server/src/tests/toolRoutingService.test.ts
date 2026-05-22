@@ -232,7 +232,19 @@ test("tool router routes explicit source requests to source-backed research", ()
   assert.equal(decision.toolType, "research");
   assert.equal(decision.intent, "fact_check");
   assert.equal(decision.fallbackAllowed, false);
+  assert.equal(decision.extractedArgs.subject, "Ada Lovelace");
   assert.equal(decision.extractedArgs.language, "en");
+
+  const frenchDecision = service.route({
+    question: "Qui etait Ada Lovelace ? Reponds en francais avec sources.",
+    category: "other"
+  });
+
+  assert.equal(frenchDecision.toolRequired, true);
+  assert.equal(frenchDecision.toolType, "research");
+  assert.equal(frenchDecision.intent, "fact_check");
+  assert.equal(frenchDecision.extractedArgs.subject, "Ada Lovelace");
+  assert.equal(frenchDecision.extractedArgs.language, "fr");
 });
 
 test("tool router marks GitHub repo lookup as required repo tool use", () => {

@@ -688,6 +688,8 @@ function extractAnswerabilityResearchSubject(question: string) {
   const cleaned = question
     .replace(/['’]/g, " ")
     .replace(/[?]/g, " ")
+    .replace(/\b(?:r[e\u00e9]ponds?|answer|respond)\s+(?:en|in)\s+(?:fran[c\u00e7]ais|french|anglais|english)\b.*$/gi, " ")
+    .replace(/\b(?:avec|with)\s+(?:des\s+)?(?:sources?|citations?)\b.*$/gi, " ")
     .replace(
       /\b(?:who is|who was|what is|what are|tell me about|explain|define|definition|history of|biography of|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce que|quest ce que|c[' ]?est quoi|explique(?: moi)?|raconte(?:\s+l\s+histoire\s+de)?|raconte|biographie(?: de)?|histoire(?: de)?|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition)\b/gi,
       " "

@@ -58,9 +58,9 @@ const NUMBER_WORDS: Record<string, number> = {
 const COUNTRY_SUFFIX_PATTERN =
   /\b(?:france|angleterre|england|spain|espagne|italie|italy|germany|allemagne|portugal|russie|russia)\b$/i;
 const SUBJECT_STOPWORD_PATTERN =
-  /\b(?:roi|reine|king|queen|empereur|emperor|pape|pope|pharaon|pharaoh|prince|princesse|pour|for|de|du|des|d|l|of|about|sur|the|le|la|les|un|une|a|an|son|sa|ses|his|her|their|its)\b/gi;
+  /\b(?:roi|reine|king|queen|empereur|emperor|pape|pope|pharaon|pharaoh|prince|princesse|pour|for|de|du|des|d|l|of|about|sur|the|le|la|les|un|une|a|an|son|sa|ses|his|her|their|its|reponds|r[eé]ponds|answer|respond|francais|fran[cç]ais|french|anglais|english|source|sources|citation|citations)\b/gi;
 const MATCH_STOPWORD_PATTERN =
-  /\b(?:roi|king|reine|queen|empereur|emperor|pape|pope|saint|sainte|de|du|des|d|of|the|le|la|les|france|french|english|anglais|francais|francaise|biographie|biography|history|histoire|definition|explain|explique)\b/g;
+  /\b(?:roi|king|reine|queen|empereur|emperor|pape|pope|saint|sainte|de|du|des|d|of|the|le|la|les|france|french|english|anglais|francais|francaise|biographie|biography|history|histoire|definition|explain|explique|reponds|responds|answer|source|sources|citation|citations)\b/g;
 const DASH_PATTERN = /[\u2010-\u2015-]+/g;
 const COMMON_ALIAS_CANONICALS: Record<string, string> = {
   adn: "DNA",

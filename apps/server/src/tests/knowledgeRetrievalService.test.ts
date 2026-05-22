@@ -302,6 +302,46 @@ test("chat runtime answers from governed knowledge when local model falls back",
   }
 });
 
+test("knowledge retrieval does not match entity names by unsafe substrings", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "hydria-knowledge-retrieval-substring-"));
+  try {
+    const store = new KnowledgeObjectStore(
+      join(tempRoot, "knowledge-objects.json"),
+      join(tempRoot, "vault")
+    );
+    await store.save([
+      buildKnowledgeObject({
+        objectId: "ko::source-acquisition::douglas-adams",
+        title: "Douglas Adams",
+        category: "other",
+        content:
+          "Douglas Adams was an English writer and humourist, known for The Hitchhiker's Guide to the Galaxy.",
+        summary: "Douglas Adams was an English writer and humourist.",
+        tags: ["source-acquisition", "wikipedia", "biography"],
+        sources: [
+          {
+            sourceType: "source_acquisition",
+            sourceId: "source-item::douglas-adams",
+            sourceUri: "https://en.wikipedia.org/api/rest_v1/page/summary/Douglas_Adams",
+            evidenceRecordIds: []
+          }
+        ]
+      })
+    ]);
+    const service = new KnowledgeRetrievalService({ knowledgeObjectStore: store });
+
+    const result = await service.retrieve({
+      query: "Qui etait Ada Lovelace ? Reponds en francais avec sources.",
+      category: "other"
+    });
+
+    assert.equal(result.route, "no_match");
+    assert.equal(result.used, false);
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test("knowledge retrieval allows validated runtime chat knowledge", async () => {
   const tempRoot = await mkdtemp(join(tmpdir(), "hydria-knowledge-retrieval-chat-"));
   try {

@@ -41,6 +41,9 @@ const STOPWORDS = new Set([
   "explain",
   "explique",
   "fait",
+  "francais",
+  "francaise",
+  "french",
   "give",
   "how",
   "les",
@@ -56,7 +59,11 @@ const STOPWORDS = new Set([
   "recent",
   "recente",
   "recentes",
+  "reponds",
+  "responds",
   "semaine",
+  "source",
+  "sources",
   "sorties",
   "sont",
   "sur",
@@ -140,7 +147,8 @@ function termVariants(term: string) {
 }
 
 function textContainsTerm(text: string, term: string) {
-  return termVariants(term).some((variant) => text.includes(variant));
+  const tokens = new Set(text.split(/[^a-z0-9]+/).filter(Boolean));
+  return termVariants(term).some((variant) => tokens.has(variant));
 }
 
 function queryTerms(query: string) {
