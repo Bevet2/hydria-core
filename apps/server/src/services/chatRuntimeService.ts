@@ -1401,7 +1401,7 @@ function buildSourceBackedFactualRepair(args: {
   const subjectPrefix =
     subjectIsUnderspecified && preferredSubjectPrefix.trim().length > 0 ? `${preferredSubjectPrefix.trim()}:` : "";
   const maxInformativeSentences = args.force && isLikelyTruncatedAnswer(args.answer.answer) ? 1 : 2;
-  const repaired = [
+  let repaired = [
     subjectPrefix,
     shouldKeepModelLead ? args.answer.answer : "",
     ...informativeSentences.slice(0, maxInformativeSentences)
@@ -1410,6 +1410,13 @@ function buildSourceBackedFactualRepair(args: {
     .join(" ")
     .replace(/\s+/g, " ")
     .trim();
+  if (
+    subject.trim() &&
+    subjectTerms.size > 0 &&
+    [...subjectTerms].some((term) => !normalizeText(repaired).includes(term))
+  ) {
+    repaired = `${subject.trim()}: ${repaired}`;
+  }
   if (!repaired || normalizeText(repaired) === normalizedAnswer) {
     return null;
   }
@@ -1593,7 +1600,7 @@ function asksForMechanism(value: string) {
 }
 
 function answersMechanism(value: string) {
-  return /\b(?:fonctionne|fonctionnement|grace|parce|cause|provoque|mecanisme|explique|expliquee|due|depend|liee|attire|works|because|causes?|mechanism|due|depends|explains?)\b/i.test(
+  return /\b(?:fonctionne|fonctionnement|grace|parce|cause|provoque|mecanisme|explique|expliquee|conversion|convertit|electromagnetisme|electromagnetic|energie mecanique|due|depend|liee|attire|works|because|causes?|mechanism|due|depends|explains?|converts?)\b/i.test(
     normalizeText(value)
   );
 }
