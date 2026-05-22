@@ -16,6 +16,7 @@ export type RuntimeKnowledgeIntakeInput = {
   recordId?: string | null;
   sessionId?: string | null;
   question: string;
+  subject?: string | null;
   answer: string;
   category: QuestionCategory;
   language: "fr" | "en" | "unknown";
@@ -208,7 +209,9 @@ export class KnowledgeRuntimeIntakeService {
         ...sources.map((source) => normalize(source.url))
       ].join("|")
     );
-    const title = compact(input.question.replace(/[?!.]+$/g, ""), 160) || "Runtime sourced answer";
+    const title =
+      compact((input.subject?.trim() || input.question).replace(/[?!.]+$/g, ""), 160) ||
+      "Runtime sourced answer";
     const summary = compact(input.answer, 300);
     const verifiedFacts = (input.verifiedFacts ?? []).slice(0, 5);
     const content = compact(

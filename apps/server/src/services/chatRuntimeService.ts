@@ -4447,6 +4447,10 @@ export class ChatRuntimeService {
       recordId: interactionRecord?.id ?? null,
       sessionId: response.sessionId,
       question: response.userMessage.content,
+      subject:
+        typeof response.tooling.routing.extractedArgs?.subject === "string"
+          ? response.tooling.routing.extractedArgs.subject
+          : null,
       answer: response.assistantMessage.content,
       category: response.category,
       language: response.conversationState.language,

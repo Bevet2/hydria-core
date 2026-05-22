@@ -49,6 +49,7 @@ test("runtime intake captures stable source-backed chat answers as validated kno
       recordId: "interaction-1",
       sessionId: "session-1",
       question: "Qui etait Ada Lovelace ?",
+      subject: "Ada Lovelace",
       answer:
         "Ada Lovelace etait une mathematique anglaise associee aux travaux de Charles Babbage. Elle est souvent citee pour ses notes sur la machine analytique, qui contiennent une description precoce d'un algorithme.",
       category: "other",
@@ -77,6 +78,7 @@ test("runtime intake captures stable source-backed chat answers as validated kno
     const file = await store.load();
     assert.equal(file?.objects.length, 1);
     assert.equal(file?.objects[0]?.state, "validated");
+    assert.equal(file?.objects[0]?.title, "Ada Lovelace");
     assert.equal(file?.objects[0]?.sources[0]?.sourceType, "chat");
     assert.match(file?.objects[0]?.summary ?? "", /Ada Lovelace/);
   });
