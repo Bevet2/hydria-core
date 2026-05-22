@@ -1395,7 +1395,9 @@ function buildSourceBackedFactualRepair(args: {
       args.answer.answer,
       evidenceSubjectTerms.size > 0 ? [...evidenceSubjectTerms] : extractTerms(fact, 4)
     );
-  const preferredSubjectPrefix = factLabel || subject;
+  const normalizedFactLabel = normalizeText(factLabel);
+  const subjectTermsMissingFromFactLabel = [...subjectTerms].some((term) => !normalizedFactLabel.includes(term));
+  const preferredSubjectPrefix = subjectTermsMissingFromFactLabel && subject.trim().length > 0 ? subject : factLabel || subject;
   const subjectPrefix =
     subjectIsUnderspecified && preferredSubjectPrefix.trim().length > 0 ? `${preferredSubjectPrefix.trim()}:` : "";
   const maxInformativeSentences = args.force && isLikelyTruncatedAnswer(args.answer.answer) ? 1 : 2;
@@ -1751,7 +1753,14 @@ function buildSemanticSourceSynthesis(args: {
   const prefix = semanticRepairPrefix(args.intent, args.language);
   const subjectLabel = factLabel || subject.trim();
   let repaired = [prefix, ...selected].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
-  if (subjectLabel && !answerMentionsAnyTerm(repaired, extractSourceSubjectTerms(subjectLabel, 8))) {
+  const explicitSubjectTerms = extractSourceSubjectTerms(subject, 8);
+  if (
+    subject.trim() &&
+    explicitSubjectTerms.length > 0 &&
+    explicitSubjectTerms.some((term) => !normalizeText(repaired).includes(term))
+  ) {
+    repaired = `${subject.trim()}: ${repaired}`;
+  } else if (subjectLabel && !answerMentionsAnyTerm(repaired, extractSourceSubjectTerms(subjectLabel, 8))) {
     repaired = `${subjectLabel}: ${repaired}`;
   }
   return compactToCompleteSentence(repaired, 420);
