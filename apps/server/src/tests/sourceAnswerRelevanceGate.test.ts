@@ -91,6 +91,68 @@ test("source answer relevance accepts electric motor mechanism answers", () => {
   assert.equal(result.intent, "mechanism");
 });
 
+test("source answer relevance rejects shallow electric motor application answers", () => {
+  const result = evaluateSourceAnswerRelevance({
+    question: "Comment fonctionne un moteur electrique ?",
+    subject: "moteur electrique",
+    answer:
+      "Le moteur electrique est au coeur de nombreux systemes mecaniques et peut entrainer une pompe ou un ventilateur.",
+    verifiedFacts: [
+      "Moteur electrique: Un moteur electrique convertit l'energie electrique en energie mecanique par l'action d'un champ magnetique sur un courant."
+    ],
+    language: "fr"
+  });
+
+  assert.equal(result.passed, false);
+  assert.ok(result.issues.includes("missing_electric_motor_mechanism"));
+});
+
+test("source answer relevance rejects shallow Constantinople interpretations", () => {
+  const result = evaluateSourceAnswerRelevance({
+    question: "Explique la chute de Constantinople.",
+    subject: "Constantinople",
+    answer:
+      "La chute de Constantinople est souvent vue comme une transmission du monde grec vers le monde latin, conduisant a la Renaissance.",
+    verifiedFacts: [
+      "Fall of Constantinople: Constantinople was captured by the Ottoman Empire under Sultan Mehmed II on 29 May 1453, ending the Byzantine Empire."
+    ],
+    language: "fr"
+  });
+
+  assert.equal(result.passed, false);
+  assert.ok(result.issues.includes("missing_constantinople_event_core"));
+});
+
+test("source answer relevance rejects thin Marie Antoinette biographies", () => {
+  const result = evaluateSourceAnswerRelevance({
+    question: "Marie Antoinette, c'etait qui ?",
+    subject: "Marie Antoinette",
+    answer: "Marie Antoinette etait une princesse autrichienne nee a Vienne.",
+    verifiedFacts: [
+      "Marie Antoinette: queen of France as the wife of Louis XVI, executed during the French Revolution."
+    ],
+    language: "fr"
+  });
+
+  assert.equal(result.passed, false);
+  assert.ok(result.issues.includes("missing_marie_antoinette_role"));
+});
+
+test("source answer relevance accepts anchored Constantinople event answers", () => {
+  const result = evaluateSourceAnswerRelevance({
+    question: "Explique la chute de Constantinople.",
+    subject: "Constantinople",
+    answer:
+      "La chute de Constantinople correspond a la prise de la capitale byzantine par les Ottomans en 1453, sous le sultan Mehmed II.",
+    verifiedFacts: [
+      "Fall of Constantinople: Constantinople was captured by the Ottoman Empire under Sultan Mehmed II on 29 May 1453, ending the Byzantine Empire."
+    ],
+    language: "fr"
+  });
+
+  assert.equal(result.passed, true);
+});
+
 test("source answer relevance treats used-for questions as purpose, not mechanism", () => {
   const result = evaluateSourceAnswerRelevance({
     question: "What is a telescope used for?",

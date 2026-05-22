@@ -265,6 +265,78 @@ function signalHits(value: string, signals: string[]) {
   });
 }
 
+type TopicConceptRequirement = {
+  issue: string;
+  penalty: string;
+  minGroups: number;
+  groups: string[][];
+  matches: (args: { question: string; subject: string }) => boolean;
+};
+
+const TOPIC_CONCEPT_REQUIREMENTS: TopicConceptRequirement[] = [
+  {
+    issue: "missing_electric_motor_mechanism",
+    penalty: "electric motor explanation must mention the physical mechanism, not only an application",
+    minGroups: 2,
+    groups: [
+      ["courant", "current"],
+      ["champ magnetique", "magnetic field", "magnetic"],
+      ["rotation", "energie mecanique", "mechanical energy", "force", "convertit", "converts"]
+    ],
+    matches: ({ question, subject }) => /\b(?:moteur electrique|electric motor)\b/.test(`${question} ${subject}`)
+  },
+  {
+    issue: "missing_constantinople_event_core",
+    penalty: "fall of Constantinople answer must anchor the event, not only a later interpretation",
+    minGroups: 2,
+    groups: [
+      ["1453", "29 mai", "29 may"],
+      ["ottoman", "ottomans", "turc", "turks", "mehmed", "mehmet", "sultan"],
+      ["byzantin", "byzantine", "empire romain d orient"],
+      ["prise", "capture", "conquete", "conquered", "fall", "fell"]
+    ],
+    matches: ({ question, subject }) =>
+      /\bconstantinople\b/.test(`${question} ${subject}`) && /\b(?:chute|fall|fell)\b/.test(question)
+  },
+  {
+    issue: "missing_marie_antoinette_role",
+    penalty: "Marie Antoinette biography must identify her historical role, not only nationality",
+    minGroups: 2,
+    groups: [
+      ["reine", "queen"],
+      ["france", "french"],
+      ["louis xvi", "louis 16"],
+      ["revolution", "guillotin", "executed"]
+    ],
+    matches: ({ subject }) => /\bmarie antoinette\b/.test(subject)
+  }
+];
+
+function groupHit(normalizedAnswer: string, group: string[]) {
+  return group.some((signal) => {
+    const normalizedSignal = normalizeText(signal);
+    if (!normalizedSignal) {
+      return false;
+    }
+    return normalizedAnswer.includes(normalizedSignal);
+  });
+}
+
+function topicConceptIssues(args: { question: string; subject: string; answer: string }) {
+  const normalizedArgs = {
+    question: normalizeText(args.question),
+    subject: normalizeText(args.subject),
+    answer: normalizeText(args.answer)
+  };
+  return TOPIC_CONCEPT_REQUIREMENTS.filter((requirement) => {
+    if (!requirement.matches(normalizedArgs)) {
+      return false;
+    }
+    const hits = requirement.groups.filter((group) => groupHit(normalizedArgs.answer, group)).length;
+    return hits < requirement.minGroups;
+  });
+}
+
 function subjectTerms(input: SourceAnswerRelevanceInput) {
   const explicitSubject = input.subject?.trim();
   return extractTerms(explicitSubject && explicitSubject.length >= 2 ? explicitSubject : input.question, 8);
@@ -384,6 +456,14 @@ export function evaluateSourceAnswerRelevance(
     signalHits(answer, CAUSE_SIGNALS).length === 0
   ) {
     addIssue(issues, penalties, "definition_instead_of_cause", "answer defines the Berlin Wall instead of explaining why it fell");
+  }
+
+  for (const requirement of topicConceptIssues({
+    question: input.question,
+    subject: input.subject ?? "",
+    answer
+  })) {
+    addIssue(issues, penalties, requirement.issue, requirement.penalty);
   }
 
   if (facts.length > 0 && sourceOverlapScore(answer, facts) < 0.18) {
