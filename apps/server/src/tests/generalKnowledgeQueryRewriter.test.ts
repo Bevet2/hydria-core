@@ -124,7 +124,11 @@ test("general knowledge rewriter normalizes fuzzy aliases and explicit correctio
 
   assert.equal(einstein.canonicalSubject, "Albert Einstein");
   assert.equal(louis.canonicalSubject, "Louis IX");
-  assert.equal(java.canonicalSubject, "Java");
+  assert.equal(java.canonicalSubject, "Java programming language");
+  assert.equal(subjectMatchesText("Java programming language", "Java is one of the Greater Sunda Islands."), false);
+  assert.equal(subjectMatchesText("Java programming language", "Java is a high-level programming language."), true);
+  assert.equal(subjectMatchesText("Mercury planet", "Mercury was a division of Ford Motor Company."), false);
+  assert.equal(subjectMatchesText("Mercury planet", "Mercury is the first planet from the Sun."), true);
 });
 
 test("general knowledge rewriter disambiguates Cleopatra person from title-only works", () => {

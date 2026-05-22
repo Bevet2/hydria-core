@@ -89,6 +89,9 @@ const COMMON_ALIAS_CANONICALS: Record<string, string> = {
   "maire curie": "Marie Curie",
   "napoelon bonaparte": "Napoleon Bonaparte",
   "leonardo da vichi": "Leonardo da Vinci",
+  "java programming language": "Java programming language",
+  "mercury planet": "Mercury planet",
+  "mercury the planet": "Mercury planet",
   "napoleon bonaparte": "Napoleon Bonaparte"
 };
 
@@ -115,7 +118,7 @@ const ADDITIONAL_COMMON_ALIAS_CANONICALS: Record<string, string> = {
   "printing press": "printing press",
   "route de la soie": "Silk Road",
   "space race": "Space Race",
-  "d day": "D-Day",
+  "d day": "Normandy landings",
   "principe vaccination": "vaccination",
   sang: "sang",
   "systeme imunitaire": "systeme immunitaire",
@@ -161,7 +164,9 @@ const ADDITIONAL_SPECIAL_CANDIDATE_ALIASES: Record<string, string[]> = {
   "route de la soie": ["route de la soie", "Silk Road"],
   "silk road": ["Silk Road", "route de la soie"],
   "space race": ["Space Race", "course a l'espace"],
-  "d day": ["D-Day", "Normandy landings"],
+  "java programming language": ["Java (programming language)", "Java programming language", "Java"],
+  "mercury planet": ["Mercury (planet)", "Mercury planet", "Mercury"],
+  "normandy landings": ["Normandy landings", "D-Day"],
   "guerre de cent ans": ["guerre de Cent Ans", "Hundred Years' War"],
   "empire byzantin": ["empire byzantin", "Byzantine Empire"],
   "manhattan project": ["Manhattan Project", "Projet Manhattan"],
@@ -293,13 +298,25 @@ function canonicalAlias(value: string) {
 
 function contextualCanonicalAlias(args: { question: string; subject: string }) {
   const combined = normalizeLooseText(`${args.question} ${args.subject}`);
+  if (/\bpython\b/.test(combined) && /\b(?:langage|language|programming)\b/.test(combined)) {
+    return "Python";
+  }
+  if (/\bjava\b/.test(combined) && /\b(?:langage|language|programming)\b/.test(combined)) {
+    return "Java programming language";
+  }
+  if (/\bmercury\b/.test(combined) && /\bplanet\b/.test(combined)) {
+    return "Mercury planet";
+  }
+  if (/\bcleopatre|cleopatra\b/.test(combined) && /\b(?:opera|person|qui|who)\b/.test(combined)) {
+    return "Cleopatra VII";
+  }
   const correctionMatch = combined.match(
     /\b(?:je voulais dire|je veux|je parle de|i meant|i mean)\s+(.+?)(?:\s+(?:pas|not)\s+|[,.:;]|$)/
   );
   if (correctionMatch?.[1]) {
     const corrected = normalizeSpace(
       stripRoleAndGlue(normalizeOrdinalAliases(correctionMatch[1].replace(DASH_PATTERN, " "))).replace(
-        /\b(?:langage|language|programming|planet|element|serpent|snake|island|ile|opera|ville|city)\b/gi,
+        /\b(?:element|serpent|snake|island|ile|opera|ville|city)\b/gi,
         " "
       )
     );
@@ -311,18 +328,6 @@ function contextualCanonicalAlias(args: { question: string; subject: string }) {
     if (normalizeLooseText(correctedTitle).length >= 2) {
       return correctedTitle;
     }
-  }
-  if (/\bpython\b/.test(combined) && /\b(?:langage|language|programming)\b/.test(combined)) {
-    return "Python";
-  }
-  if (/\bjava\b/.test(combined) && /\b(?:langage|language|programming)\b/.test(combined)) {
-    return "Java";
-  }
-  if (/\bmercury\b/.test(combined) && /\bplanet\b/.test(combined)) {
-    return "Mercury";
-  }
-  if (/\bcleopatre|cleopatra\b/.test(combined) && /\b(?:opera|person|qui|who)\b/.test(combined)) {
-    return "Cleopatra VII";
   }
   const explicitlyRejectsCityReading = /\b(?:pas de la ville|pas la ville|not the city)\b/.test(combined);
   const hasPlaceCue =

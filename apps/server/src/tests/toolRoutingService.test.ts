@@ -208,7 +208,7 @@ test("tool router routes simple history what/why questions to source-backed rese
   const cases = [
     ["Why was the printing press important?", "printing press", "en"],
     ["What was Apollo 11?", "Apollo 11", "en"],
-    ["What was D-Day?", "D-Day", "en"],
+    ["What was D-Day?", "Normandy Landings", "en"],
     ["Raconte la guerre de Cent Ans.", "guerre de Cent Ans", "fr"]
   ] as const;
 
