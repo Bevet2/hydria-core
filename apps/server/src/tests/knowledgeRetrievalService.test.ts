@@ -441,3 +441,52 @@ test("knowledge retrieval blocks candidate runtime chat knowledge", async () => 
     await rm(tempRoot, { recursive: true, force: true });
   }
 });
+
+test("knowledge retrieval blocks runtime chat knowledge polluted by prompt instructions", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "hydria-knowledge-retrieval-chat-leak-"));
+  try {
+    const store = new KnowledgeObjectStore(
+      join(tempRoot, "knowledge-objects.json"),
+      join(tempRoot, "vault")
+    );
+    await store.save([
+      buildKnowledgeObject({
+        objectId: "ko::runtime-intake::chat::prompt-leak",
+        title: "Ada Lovelace",
+        summary:
+          "Ada Lovelace Reponds En Francais Avec: Ada Lovelace was associated with Charles Babbage.",
+        content:
+          "Question: Qui etait Ada Lovelace? Answer: Ada Lovelace Reponds En Francais Avec: Ada Lovelace was associated with Charles Babbage.",
+        tags: ["runtime-intake", "source-backed", "chat"],
+        state: "validated",
+        confidence: 0.88,
+        riskLevel: "low",
+        sources: [
+          {
+            sourceType: "chat",
+            sourceId: "britannica.com:Ada Lovelace",
+            sourceUri: "https://www.britannica.com/biography/Ada-Lovelace",
+            evidenceRecordIds: ["interaction-1"]
+          },
+          {
+            sourceType: "chat",
+            sourceId: "wikipedia.org:Ada Lovelace",
+            sourceUri: "https://en.wikipedia.org/wiki/Ada_Lovelace",
+            evidenceRecordIds: ["interaction-1"]
+          }
+        ]
+      })
+    ]);
+    const service = new KnowledgeRetrievalService({ knowledgeObjectStore: store });
+
+    const result = await service.retrieve({
+      query: "Qui etait Ada Lovelace ?",
+      category: "other"
+    });
+
+    assert.equal(result.route, "no_match");
+    assert.equal(result.used, false);
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});

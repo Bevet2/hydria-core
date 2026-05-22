@@ -56,6 +56,8 @@ const LIVE_OR_UNSTABLE_PATTERN =
 
 const LOW_VALUE_ANSWER_PATTERN =
   /\b(?:i cannot verify|i can(?:not|'t) answer|je ne peux pas v[eé]rifier|je ne peux pas r[eé]pondre|no reliable source|source fiable insuffisante|fallback)\b/i;
+const PROMPT_INSTRUCTION_LEAK_PATTERN =
+  /\b(?:r[eé]ponds?|reponds?|answer|respond)\s+(?:en|in)\s+(?:fran[cç]ais|francais|french|anglais|english)\b.*\b(?:avec|with)?\b/i;
 
 function compact(value: string, maxChars: number) {
   const normalized = value.replace(/\s+/g, " ").trim();
@@ -272,6 +274,9 @@ export class KnowledgeRuntimeIntakeService {
     }
     if (LOW_VALUE_ANSWER_PATTERN.test(input.answer) || input.answer.replace(/\s+/g, " ").trim().length < 80) {
       return "weak_answer";
+    }
+    if (PROMPT_INSTRUCTION_LEAK_PATTERN.test(input.answer)) {
+      return "prompt_instruction_leak";
     }
 
     const sources = reliableSources(input.sources);

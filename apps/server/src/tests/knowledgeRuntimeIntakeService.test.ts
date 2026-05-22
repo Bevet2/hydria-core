@@ -116,6 +116,42 @@ test("runtime intake refuses unsourced or weak chat answers", async () => {
   });
 });
 
+test("runtime intake refuses answers polluted by prompt instructions", async () => {
+  await withStore(async (store) => {
+    const service = new KnowledgeRuntimeIntakeService({
+      knowledgeObjectStore: store,
+      now: () => new Date("2026-05-22T10:00:00.000Z")
+    });
+
+    const result = await service.capture({
+      source: "chat",
+      scope: "chat_turn",
+      question: "Qui etait Ada Lovelace ? Reponds en francais avec sources.",
+      subject: "Ada Lovelace",
+      answer:
+        "Ada Lovelace Reponds En Francais Avec: Ada Lovelace etait une mathematique anglaise associee aux travaux de Charles Babbage et aux notes de la machine analytique.",
+      category: "other",
+      language: "fr",
+      answerabilityMode: "source_backed",
+      sourceBound: true,
+      toolUsed: true,
+      toolType: "research",
+      toolIntent: "fact_check",
+      qualityPassed: true,
+      usedStaticFallback: false,
+      sources: [
+        source("Britannica Ada Lovelace", "https://www.britannica.com/biography/Ada-Lovelace"),
+        source("Wikipedia Ada Lovelace", "https://en.wikipedia.org/wiki/Ada_Lovelace")
+      ]
+    });
+
+    assert.deepEqual(result, {
+      captured: false,
+      reason: "prompt_instruction_leak"
+    });
+  });
+});
+
 test("runtime intake guards current knowledge instead of activating it", async () => {
   await withStore(async (store) => {
     const service = new KnowledgeRuntimeIntakeService({

@@ -103,6 +103,9 @@ const STOPWORDS = new Set([
   "with"
 ]);
 
+const RUNTIME_PROMPT_INSTRUCTION_LEAK_PATTERN =
+  /\b(?:r[eé]ponds?|reponds?|answer|respond)\s+(?:en|in)\s+(?:fran[cç]ais|francais|french|anglais|english)\b/i;
+
 function compact(value: string, maxChars = 320) {
   const normalized = value.replace(/\s+/g, " ").trim();
   if (normalized.length <= maxChars) {
@@ -193,6 +196,10 @@ function isRetrievable(object: KnowledgeObject) {
     source.sourceType === "interaction_learning"
   );
   if (hasRuntimeInteractionSource) {
+    if (RUNTIME_PROMPT_INSTRUCTION_LEAK_PATTERN.test(`${object.summary}\n${object.content}`)) {
+      return false;
+    }
+
     return (
       (object.state === "validated" || object.state === "active") &&
       object.riskLevel === "low" &&
