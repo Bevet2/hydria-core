@@ -1595,12 +1595,26 @@ function semanticSourceSentenceScore(args: {
   intent: SourceAnswerIntent;
   subjectTerms: Set<string>;
   language: ConversationState["language"];
+  question?: string;
+  subject?: string;
+  verifiedFacts?: string[];
 }) {
   const normalized = normalizeText(args.sentence);
   const subjectHits = [...args.subjectTerms].filter((term) => normalized.includes(term)).length;
   const cueHits = semanticIntentCueHits(args.sentence, args.intent);
   const concreteTermCount = extractTerms(args.sentence, 24).filter((term) => !args.subjectTerms.has(term)).length;
+  const relevanceScore =
+    args.question && args.subject
+      ? evaluateSourceAnswerRelevance({
+          question: args.question,
+          subject: args.subject,
+          answer: args.sentence,
+          verifiedFacts: args.verifiedFacts ?? [],
+          language: args.language
+        }).score
+      : 0;
   return (
+    relevanceScore * 2 +
     subjectHits * 22 +
     cueHits * 18 +
     sourceFactLanguageScore(args.sentence, args.language) * 3 +
@@ -1676,13 +1690,19 @@ function buildSemanticSourceSynthesis(args: {
           sentence: right,
           intent: args.intent,
           subjectTerms,
-          language: args.language
+          language: args.language,
+          question: args.userMessage,
+          subject,
+          verifiedFacts: args.tooling.verifiedFacts
         }) -
         semanticSourceSentenceScore({
           sentence: left,
           intent: args.intent,
           subjectTerms,
-          language: args.language
+          language: args.language,
+          question: args.userMessage,
+          subject,
+          verifiedFacts: args.tooling.verifiedFacts
         })
     );
 

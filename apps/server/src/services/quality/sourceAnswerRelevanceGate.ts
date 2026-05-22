@@ -280,7 +280,7 @@ const TOPIC_CONCEPT_REQUIREMENTS: TopicConceptRequirement[] = [
     minGroups: 2,
     groups: [
       ["courant", "current"],
-      ["champ magnetique", "magnetic field", "magnetic"],
+      ["champ magnetique", "magnetic field", "magnetic", "electromagnetisme", "electromagnetic"],
       ["rotation", "energie mecanique", "mechanical energy", "force", "convertit", "converts"]
     ],
     matches: ({ question, subject }) => /\b(?:moteur electrique|electric motor)\b/.test(`${question} ${subject}`)
