@@ -1513,12 +1513,6 @@ function buildFragmentarySourceSynthesisRepair(args: {
     return null;
   }
 
-  const fragments = args.tooling.verifiedFacts.flatMap(sourceFragmentItems);
-  const uniqueFragments = uniqueFactualSentences(fragments).slice(0, 4);
-  if (uniqueFragments.length < 2) {
-    return null;
-  }
-
   const subject =
     typeof args.tooling.routing.extractedArgs?.subject === "string"
       ? args.tooling.routing.extractedArgs.subject
@@ -1527,6 +1521,38 @@ function buildFragmentarySourceSynthesisRepair(args: {
     typeof args.tooling.routing.extractedArgs?.query === "string"
       ? args.tooling.routing.extractedArgs.query
       : "";
+  const subjectTerms = new Set([
+    ...extractSourceSubjectTerms(subject, 10),
+    ...extractSourceSubjectTerms(sourceQuery, 10)
+  ]);
+  const fragments = args.tooling.verifiedFacts.flatMap(sourceFragmentItems);
+  const uniqueFragments = uniqueFactualSentences(fragments)
+    .sort(
+      (left, right) =>
+        semanticSourceSentenceScore({
+          sentence: right,
+          intent: asksForMechanism(`${subject} ${sourceQuery}`) ? "mechanism" : "unknown",
+          subjectTerms,
+          language: args.language,
+          question: sourceQuery || subject,
+          subject,
+          verifiedFacts: args.tooling.verifiedFacts
+        }) -
+        semanticSourceSentenceScore({
+          sentence: left,
+          intent: asksForMechanism(`${subject} ${sourceQuery}`) ? "mechanism" : "unknown",
+          subjectTerms,
+          language: args.language,
+          question: sourceQuery || subject,
+          subject,
+          verifiedFacts: args.tooling.verifiedFacts
+        })
+    )
+    .slice(0, 4);
+  if (uniqueFragments.length < 2) {
+    return null;
+  }
+
   const subjectDisplay = sourceSubjectDisplay(subject, args.language);
   const joined = joinNaturalList(uniqueFragments, args.language);
   const asksMechanism = asksForMechanism(`${subject} ${sourceQuery}`);
@@ -1538,10 +1564,21 @@ function buildFragmentarySourceSynthesisRepair(args: {
       : asksMechanism
         ? `Pour ${subjectDisplay}, le fonctionnement s'explique surtout par ${joined}.`
         : `Pour ${subjectDisplay}, les sources mettent en avant ${joined}.`;
+  const compactedAnswer = compactToCompleteSentence(answer, 300);
+  const relevance = evaluateSourceAnswerRelevance({
+    question: sourceQuery || subject,
+    subject,
+    answer: compactedAnswer,
+    verifiedFacts: args.tooling.verifiedFacts,
+    language: args.language
+  });
+  if (!relevance.passed && relevance.issues.some((issue) => /^missing_|subject_not_answered/.test(issue))) {
+    return null;
+  }
 
   return {
     ...args.answer,
-    answer: compactToCompleteSentence(answer, 300),
+    answer: compactedAnswer,
     key_points: [...args.answer.key_points, "Fragmentary source synthesis repair"].slice(0, 6),
     confidence: Math.max(args.answer.confidence, 84)
   };
