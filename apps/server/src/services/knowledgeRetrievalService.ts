@@ -178,6 +178,21 @@ function isRetrievable(object: KnowledgeObject) {
     return false;
   }
 
+  const hasRuntimeInteractionSource = object.sources.some((source) =>
+    source.sourceType === "chat" ||
+    source.sourceType === "student_lab" ||
+    source.sourceType === "playground" ||
+    source.sourceType === "interaction_learning"
+  );
+  if (hasRuntimeInteractionSource) {
+    return (
+      (object.state === "validated" || object.state === "active") &&
+      object.riskLevel === "low" &&
+      object.confidence >= 0.76 &&
+      object.sources.length >= 2
+    );
+  }
+
   return object.sources.some((source) =>
     source.sourceType === "source_acquisition" ||
     source.sourceType === "watcher" ||

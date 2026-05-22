@@ -39,6 +39,7 @@ import { ToolRoutingService } from "./tools/toolRoutingService.js";
 import type { ModelRuntimeTelemetryService } from "./models/modelRuntimeTelemetryService.js";
 import type { InteractionLogStore } from "./interactionLogStore.js";
 import { KnowledgeRetrievalService } from "./knowledgeRetrievalService.js";
+import type { KnowledgeRuntimeIntakeService } from "./knowledgeRuntimeIntakeService.js";
 import type { LearningQueueService } from "./learningQueueService.js";
 import {
   defaultAnswerabilityPlanner,
@@ -3434,7 +3435,8 @@ export class ChatRuntimeService {
     private readonly knowledgeRetrievalService: Pick<KnowledgeRetrievalService, "retrieve"> | null = null,
     private readonly learningQueueService: Pick<LearningQueueService, "safeCaptureChatResponse"> | null = null,
     private readonly answerabilityPlanner: Pick<AnswerabilityPlanner, "planRequirement" | "buildCapsule"> =
-      defaultAnswerabilityPlanner
+      defaultAnswerabilityPlanner,
+    private readonly knowledgeRuntimeIntakeService: Pick<KnowledgeRuntimeIntakeService, "safeCapture"> | null = null
   ) {}
 
   resetSession(sessionId: string) {
@@ -4436,6 +4438,27 @@ export class ChatRuntimeService {
     await this.learningQueueService?.safeCaptureChatResponse({
       response,
       interactionRecord
+    });
+    await this.knowledgeRuntimeIntakeService?.safeCapture({
+      source: "chat",
+      scope: "chat_turn",
+      recordId: interactionRecord?.id ?? null,
+      sessionId: response.sessionId,
+      question: response.userMessage.content,
+      answer: response.assistantMessage.content,
+      category: response.category,
+      language: response.conversationState.language,
+      answerabilityMode: response.evidenceCapsule.answerabilityMode,
+      sourceBound: response.evidenceCapsule.sourceBound,
+      toolUsed: response.tooling.used,
+      toolType: response.tooling.routing.toolType,
+      toolIntent: response.tooling.routing.intent,
+      qualityPassed: response.conversationQuality.passed,
+      qualityIssues: response.conversationQuality.issues,
+      usedStaticFallback: response.generation.usedStaticFallback,
+      sources: response.tooling.sources,
+      verifiedFacts: response.tooling.verifiedFacts,
+      durationMs: response.durationMs
     });
 
     return response;

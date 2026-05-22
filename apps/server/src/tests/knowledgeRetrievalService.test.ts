@@ -301,3 +301,103 @@ test("chat runtime answers from governed knowledge when local model falls back",
     await rm(tempRoot, { recursive: true, force: true });
   }
 });
+
+test("knowledge retrieval allows validated runtime chat knowledge", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "hydria-knowledge-retrieval-chat-"));
+  try {
+    const store = new KnowledgeObjectStore(
+      join(tempRoot, "knowledge-objects.json"),
+      join(tempRoot, "vault")
+    );
+    await store.save([
+      buildKnowledgeObject({
+        objectId: "ko::runtime-intake::chat::ada-lovelace",
+        title: "Qui etait Ada Lovelace",
+        category: "other",
+        domain: "runtime_learned_general",
+        summary:
+          "Ada Lovelace was a mathematician associated with Charles Babbage's Analytical Engine notes.",
+        content:
+          "Question: Qui etait Ada Lovelace? Answer: Ada Lovelace was a mathematician associated with Charles Babbage's Analytical Engine notes.",
+        tags: ["runtime-intake", "source-backed", "chat", "stable"],
+        state: "validated",
+        confidence: 0.84,
+        riskLevel: "low",
+        sources: [
+          {
+            sourceType: "chat",
+            sourceId: "britannica.com:Ada Lovelace",
+            sourceUri: "https://www.britannica.com/biography/Ada-Lovelace",
+            evidenceRecordIds: ["interaction-1"]
+          },
+          {
+            sourceType: "chat",
+            sourceId: "wikipedia.org:Ada Lovelace",
+            sourceUri: "https://en.wikipedia.org/wiki/Ada_Lovelace",
+            evidenceRecordIds: ["interaction-1"]
+          }
+        ]
+      })
+    ]);
+    const service = new KnowledgeRetrievalService({ knowledgeObjectStore: store });
+
+    const result = await service.retrieve({
+      query: "qui etait Ada Lovelace",
+      category: "other"
+    });
+
+    assert.equal(result.route, "used");
+    assert.equal(result.hitCount, 1);
+    assert.equal(result.hits[0]?.objectId, "ko::runtime-intake::chat::ada-lovelace");
+    assert.equal(result.hits[0]?.sourceLabels.includes("chat"), true);
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("knowledge retrieval blocks candidate runtime chat knowledge", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "hydria-knowledge-retrieval-chat-candidate-"));
+  try {
+    const store = new KnowledgeObjectStore(
+      join(tempRoot, "knowledge-objects.json"),
+      join(tempRoot, "vault")
+    );
+    await store.save([
+      buildKnowledgeObject({
+        objectId: "ko::runtime-intake::chat::candidate",
+        title: "Candidate runtime fact",
+        summary: "Candidate runtime fact about Ada Lovelace.",
+        content: "Candidate runtime fact about Ada Lovelace.",
+        tags: ["runtime-intake", "source-backed", "chat"],
+        state: "candidate",
+        confidence: 0.9,
+        riskLevel: "low",
+        sources: [
+          {
+            sourceType: "chat",
+            sourceId: "britannica.com:Ada Lovelace",
+            sourceUri: "https://www.britannica.com/biography/Ada-Lovelace",
+            evidenceRecordIds: ["interaction-1"]
+          },
+          {
+            sourceType: "chat",
+            sourceId: "wikipedia.org:Ada Lovelace",
+            sourceUri: "https://en.wikipedia.org/wiki/Ada_Lovelace",
+            evidenceRecordIds: ["interaction-1"]
+          }
+        ]
+      })
+    ]);
+    const service = new KnowledgeRetrievalService({ knowledgeObjectStore: store });
+
+    const result = await service.retrieve({
+      query: "Ada Lovelace",
+      category: "other"
+    });
+
+    assert.equal(result.route, "no_match");
+    assert.equal(result.used, false);
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});

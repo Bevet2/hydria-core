@@ -404,6 +404,18 @@ storage/training/knowledge-retrieval-gate-v1.json
 
 The gate checks that a source-acquired object can be retrieved and traced, that unrelated everyday chat such as a recipe does not receive off-topic knowledge, and that live tool questions keep tool priority. The Chat UI shows the public `Knowledge retrieval` trace step and the injected hit titles/summaries; this is a runtime trace, not private chain-of-thought.
 
+Runtime knowledge intake is now also enabled for public chat. When a chat answer is source-backed, passes the quality gate, uses the research tool, is not a static fallback, and has at least two independent sources, Hydria writes a governed Knowledge Object from that turn:
+
+```text
+source-backed chat answer
+-> KnowledgeRuntimeIntakeService
+-> validated stable Knowledge Object or guarded dynamic Knowledge Object
+-> vault projection
+-> later retrieval only when validated, low-risk, and multi-source
+```
+
+This is not fine-tuning and does not change model weights. Stable facts become `validated` retrieval candidates; current or fast-moving claims become `guarded` with fast decay. Candidate/runtime interaction knowledge is not injected unless it passes the retrievability policy.
+
 ## GraphRAG and policy optimization
 
 Hydria now has a GraphRAG contract layer in addition to the existing Knowledge Objects and vault projection. This layer is still safe-by-default: it builds and queries a persistent graph, but it is not automatically promoted into public chat routing without a dedicated gate.
