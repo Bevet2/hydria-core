@@ -15,6 +15,19 @@ export type PostAnswerVerificationResult = {
   recommendedAction: "accept" | "repair_from_verified_sources" | "retry_with_better_sources" | "abstain";
 };
 
+type EntityKind = "organization" | "person" | "place" | "product_device" | "software" | "unknown";
+
+const ENTITY_KIND_PATTERNS: Record<Exclude<EntityKind, "unknown">, RegExp> = {
+  organization:
+    /\b(?:company|corporation|enterprise|manufacturer|fabless|startup|organisation|organization|societe|soci[eé]t[eé]|entreprise|fabricant|editeur|[eé]diteur|constructeur|multinationale)\b/i,
+  person: /\b(?:person|born|died|writer|scientist|engineer|roi|reine|empereur|ne |n[eé]e|mort|morte|personne)\b/i,
+  place: /\b(?:city|country|state|river|mountain|ville|pays|etat|[eé]tat|fleuve|montagne|commune)\b/i,
+  product_device:
+    /\b(?:processor|soc|system on a chip|chip|microprocessor|gpu|cpu|device|architecture|processeur|puce|systeme sur une puce|syst[eè]me sur une puce|appareil|architecture)\b/i,
+  software:
+    /\b(?:software|platform|library|application|framework|api|logiciel|plateforme|bibliotheque|biblioth[eè]que|application)\b/i
+};
+
 function extractTerms(value: string) {
   const stop = new Set([
     "the",
@@ -62,6 +75,50 @@ function textHasTerm(normalizedText: string, normalizedTokens: Set<string>, term
     : normalizedTokens.has(normalizedTerm);
 }
 
+function firstSentence(value: string) {
+  return value.split(/[.!?]\s+/)[0]?.trim() ?? value.trim();
+}
+
+function inferEntityKinds(value: string) {
+  const normalized = normalizeLooseText(value);
+  const kinds: EntityKind[] = [];
+  for (const [kind, pattern] of Object.entries(ENTITY_KIND_PATTERNS) as Array<
+    [Exclude<EntityKind, "unknown">, RegExp]
+  >) {
+    if (pattern.test(normalized)) {
+      kinds.push(kind);
+    }
+  }
+  return kinds.length > 0 ? kinds : ["unknown" as const];
+}
+
+function primaryEntityKind(value: string): EntityKind {
+  const firstKinds = inferEntityKinds(firstSentence(value));
+  if (!firstKinds.includes("unknown")) {
+    if (firstKinds.includes("organization")) {
+      return "organization";
+    }
+    return firstKinds[0] ?? "unknown";
+  }
+  const kinds = inferEntityKinds(value);
+  return kinds[0] ?? "unknown";
+}
+
+function dominantVerifiedEntityKind(args: ChatToolMetadata): EntityKind {
+  const counts = new Map<EntityKind, number>();
+  const evidenceTexts = [
+    ...args.verifiedFacts,
+    ...args.sources.map((source) => [source.title, source.snippet, source.excerpt].filter(Boolean).join(" "))
+  ];
+  for (const text of evidenceTexts) {
+    const kind = primaryEntityKind(text);
+    if (kind !== "unknown") {
+      counts.set(kind, (counts.get(kind) ?? 0) + 1);
+    }
+  }
+  return [...counts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? "unknown";
+}
+
 export function verifyPostAnswerGrounding(args: {
   question: string;
   category: QuestionCategory;
@@ -95,6 +152,14 @@ export function verifyPostAnswerGrounding(args: {
   );
   if (rejectedAnswerTerms.length > 0 && answerSemantic.matchedExpectedTerms.length === 0) {
     issues.push("answer_uses_rejected_sense");
+  }
+
+  if (args.tooling.used && ["research", "web"].includes(args.tooling.routing.toolType)) {
+    const verifiedKind = dominantVerifiedEntityKind(args.tooling);
+    const answerKind = primaryEntityKind(args.answer);
+    if (verifiedKind === "organization" && answerKind === "product_device") {
+      issues.push("answer_entity_type_mismatch:organization_vs_product_device");
+    }
   }
 
   if (

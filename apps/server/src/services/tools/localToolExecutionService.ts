@@ -779,16 +779,50 @@ function wikipediaPageUrl(language: string, title: string) {
   return `https://${language}.wikipedia.org/wiki/${encodeURIComponent(title.replace(/\s+/g, "_"))}`;
 }
 
-async function searchWikipediaTitle(subject: string, language: string) {
+function entityTitleKey(value: string) {
+  return normalizeLooseText(value)
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\b(?:corporation|corp|company|inc|incorporated|limited|ltd|plc|sa|sarl|ag|gmbh|societe|société|entreprise)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function subjectTitleScore(subject: string, title: string) {
+  const subjectKey = entityTitleKey(subject);
+  const titleKey = entityTitleKey(title);
+  if (!subjectKey || !titleKey) {
+    return 0;
+  }
+  if (titleKey === subjectKey) {
+    return 4;
+  }
+  if (titleKey.startsWith(`${subjectKey} `) || titleKey.endsWith(` ${subjectKey}`)) {
+    return /\b(?:corporation|corp|company|inc|soci[eé]t[eé]|entreprise)\b/i.test(title) ? 3 : 1;
+  }
+  return titleKey.includes(subjectKey) ? 1 : 0;
+}
+
+async function searchWikipediaTitles(searchQuery: string, language: string, expectedSubject: string) {
   const searchUrl = new URL(`https://${language}.wikipedia.org/w/api.php`);
   searchUrl.searchParams.set("action", "query");
   searchUrl.searchParams.set("list", "search");
-  searchUrl.searchParams.set("srsearch", subject);
-  searchUrl.searchParams.set("srlimit", "1");
+  searchUrl.searchParams.set("srsearch", searchQuery);
+  searchUrl.searchParams.set("srlimit", "5");
   searchUrl.searchParams.set("format", "json");
   searchUrl.searchParams.set("origin", "*");
   const search = await fetchJson<WikipediaSearchResponse>(searchUrl);
-  return search?.query?.search?.[0]?.title?.trim() || subject;
+  const titles = (search?.query?.search ?? [])
+    .map((result, index) => ({
+      title: result.title?.trim() ?? "",
+      index
+    }))
+    .filter((result) => result.title.length > 0)
+    .sort((left, right) => {
+      const scoreDelta = subjectTitleScore(expectedSubject, right.title) - subjectTitleScore(expectedSubject, left.title);
+      return scoreDelta !== 0 ? scoreDelta : left.index - right.index;
+    })
+    .map((result) => result.title);
+  return titles.length > 0 ? titles : [searchQuery];
 }
 
 async function fetchWikipediaSummary(
@@ -797,42 +831,45 @@ async function fetchWikipediaSummary(
   semanticFrame: SemanticFrame,
   expectedSubject: string
 ) {
-  const title = await searchWikipediaTitle(searchQuery, language);
-  if (!title) {
-    return null;
-  }
-  const summaryUrl = new URL(
-    `https://${language}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/\s+/g, "_"))}`
-  );
-  const summary = await fetchJson<WikipediaSummaryResponse>(summaryUrl);
-  if (!summary?.extract || summary.extract.trim().length < 40) {
-    return null;
-  }
+  const candidateTitles = await searchWikipediaTitles(searchQuery, language, expectedSubject);
+  for (const title of candidateTitles) {
+    if (!title) {
+      continue;
+    }
+    const summaryUrl = new URL(
+      `https://${language}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/\s+/g, "_"))}`
+    );
+    const summary = await fetchJson<WikipediaSummaryResponse>(summaryUrl);
+    if (!summary?.extract || summary.extract.trim().length < 40) {
+      continue;
+    }
 
-  const pageTitle = summary.title?.trim() || title;
-  const pageUrl = summary.content_urls?.desktop?.page ?? wikipediaPageUrl(language, pageTitle);
-  const timestamp = summary.timestamp && !Number.isNaN(new Date(summary.timestamp).getTime())
-    ? new Date(summary.timestamp).toISOString()
-    : null;
-  const excerpt = normalizeSpaces(summary.extract);
-  const description = summary.description ? normalizeSpaces(summary.description) : null;
-  if (!subjectMatchesText(expectedSubject, `${pageTitle} ${description ?? ""} ${excerpt}`)) {
-    return null;
+    const pageTitle = summary.title?.trim() || title;
+    const pageUrl = summary.content_urls?.desktop?.page ?? wikipediaPageUrl(language, pageTitle);
+    const timestamp = summary.timestamp && !Number.isNaN(new Date(summary.timestamp).getTime())
+      ? new Date(summary.timestamp).toISOString()
+      : null;
+    const excerpt = normalizeSpaces(summary.extract);
+    const description = summary.description ? normalizeSpaces(summary.description) : null;
+    if (!subjectMatchesText(expectedSubject, `${pageTitle} ${description ?? ""} ${excerpt}`)) {
+      continue;
+    }
+    const semanticCheck = sourceMatchesSemanticFrame(
+      { ...semanticFrame, subject: semanticFrame.subject ?? expectedSubject },
+      `${pageTitle} ${description ?? ""} ${excerpt}`
+    );
+    if (!semanticCheck.passed) {
+      continue;
+    }
+    return {
+      title: pageTitle,
+      url: pageUrl,
+      description,
+      excerpt,
+      timestamp
+    };
   }
-  const semanticCheck = sourceMatchesSemanticFrame(
-    { ...semanticFrame, subject: semanticFrame.subject ?? expectedSubject },
-    `${pageTitle} ${description ?? ""} ${excerpt}`
-  );
-  if (!semanticCheck.passed) {
-    return null;
-  }
-  return {
-    title: pageTitle,
-    url: pageUrl,
-    description,
-    excerpt,
-    timestamp
-  };
+  return null;
 }
 
 function unwrapDuckDuckGoUrl(rawUrl: string) {
@@ -930,6 +967,10 @@ async function fetchWikidataEntity(
     })
     .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
     .sort((left, right) => {
+      const titleDelta = subjectTitleScore(expectedSubject, right.label) - subjectTitleScore(expectedSubject, left.label);
+      if (titleDelta !== 0) {
+        return titleDelta;
+      }
       const expectedDelta =
         right.semanticCheck.matchedExpectedTerms.length - left.semanticCheck.matchedExpectedTerms.length;
       return expectedDelta !== 0 ? expectedDelta : right.semanticCheck.score - left.semanticCheck.score;

@@ -116,3 +116,46 @@ test("post-answer verifier accepts source-backed technical answers with ambiguou
   assert.equal(result.passed, true);
   assert.deepEqual(result.issues, []);
 });
+
+test("post-answer verifier rejects product-level answers when sources identify an organization", () => {
+  const semanticFrame = buildSemanticFrame({
+    question: "Qu'est-ce que NVIDIA ?",
+    category: "other",
+    subject: "NVIDIA",
+    language: "fr"
+  });
+  const routing = route({
+    toolRequired: true,
+    toolType: "research",
+    intent: "fact_check",
+    fallbackAllowed: false,
+    extractedArgs: {
+      subject: "NVIDIA",
+      language: "fr",
+      semanticFrame
+    }
+  });
+
+  const result = verifyPostAnswerGrounding({
+    question: "Qu'est-ce que NVIDIA ?",
+    category: "other",
+    answer:
+      "NVIDIA est un processeur tout-en-un, ou SoC, derive de la famille d'architecture ARM produit par NVIDIA.",
+    toolRouting: routing,
+    tooling: {
+      ...defaultChatToolMetadata,
+      route: "used",
+      used: true,
+      routing,
+      verifiedFacts: [
+        "Nvidia Corporation est une societe multinationale americaine de technologie specialisee dans les processeurs graphiques et les accelerateurs d'IA.",
+        "Nvidia: fabricant americain de cartes graphiques et accelerateurs d'IA."
+      ],
+      sources: []
+    }
+  });
+
+  assert.equal(result.passed, false);
+  assert.ok(result.issues.includes("answer_entity_type_mismatch:organization_vs_product_device"));
+  assert.equal(result.recommendedAction, "repair_from_verified_sources");
+});

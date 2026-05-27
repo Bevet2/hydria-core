@@ -2977,10 +2977,11 @@ export class ChatRuntimeService {
       conversationQuality.issues.includes("wrong_language_expected_fr") ||
       conversationQuality.issues.includes("off_topic_direct_answer");
     const shouldAttemptSourceBackedRepair =
-      runtimeMode === "direct" ||
-      draft.generation.provider === "fallback" ||
-      forceSourceBackedRepair ||
-      isLikelyTruncatedAnswer(finalAnswer.answer);
+      !knowledgeRetrieval.used &&
+      (runtimeMode === "direct" ||
+        draft.generation.provider === "fallback" ||
+        forceSourceBackedRepair ||
+        isLikelyTruncatedAnswer(finalAnswer.answer));
     const sourceBackedFactualRepair = shouldAttemptSourceBackedRepair
       ? buildSourceBackedFactualRepair({
           answer: finalAnswer,
