@@ -3427,6 +3427,35 @@ export class ChatRuntimeService {
       }
     }
 
+    const finalBrevityAdjustedAnswer = enforceActiveBrevityConstraint({
+      answer: finalAnswer,
+      activeConstraintCapsule,
+      newUserMessage: args.message
+    });
+    if (finalBrevityAdjustedAnswer.answer !== finalAnswer.answer) {
+      finalAnswer = finalBrevityAdjustedAnswer;
+      conversationQuality = this.analyzeQuality({
+        runtimeMode,
+        conversationState,
+        activeConstraintCapsule,
+        answerPolicy,
+        newUserMessage: args.message,
+        answer: finalAnswer.answer,
+        lastAssistantAnswer: session.lastAssistantAnswer,
+        recentMessages: session.messages,
+        toolRouting: tooling.routing
+      });
+      postAnswerVerification = deterministicRuntimeAnswer
+        ? postAnswerVerification
+        : verifyPostAnswerGrounding({
+            question: draft.routingQuestion,
+            category: draft.category,
+            answer: finalAnswer.answer,
+            tooling,
+            toolRouting: tooling.routing
+          });
+    }
+
     const assistantMessage: ChatMessage = {
       id: randomUUID(),
       role: "assistant",
