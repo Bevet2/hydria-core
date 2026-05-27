@@ -154,7 +154,7 @@ function stripRequestTerms(value: string) {
       )
       .replace(/\b(?:c[' ]?est qui|c[' ]?est quel|c[' ]?est quoi|etait[- ]?ce|what causes|what caused|what was|what were|used for)\b/gi, " ")
       .replace(
-        /\b(?:sa biographie|son histoire|biographie|biography|histoire|history|known for|connu(?:e)? pour|complete|compl(?:e|\u00e8)te|complet|courte?|fiche|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9)|diaporama|slides?|simplement|simply|please|svp|s'il te plait|s'il vous plait|historiquement)\b/gi,
+        /\b(?:sa biographie|son histoire|biographie|biography|histoire|history|known for|connu(?:e)? pour|complete|compl(?:e|\u00e8)te|complet|courte?|fiche|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9)|diaporama|slides?|contexte|context|details?|simplement|simply|please|svp|s'il te plait|s'il vous plait|historiquement)\b/gi,
         " "
       )
       .replace(/[?.!,;:]+$/g, " ")

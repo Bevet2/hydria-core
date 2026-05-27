@@ -798,7 +798,7 @@ test("chat runtime resolves possessive biography follow-ups to the prior subject
 
   assert.equal(calls[0]?.routingQuestion, "qui est charlemagne");
   assert.equal(calls[0]?.requiresExternalGrounding, true);
-  assert.equal(calls[1]?.routingQuestion, "qui est charlemagne biographie contexte");
+  assert.equal(calls[1]?.routingQuestion, "biographie de charlemagne");
   assert.equal(calls[1]?.requiresExternalGrounding, true);
   assert.equal(calls[2]?.routingQuestion, "biographie de charlemagne");
   assert.equal(calls[2]?.requiresExternalGrounding, true);

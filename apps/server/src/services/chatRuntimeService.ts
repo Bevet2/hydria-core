@@ -719,7 +719,7 @@ function buildResolvedFollowupRoutingQuestion(args: {
   }
 
   if (POSSESSIVE_OR_BIOGRAPHY_FOLLOWUP_PATTERN.test(args.userMessage)) {
-    return frenchLike ? `qui est ${subject} biographie contexte` : `who is ${subject} biography details`;
+    return frenchLike ? `biographie de ${subject}` : `biography of ${subject}`;
   }
 
   return null;
