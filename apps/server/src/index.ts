@@ -13,6 +13,7 @@ import { createHistoryRouter } from "./routes/history.js";
 import { createLearningRouter } from "./routes/learning.js";
 import { createLocalModelRouter } from "./routes/localModel.js";
 import { createModelsRouter } from "./routes/models.js";
+import { createPublicApiV1Router } from "./routes/publicApiV1.js";
 import { createStudentRouter } from "./routes/student.js";
 import { createApiKeyAuthMiddleware } from "./middleware/apiKeyAuth.js";
 import {
@@ -50,6 +51,7 @@ import { ModelProviderService } from "./services/models/modelProviderService.js"
 import { ModelRuntimeTelemetryService } from "./services/models/modelRuntimeTelemetryService.js";
 import { OpenRouterService } from "./services/openrouter.js";
 import { OrchestrationPolicyService } from "./services/orchestrationPolicy.js";
+import { HydriaPublicApiV1Service } from "./services/publicApi/hydriaPublicApiV1Service.js";
 import { ResearchToolService } from "./services/researchToolService.js";
 import { RefineRouterService } from "./services/refineRouter.js";
 import { ExecutionAuditStore } from "./services/execution/executionAuditStore.js";
@@ -147,6 +149,9 @@ const coreAskService = new HydriaCoreAskService({
   localModelService,
   interactionLogStore
 });
+const publicApiV1Service = new HydriaPublicApiV1Service({
+  chatRuntimeService
+});
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const webDistDir = join(currentDir, "../../web/dist");
 const webIndexPath = join(webDistDir, "index.html");
@@ -198,6 +203,7 @@ app.get("/api/health", async (_request, response) => {
     },
     publicApi: {
       chatAuthRequired: false,
+      externalV1AuthRequired: env.HYDRIA_EXTERNAL_API_AUTH_REQUIRED,
       protectedRoutesAuthRequired: env.HYDRIA_PUBLIC_API_AUTH_REQUIRED,
       rateLimitWindowMs: env.HYDRIA_RATE_LIMIT_WINDOW_MS,
       chatMaxRequestsPerWindow: env.HYDRIA_CHAT_RATE_LIMIT_MAX_REQUESTS,
@@ -268,6 +274,28 @@ const publicChatUsageLogger = createUsageLoggerMiddleware("public-chat");
 app.use("/api/chat", publicChatRateLimit, publicChatUsageLogger);
 const publicCoreUsageLogger = createUsageLoggerMiddleware("core-ask");
 app.use("/api/core", publicChatRateLimit, publicCoreUsageLogger);
+const externalApiAuthAttemptRateLimit = createRateLimitMiddleware({
+  keyPrefix: "external-api-auth",
+  windowMs: env.HYDRIA_RATE_LIMIT_WINDOW_MS,
+  maxRequests: env.HYDRIA_AUTH_RATE_LIMIT_MAX_REQUESTS,
+  identityResolver: resolveIpRateLimitIdentity
+});
+const externalApiAuth = createApiKeyAuthMiddleware({
+  requireWhen: () => env.HYDRIA_EXTERNAL_API_AUTH_REQUIRED
+});
+const externalApiRateLimit = createRateLimitMiddleware({
+  keyPrefix: "external-api-v1",
+  windowMs: env.HYDRIA_RATE_LIMIT_WINDOW_MS,
+  maxRequests: env.HYDRIA_API_RATE_LIMIT_MAX_REQUESTS
+});
+const externalApiUsageLogger = createUsageLoggerMiddleware("external-api-v1");
+app.use(
+  "/api/v1",
+  externalApiAuthAttemptRateLimit,
+  externalApiAuth,
+  externalApiRateLimit,
+  externalApiUsageLogger
+);
 
 app.use(
   "/api/arena",
@@ -282,6 +310,7 @@ app.use("/api/arena/history", createHistoryRouter(historyStore));
 app.use("/api/benchmark", createBenchmarkRouter(benchmarkService));
 app.use("/api/chat", createChatRouter(chatRuntimeService));
 app.use("/api/core", createCoreRouter(coreAskService));
+app.use("/api/v1", createPublicApiV1Router(publicApiV1Service));
 app.use("/api/execution", createExecutionRouter(executionAuditStore));
 app.use("/api/local-model", createLocalModelRouter(localModelService));
 app.use("/api/models", createModelsRouter(modelCapabilityService, modelProviderService, modelRuntimeTelemetryService));

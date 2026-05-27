@@ -131,6 +131,43 @@ curl -fsS https://app.hydria.click/api/core/ask \
 
 All responses return the same envelope: `answer`, `display`, `routing`, `artifacts`, `durationMs`, and the raw mode-specific `data` payload.
 
+## Public API v1 For External Projects
+
+Use `/api/v1/*` when another project needs to call Hydria as a product API. This path is separate from Playground/Arena and uses the normal local Hydria chat runtime.
+
+It is API-key protected by default:
+
+```bash
+HYDRIA_API_KEY="$(ssh ubuntu@51.210.46.30 'cat /opt/hydria-core/.hydria-api-key')"
+```
+
+Ask Hydria:
+
+```bash
+curl -fsS https://app.hydria.click/api/v1/ask \
+  -H "content-type: application/json" \
+  -H "authorization: Bearer $HYDRIA_API_KEY" \
+  -d '{"input":"Explique PostgreSQL simplement.","options":{"includeSources":true,"includeTrace":true}}'
+```
+
+Continue a conversation by reusing the returned `sessionId`:
+
+```bash
+curl -fsS https://app.hydria.click/api/v1/ask \
+  -H "content-type: application/json" \
+  -H "authorization: Bearer $HYDRIA_API_KEY" \
+  -d '{"sessionId":"<sessionId>","input":"Donne un exemple concret."}'
+```
+
+Inspect API capabilities:
+
+```bash
+curl -fsS https://app.hydria.click/api/v1/capabilities \
+  -H "authorization: Bearer $HYDRIA_API_KEY"
+```
+
+Response fields are stable for integration: `answer`, `sessionId`, `sources`, `tools`, `models`, `memory`, `quality`, optional `trace`, and optional `diagnostics`. The trace is runtime-only and does not expose private chain-of-thought.
+
 ## Interaction Audit Persistence
 
 Production stores user-facing interactions in PostgreSQL and appends a JSONL audit projection at `storage/history/hydria-interactions.jsonl`.

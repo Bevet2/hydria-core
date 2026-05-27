@@ -197,6 +197,25 @@ The governor records profile, timeout, queue time, budget-exceeded status, and p
 
 The Chat UI exposes an **Orchestration Trace** for each answer. It shows the observable runtime path only: language/context detection, task routing, tool routing, verified facts, selected model/provider, runtime budget, attempts, quality gate, and latency. It deliberately does not expose hidden prompts or private chain-of-thought.
 
+### Public API v1
+
+External projects should use `/api/v1/*`, not the Playground or Arena routes.
+
+`POST /api/v1/ask` is the stable integration entrypoint. It is API-key protected by default and uses the normal Hydria chat runtime: local specialist models, governed tools, source-backed answerability, session memory, interaction audit persistence, learning queue capture, and post-answer verification. It does not use OpenRouter or the training/evaluation arena.
+
+Basic request:
+
+```bash
+curl -fsS https://app.hydria.click/api/v1/ask \
+  -H "content-type: application/json" \
+  -H "authorization: Bearer $HYDRIA_API_KEY" \
+  -d '{"input":"Explique PostgreSQL simplement.","options":{"includeSources":true}}'
+```
+
+The response includes `answer`, `sessionId`, `sources`, `tools`, `models`, `memory`, and `quality`. Reuse `sessionId` to continue a conversation. Optional `includeTrace` returns Hydria's runtime trace without private chain-of-thought.
+
+See [docs/api/public-api-v1.md](docs/api/public-api-v1.md).
+
 The UI also exposes an **Execution Audit** panel backed by `/api/execution/audit`. It is read-only and shows governed dry-run decisions for future browser/acquisition/execution actions: selected capability, permission state, risk level, denial reasons, rollback hints, provenance, and sanitized acquisition scoring. This does not enable real browser navigation, shell commands, or filesystem access.
 
 Chat tool flow:

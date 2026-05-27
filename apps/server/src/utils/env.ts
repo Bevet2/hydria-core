@@ -275,6 +275,10 @@ const envSchema = z.object({
     .string()
     .default("false")
     .transform((value) => value.toLowerCase() === "true"),
+  HYDRIA_EXTERNAL_API_AUTH_REQUIRED: z
+    .string()
+    .default("true")
+    .transform((value) => value.toLowerCase() !== "false"),
   HYDRIA_API_KEYS: z.string().default(""),
   HYDRIA_API_KEY_SHA256_HASHES: z.string().default(""),
   HYDRIA_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(60000),
