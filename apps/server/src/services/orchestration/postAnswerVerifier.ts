@@ -52,6 +52,16 @@ function sharesVerifiedFactTerms(answer: string, facts: string[]) {
   return shared.length >= Math.min(3, Math.max(1, Math.ceil(factTerms.length * 0.12)));
 }
 
+function textHasTerm(normalizedText: string, normalizedTokens: Set<string>, term: string) {
+  const normalizedTerm = normalizeLooseText(term);
+  if (!normalizedTerm) {
+    return false;
+  }
+  return normalizedTerm.includes(" ")
+    ? normalizedText.includes(normalizedTerm)
+    : normalizedTokens.has(normalizedTerm);
+}
+
 export function verifyPostAnswerGrounding(args: {
   question: string;
   category: QuestionCategory;
@@ -66,6 +76,7 @@ export function verifyPostAnswerGrounding(args: {
   });
   const issues: string[] = [];
   const normalizedAnswer = normalizeLooseText(args.answer);
+  const normalizedAnswerTokens = new Set(normalizedAnswer.split(/\s+/).filter(Boolean));
   const subject =
     frame.subject ??
     (typeof args.toolRouting.extractedArgs?.subject === "string" ? args.toolRouting.extractedArgs.subject : null);
@@ -80,7 +91,7 @@ export function verifyPostAnswerGrounding(args: {
   }
 
   const rejectedAnswerTerms = frame.rejectedSenseTerms.filter((term) =>
-    normalizedAnswer.includes(normalizeLooseText(term))
+    textHasTerm(normalizedAnswer, normalizedAnswerTokens, term)
   );
   if (rejectedAnswerTerms.length > 0 && answerSemantic.matchedExpectedTerms.length === 0) {
     issues.push("answer_uses_rejected_sense");

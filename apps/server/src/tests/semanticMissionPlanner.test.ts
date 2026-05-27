@@ -76,3 +76,43 @@ test("post-answer verifier flags answers that use a rejected source sense", () =
   assert.equal(result.recommendedAction, "repair_from_verified_sources");
 });
 
+test("post-answer verifier accepts source-backed technical answers with ambiguous product names", () => {
+  const semanticFrame = buildSemanticFrame({
+    question: "Explique Docker simplement.",
+    category: "technical_explanation",
+    subject: "Docker",
+    language: "fr"
+  });
+  const routing = route({
+    toolRequired: true,
+    toolType: "research",
+    intent: "fact_check",
+    fallbackAllowed: false,
+    extractedArgs: {
+      subject: "Docker",
+      language: "fr",
+      semanticFrame
+    }
+  });
+
+  const result = verifyPostAnswerGrounding({
+    question: "Explique Docker simplement.",
+    category: "technical_explanation",
+    answer:
+      "Docker est une plateforme logicielle permettant de faire tourner des applications dans des conteneurs.",
+    toolRouting: routing,
+    tooling: {
+      ...defaultChatToolMetadata,
+      route: "used",
+      used: true,
+      routing,
+      verifiedFacts: [
+        "Docker est une plateforme logicielle permettant de faire tourner des applications dans des conteneurs."
+      ],
+      sources: []
+    }
+  });
+
+  assert.equal(result.passed, true);
+  assert.deepEqual(result.issues, []);
+});
