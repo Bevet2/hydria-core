@@ -2,8 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildSemanticFrame, sourceMatchesSemanticFrame } from "../services/orchestration/semanticMissionPlanner.js";
 import { verifyPostAnswerGrounding } from "../services/orchestration/postAnswerVerifier.js";
+import { AgenticOrchestrationPlanner } from "../services/orchestration/agenticOrchestrationPlanner.js";
+import type { EvidenceCapsule, EvidenceRequirementPlan } from "../services/answerability/answerabilityPlanner.js";
 import { defaultChatToolMetadata } from "../types/chat.js";
 import { defaultToolRoutingDecision, type ToolRoutingDecision } from "../types/arena.js";
+import { defaultChatKnowledgeRetrievalMetadata } from "../types/knowledgeRetrieval.js";
 
 function route(overrides: Partial<ToolRoutingDecision>): ToolRoutingDecision {
   return {
@@ -158,4 +161,163 @@ test("post-answer verifier rejects product-level answers when sources identify a
   assert.equal(result.passed, false);
   assert.ok(result.issues.includes("answer_entity_type_mismatch:organization_vs_product_device"));
   assert.equal(result.recommendedAction, "repair_from_verified_sources");
+});
+
+test("post-answer verifier rejects unsupported dates or figures in sourced answers", () => {
+  const semanticFrame = buildSemanticFrame({
+    question: "Qu'est-ce que NVIDIA ?",
+    category: "other",
+    subject: "NVIDIA",
+    language: "fr"
+  });
+  const routing = route({
+    toolRequired: true,
+    toolType: "research",
+    intent: "fact_check",
+    fallbackAllowed: false,
+    extractedArgs: {
+      subject: "NVIDIA",
+      language: "fr",
+      semanticFrame
+    }
+  });
+
+  const result = verifyPostAnswerGrounding({
+    question: "Qu'est-ce que NVIDIA ?",
+    category: "other",
+    answer:
+      "NVIDIA est une societe americaine de technologie fondee en 1993 et valorisee a 900 milliards de dollars.",
+    toolRouting: routing,
+    tooling: {
+      ...defaultChatToolMetadata,
+      route: "used",
+      used: true,
+      routing,
+      verifiedFacts: [
+        "Nvidia Corporation est une societe multinationale americaine de technologie specialisee dans les processeurs graphiques et les accelerateurs d'IA."
+      ],
+      sources: [
+        {
+          title: "Wikipedia: Nvidia",
+          url: "https://fr.wikipedia.org/wiki/Nvidia",
+          snippet: "Nvidia Corporation est une societe multinationale americaine de technologie.",
+          excerpt: "Nvidia Corporation est une societe multinationale americaine de technologie.",
+          publishedAt: null,
+          modifiedAt: null,
+          effectiveDate: null,
+          dateSource: "unknown",
+          retrievalChannel: "live",
+          retrievalOrigin: "known_endpoint",
+          retrievalEngine: "known_endpoint"
+        },
+        {
+          title: "Wikidata: Nvidia",
+          url: "https://www.wikidata.org/wiki/Q182477",
+          snippet: "fabricant americain de cartes graphiques",
+          excerpt: "Nvidia: fabricant americain de cartes graphiques.",
+          publishedAt: null,
+          modifiedAt: null,
+          effectiveDate: null,
+          dateSource: "unknown",
+          retrievalChannel: "live",
+          retrievalOrigin: "known_endpoint",
+          retrievalEngine: "known_endpoint"
+        }
+      ]
+    }
+  });
+
+  assert.equal(result.passed, false);
+  assert.ok(result.issues.includes("unsupported_numeric_or_date_claim"));
+});
+
+test("agentic planner builds an evidence-first mission graph from accepted sources", () => {
+  const semanticFrame = buildSemanticFrame({
+    question: "Qu'est-ce que NVIDIA ?",
+    category: "other",
+    subject: "NVIDIA",
+    language: "fr"
+  });
+  const routing = route({
+    toolRequired: true,
+    toolType: "research",
+    intent: "fact_check",
+    fallbackAllowed: false,
+    extractedArgs: {
+      subject: "NVIDIA",
+      language: "fr",
+      semanticFrame
+    }
+  });
+  const evidenceRequirement: EvidenceRequirementPlan = {
+    answerabilityMode: "source_backed",
+    requiredEvidence: ["source_research"],
+    preferredEvidence: ["governed_knowledge"],
+    requiresTool: true,
+    requiresResearch: true,
+    requiresKnowledge: true,
+    requiresConversationMemory: false,
+    requiresSpecialistModel: false,
+    requiresSynthesis: true,
+    sourceBound: true,
+    abstainIfMissing: false,
+    riskFlags: ["general_knowledge_reliability_v2"],
+    reasons: ["test"],
+    guidance: "Ground factual claims in sources."
+  };
+  const evidenceCapsule: EvidenceCapsule = {
+    answerabilityMode: "source_backed",
+    requiredEvidence: ["source_research"],
+    preferredEvidence: ["governed_knowledge"],
+    usedEvidence: ["tool:research/fact_check"],
+    missingEvidence: ["governed_knowledge"],
+    sourceBound: true,
+    abstainIfMissing: false,
+    reliabilityLevel: "verified",
+    synthesisStrategy: "evidence_first_then_specialist_synthesis",
+    riskFlags: ["general_knowledge_reliability_v2"],
+    reasons: ["test"],
+    promptGuidance: "Ground factual claims in sources."
+  };
+
+  const plan = new AgenticOrchestrationPlanner().buildPlan({
+    question: "Qu'est-ce que NVIDIA ?",
+    category: "other",
+    toolRouting: routing,
+    tooling: {
+      ...defaultChatToolMetadata,
+      route: "used",
+      used: true,
+      routing,
+      verifiedFacts: ["Nvidia Corporation est une societe americaine de technologie."],
+      sources: [
+        {
+          title: "Wikipedia: Nvidia",
+          url: "https://fr.wikipedia.org/wiki/Nvidia",
+          snippet: "Nvidia Corporation est une societe americaine de technologie.",
+          excerpt: "Nvidia Corporation est une societe americaine de technologie.",
+          publishedAt: null,
+          modifiedAt: null,
+          effectiveDate: null,
+          dateSource: "unknown",
+          retrievalChannel: "live",
+          retrievalOrigin: "known_endpoint",
+          retrievalEngine: "known_endpoint"
+        }
+      ]
+    },
+    knowledgeRetrieval: {
+      ...defaultChatKnowledgeRetrievalMetadata,
+      query: "NVIDIA",
+      category: "other"
+    },
+    evidenceRequirement,
+    evidenceCapsule
+  });
+
+  assert.equal(plan.mode, "evidence_first");
+  assert.equal(plan.subject, "NVIDIA");
+  assert.ok(plan.missions.some((mission) => mission.id === "external_source_research" && mission.status === "satisfied"));
+  assert.ok(plan.missions.some((mission) => mission.id === "post_answer_verifier"));
+  assert.ok(plan.criticalChecks.includes("answer_claims_are_supported_by_verified_sources"));
 });

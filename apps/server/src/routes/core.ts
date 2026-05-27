@@ -15,9 +15,12 @@ function modeRequiresTrainingGate(mode: HydriaCoreAskMode) {
   return mode === "playground" || mode === "benchmark" || mode === "student_session";
 }
 
-function isPublicCoreMode(mode: HydriaCoreAskMode) {
+export function isPublicCoreMode(mode: HydriaCoreAskMode) {
   if (mode === "chat") {
     return true;
+  }
+  if (mode === "playground") {
+    return env.PLAYGROUND_PUBLIC_ENABLED;
   }
   return mode === "student_preview" && env.STUDENT_LAB_PUBLIC_ENABLED;
 }

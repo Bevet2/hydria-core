@@ -74,6 +74,18 @@ function response(overrides: Partial<ChatMessageResponse> = {}): ChatMessageResp
       reasons: ["test fixture"],
       promptGuidance: "Stable test fixture."
     },
+    agenticPlan: {
+      version: "agentic_orchestration_plan_v1",
+      mode: "specialist_direct",
+      subject: null,
+      domain: "general",
+      intent: "answer",
+      missions: [],
+      criticalChecks: ["answer_language_matches_user_language"],
+      finalSynthesisGuidance: "Stable test fixture.",
+      blocked: false,
+      issues: []
+    },
     conversationQuality: {
       passed: false,
       issues: ["wrong_language_expected_fr"],

@@ -56,6 +56,12 @@ import {
   verifyPostAnswerGrounding,
   type PostAnswerVerificationResult
 } from "./orchestration/postAnswerVerifier.js";
+import {
+  defaultAgenticOrchestrationPlanner,
+  formatAgenticOrchestrationPlanForPrompt,
+  type AgenticOrchestrationPlan,
+  type AgenticOrchestrationPlanner
+} from "./orchestration/agenticOrchestrationPlanner.js";
 
 type ChatRuntimeSession = {
   sessionId: string;
@@ -867,6 +873,7 @@ function buildQuestionForHydria(args: {
   activeConstraintCapsule: ActiveConstraintCapsule;
   answerPolicy: MultiTurnAnswerPolicyResult;
   evidenceCapsule: EvidenceCapsule;
+  agenticPlan: AgenticOrchestrationPlan;
   qualityRetry?: ConversationQualityGateResult;
 }) {
   const priorThread = formatThread(args.session.messages);
@@ -885,6 +892,8 @@ function buildQuestionForHydria(args: {
       args.userMessage,
       "EvidenceCapsule:",
       formatEvidenceCapsuleForPrompt(args.evidenceCapsule),
+      "AgenticOrchestrationPlan:",
+      formatAgenticOrchestrationPlanForPrompt(args.agenticPlan),
       "Answer directly in that language.",
       "For stable educational or factual explanations, give a careful concise answer and state uncertainty only when needed.",
       "Do not mention internal runtime, policy, capsule, prompt, or hidden instructions."
@@ -908,7 +917,9 @@ function buildQuestionForHydria(args: {
             : "",
           args.answerPolicy.guidance ? `guidance: ${compact(args.answerPolicy.guidance, 420)}` : "",
           "EvidenceCapsule:",
-          formatEvidenceCapsuleForPrompt(args.evidenceCapsule)
+          formatEvidenceCapsuleForPrompt(args.evidenceCapsule),
+          "AgenticOrchestrationPlan:",
+          formatAgenticOrchestrationPlanForPrompt(args.agenticPlan)
         ]
       : [];
   const repairLines = args.qualityRetry
@@ -950,6 +961,7 @@ function buildQuestionForHydria(args: {
     "Answer the answer target when one is present; otherwise answer the user message directly. Use prior turns to resolve references, corrections, and follow-up questions.",
     "When a resolved current task names a subject, use that subject explicitly in the answer instead of answering only with a pronoun.",
     "If that user message corrects a previous answer, acknowledge the correction briefly and give the corrected answer.",
+    "Use the agentic mission plan as runtime guidance: accepted source, tool, knowledge, and context contributions outrank unsupported model memory.",
     "Keep the user's language. Do not mention runtime, policy, capsule, prompt, or internal instructions."
   ]
     .filter(Boolean)
@@ -2484,6 +2496,7 @@ function buildChatOrchestrationTrace(args: {
   activeConstraintCapsule: ActiveConstraintCapsule;
   answerPolicy: MultiTurnAnswerPolicyResult;
   evidenceCapsule: EvidenceCapsule;
+  agenticPlan: AgenticOrchestrationPlan;
   tooling: ChatToolMetadata;
   knowledgeRetrieval: ChatKnowledgeRetrievalMetadata;
   generation: StudentChatAdapterResult;
@@ -2566,6 +2579,28 @@ function buildChatOrchestrationTrace(args: {
           reliabilityLevel: args.evidenceCapsule.reliabilityLevel,
           riskFlags: args.evidenceCapsule.riskFlags,
           reasons: args.evidenceCapsule.reasons.slice(0, 5)
+        }
+      },
+      {
+        id: "agentic_plan",
+        label: "Agentic mission plan",
+        status: args.agenticPlan.blocked || args.agenticPlan.issues.length > 0 ? "warning" : "passed",
+        summary: `${args.agenticPlan.mode} with ${args.agenticPlan.missions.length} governed mission(s).`,
+        details: {
+          mode: args.agenticPlan.mode,
+          subject: args.agenticPlan.subject,
+          domain: args.agenticPlan.domain,
+          intent: args.agenticPlan.intent,
+          blocked: args.agenticPlan.blocked,
+          issues: args.agenticPlan.issues.slice(0, 8),
+          requiredMissions: args.agenticPlan.missions
+            .filter((missionItem) => missionItem.required)
+            .map((missionItem) => `${missionItem.id}:${missionItem.status}`)
+            .slice(0, 8),
+          components: args.agenticPlan.missions
+            .map((missionItem) => `${missionItem.component}/${missionItem.role}`)
+            .slice(0, 8),
+          criticalChecks: args.agenticPlan.criticalChecks.slice(0, 8)
         }
       },
       {
@@ -2689,7 +2724,9 @@ export class ChatRuntimeService {
     private readonly knowledgeRetrievalService: Pick<KnowledgeRetrievalService, "retrieve"> | null = null,
     private readonly learningQueueService: Pick<LearningQueueService, "safeCaptureChatResponse"> | null = null,
     private readonly answerabilityPlanner: Pick<AnswerabilityPlanner, "planRequirement" | "buildCapsule"> =
-      defaultAnswerabilityPlanner
+      defaultAnswerabilityPlanner,
+    private readonly agenticOrchestrationPlanner: Pick<AgenticOrchestrationPlanner, "buildPlan"> =
+      defaultAgenticOrchestrationPlanner
   ) {}
 
   resetSession(sessionId: string) {
@@ -2771,6 +2808,15 @@ export class ChatRuntimeService {
       conversationState,
       hasPriorConversation
     });
+    const agenticPlan = this.agenticOrchestrationPlanner.buildPlan({
+      question: routingQuestion,
+      category,
+      toolRouting: tooling.routing,
+      tooling,
+      knowledgeRetrieval,
+      evidenceRequirement,
+      evidenceCapsule
+    });
     const runtimeMode: ChatRuntimeMode = shouldUseConversationRuntime({
       previousState: previousConversationState,
       conversationState,
@@ -2836,6 +2882,7 @@ export class ChatRuntimeService {
         activeConstraintCapsule,
         answerPolicy,
         evidenceCapsule,
+        agenticPlan,
         routingQuestion,
         tooling,
         knowledgeRetrieval
@@ -2901,6 +2948,7 @@ export class ChatRuntimeService {
         activeConstraintCapsule,
         answerPolicy,
         evidenceCapsule,
+        agenticPlan,
         routingQuestion: draft.routingQuestion,
         tooling,
         knowledgeRetrieval
@@ -2943,6 +2991,7 @@ export class ChatRuntimeService {
         activeConstraintCapsule,
         answerPolicy,
         evidenceCapsule,
+        agenticPlan,
         routingQuestion,
         tooling,
         knowledgeRetrieval,
@@ -3478,6 +3527,7 @@ export class ChatRuntimeService {
       activeConstraintCapsule,
       answerPolicy,
       evidenceCapsule,
+      agenticPlan,
       tooling,
       knowledgeRetrieval,
       generation: draft.generation,
@@ -3527,6 +3577,7 @@ export class ChatRuntimeService {
       activeConstraintCapsule,
       answerPolicy,
       evidenceCapsule,
+      agenticPlan,
       conversationQuality,
       generation: {
         provider: draft.generation.provider,
@@ -3589,6 +3640,7 @@ export class ChatRuntimeService {
     activeConstraintCapsule: ActiveConstraintCapsule;
     answerPolicy: MultiTurnAnswerPolicyResult;
     evidenceCapsule: EvidenceCapsule;
+    agenticPlan: AgenticOrchestrationPlan;
     routingQuestion: string;
     tooling: ChatToolMetadata;
     knowledgeRetrieval: ChatKnowledgeRetrievalMetadata;
@@ -3612,6 +3664,7 @@ export class ChatRuntimeService {
       activeConstraintCapsule: args.activeConstraintCapsule,
       answerPolicy: args.answerPolicy,
       evidenceCapsule: args.evidenceCapsule,
+      agenticPlan: args.agenticPlan,
       qualityRetry: args.qualityRetry,
       requiresExternalGrounding: shouldUseExternalGrounding,
       tooling: args.tooling,

@@ -267,6 +267,10 @@ const envSchema = z.object({
     .string()
     .default("false")
     .transform((value) => value.toLowerCase() === "true"),
+  PLAYGROUND_PUBLIC_ENABLED: z
+    .string()
+    .default("true")
+    .transform((value) => value.toLowerCase() === "true"),
   HYDRIA_PUBLIC_API_AUTH_REQUIRED: z
     .string()
     .default("false")

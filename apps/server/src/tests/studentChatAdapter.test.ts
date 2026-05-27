@@ -13,6 +13,7 @@ import { decideMultiTurnAnswerPolicy } from "../services/context/multiTurnAnswer
 import { defaultChatToolMetadata } from "../types/chat.js";
 import { defaultChatKnowledgeRetrievalMetadata } from "../types/knowledgeRetrieval.js";
 import { defaultAnswerabilityPlanner } from "../services/answerability/answerabilityPlanner.js";
+import { defaultAgenticOrchestrationPlanner } from "../services/orchestration/agenticOrchestrationPlanner.js";
 
 function buildEvidenceCapsule(args: {
   question: string;
@@ -32,9 +33,34 @@ function buildEvidenceCapsule(args: {
   });
 }
 
+function buildAgenticPlan(args: {
+  question: string;
+  category?: StudentChatAdapterInput["category"];
+  evidenceCapsule: StudentChatAdapterInput["evidenceCapsule"];
+}) {
+  const state = createInitialState();
+  return defaultAgenticOrchestrationPlanner.buildPlan({
+    question: args.question,
+    category: args.category ?? "other",
+    toolRouting: defaultChatToolMetadata.routing,
+    tooling: defaultChatToolMetadata,
+    knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata,
+    evidenceRequirement: defaultAnswerabilityPlanner.planRequirement({
+      question: args.question,
+      userMessage: args.question,
+      category: args.category ?? "other",
+      toolRouting: defaultChatToolMetadata.routing,
+      conversationState: state,
+      hasPriorConversation: false
+    }),
+    evidenceCapsule: args.evidenceCapsule
+  });
+}
+
 function buildInput(): StudentChatAdapterInput {
   const state = createInitialState();
   const capsule = buildActiveConstraintCapsule(state, "qui est charlemagne");
+  const evidenceCapsule = buildEvidenceCapsule({ question: "qui est charlemagne" });
   const policy = decideMultiTurnAnswerPolicy({
     conversationState: state,
     activeConstraintCapsule: capsule,
@@ -52,7 +78,8 @@ function buildInput(): StudentChatAdapterInput {
     recentMessages: [],
     activeConstraintCapsule: capsule,
     answerPolicy: policy,
-    evidenceCapsule: buildEvidenceCapsule({ question: "qui est charlemagne" }),
+    evidenceCapsule,
+    agenticPlan: buildAgenticPlan({ question: "qui est charlemagne", evidenceCapsule }),
     requiresExternalGrounding: true,
     tooling: defaultChatToolMetadata,
     knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata
@@ -786,6 +813,14 @@ test("student chat adapter routes bounded strategic decisions to the light local
       question: "On doit choisir une architecture. Au depart je pensais AWS.",
       category: "architecture_design"
     }),
+    agenticPlan: buildAgenticPlan({
+      question: "On-prem strict, deadline demain. Tu recommandes quoi ?",
+      category: "architecture_design",
+      evidenceCapsule: buildEvidenceCapsule({
+        question: "On doit choisir une architecture. Au depart je pensais AWS.",
+        category: "architecture_design"
+      })
+    }),
     requiresExternalGrounding: false,
     tooling: defaultChatToolMetadata,
     knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata
@@ -850,6 +885,14 @@ test("student chat adapter routes strategic setup turns to the fast local path",
     evidenceCapsule: buildEvidenceCapsule({
       question: "On-prem strict, deadline demain. Tu recommandes quoi ?",
       category: "architecture_design"
+    }),
+    agenticPlan: buildAgenticPlan({
+      question: "On doit choisir une architecture. Au depart je pensais AWS.",
+      category: "architecture_design",
+      evidenceCapsule: buildEvidenceCapsule({
+        question: "On-prem strict, deadline demain. Tu recommandes quoi ?",
+        category: "architecture_design"
+      })
     }),
     requiresExternalGrounding: false,
     tooling: defaultChatToolMetadata,

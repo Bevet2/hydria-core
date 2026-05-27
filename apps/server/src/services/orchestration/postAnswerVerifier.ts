@@ -119,6 +119,73 @@ function dominantVerifiedEntityKind(args: ChatToolMetadata): EntityKind {
   return [...counts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? "unknown";
 }
 
+function sourceFamily(url: string) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    if (host.endsWith("wikipedia.org")) {
+      return "wikipedia";
+    }
+    if (host.endsWith("wikidata.org")) {
+      return "wikidata";
+    }
+    if (host.endsWith("britannica.com")) {
+      return "britannica";
+    }
+    return host;
+  } catch {
+    return url || "unknown";
+  }
+}
+
+function acceptedSourceFamilies(tooling: ChatToolMetadata) {
+  return new Set(tooling.sources.map((source) => sourceFamily(source.url || source.title || "")));
+}
+
+function extractFactualNumbers(value: string) {
+  const normalized = value.replace(/\b(?:q\d+|v\d+(?:\.\d+)+)\b/gi, " ");
+  return [...normalized.matchAll(/\b(?:\d{3,4}|\d+(?:[.,]\d+)?\s?%|\d+(?:[.,]\d+)?\s?(?:million|milliard|billion|trillion|millions|milliards|dollars?|euros?|usd|eur))\b/gi)]
+    .map((match) => match[0].toLowerCase().replace(/\s+/g, " ").trim());
+}
+
+function normalizedEvidenceText(tooling: ChatToolMetadata) {
+  return normalizeLooseText([
+    ...tooling.verifiedFacts,
+    ...tooling.summary,
+    ...tooling.sources.flatMap((source) => [source.title, source.snippet, source.excerpt])
+  ].filter(Boolean).join(" "));
+}
+
+function unsupportedFactualNumbers(args: {
+  answer: string;
+  question: string;
+  tooling: ChatToolMetadata;
+}) {
+  const evidenceText = normalizedEvidenceText(args.tooling);
+  if (!evidenceText) {
+    return [];
+  }
+  const questionText = normalizeLooseText(args.question);
+  return extractFactualNumbers(args.answer).filter((numberValue) => {
+    const normalized = normalizeLooseText(numberValue);
+    return normalized && !evidenceText.includes(normalized) && !questionText.includes(normalized);
+  });
+}
+
+function answerIsTooNarrowForVerifiedEntity(args: {
+  answerKind: EntityKind;
+  verifiedKind: EntityKind;
+  answer: string;
+}) {
+  if (args.verifiedKind === "organization" && args.answerKind === "product_device") {
+    return true;
+  }
+  const first = firstSentence(args.answer);
+  return (
+    args.verifiedKind === "organization" &&
+    /\b(?:is|est|c'est|c est)\s+(?:a |an |un |une )?(?:processor|chip|soc|gpu|processeur|puce)\b/i.test(first)
+  );
+}
+
 export function verifyPostAnswerGrounding(args: {
   question: string;
   category: QuestionCategory;
@@ -157,9 +224,18 @@ export function verifyPostAnswerGrounding(args: {
   if (args.tooling.used && ["research", "web"].includes(args.tooling.routing.toolType)) {
     const verifiedKind = dominantVerifiedEntityKind(args.tooling);
     const answerKind = primaryEntityKind(args.answer);
-    if (verifiedKind === "organization" && answerKind === "product_device") {
+    if (answerIsTooNarrowForVerifiedEntity({ verifiedKind, answerKind, answer: args.answer })) {
       issues.push("answer_entity_type_mismatch:organization_vs_product_device");
     }
+  }
+
+  if (
+    args.tooling.used &&
+    ["research", "web"].includes(args.tooling.routing.toolType) &&
+    args.tooling.sources.length > 0 &&
+    acceptedSourceFamilies(args.tooling).size < 2
+  ) {
+    issues.push("weak_source_corroboration");
   }
 
   if (
@@ -178,6 +254,21 @@ export function verifyPostAnswerGrounding(args: {
     });
     if (badSources.length > 0) {
       issues.push("source_semantic_mismatch");
+    }
+  }
+
+  if (
+    args.tooling.used &&
+    ["research", "web"].includes(args.tooling.routing.toolType) &&
+    args.tooling.sources.length > 0
+  ) {
+    const unsupportedNumbers = unsupportedFactualNumbers({
+      answer: args.answer,
+      question: args.question,
+      tooling: args.tooling
+    });
+    if (unsupportedNumbers.length > 0) {
+      issues.push("unsupported_numeric_or_date_claim");
     }
   }
 

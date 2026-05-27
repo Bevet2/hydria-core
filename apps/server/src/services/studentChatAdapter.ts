@@ -24,6 +24,10 @@ import {
   type ModelRuntimeBudget,
   type ModelRuntimeGovernorService
 } from "./models/modelRuntimeGovernor.js";
+import {
+  formatAgenticOrchestrationPlanForPrompt,
+  type AgenticOrchestrationPlan
+} from "./orchestration/agenticOrchestrationPlanner.js";
 
 export type StudentChatAdapterInput = {
   question: string;
@@ -35,6 +39,7 @@ export type StudentChatAdapterInput = {
   activeConstraintCapsule: ActiveConstraintCapsule;
   answerPolicy: MultiTurnAnswerPolicyResult;
   evidenceCapsule: EvidenceCapsule;
+  agenticPlan: AgenticOrchestrationPlan;
   qualityRetry?: ConversationQualityGateResult;
   requiresExternalGrounding: boolean;
   tooling: ChatToolMetadata;
@@ -511,6 +516,9 @@ export function buildStudentChatPrompt(input: StudentChatAdapterInput, route = s
     "Use the selected specialist capability, but do not mention model routing in the answer.",
     "EvidenceCapsule:",
     formatEvidenceCapsuleForPrompt(input.evidenceCapsule),
+    "AgenticOrchestrationPlan:",
+    formatAgenticOrchestrationPlanForPrompt(input.agenticPlan),
+    "Follow the mission plan as orchestration guidance. Use accepted tool, source, knowledge, and context contributions first; do not expose the plan.",
     ...maybeStableFactCompaction(route),
     ...maybePlainRouteGuidance(route),
     ...maybeProductGrounding(input),
