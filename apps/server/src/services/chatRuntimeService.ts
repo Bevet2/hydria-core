@@ -51,6 +51,11 @@ import {
   normalizeOrdinalAliases,
   rewriteGeneralKnowledgeQuery
 } from "./research/generalKnowledgeQueryRewriter.js";
+import { buildSemanticFrame } from "./orchestration/semanticMissionPlanner.js";
+import {
+  verifyPostAnswerGrounding,
+  type PostAnswerVerificationResult
+} from "./orchestration/postAnswerVerifier.js";
 
 type ChatRuntimeSession = {
   sessionId: string;
@@ -2483,6 +2488,7 @@ function buildChatOrchestrationTrace(args: {
   knowledgeRetrieval: ChatKnowledgeRetrievalMetadata;
   generation: StudentChatAdapterResult;
   conversationQuality: ConversationQualityGateResult;
+  postAnswerVerification: PostAnswerVerificationResult;
   usedRetry: boolean;
   durationMs: number;
 }): ChatOrchestrationTrace {
@@ -2499,6 +2505,7 @@ function buildChatOrchestrationTrace(args: {
       ? "warning"
       : "passed";
   const qualityStatus = args.conversationQuality.passed ? "passed" : "warning";
+  const postAnswerStatus = args.postAnswerVerification.passed ? "passed" : "warning";
   const knowledgeStatus =
     args.knowledgeRetrieval.route === "used"
       ? "passed"
@@ -2635,6 +2642,22 @@ function buildChatOrchestrationTrace(args: {
         }
       },
       {
+        id: "post_answer_verifier",
+        label: "Post-answer verifier",
+        status: postAnswerStatus,
+        summary: args.postAnswerVerification.passed
+          ? "Answer matches the expected subject, semantic domain, and verified evidence."
+          : `Verifier kept warnings: ${args.postAnswerVerification.issues.join(", ")}.`,
+        details: {
+          passed: args.postAnswerVerification.passed,
+          score: args.postAnswerVerification.score,
+          subject: args.postAnswerVerification.subject,
+          domain: args.postAnswerVerification.domain,
+          recommendedAction: args.postAnswerVerification.recommendedAction,
+          issues: args.postAnswerVerification.issues.slice(0, 8)
+        }
+      },
+      {
         id: "quality_gate",
         label: "Quality gate",
         status: qualityStatus,
@@ -2767,12 +2790,6 @@ export class ChatRuntimeService {
         language: conversationState.language,
         routingQuestion
       }) ??
-      buildRequiredToolUnavailableDraft({
-        tooling,
-        category,
-        language: conversationState.language,
-        routingQuestion
-      }) ??
       buildRuntimeProductKnowledgeDraft({
         userMessage: args.message,
         language: conversationState.language,
@@ -2791,6 +2808,14 @@ export class ChatRuntimeService {
         category,
         routingQuestion
       }) ??
+      (!knowledgeRetrieval.used
+        ? buildRequiredToolUnavailableDraft({
+            tooling,
+            category,
+            language: conversationState.language,
+            routingQuestion
+          })
+        : null) ??
       buildContextSetupDraft({
         conversationState,
         newUserMessage: args.message,
@@ -3349,6 +3374,59 @@ export class ChatRuntimeService {
       });
     }
 
+    const deterministicRuntimeAnswer = isQualityTrustedDeterministicRuntimeModel(draft.generation.model);
+    let postAnswerVerification: PostAnswerVerificationResult = deterministicRuntimeAnswer
+      ? {
+          passed: true,
+          score: 0.95,
+          issues: [],
+          subject:
+            typeof tooling.routing.extractedArgs?.subject === "string" ? tooling.routing.extractedArgs.subject : null,
+          domain: "deterministic_runtime",
+          recommendedAction: "accept"
+        }
+      : verifyPostAnswerGrounding({
+          question: draft.routingQuestion,
+          category: draft.category,
+          answer: finalAnswer.answer,
+          tooling,
+          toolRouting: tooling.routing
+        });
+    if (
+      !deterministicRuntimeAnswer &&
+      !postAnswerVerification.passed &&
+      postAnswerVerification.recommendedAction === "repair_from_verified_sources" &&
+      !knowledgeRetrieval.used
+    ) {
+      const verifiedRepair = buildSourceBackedFactualRepair({
+        answer: finalAnswer,
+        tooling,
+        force: true
+      });
+      if (verifiedRepair && verifiedRepair.answer !== finalAnswer.answer) {
+        finalAnswer = verifiedRepair;
+        conversationQuality = this.analyzeQuality({
+          runtimeMode,
+          conversationState,
+          activeConstraintCapsule,
+          answerPolicy,
+          newUserMessage: args.message,
+          answer: finalAnswer.answer,
+          lastAssistantAnswer: session.lastAssistantAnswer,
+          recentMessages: session.messages,
+          toolRouting: tooling.routing
+        });
+        usedRetry = true;
+        postAnswerVerification = verifyPostAnswerGrounding({
+          question: draft.routingQuestion,
+          category: draft.category,
+          answer: finalAnswer.answer,
+          tooling,
+          toolRouting: tooling.routing
+        });
+      }
+    }
+
     const assistantMessage: ChatMessage = {
       id: randomUUID(),
       role: "assistant",
@@ -3374,6 +3452,7 @@ export class ChatRuntimeService {
       knowledgeRetrieval,
       generation: draft.generation,
       conversationQuality,
+      postAnswerVerification,
       usedRetry,
       durationMs
     });
@@ -3621,6 +3700,12 @@ export class ChatRuntimeService {
     const subject = extractAnswerabilityResearchSubject(args.question);
     const directLanguage = detectDirectLanguage(args.question);
     const language = args.conversationState.language === "fr" || directLanguage === "fr" ? "fr" : "en";
+    const semanticFrame = buildSemanticFrame({
+      question: args.question,
+      category: args.category,
+      subject,
+      language
+    });
     const routing: ToolRoutingDecision = {
       ...defaultToolRoutingDecision,
       considered: true,
@@ -3636,7 +3721,8 @@ export class ChatRuntimeService {
       extractedArgs: {
         query: args.question,
         subject,
-        language
+        language,
+        semanticFrame
       },
       toolResultUsed: false
     };

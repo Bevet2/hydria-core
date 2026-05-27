@@ -12,6 +12,12 @@ import {
   rewriteGeneralKnowledgeQuery,
   subjectMatchesText
 } from "../research/generalKnowledgeQueryRewriter.js";
+import {
+  buildSemanticSearchCandidates,
+  semanticFrameFromRouting,
+  sourceMatchesSemanticFrame,
+  type SemanticFrame
+} from "../orchestration/semanticMissionPlanner.js";
 
 export type LocalToolExecutionResult = {
   toolType: ToolRoutingDecision["toolType"];
@@ -753,6 +759,18 @@ function rewriteResearchQuery(args: ToolRoutingDecision) {
   });
 }
 
+function uniqueStrings(values: string[]) {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const normalized = normalizeLooseText(value);
+    if (!normalized || seen.has(normalized)) {
+      return false;
+    }
+    seen.add(normalized);
+    return true;
+  });
+}
+
 function wikipediaLanguageOrder(language: WeatherLanguage) {
   return language === "fr" ? ["fr", "en"] : ["en", "fr"];
 }
@@ -773,8 +791,13 @@ async function searchWikipediaTitle(subject: string, language: string) {
   return search?.query?.search?.[0]?.title?.trim() || subject;
 }
 
-async function fetchWikipediaSummary(subject: string, language: string) {
-  const title = await searchWikipediaTitle(subject, language);
+async function fetchWikipediaSummary(
+  searchQuery: string,
+  language: string,
+  semanticFrame: SemanticFrame,
+  expectedSubject: string
+) {
+  const title = await searchWikipediaTitle(searchQuery, language);
   if (!title) {
     return null;
   }
@@ -793,7 +816,14 @@ async function fetchWikipediaSummary(subject: string, language: string) {
     : null;
   const excerpt = normalizeSpaces(summary.extract);
   const description = summary.description ? normalizeSpaces(summary.description) : null;
-  if (!subjectMatchesText(subject, `${pageTitle} ${description ?? ""} ${excerpt}`)) {
+  if (!subjectMatchesText(expectedSubject, `${pageTitle} ${description ?? ""} ${excerpt}`)) {
+    return null;
+  }
+  const semanticCheck = sourceMatchesSemanticFrame(
+    { ...semanticFrame, subject: semanticFrame.subject ?? expectedSubject },
+    `${pageTitle} ${description ?? ""} ${excerpt}`
+  );
+  if (!semanticCheck.passed) {
     return null;
   }
   return {
@@ -842,52 +872,102 @@ async function searchDuckDuckGo(query: string): Promise<SearchResult[]> {
   return results.slice(0, 3);
 }
 
-async function fetchWikidataEntity(subject: string, language: string): Promise<GeneralKnowledgeEvidence | null> {
+async function fetchWikidataEntity(
+  searchQuery: string,
+  language: string,
+  semanticFrame: SemanticFrame,
+  expectedSubject: string
+): Promise<GeneralKnowledgeEvidence | null> {
   const url = new URL("https://www.wikidata.org/w/api.php");
   url.searchParams.set("action", "wbsearchentities");
-  url.searchParams.set("search", subject);
+  url.searchParams.set("search", searchQuery);
   url.searchParams.set("language", language === "fr" ? "fr" : "en");
   url.searchParams.set("uselang", language === "fr" ? "fr" : "en");
   url.searchParams.set("format", "json");
   url.searchParams.set("origin", "*");
-  url.searchParams.set("limit", "1");
+  url.searchParams.set("limit", "5");
 
   const body = await fetchJson<WikidataSearchResponse>(url);
-  const match = body?.search?.[0];
-  if (!match) {
-    return null;
-  }
-  const label = match?.label?.trim();
-  const description = match?.description?.trim();
-  const id = match?.id?.trim();
-  if (!label || !description || !id) {
+  const matches = body?.search ?? [];
+  if (matches.length === 0) {
     return null;
   }
 
-  const excerpt = normalizeSpaces(`${label}: ${description}.`);
-  if (!subjectMatchesText(subject, excerpt)) {
+  const candidates = matches
+    .map((match) => {
+      const label = match?.label?.trim();
+      const description = match?.description?.trim();
+      const id = match?.id?.trim();
+      if (!label || !description || !id) {
+        return null;
+      }
+      const excerpt = normalizeSpaces(`${label}: ${description}.`);
+      if (!subjectMatchesText(expectedSubject, excerpt)) {
+        return null;
+      }
+      const semanticCheck = sourceMatchesSemanticFrame(
+        { ...semanticFrame, subject: semanticFrame.subject ?? expectedSubject },
+        excerpt
+      );
+      if (!semanticCheck.passed) {
+        return null;
+      }
+      if (
+        semanticFrame.ambiguityLevel === "high" &&
+        semanticFrame.expectedSenseTerms.length > 0 &&
+        semanticCheck.matchedExpectedTerms.length === 0
+      ) {
+        return null;
+      }
+      return {
+        match,
+        label,
+        description,
+        id,
+        excerpt,
+        semanticCheck
+      };
+    })
+    .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
+    .sort((left, right) => {
+      const expectedDelta =
+        right.semanticCheck.matchedExpectedTerms.length - left.semanticCheck.matchedExpectedTerms.length;
+      return expectedDelta !== 0 ? expectedDelta : right.semanticCheck.score - left.semanticCheck.score;
+    });
+
+  const best = candidates[0];
+  if (!best) {
     return null;
   }
 
   return {
-    title: `Wikidata: ${label}`,
-    url: match.concepturi ?? `https://www.wikidata.org/wiki/${id}`,
-    snippet: description,
-    excerpt,
+    title: `Wikidata: ${best.label}`,
+    url: best.match.concepturi ?? `https://www.wikidata.org/wiki/${best.id}`,
+    snippet: best.description,
+    excerpt: best.excerpt,
     engine: "known_endpoint",
     origin: "known_endpoint",
-    confidence: 0.82,
+    confidence: Math.max(0.72, best.semanticCheck.score),
     modifiedAt: null,
     dateSource: "unknown"
   };
 }
 
-async function searchBritannica(subject: string): Promise<GeneralKnowledgeEvidence | null> {
-  const results = await searchDuckDuckGo(`site:britannica.com ${subject}`);
+async function searchBritannica(
+  searchQuery: string,
+  semanticFrame: SemanticFrame,
+  expectedSubject: string
+): Promise<GeneralKnowledgeEvidence | null> {
+  const results = await searchDuckDuckGo(`site:britannica.com ${searchQuery}`);
   const match = results.find((result) => {
     try {
       const host = new URL(result.url).hostname.replace(/^www\./, "");
-      return host.endsWith("britannica.com") && subjectMatchesText(subject, `${result.title} ${result.snippet}`);
+      const text = `${result.title} ${result.snippet}`;
+      return (
+        host.endsWith("britannica.com") &&
+        subjectMatchesText(expectedSubject, text) &&
+        sourceMatchesSemanticFrame({ ...semanticFrame, subject: semanticFrame.subject ?? expectedSubject }, text).passed
+      );
     } catch {
       return false;
     }
@@ -909,10 +989,20 @@ async function searchBritannica(subject: string): Promise<GeneralKnowledgeEviden
   };
 }
 
-async function searchGenericFactSources(subject: string): Promise<GeneralKnowledgeEvidence[]> {
-  const results = await searchDuckDuckGo(subject);
+async function searchGenericFactSources(
+  searchQuery: string,
+  semanticFrame: SemanticFrame,
+  expectedSubject: string
+): Promise<GeneralKnowledgeEvidence[]> {
+  const results = await searchDuckDuckGo(searchQuery);
   return results
-    .filter((result) => subjectMatchesText(subject, `${result.title} ${result.snippet}`))
+    .filter((result) => {
+      const text = `${result.title} ${result.snippet}`;
+      return (
+        subjectMatchesText(expectedSubject, text) &&
+        sourceMatchesSemanticFrame({ ...semanticFrame, subject: semanticFrame.subject ?? expectedSubject }, text).passed
+      );
+    })
     .slice(0, 3)
     .map((result) => ({
       title: result.title,
@@ -994,10 +1084,21 @@ async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<L
   }
 
   const language = extractLanguage(args);
+  const semanticFrame = {
+    ...semanticFrameFromRouting({
+      routing: args,
+      question: extractStringArg(args, "query") ?? subject
+    }),
+    subject
+  };
+  const researchCandidates = uniqueStrings([
+    ...buildSemanticSearchCandidates(subject, semanticFrame),
+    ...rewrite.candidates
+  ]);
   const evidence: GeneralKnowledgeEvidence[] = [];
-  for (const candidate of rewrite.candidates) {
+  for (const candidate of researchCandidates) {
     for (const wikipediaLanguage of wikipediaLanguageOrder(language)) {
-      const summary = await fetchWikipediaSummary(candidate, wikipediaLanguage);
+      const summary = await fetchWikipediaSummary(candidate, wikipediaLanguage, semanticFrame, subject);
       if (!summary) {
         continue;
       }
@@ -1019,16 +1120,16 @@ async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<L
     }
   }
 
-  for (const candidate of rewrite.candidates) {
-    addEvidence(evidence, await fetchWikidataEntity(candidate, language));
+  for (const candidate of researchCandidates) {
+    addEvidence(evidence, await fetchWikidataEntity(candidate, language, semanticFrame, subject));
     if (evidence.length >= 2) {
       break;
     }
   }
 
   if (evidence.length < 2) {
-    for (const candidate of rewrite.candidates) {
-      addEvidence(evidence, await searchBritannica(candidate));
+    for (const candidate of researchCandidates) {
+      addEvidence(evidence, await searchBritannica(candidate, semanticFrame, subject));
       if (evidence.length >= 2) {
         break;
       }
@@ -1036,8 +1137,8 @@ async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<L
   }
 
   if (evidence.length < 2) {
-    for (const candidate of rewrite.candidates) {
-      for (const item of await searchGenericFactSources(candidate)) {
+    for (const candidate of researchCandidates) {
+      for (const item of await searchGenericFactSources(candidate, semanticFrame, subject)) {
         addEvidence(evidence, item);
       }
       if (evidence.length >= 2) {

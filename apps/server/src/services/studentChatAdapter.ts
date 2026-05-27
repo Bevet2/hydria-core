@@ -414,6 +414,54 @@ function formatToolContext(tooling: ChatToolMetadata) {
     .join("\n");
 }
 
+function formatSemanticMissionContext(tooling: ChatToolMetadata) {
+  const rawFrame = tooling.routing.extractedArgs?.semanticFrame;
+  if (typeof rawFrame !== "object" || rawFrame === null) {
+    return "";
+  }
+  const frame = rawFrame as {
+    subject?: unknown;
+    domain?: unknown;
+    intent?: unknown;
+    expectedSenseTerms?: unknown;
+    rejectedSenseTerms?: unknown;
+    componentMissions?: unknown;
+  };
+  const expectedTerms = Array.isArray(frame.expectedSenseTerms)
+    ? frame.expectedSenseTerms.filter((item): item is string => typeof item === "string").slice(0, 12)
+    : [];
+  const rejectedTerms = Array.isArray(frame.rejectedSenseTerms)
+    ? frame.rejectedSenseTerms.filter((item): item is string => typeof item === "string").slice(0, 10)
+    : [];
+  const missions = Array.isArray(frame.componentMissions)
+    ? frame.componentMissions
+        .filter((item): item is { component?: unknown; role?: unknown; mission?: unknown; required?: unknown } =>
+          typeof item === "object" && item !== null
+        )
+        .slice(0, 6)
+        .map((mission) =>
+          `- ${String(mission.component ?? "component")} / ${String(mission.role ?? "role")}: ${compact(
+            String(mission.mission ?? ""),
+            160
+          )}`
+        )
+    : [];
+
+  return [
+    "Semantic orchestration frame:",
+    `subject=${typeof frame.subject === "string" ? compact(frame.subject, 120) : "unknown"}`,
+    `domain=${typeof frame.domain === "string" ? frame.domain : "general"}`,
+    `intent=${typeof frame.intent === "string" ? frame.intent : tooling.routing.intent}`,
+    expectedTerms.length > 0 ? `expectedSenseTerms=${expectedTerms.join(", ")}` : "",
+    rejectedTerms.length > 0 ? `rejectedSenseTerms=${rejectedTerms.join(", ")}` : "",
+    missions.length > 0 ? "Component missions:" : "",
+    ...missions,
+    "Use only evidence that matches this semantic frame; reject same-word but wrong-sense sources."
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 function formatKnowledgeRetrievalContext(knowledge: ChatKnowledgeRetrievalMetadata) {
   if (!knowledge.used || knowledge.hits.length === 0) {
     return "";
@@ -442,6 +490,7 @@ function formatKnowledgeRetrievalContext(knowledge: ChatKnowledgeRetrievalMetada
 export function buildStudentChatPrompt(input: StudentChatAdapterInput, route = selectStudentChatModelRoute(input)) {
   const recentMessages = formatRecentMessages(input.recentMessages);
   const toolContext = formatToolContext(input.tooling);
+  const semanticMissionContext = formatSemanticMissionContext(input.tooling);
   const knowledgeContext = formatKnowledgeRetrievalContext(input.knowledgeRetrieval);
   const usePlainText = shouldUsePlainTextRoute(route);
   const retryLines = input.qualityRetry
@@ -466,6 +515,7 @@ export function buildStudentChatPrompt(input: StudentChatAdapterInput, route = s
     ...maybePlainRouteGuidance(route),
     ...maybeProductGrounding(input),
     ...maybeCurrentDataGuidance(input),
+    semanticMissionContext,
     toolContext,
     knowledgeContext,
     input.runtimeMode === "conversation" ? "Active context:" : "",

@@ -1,5 +1,6 @@
 import type { QuestionCategory, ToolRoutingDecision } from "../../types/arena.js";
 import { defaultToolRoutingDecision } from "../../types/arena.js";
+import { buildSemanticFrame } from "../orchestration/semanticMissionPlanner.js";
 import { normalizeSpace } from "../research/common.js";
 import { rewriteGeneralKnowledgeQuery } from "../research/generalKnowledgeQueryRewriter.js";
 import { detectTemporalQuery } from "../research/temporal.js";
@@ -299,6 +300,23 @@ function cleanFactualLookupSubject(question: string) {
     language: detectQuestionLanguage(question)
   }).canonicalSubject;
   return normalized.length >= 2 ? normalized : extractQuotedOrTrailingName(question) ?? question;
+}
+
+function buildFactCheckArgs(question: string, category: QuestionCategory | null | undefined) {
+  const subject = cleanFactualLookupSubject(question);
+  const language = detectQuestionLanguage(question);
+  const semanticFrame = buildSemanticFrame({
+    question,
+    category,
+    subject,
+    language
+  });
+  return {
+    subject,
+    query: question,
+    language,
+    semanticFrame
+  };
 }
 
 function cleanSubject(value: string) {
@@ -1149,11 +1167,7 @@ export class ToolRoutingService {
         fallbackAllowed: false,
         reason:
           "The request asks for a named factual lookup or explicitly requests verification; use source retrieval before synthesis.",
-        extractedArgs: {
-          subject: cleanFactualLookupSubject(question),
-          query: question,
-          language: detectQuestionLanguage(question)
-        }
+        extractedArgs: buildFactCheckArgs(question, args.category)
       });
     }
 
