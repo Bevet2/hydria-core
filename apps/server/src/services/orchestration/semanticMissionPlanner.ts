@@ -201,7 +201,10 @@ function unique(values: string[]) {
 }
 
 function normalizeTokens(value: string) {
-  return normalizeLooseText(value).split(/\s+/).filter(Boolean);
+  return normalizeLooseText(value)
+    .split(/\s+/)
+    .map((token) => token.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, ""))
+    .filter(Boolean);
 }
 
 function textHasTerm(normalizedText: string, normalizedTokens: Set<string>, term: string) {
@@ -472,9 +475,9 @@ export function buildSemanticSearchCandidates(subject: string, frame: SemanticFr
   }
 
   return unique([
+    cleanSubject,
     `${cleanSubject} ${frame.searchModifiers.slice(0, 2).join(" ")}`,
-    `${cleanSubject} ${frame.searchModifiers[0]}`,
-    cleanSubject
+    `${cleanSubject} ${frame.searchModifiers[0]}`
   ]);
 }
 

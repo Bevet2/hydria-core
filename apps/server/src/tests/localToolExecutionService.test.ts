@@ -625,6 +625,105 @@ test("local research fact-check tool cleans presentation biography subjects befo
   assert.equal(result?.sources?.[0]?.retrievalEngine, "known_endpoint");
 });
 
+test("local research fact-check tool rejects same-brand wrong-sense source pages", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const requestedSearches: string[] = [];
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    if (url.includes("fr.wikipedia.org/w/api.php")) {
+      const parsed = new URL(url);
+      requestedSearches.push(parsed.searchParams.get("srsearch") ?? "");
+      const search = parsed.searchParams.get("srsearch") ?? "";
+      return new Response(
+        JSON.stringify({
+          query: {
+            search: search === "NVIDIA"
+              ? [
+                  { title: "Tegra", snippet: "Processeur produit par NVIDIA." },
+                  { title: "Nvidia", snippet: "Societe americaine de technologie." }
+                ]
+              : [{ title: "Tegra", snippet: "Processeur produit par NVIDIA." }]
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("fr.wikipedia.org/api/rest_v1/page/summary/Tegra")) {
+      return new Response(
+        JSON.stringify({
+          title: "Tegra",
+          description: "Processeur tout en un",
+          extract:
+            "NVIDIA Tegra est un processeur tout en un derive de l'architecture ARM et produit par NVIDIA.",
+          timestamp: "2026-05-01T12:00:00Z"
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("fr.wikipedia.org/api/rest_v1/page/summary/Nvidia")) {
+      return new Response(
+        JSON.stringify({
+          title: "Nvidia",
+          description: "Societe americaine de technologie",
+          extract:
+            "Nvidia Corporation est une societe americaine de technologie specialisee dans les processeurs graphiques et les accelerateurs d'intelligence artificielle.",
+          timestamp: "2026-05-01T12:00:00Z",
+          content_urls: {
+            desktop: {
+              page: "https://fr.wikipedia.org/wiki/Nvidia"
+            }
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("wikidata.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          search: [
+            {
+              id: "Q182477",
+              label: "NVIDIA",
+              description: "societe americaine de technologie",
+              concepturi: "https://www.wikidata.org/wiki/Q182477"
+            }
+          ]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const service = new LocalToolExecutionService();
+  const routing = buildFactCheckRouting("NVIDIA");
+  routing.extractedArgs = {
+    ...routing.extractedArgs,
+    query: "Qu'est-ce que NVIDIA ?",
+    semanticFrame: {
+      subject: "NVIDIA",
+      domain: "software_technology",
+      intent: "fact_check",
+      expectedSenseTerms: ["technologie", "informatique"],
+      rejectedSenseTerms: [],
+      searchModifiers: ["logiciel", "informatique", "technologie"],
+      ambiguityLevel: "high",
+      componentMissions: []
+    }
+  };
+  const result = await service.tryExecute(routing);
+
+  assert.equal(requestedSearches[0], "NVIDIA");
+  assert.equal(result?.toolType, "research");
+  assert.match(result?.verifiedFacts.join(" "), /societe americaine de technologie/i);
+  assert.doesNotMatch(result?.verifiedFacts.join(" "), /Tegra|processeur tout en un/i);
+});
+
 test("local research fact-check tool abstains when only one source family is available", async (t) => {
   const originalFetch = globalThis.fetch;
 

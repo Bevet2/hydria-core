@@ -802,6 +802,22 @@ function subjectTitleScore(subject: string, title: string) {
   return titleKey.includes(subjectKey) ? 1 : 0;
 }
 
+function requiresStrictSourceTitle(subject: string) {
+  const compact = subject.trim().replace(/[^A-Za-z0-9]/g, "");
+  return compact.length >= 4 && compact === compact.toUpperCase() && /[A-Z]/.test(compact);
+}
+
+function sourceTitleMatchesResolvedSubject(expectedSubject: string, title: string) {
+  const titleScore = subjectTitleScore(expectedSubject, title);
+  if (titleScore >= 3) {
+    return true;
+  }
+  if (requiresStrictSourceTitle(expectedSubject)) {
+    return false;
+  }
+  return titleScore > 0 || subjectMatchesText(expectedSubject, title);
+}
+
 async function searchWikipediaTitles(searchQuery: string, language: string, expectedSubject: string) {
   const searchUrl = new URL(`https://${language}.wikipedia.org/w/api.php`);
   searchUrl.searchParams.set("action", "query");
@@ -851,6 +867,9 @@ async function fetchWikipediaSummary(
       : null;
     const excerpt = normalizeSpaces(summary.extract);
     const description = summary.description ? normalizeSpaces(summary.description) : null;
+    if (!sourceTitleMatchesResolvedSubject(expectedSubject, pageTitle)) {
+      continue;
+    }
     if (!subjectMatchesText(expectedSubject, `${pageTitle} ${description ?? ""} ${excerpt}`)) {
       continue;
     }
@@ -939,6 +958,9 @@ async function fetchWikidataEntity(
         return null;
       }
       const excerpt = normalizeSpaces(`${label}: ${description}.`);
+      if (!sourceTitleMatchesResolvedSubject(expectedSubject, label)) {
+        return null;
+      }
       if (!subjectMatchesText(expectedSubject, excerpt)) {
         return null;
       }
@@ -1006,6 +1028,7 @@ async function searchBritannica(
       const text = `${result.title} ${result.snippet}`;
       return (
         host.endsWith("britannica.com") &&
+        sourceTitleMatchesResolvedSubject(expectedSubject, result.title) &&
         subjectMatchesText(expectedSubject, text) &&
         sourceMatchesSemanticFrame({ ...semanticFrame, subject: semanticFrame.subject ?? expectedSubject }, text).passed
       );
@@ -1040,6 +1063,7 @@ async function searchGenericFactSources(
     .filter((result) => {
       const text = `${result.title} ${result.snippet}`;
       return (
+        sourceTitleMatchesResolvedSubject(expectedSubject, result.title) &&
         subjectMatchesText(expectedSubject, text) &&
         sourceMatchesSemanticFrame({ ...semanticFrame, subject: semanticFrame.subject ?? expectedSubject }, text).passed
       );
