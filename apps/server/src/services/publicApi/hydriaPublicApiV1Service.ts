@@ -12,6 +12,7 @@ import {
   type PublicApiSessionResponse
 } from "../../types/publicApi.js";
 import { env } from "../../utils/env.js";
+import { planPublicApiProposedActions } from "./osActionPlanner.js";
 
 type HydriaPublicApiV1ServiceDeps = {
   chatRuntimeService: Pick<ChatRuntimeService, "sendMessage" | "resetSession">;
@@ -51,12 +52,19 @@ export class HydriaPublicApiV1Service {
       message: resolveQuestion(request),
       ...(request.sessionId ? { sessionId: request.sessionId } : {})
     });
+    const requestId = randomUUID();
     const includeSources = request.options.includeSources;
     const includeTrace = request.options.includeTrace;
     const includeDiagnostics = request.options.includeDiagnostics;
+    const proposedActions = planPublicApiProposedActions({
+      requestId,
+      createdAt: result.createdAt,
+      request,
+      answer: result.assistantMessage.content
+    });
 
     return publicApiAskResponseSchema.parse({
-      id: randomUUID(),
+      id: requestId,
       object: "hydria.answer",
       createdAt: result.createdAt,
       sessionId: result.sessionId,
@@ -90,6 +98,7 @@ export class HydriaPublicApiV1Service {
         retryUsed: result.usedRetry,
         durationMs: result.durationMs
       },
+      proposedActions,
       ...(includeTrace ? { trace: result.orchestrationTrace } : {}),
       ...(includeDiagnostics
         ? {
@@ -146,7 +155,8 @@ export class HydriaPublicApiV1Service {
           "source-backed answerability",
           "governed memory retrieval",
           "agentic mission plan",
-          "post-answer verification"
+          "post-answer verification",
+          "workspace action proposals"
         ],
         memory: [
           "session continuity via sessionId",

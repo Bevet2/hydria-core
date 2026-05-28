@@ -85,6 +85,7 @@ test("public API ask schema accepts input alias and defaults output options", ()
   assert.equal(parsed.input, "Qu'est-ce que NVIDIA ?");
   assert.equal(parsed.options.includeSources, true);
   assert.equal(parsed.options.includeTrace, false);
+  assert.equal(parsed.options.includeProposedActions, true);
   assert.throws(() => publicApiAskRequestSchema.parse({}), /Either input or question is required/);
 });
 
@@ -118,7 +119,86 @@ test("public API v1 maps chat runtime output into a stable integration envelope"
   assert.equal(response.tools.used, true);
   assert.equal(response.models.provider, "tool");
   assert.equal(response.memory.contextTracked, true);
+  assert.deepEqual(response.proposedActions, []);
   assert.equal("trace" in response, false);
+});
+
+test("public API v1 returns dry-run proposed actions for Hydria OS workspaces", async () => {
+  const service = new HydriaPublicApiV1Service({
+    chatRuntimeService: {
+      async sendMessage() {
+        return chatResponse({
+          assistantMessage: {
+            content: "Je vais proposer une modification du tableau actif."
+          }
+        });
+      },
+      resetSession() {}
+    } as any
+  });
+
+  const response = await service.ask(
+    publicApiAskRequestSchema.parse({
+      input: "Ajoute une colonne Priorite dans le tableur.",
+      workspaceContext: {
+        os: {
+          name: "Hydria OS"
+        },
+        activeWorkObject: {
+          id: "work-object-1",
+          title: "Pipeline ventes",
+          kind: "dataset",
+          entryPath: "table.csv",
+          contentPreview: "Client,Status"
+        },
+        capabilities: {
+          actions: ["reply", "update_work_object", "create_artifact"],
+          artifactFormats: ["xlsx", "csv"],
+          workObjectKinds: ["dataset", "document"]
+        }
+      }
+    })
+  );
+
+  assert.equal(response.proposedActions.length, 1);
+  assert.equal(response.proposedActions[0]?.type, "update_work_object");
+  assert.equal(response.proposedActions[0]?.target.workObjectId, "work-object-1");
+  assert.equal(response.proposedActions[0]?.dryRun, true);
+  assert.equal(response.proposedActions[0]?.requiresConfirmation, true);
+  assert.equal(response.proposedActions[0]?.payload.mode, "append");
+});
+
+test("public API v1 returns creation proposals when an OS advertises artifact capabilities", async () => {
+  const service = new HydriaPublicApiV1Service({
+    chatRuntimeService: {
+      async sendMessage() {
+        return chatResponse({
+          assistantMessage: {
+            content: "Je peux preparer le tableur demande."
+          }
+        });
+      },
+      resetSession() {}
+    } as any
+  });
+
+  const response = await service.ask(
+    publicApiAskRequestSchema.parse({
+      input: "Cree un Excel de suivi des prospects.",
+      workspaceContext: {
+        capabilities: {
+          actions: ["create_artifact"],
+          artifactFormats: ["xlsx", "csv"],
+          workObjectKinds: ["dataset"]
+        }
+      }
+    })
+  );
+
+  assert.equal(response.proposedActions.length, 1);
+  assert.equal(response.proposedActions[0]?.type, "create_artifact");
+  assert.equal(response.proposedActions[0]?.payload.format, "xlsx");
+  assert.equal(response.proposedActions[0]?.payload.kind, "dataset");
 });
 
 test("public API v1 can include trace and diagnostics without exposing private chain-of-thought", async () => {
@@ -182,5 +262,6 @@ test("public API v1 exposes integration capabilities", () => {
   assert.equal(capabilities.version, "v1");
   assert.ok(capabilities.endpoints.includes("POST /api/v1/ask"));
   assert.ok(capabilities.runtime.orchestration.includes("agentic mission plan"));
+  assert.ok(capabilities.runtime.orchestration.includes("workspace action proposals"));
   assert.equal(capabilities.runtime.chainOfThought, "not_exposed");
 });

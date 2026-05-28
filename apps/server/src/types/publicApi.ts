@@ -4,13 +4,69 @@ export const publicApiAskOptionsSchema = z
   .object({
     includeSources: z.boolean().default(true),
     includeTrace: z.boolean().default(false),
-    includeDiagnostics: z.boolean().default(false)
+    includeDiagnostics: z.boolean().default(false),
+    includeProposedActions: z.boolean().default(true)
   })
   .default({
     includeSources: true,
     includeTrace: false,
-    includeDiagnostics: false
+    includeDiagnostics: false,
+    includeProposedActions: true
   });
+
+export const publicApiOsActionTypeSchema = z.enum([
+  "reply",
+  "create_artifact",
+  "create_work_object",
+  "update_work_object",
+  "set_work_object_metadata"
+]);
+
+export const publicApiWorkspaceContextSchema = z
+  .object({
+    os: z
+      .object({
+        name: z.string().trim().min(1).max(120).optional(),
+        version: z.string().trim().min(1).max(80).optional()
+      })
+      .optional(),
+    activeWorkObject: z
+      .object({
+        id: z.string().trim().min(1).max(200),
+        title: z.string().trim().max(300).optional(),
+        kind: z.string().trim().max(80).optional(),
+        entryPath: z.string().trim().max(260).optional(),
+        contentPreview: z.string().max(5000).optional(),
+        editable: z.boolean().optional()
+      })
+      .optional(),
+    recentWorkObjects: z
+      .array(
+        z.object({
+          id: z.string().trim().min(1).max(200),
+          title: z.string().trim().max(300).optional(),
+          kind: z.string().trim().max(80).optional(),
+          entryPath: z.string().trim().max(260).optional(),
+          editable: z.boolean().optional()
+        })
+      )
+      .max(20)
+      .optional(),
+    capabilities: z
+      .object({
+        actions: z.array(publicApiOsActionTypeSchema).max(20).optional(),
+        workObjectKinds: z.array(z.string().trim().min(1).max(80)).max(30).optional(),
+        artifactFormats: z.array(z.string().trim().min(1).max(24)).max(30).optional()
+      })
+      .optional(),
+    executionPolicy: z
+      .object({
+        mode: z.enum(["propose_only", "dry_run", "execute_after_confirmation"]).default("propose_only"),
+        requireConfirmation: z.boolean().default(true)
+      })
+      .optional()
+  })
+  .optional();
 
 export const publicApiAskRequestSchema = z
   .object({
@@ -19,6 +75,7 @@ export const publicApiAskRequestSchema = z
     sessionId: z.string().uuid().optional(),
     userId: z.string().trim().min(1).max(160).optional(),
     projectId: z.string().trim().min(1).max(160).optional(),
+    workspaceContext: publicApiWorkspaceContextSchema,
     metadata: z.record(z.string(), z.unknown()).optional(),
     options: publicApiAskOptionsSchema
   })
@@ -32,6 +89,26 @@ export const publicApiSourceSchema = z.object({
   url: z.string().min(1).nullable(),
   snippet: z.string().nullable(),
   excerpt: z.string().nullable()
+});
+
+export const publicApiProposedActionSchema = z.object({
+  id: z.string().uuid(),
+  type: publicApiOsActionTypeSchema,
+  title: z.string(),
+  target: z.object({
+    workObjectId: z.string().nullable(),
+    entryPath: z.string().nullable()
+  }),
+  payload: z.record(z.string(), z.unknown()),
+  riskLevel: z.enum(["low", "medium", "high"]),
+  requiresConfirmation: z.boolean(),
+  dryRun: z.boolean(),
+  rationale: z.string(),
+  provenance: z.object({
+    source: z.literal("hydria_core_public_api_v1"),
+    requestId: z.string().uuid(),
+    generatedAt: z.string().datetime()
+  })
 });
 
 export const publicApiAskResponseSchema = z.object({
@@ -69,6 +146,7 @@ export const publicApiAskResponseSchema = z.object({
     retryUsed: z.boolean(),
     durationMs: z.number().int().nonnegative()
   }),
+  proposedActions: z.array(publicApiProposedActionSchema),
   trace: z.unknown().optional(),
   diagnostics: z.unknown().optional()
 });
@@ -110,6 +188,7 @@ export const publicApiCapabilitiesResponseSchema = z.object({
 
 export type PublicApiAskRequest = z.infer<typeof publicApiAskRequestSchema>;
 export type PublicApiAskResponse = z.infer<typeof publicApiAskResponseSchema>;
+export type PublicApiProposedAction = z.infer<typeof publicApiProposedActionSchema>;
 export type PublicApiSessionResponse = z.infer<typeof publicApiSessionResponseSchema>;
 export type PublicApiSessionResetResponse = z.infer<typeof publicApiSessionResetResponseSchema>;
 export type PublicApiCapabilitiesResponse = z.infer<typeof publicApiCapabilitiesResponseSchema>;

@@ -9,6 +9,7 @@ The public API uses the normal Hydria chat runtime:
 - session memory through `sessionId`
 - interaction audit persistence and governed learning capture
 - runtime trace without private chain-of-thought
+- optional Hydria OS `workspaceContext` that returns governed `proposedActions`
 
 It does not use Playground/Arena or OpenRouter.
 
@@ -96,9 +97,87 @@ Response shape:
     "issues": [],
     "retryUsed": false,
     "durationMs": 1234
-  }
+  },
+  "proposedActions": []
 }
 ```
+
+## Hydria OS Workspace Actions
+
+External OS clients can pass workspace capabilities to let Core propose actions without executing them.
+Core remains the brain: it reasons, proposes, and explains. The OS remains the body: it confirms, applies,
+rolls back, and owns local files/workspaces.
+
+```bash
+curl -fsS https://app.hydria.click/api/v1/ask \
+  -H "content-type: application/json" \
+  -H "authorization: Bearer $HYDRIA_API_KEY" \
+  -d '{
+    "input": "Ajoute une colonne Priorite dans le tableur actif.",
+    "workspaceContext": {
+      "os": { "name": "Hydria OS" },
+      "activeWorkObject": {
+        "id": "work-object-1",
+        "title": "Pipeline ventes",
+        "kind": "dataset",
+        "entryPath": "table.csv",
+        "contentPreview": "Client,Status",
+        "editable": true
+      },
+      "capabilities": {
+        "actions": ["reply", "create_artifact", "create_work_object", "update_work_object", "set_work_object_metadata"],
+        "artifactFormats": ["xlsx", "csv", "docx", "pdf", "pptx", "md"],
+        "workObjectKinds": ["document", "dataset", "presentation", "dashboard", "workflow", "project"]
+      },
+      "executionPolicy": {
+        "mode": "dry_run",
+        "requireConfirmation": true
+      }
+    }
+  }'
+```
+
+Action response example:
+
+```json
+{
+  "proposedActions": [
+    {
+      "id": "action uuid",
+      "type": "update_work_object",
+      "title": "Modifier Pipeline ventes",
+      "target": {
+        "workObjectId": "work-object-1",
+        "entryPath": "table.csv"
+      },
+      "payload": {
+        "instruction": "Ajoute une colonne Priorite dans le tableur actif.",
+        "mode": "append",
+        "answerDraft": "..."
+      },
+      "riskLevel": "medium",
+      "requiresConfirmation": true,
+      "dryRun": true,
+      "rationale": "La requete demande de travailler sur l'objet actif.",
+      "provenance": {
+        "source": "hydria_core_public_api_v1",
+        "requestId": "request uuid",
+        "generatedAt": "2026-05-27T12:00:00.000Z"
+      }
+    }
+  ]
+}
+```
+
+Allowed action types:
+
+- `reply`
+- `create_artifact`
+- `create_work_object`
+- `update_work_object`
+- `set_work_object_metadata`
+
+`proposedActions` are dry-run contract objects. `/api/v1/ask` never executes OS actions.
 
 ## Conversation Memory
 
