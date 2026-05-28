@@ -12,7 +12,10 @@ import {
   type PublicApiSessionResponse
 } from "../../types/publicApi.js";
 import { env } from "../../utils/env.js";
-import { planPublicApiProposedActions } from "./osActionPlanner.js";
+import {
+  planPublicApiProposedActions,
+  shouldUsePublicApiWorkspaceActionFastPath
+} from "./osActionPlanner.js";
 
 type HydriaPublicApiV1ServiceDeps = {
   chatRuntimeService: Pick<ChatRuntimeService, "sendMessage" | "resetSession">;
@@ -44,15 +47,107 @@ function attemptModels(result: Awaited<ReturnType<ChatRuntimeService["sendMessag
   return [...new Set(attempts.length > 0 ? attempts : [result.generation.model])];
 }
 
+function inferLanguage(value: string) {
+  return /\b(le|la|les|une|un|des|dans|avec|pour|ajoute|cree|crée|tableur|colonne)\b/i.test(value)
+    ? "fr"
+    : "en";
+}
+
+function buildWorkspaceActionAnswer(actionCount: number, language: "fr" | "en") {
+  if (language === "fr") {
+    return actionCount > 1
+      ? `${actionCount} actions OS sont proposees en dry-run.`
+      : "Une action OS est proposee en dry-run.";
+  }
+
+  return actionCount > 1
+    ? `${actionCount} OS actions are proposed as dry-run.`
+    : "One OS action is proposed as dry-run.";
+}
+
 export class HydriaPublicApiV1Service {
   constructor(private readonly deps: HydriaPublicApiV1ServiceDeps) {}
 
   async ask(request: PublicApiAskRequest): Promise<PublicApiAskResponse> {
+    const requestId = randomUUID();
+    const fastPathCreatedAt = new Date().toISOString();
+
+    if (shouldUsePublicApiWorkspaceActionFastPath(request)) {
+      const proposedActions = planPublicApiProposedActions({
+        requestId,
+        createdAt: fastPathCreatedAt,
+        request,
+        answer: ""
+      });
+      const actionable = proposedActions.filter((action) => action.type !== "reply");
+
+      if (actionable.length > 0) {
+        const language = inferLanguage(resolveQuestion(request));
+        const sessionId = request.sessionId ?? randomUUID();
+        return publicApiAskResponseSchema.parse({
+          id: requestId,
+          object: "hydria.answer",
+          createdAt: fastPathCreatedAt,
+          sessionId,
+          answer: buildWorkspaceActionAnswer(actionable.length, language),
+          language,
+          category: "workspace_action",
+          confidence: 92,
+          sources: [],
+          tools: {
+            used: false,
+            route: "not_needed",
+            type: "none",
+            intent: "workspace_action_plan",
+            sourceCount: 0
+          },
+          models: {
+            provider: "policy",
+            model: "workspace_action_planner_v1",
+            specialistRole: "os_action_contract",
+            attempts: ["workspace_action_planner_v1"]
+          },
+          memory: {
+            sessionId,
+            userGoal: resolveQuestion(request),
+            activeConstraints: [],
+            contextTracked: Boolean(request.workspaceContext?.activeWorkObject)
+          },
+          quality: {
+            passed: true,
+            issues: [],
+            retryUsed: false,
+            durationMs: 0
+          },
+          proposedActions: actionable,
+          ...(request.options.includeTrace
+            ? {
+                trace: {
+                  version: "public_api_workspace_action_trace_v1",
+                  disclosure: "runtime_trace_no_private_chain_of_thought",
+                  steps: ["workspace_context_received", "deterministic_action_plan"]
+                }
+              }
+            : {}),
+          ...(request.options.includeDiagnostics
+            ? {
+                diagnostics: {
+                  runtimeMode: "workspace_action_fast_path",
+                  actionPlanner: {
+                    proposed: actionable.length,
+                    skippedModelGeneration: true
+                  }
+                }
+              }
+            : {})
+        });
+      }
+    }
+
     const result = await this.deps.chatRuntimeService.sendMessage({
       message: resolveQuestion(request),
       ...(request.sessionId ? { sessionId: request.sessionId } : {})
     });
-    const requestId = randomUUID();
     const includeSources = request.options.includeSources;
     const includeTrace = request.options.includeTrace;
     const includeDiagnostics = request.options.includeDiagnostics;

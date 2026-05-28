@@ -246,3 +246,27 @@ export function planPublicApiProposedActions(args: PlanArgs): PublicApiProposedA
 
   return [];
 }
+
+export function shouldUsePublicApiWorkspaceActionFastPath(request: PublicApiAskRequest) {
+  if (!request.options.includeProposedActions || !request.workspaceContext) {
+    return false;
+  }
+
+  const question = normalizeText(request.input ?? request.question ?? "");
+
+  if (
+    /\b(cette semaine|today|latest|recent|actuel|actuelle|nouveaute|nouveautes|news|cherche|recherche|source|sources|biograph|qui est|who is|historique)\b/.test(
+      question
+    )
+  ) {
+    return false;
+  }
+
+  return (
+    /\b(ajoute|add)\b.*\b(colonne|column|champ|field)\b/.test(question) ||
+    /\b(renomme|rename|retitle|statut|status)\b/.test(question) ||
+    (/\b(cree|create|genere|generate|fais|make)\b/.test(question) &&
+      /\b(excel|xlsx|csv|tableur|spreadsheet|sheet)\b/.test(question) &&
+      /\b(colonne|colonnes|column|columns|champ|fields)\b/.test(question))
+  );
+}
