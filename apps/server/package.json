@@ -55,6 +55,7 @@
     "prod:general-knowledge-reliability-gate": "tsx src/scripts/runProductionGeneralKnowledgeReliabilityGate.ts",
     "prod:chat-slo-gate": "tsx src/scripts/runChatRuntimeSloGate.ts",
     "prod:stable-factual-gate": "tsx src/scripts/runStableFactualChatGate.ts",
+    "prod:public-api-workspace-gate": "tsx src/scripts/runProductionPublicApiWorkspaceGate.ts",
     "os:office-workspace-gate": "tsx src/scripts/runHydriaOsOfficeWorkspaceActionGate.ts",
     "os:office-workspace-model-gate": "tsx src/scripts/runHydriaOsOfficeWorkspaceModelGate.ts",
     "os:office-workspace-ab-gate": "tsx src/scripts/runHydriaOsOfficeWorkspaceABGate.ts",

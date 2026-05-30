@@ -615,8 +615,19 @@ The broader public API workspace scenario gate validates the user/workspace/Core
 npm run os:workspace-scenario-gate
 ```
 
-It covers plain questions, numbers-to-Excel extraction, active Sheet commentary, totals, sort/filter/format/chart
-planning, document section edits, text replacement, links, code blocks, comments, summaries, and slide creation.
+It covers plain questions, numbers-to-Excel extraction, active Sheet commentary, totals, sort/filter/format/chart,
+validation dropdowns, pivot tables, named ranges, freeze panes, gridlines, document section edits, text replacement,
+links, code blocks, comments, summaries, page breaks, table of contents, quotes, images, and slide creation.
+
+The production API v1 workspace gate validates the authenticated public contract against OVH:
+
+```bash
+HYDRIA_PROD_API_KEY=<plaintext key> npm run prod:public-api-workspace-gate -- --base-url=https://app.hydria.click
+```
+
+This gate checks `/api/v1/capabilities`, `/api/v1/ask`, confirmed workspace execution,
+`/api/v1/work-objects/:id/operations`, and `/api/v1/interactions`. It requires the plaintext API key;
+production may store only key hashes, so the key must come from the deploy secret store rather than from logs.
 
 The gate validates:
 

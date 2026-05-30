@@ -270,6 +270,132 @@ const scenarios: Scenario[] = [
     }
   },
   {
+    id: "active_sheet_validation_dropdown",
+    request: publicApiAskRequestSchema.parse({
+      input: "Ajoute une validation liste 'Oui, Non' sur B2:B10.",
+      metadata: { workspaceFamilyId: "data_spreadsheet" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "sheet-1",
+          title: "Validation",
+          kind: "dataset",
+          workspaceFamilyId: "data_spreadsheet",
+          entryPath: "table.csv",
+          contentPreview: sheetPreview(["Client", "Statut"], [["A", ""], ["B", ""]])
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["sheet.set_data_validation"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operation = (response.proposedActions[0]?.payload.operations as any[] | undefined)?.[0];
+      return [
+        operation?.type === "sheet.set_data_validation" ? "" : "expected sheet.set_data_validation",
+        operation?.range === "B2:B10" ? "" : "expected B2:B10 range",
+        JSON.stringify(operation?.payload?.values ?? []).includes("Oui") ? "" : "expected Oui/Non values"
+      ];
+    }
+  },
+  {
+    id: "active_sheet_pivot_table",
+    request: publicApiAskRequestSchema.parse({
+      input: "Ajoute un tableau croise Ventes sur A1:B4.",
+      metadata: { workspaceFamilyId: "data_spreadsheet" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "sheet-1",
+          title: "Ventes",
+          kind: "dataset",
+          workspaceFamilyId: "data_spreadsheet",
+          entryPath: "table.csv",
+          contentPreview: sheetPreview(["Produit", "CA"], [["A", "1200"], ["B", "1600"]])
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["sheet.add_pivot_table"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operation = (response.proposedActions[0]?.payload.operations as any[] | undefined)?.[0];
+      return [
+        operation?.type === "sheet.add_pivot_table" ? "" : "expected sheet.add_pivot_table",
+        operation?.range === "A1:B4" ? "" : "expected A1:B4 range"
+      ];
+    }
+  },
+  {
+    id: "active_sheet_named_range",
+    request: publicApiAskRequestSchema.parse({
+      input: "Ajoute une plage nommee PrixRange sur A2:A10.",
+      metadata: { workspaceFamilyId: "data_spreadsheet" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "sheet-1",
+          title: "Prix",
+          kind: "dataset",
+          workspaceFamilyId: "data_spreadsheet",
+          entryPath: "table.csv",
+          contentPreview: sheetPreview(["Prix"], [["10"], ["20"]])
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["sheet.add_named_range"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operation = (response.proposedActions[0]?.payload.operations as any[] | undefined)?.[0];
+      return [
+        operation?.type === "sheet.add_named_range" ? "" : "expected sheet.add_named_range",
+        operation?.range === "A2:A10" ? "" : "expected A2:A10 range"
+      ];
+    }
+  },
+  {
+    id: "active_sheet_freeze_first_row",
+    request: publicApiAskRequestSchema.parse({
+      input: "Fige la premiere ligne.",
+      metadata: { workspaceFamilyId: "data_spreadsheet" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "sheet-1",
+          title: "CA",
+          kind: "dataset",
+          workspaceFamilyId: "data_spreadsheet",
+          entryPath: "table.csv",
+          contentPreview: sheetPreview(["Mois", "CA"], [["Janvier", "1200"]])
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["sheet.freeze_panes"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operation = (response.proposedActions[0]?.payload.operations as any[] | undefined)?.[0];
+      return [
+        operation?.type === "sheet.freeze_panes" ? "" : "expected sheet.freeze_panes",
+        operation?.payload?.rows === 1 ? "" : "expected one frozen row"
+      ];
+    }
+  },
+  {
+    id: "active_sheet_hide_gridlines",
+    request: publicApiAskRequestSchema.parse({
+      input: "Masque le quadrillage.",
+      metadata: { workspaceFamilyId: "data_spreadsheet" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "sheet-1",
+          title: "CA",
+          kind: "dataset",
+          workspaceFamilyId: "data_spreadsheet",
+          entryPath: "table.csv",
+          contentPreview: sheetPreview(["Mois", "CA"], [["Janvier", "1200"]])
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["sheet.show_gridlines"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operation = (response.proposedActions[0]?.payload.operations as any[] | undefined)?.[0];
+      return [
+        operation?.type === "sheet.show_gridlines" ? "" : "expected sheet.show_gridlines",
+        operation?.value === false ? "" : "expected gridlines false"
+      ];
+    }
+  },
+  {
     id: "active_doc_insert_section",
     request: publicApiAskRequestSchema.parse({
       input: "Ajoute une section Risques avec 'Verifier les sources avant publication.'",
@@ -292,6 +418,100 @@ const scenarios: Scenario[] = [
         response.proposedActions[0]?.payload.toolName === "doc.edit" ? "" : "expected doc.edit",
         operation?.type === "doc.insert_section" ? "" : "expected doc.insert_section",
         operation?.content === "Verifier les sources avant publication." ? "" : "expected quoted content preserved"
+      ];
+    }
+  },
+  {
+    id: "active_doc_insert_page_break",
+    request: publicApiAskRequestSchema.parse({
+      input: "Ajoute un saut de page.",
+      metadata: { workspaceFamilyId: "document_knowledge" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "doc-1",
+          title: "Rapport",
+          kind: "document",
+          workspaceFamilyId: "document_knowledge",
+          entryPath: "content.md",
+          contentPreview: "# Rapport\n\nContenu."
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["doc.insert_page_break"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operation = (response.proposedActions[0]?.payload.operations as any[] | undefined)?.[0];
+      return [operation?.type === "doc.insert_page_break" ? "" : "expected doc.insert_page_break"];
+    }
+  },
+  {
+    id: "active_doc_insert_toc",
+    request: publicApiAskRequestSchema.parse({
+      input: "Ajoute un sommaire.",
+      metadata: { workspaceFamilyId: "document_knowledge" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "doc-1",
+          title: "Rapport",
+          kind: "document",
+          workspaceFamilyId: "document_knowledge",
+          entryPath: "content.md",
+          contentPreview: "# Rapport\n\n## Introduction\n\nTexte."
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["doc.insert_toc"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operation = (response.proposedActions[0]?.payload.operations as any[] | undefined)?.[0];
+      return [operation?.type === "doc.insert_toc" ? "" : "expected doc.insert_toc"];
+    }
+  },
+  {
+    id: "active_doc_insert_quote",
+    request: publicApiAskRequestSchema.parse({
+      input: "Ajoute une citation 'La connaissance doit rester gouvernee.'",
+      metadata: { workspaceFamilyId: "document_knowledge" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "doc-1",
+          title: "Rapport",
+          kind: "document",
+          workspaceFamilyId: "document_knowledge",
+          entryPath: "content.md",
+          contentPreview: "# Rapport"
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["doc.insert_quote"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operation = (response.proposedActions[0]?.payload.operations as any[] | undefined)?.[0];
+      return [
+        operation?.type === "doc.insert_quote" ? "" : "expected doc.insert_quote",
+        operation?.content === "La connaissance doit rester gouvernee." ? "" : "expected quote content"
+      ];
+    }
+  },
+  {
+    id: "active_doc_insert_image",
+    request: publicApiAskRequestSchema.parse({
+      input: "Ajoute une image https://app.hydria.click/logo.png.",
+      metadata: { workspaceFamilyId: "document_knowledge" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "doc-1",
+          title: "Rapport",
+          kind: "document",
+          workspaceFamilyId: "document_knowledge",
+          entryPath: "content.md",
+          contentPreview: "# Rapport"
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["doc.insert_image"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operation = (response.proposedActions[0]?.payload.operations as any[] | undefined)?.[0];
+      return [
+        operation?.type === "doc.insert_image" ? "" : "expected doc.insert_image",
+        operation?.value === "https://app.hydria.click/logo.png" ? "" : "expected image URL"
       ];
     }
   },
