@@ -1803,7 +1803,7 @@ function planDocumentWorkspaceToolOperation(request: PublicApiAskRequest, questi
         {
           type: "doc.insert_table",
           title,
-          content: answer || quotedContent || "",
+          content: quotedContent || answer || "",
           target: {
             ...(targetHeading ? { heading: targetHeading } : { position: "end" })
           }
@@ -1836,7 +1836,7 @@ function planDocumentWorkspaceToolOperation(request: PublicApiAskRequest, questi
         {
           type: "doc.insert_section",
           title: heading,
-          content: answer || quotedContent || "A completer.",
+          content: quotedContent || "A completer.",
           target: {
             position: "end"
           }
@@ -1848,11 +1848,10 @@ function planDocumentWorkspaceToolOperation(request: PublicApiAskRequest, questi
   const blockTitle = targetHeading || extractNamedPart(question, /(?:bloc|block|section|partie)/, "");
   if (/\b(remplace|replace|rewrite|reformule|modifie|modify|corrige|fix|resume|summarize|raccourcis|shorten)\b/.test(normalized)) {
     const replacement =
-      answer ||
       quotedContent ||
       (/\b(resume|summarize|raccourcis|shorten)\b/.test(normalized)
         ? summarizeDocumentSectionText(documentSectionBodyByHeading(sections, blockTitle))
-        : "");
+        : answer);
     if (!replacement) {
       return null;
     }
@@ -1872,7 +1871,7 @@ function planDocumentWorkspaceToolOperation(request: PublicApiAskRequest, questi
   }
 
   if (/\b(ajoute|append|add|complete|continue)\b/.test(normalized)) {
-    const contentToAppend = answer || quotedContent || explicitTarget;
+    const contentToAppend = quotedContent || explicitTarget || answer;
     if (!contentToAppend) {
       return null;
     }

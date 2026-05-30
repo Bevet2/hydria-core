@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { HydriaPublicApiV1Service } from "../services/publicApi/hydriaPublicApiV1Service.js";
+import { planPublicApiProposedActions } from "../services/publicApi/osActionPlanner.js";
 import { publicApiAskRequestSchema } from "../types/publicApi.js";
 
 const sessionId = "11111111-1111-4111-8111-111111111111";
@@ -952,6 +953,47 @@ test("public API v1 understands document structure before planning doc edits", a
   assert.equal(insertionOps[0]?.type, "doc.insert_section");
   assert.equal(insertionOps[0]?.title, "Decisions");
   assert.equal(insertionOps[0]?.content, "Valider le contrat Core OS.");
+});
+
+test("public API v1 keeps quoted document edit content instead of model prose", () => {
+  const request = publicApiAskRequestSchema.parse({
+    input: "Ajoute une section Risques avec 'Verifier les sources avant publication.'",
+    options: {
+      includeProposedActions: true
+    },
+    metadata: {
+      workspaceFamilyId: "document_knowledge"
+    },
+    workspaceContext: {
+      activeWorkObject: {
+        id: "doc-1",
+        kind: "document",
+        title: "Plan projet",
+        workspaceFamilyId: "document_knowledge",
+        entryPath: "content.md",
+        contentPreview: "# Plan projet\n\n## Introduction\n\nHydria OS connecte Core au workspace."
+      },
+      capabilities: {
+        actions: ["workspace_tool_call"],
+        workspaceTools: ["doc.edit"],
+        artifactFormats: ["docx", "md"],
+        workObjectKinds: ["document"]
+      }
+    }
+  });
+
+  const actions = planPublicApiProposedActions({
+    requestId: "request-doc-quoted",
+    createdAt: "2026-05-30T12:00:00.000Z",
+    request,
+    answer: "Ajoutez donc une section Risques avec le texte demande comme recommandation."
+  });
+
+  const operation = ((actions[0]?.payload as any).operations as any[])?.[0];
+  assert.equal(actions[0]?.type, "workspace_tool_call");
+  assert.equal(operation?.type, "doc.insert_section");
+  assert.equal(operation?.title, "Risques");
+  assert.equal(operation?.content, "Verifier les sources avant publication.");
 });
 
 test("public API v1 proposes document table and deletion operations", async () => {
