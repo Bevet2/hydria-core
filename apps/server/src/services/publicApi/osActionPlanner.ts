@@ -313,6 +313,172 @@ function extractNumericTableFromPrompt(prompt: string) {
   };
 }
 
+function markdownTableFromSheet(columns: string[], rows: string[][]) {
+  const safeColumns = columns.length > 0 ? columns : ["Colonne 1"];
+  const header = `| ${safeColumns.join(" | ")} |`;
+  const separator = `| ${safeColumns.map(() => "---").join(" | ")} |`;
+  const body = rows.slice(0, 30).map((row) =>
+    `| ${safeColumns.map((_, index) => compact(row[index] ?? "", 160).replace(/\|/g, "/")).join(" | ")} |`
+  );
+  return [header, separator, ...body].join("\n");
+}
+
+function parseNumberCell(value: unknown) {
+  const normalized = String(value ?? "")
+    .replace(/\s+/g, "")
+    .replace(",", ".")
+    .replace(/[^\d.-]/g, "");
+  if (!normalized || normalized === "-" || normalized === ".") {
+    return null;
+  }
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatNumberCell(value: number) {
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)));
+}
+
+function summarizeSheetData(preview: ReturnType<typeof sheetPreview>) {
+  const numericColumns = preview.columns
+    .map((column, columnIndex) => {
+      const values = preview.rows
+        .map((row) => parseNumberCell(row[columnIndex]))
+        .filter((value): value is number => value !== null);
+      return { column: column || `Colonne ${columnIndex + 1}`, values };
+    })
+    .filter((candidate) => candidate.values.length > 0)
+    .sort((left, right) => right.values.length - left.values.length);
+
+  if (numericColumns.length === 0) {
+    return `Le tableau contient ${preview.rows.length} ligne(s) et ${preview.columns.length} colonne(s).`;
+  }
+
+  const selected = numericColumns[0]!;
+  const total = selected.values.reduce((sum, value) => sum + value, 0);
+  const min = Math.min(...selected.values);
+  const max = Math.max(...selected.values);
+  return `${selected.column}: total ${formatNumberCell(total)}, minimum ${formatNumberCell(min)}, maximum ${formatNumberCell(max)}.`;
+}
+
+function documentDraftFromActiveSheet(request: PublicApiAskRequest, question: string, answer: string) {
+  const preview = sheetPreview(request);
+  if (preview.columns.length === 0 && preview.rows.length === 0) {
+    return compact(answer, 3000);
+  }
+
+  const active = request.workspaceContext?.activeWorkObject;
+  return [
+    `Document genere a partir du tableur actif "${active?.title || active?.id || "tableur"}".`,
+    "",
+    "## Synthese",
+    "",
+    summarizeSheetData(preview),
+    "",
+    "## Donnees reprises",
+    "",
+    markdownTableFromSheet(preview.columns, preview.rows),
+    "",
+    "## Demande utilisateur",
+    "",
+    question
+  ].join("\n");
+}
+
+function parseMarkdownTable(content: string) {
+  const lines = content.split(/\r?\n/).map((line) => line.trim()).filter((line) => /^\|.*\|$/.test(line));
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    const header = lines[index]!;
+    const separator = lines[index + 1]!;
+    if (!/^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(separator)) {
+      continue;
+    }
+    const columns = header.split("|").map((cell) => cell.trim()).filter(Boolean);
+    const rows = lines
+      .slice(index + 2)
+      .filter((line) => /^\|.*\|$/.test(line))
+      .map((line) => line.split("|").map((cell) => cell.trim()).filter(Boolean))
+      .filter((row) => row.length > 0);
+    if (columns.length > 0 && rows.length > 0) {
+      return { columns, rows };
+    }
+  }
+  return null;
+}
+
+function tableFromActiveDocument(request: PublicApiAskRequest) {
+  const content = documentContentPreview(request);
+  const markdownTable = parseMarkdownTable(content);
+  if (markdownTable) {
+    return markdownTable;
+  }
+
+  const numericRows: string[][] = [];
+  for (const line of content.split(/\r?\n/).map((entry) => entry.trim()).filter(Boolean)) {
+    const match = line.match(/^(?:[-*]\s*)?(.{1,80}?)(?:\s*[:=]\s*|\s+-\s+|\s+)(-?\d[\d\s]*(?:[.,]\d+)?)(?:\s*(k€|m€|€|eur|euros?|usd|dollars?|\$|%|clients?|users?|utilisateurs?))?\s*$/i);
+    if (!match?.[1] || !match?.[2]) {
+      continue;
+    }
+    numericRows.push([
+      cleanNumericTableLabel(match[1]),
+      normalizeNumericCell(match[2]),
+      String(match[3] ?? "").trim()
+    ]);
+  }
+  if (numericRows.length > 0) {
+    const hasUnit = numericRows.some((row) => row[2]);
+    return {
+      columns: hasUnit ? ["Libelle", "Valeur", "Unite"] : ["Libelle", "Valeur"],
+      rows: hasUnit ? numericRows : numericRows.map(([label, value]) => [label, value])
+    };
+  }
+
+  const sections = documentSectionsFromContent(content);
+  if (sections.length > 0) {
+    return {
+      columns: ["Section", "Contenu"],
+      rows: sections.map((section) => [section.title, compact(section.body, 500)])
+    };
+  }
+
+  const lines = content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 40);
+  return lines.length > 0
+    ? {
+        columns: ["Element"],
+        rows: lines.map((line) => [compact(line.replace(/^[-*]\s*/, ""), 500)])
+      }
+    : null;
+}
+
+function targetWorkspaceFamilyId(kind: string, request: PublicApiAskRequest) {
+  if (kind === "dataset") {
+    return "data_spreadsheet";
+  }
+  if (kind === "document") {
+    return "document_knowledge";
+  }
+  if (kind === "presentation") {
+    return "presentation";
+  }
+  return activeWorkspaceFamilyId(request);
+}
+
+function isCrossWorkspaceCreate(request: PublicApiAskRequest, question: string, allowedKinds: string[]) {
+  if (!request.workspaceContext?.activeWorkObject || !wantsCreate(question)) {
+    return false;
+  }
+  const normalized = normalizeText(question);
+  const targetKind = inferWorkObjectKind(question, allowedKinds);
+  return (
+    (targetKind === "document" &&
+      isDatasetWorkspaceRequest(request, question) &&
+      /\b(word|docx|document|rapport|brief|note|sop|wiki|texte)\b/.test(normalized)) ||
+    (targetKind === "dataset" &&
+      isDocumentWorkspaceRequest(request, question) &&
+      /\b(excel|xlsx|csv|tableur|spreadsheet|sheet)\b/.test(normalized))
+  );
+}
+
 function extractRequestedSections(prompt: string) {
   const normalized = prompt.replace(/\s+/g, " ").trim();
   const match =
@@ -2222,6 +2388,7 @@ export function planPublicApiProposedActions(args: PlanArgs): PublicApiProposedA
   const allowedKinds = request.workspaceContext?.capabilities?.workObjectKinds ?? [];
   const active = workspace.activeWorkObject ?? null;
   const requireConfirmation = workspace.executionPolicy?.requireConfirmation ?? true;
+  const crossWorkspaceCreate = isCrossWorkspaceCreate(request, question, allowedKinds);
 
   if (active && wantsMetadataChange(question) && actions.has("set_work_object_metadata")) {
     return [
@@ -2245,7 +2412,7 @@ export function planPublicApiProposedActions(args: PlanArgs): PublicApiProposedA
     ];
   }
 
-  const workspaceToolPlan = active && actions.has("workspace_tool_call") && wantsWorkspaceToolCall(question)
+  const workspaceToolPlan = active && !crossWorkspaceCreate && actions.has("workspace_tool_call") && wantsWorkspaceToolCall(question)
     ? planWorkspaceToolOperation(request, question, answer)
     : null;
   if (active && workspaceToolPlan) {
@@ -2301,9 +2468,17 @@ export function planPublicApiProposedActions(args: PlanArgs): PublicApiProposedA
 
   if (wantsCreate(question) && actions.has("create_artifact")) {
     const format = inferArtifactFormat(question, allowedFormats);
-    const numericTable = inferWorkObjectKind(question, allowedKinds) === "dataset"
-      ? extractNumericTableFromPrompt(question)
+    const kind = inferWorkObjectKind(question, allowedKinds);
+    const numericTable = kind === "dataset"
+      ? extractNumericTableFromPrompt(question) ?? (active ? tableFromActiveDocument(request) : null)
       : null;
+    const requestedSections = extractRequestedSections(question);
+    const sections = kind === "document" && requestedSections.length === 0 && active && isDatasetWorkspaceRequest(request, question)
+      ? ["Synthese", "Donnees reprises", "Observations"]
+      : requestedSections;
+    const answerDraft = kind === "document" && active && isDatasetWorkspaceRequest(request, question)
+      ? documentDraftFromActiveSheet(request, question, answer)
+      : compact(answer, 3000);
     return [
       makeAction(args, {
         type: "create_artifact",
@@ -2315,12 +2490,14 @@ export function planPublicApiProposedActions(args: PlanArgs): PublicApiProposedA
         payload: {
           instruction: question,
           format,
-          kind: inferWorkObjectKind(question, allowedKinds),
-          workspaceFamilyId: activeWorkspaceFamilyId(request),
-          answerDraft: compact(answer, 3000),
+          kind,
+          workspaceFamilyId: targetWorkspaceFamilyId(kind, request),
+          sourceWorkObjectId: active?.id ?? null,
+          sourceEntryPath: active?.entryPath ?? null,
+          answerDraft,
           columns: numericTable?.columns ?? extractRequestedColumns(question),
           rows: numericTable?.rows ?? [],
-          sections: extractRequestedSections(question)
+          sections
         },
         riskLevel: "low",
         requiresConfirmation: requireConfirmation,
@@ -2400,7 +2577,11 @@ export function shouldUsePublicApiWorkspaceActionFastPath(request: PublicApiAskR
   const datasetCreate =
     /\b(cree|create|genere|generate|fais|make|presente|presenter|mets|mettre)\b/.test(question) &&
       /\b(excel|xlsx|csv|tableur|spreadsheet|sheet)\b/.test(question) &&
-      (/\b(colonne|colonnes|column|columns|champ|fields)\b/.test(question) || Boolean(extractNumericTableFromPrompt(question)));
+      (
+        /\b(colonne|colonnes|column|columns|champ|fields)\b/.test(question) ||
+        Boolean(extractNumericTableFromPrompt(question)) ||
+        (Boolean(request.workspaceContext?.activeWorkObject) && isDocumentWorkspaceRequest(request, question))
+      );
   const documentUpdate =
     documentRequest &&
     /\b(ajoute|add|complete|continue|ameliore|improve|reformule|rewrite|corrige|fix)\b/.test(question) &&

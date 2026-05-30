@@ -399,6 +399,29 @@ The `.docx`, `.xlsx`, and `.pptx` files are downloadable artifacts. The source o
 workspace object returned by `activeWorkObject`, so Hydria OS can keep editing it in its real document,
 spreadsheet, and slide surfaces.
 
+### Cross-Workspace Creation
+
+Core can now link document and spreadsheet work instead of treating each workspace as isolated.
+
+Supported examples:
+
+- active Sheet -> "Cree un document Word a partir de ce tableau"
+- active Sheet -> generated document draft with a short synthesis and a markdown copy of the table
+- active Doc -> "Cree un Excel a partir de ce document"
+- active Doc -> generated dataset from an existing markdown table, numeric lines, sections, or bullet content
+
+The returned action is still a normal `create_artifact` action. The payload includes:
+
+- `sourceWorkObjectId`
+- `sourceEntryPath`
+- target `kind` (`document` or `dataset`)
+- target `workspaceFamilyId` (`document_knowledge` or `data_spreadsheet`)
+- `answerDraft` for document creation from Sheet data
+- `columns` and `rows` for Sheet creation from document data
+
+This keeps the execution split clean: Core interprets the intent and prepares the structured artifact payload;
+Hydria OS or the public API executor materializes the editable workspace object and export artifact.
+
 ### Workspace Tool Calls
 
 For live workspace operations, Core can return a `workspace_tool_call` action. This is the contract used

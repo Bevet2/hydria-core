@@ -1363,6 +1363,96 @@ test("public API v1 returns creation proposals when an OS advertises artifact ca
   assert.equal(response.proposedActions[0]?.payload.kind, "dataset");
 });
 
+test("public API v1 can create a document proposal from the active sheet", async () => {
+  let chatCalls = 0;
+  const service = new HydriaPublicApiV1Service({
+    chatRuntimeService: {
+      async sendMessage() {
+        chatCalls += 1;
+        return chatResponse();
+      },
+      resetSession() {}
+    } as any
+  });
+
+  const response = await service.ask(
+    publicApiAskRequestSchema.parse({
+      input: "Cree un document Word a partir de ce tableau.",
+      workspaceContext: {
+        activeWorkObject: {
+          id: "sheet-1",
+          title: "CA mensuel",
+          kind: "dataset",
+          workspaceFamilyId: "data_spreadsheet",
+          entryPath: "table.csv",
+          contentPreview: JSON.stringify({
+            kind: "hydria-sheet",
+            activeSheetId: "sheet-1",
+            sheets: [
+              {
+                id: "sheet-1",
+                columns: ["Mois", "CA"],
+                rows: [["Janvier", "1200"], ["Fevrier", "1600"]]
+              }
+            ]
+          })
+        },
+        capabilities: {
+          actions: ["create_artifact", "reply"],
+          artifactFormats: ["docx", "md"],
+          workObjectKinds: ["dataset", "document"]
+        }
+      }
+    })
+  );
+
+  assert.equal(chatCalls, 0);
+  assert.equal(response.proposedActions[0]?.type, "create_artifact");
+  assert.equal(response.proposedActions[0]?.payload.kind, "document");
+  assert.equal(response.proposedActions[0]?.payload.workspaceFamilyId, "document_knowledge");
+  assert.match(String(response.proposedActions[0]?.payload.answerDraft), /1600/);
+});
+
+test("public API v1 can create a sheet proposal from the active document", async () => {
+  let chatCalls = 0;
+  const service = new HydriaPublicApiV1Service({
+    chatRuntimeService: {
+      async sendMessage() {
+        chatCalls += 1;
+        return chatResponse();
+      },
+      resetSession() {}
+    } as any
+  });
+
+  const response = await service.ask(
+    publicApiAskRequestSchema.parse({
+      input: "Cree un Excel a partir de ce document.",
+      workspaceContext: {
+        activeWorkObject: {
+          id: "doc-1",
+          title: "CA note",
+          kind: "document",
+          workspaceFamilyId: "document_knowledge",
+          entryPath: "content.md",
+          contentPreview: "# CA note\n\nJanvier: 1200\nFevrier: 1600"
+        },
+        capabilities: {
+          actions: ["create_artifact", "reply"],
+          artifactFormats: ["xlsx", "csv"],
+          workObjectKinds: ["dataset", "document"]
+        }
+      }
+    })
+  );
+
+  assert.equal(chatCalls, 0);
+  assert.equal(response.proposedActions[0]?.type, "create_artifact");
+  assert.equal(response.proposedActions[0]?.payload.kind, "dataset");
+  assert.equal(response.proposedActions[0]?.payload.workspaceFamilyId, "data_spreadsheet");
+  assert.match(JSON.stringify(response.proposedActions[0]?.payload.rows), /1600/);
+});
+
 test("public API v1 plans Word document workspace actions on deterministic fast path", async () => {
   let chatCalls = 0;
   const service = new HydriaPublicApiV1Service({

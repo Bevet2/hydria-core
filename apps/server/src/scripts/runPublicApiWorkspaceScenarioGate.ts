@@ -143,6 +143,60 @@ const scenarios: Scenario[] = [
     ]
   },
   {
+    id: "active_sheet_to_document",
+    request: publicApiAskRequestSchema.parse({
+      input: "Cree un document Word a partir de ce tableau.",
+      metadata: { workspaceFamilyId: "data_spreadsheet" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "sheet-1",
+          title: "CA mensuel",
+          kind: "dataset",
+          workspaceFamilyId: "data_spreadsheet",
+          entryPath: "table.csv",
+          contentPreview: sheetPreview(["Mois", "CA"], [["Janvier", "1200"], ["Fevrier", "1600"], ["Mars", "1400"]])
+        },
+        ...baseWorkspace(["create_artifact", "reply"], [])
+      }
+    }),
+    expect: ({ response }) => {
+      const action = response.proposedActions[0];
+      return [
+        action?.type === "create_artifact" ? "" : "expected create_artifact",
+        action?.payload.kind === "document" ? "" : "expected document kind",
+        action?.payload.workspaceFamilyId === "document_knowledge" ? "" : "expected document workspace family",
+        JSON.stringify(action?.payload.answerDraft ?? "").includes("1600") ? "" : "expected sheet data in document draft"
+      ];
+    }
+  },
+  {
+    id: "active_document_to_sheet",
+    request: publicApiAskRequestSchema.parse({
+      input: "Cree un Excel a partir de ce document.",
+      metadata: { workspaceFamilyId: "document_knowledge" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "doc-1",
+          title: "CA note",
+          kind: "document",
+          workspaceFamilyId: "document_knowledge",
+          entryPath: "content.md",
+          contentPreview: "# CA note\n\nJanvier: 1200\nFevrier: 1600\nMars: 1400"
+        },
+        ...baseWorkspace(["create_artifact", "reply"], [])
+      }
+    }),
+    expect: ({ response }) => {
+      const action = response.proposedActions[0];
+      return [
+        action?.type === "create_artifact" ? "" : "expected create_artifact",
+        action?.payload.kind === "dataset" ? "" : "expected dataset kind",
+        action?.payload.workspaceFamilyId === "data_spreadsheet" ? "" : "expected spreadsheet workspace family",
+        JSON.stringify(action?.payload.rows ?? []).includes("1600") ? "" : "expected document numeric rows"
+      ];
+    }
+  },
+  {
     id: "active_sheet_total_formula",
     request: publicApiAskRequestSchema.parse({
       input: "Fais le total en C.",

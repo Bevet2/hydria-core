@@ -314,6 +314,82 @@ async function runProductionPublicApiWorkspaceGate(args = parseArgs()) {
     });
   });
 
+  await runCheck(checks, "active_sheet_can_create_document", async () => {
+    const response = await postJson<PublicApiAskResponse>(args, "/api/v1/ask", {
+      sessionId,
+      input: "Cree un document Word a partir de ce tableau.",
+      userId: "prod-api-gate",
+      projectId: "workspace-api-gate",
+      workspaceContext: {
+        activeWorkObject: {
+          id: workObjectId || "sheet-prod-gate",
+          title: "CA mensuel",
+          kind: "dataset",
+          workspaceFamilyId: "data_spreadsheet",
+          entryPath: "table.csv",
+          contentPreview: sheetPreview(["Mois", "CA"], [["Janvier", "1200"], ["Fevrier", "1600"], ["Mars", "1400"]])
+        },
+        ...workspaceCapabilities(["sheet.apply_formula"])
+      },
+      options: {
+        includeProposedActions: true,
+        includeDiagnostics: true
+      }
+    });
+    const action = response.proposedActions?.[0];
+    if (action?.type !== "create_artifact" || action?.payload?.kind !== "document") {
+      return fail("active sheet did not produce a document artifact proposal", response);
+    }
+    if (!JSON.stringify(action.payload?.answerDraft ?? "").includes("1600")) {
+      return fail("document draft did not include source sheet data", action);
+    }
+    if (!response.executedActions?.some((executed) => executed.status === "executed")) {
+      return fail("document artifact was not executed under confirmed public API policy", response);
+    }
+    return pass("active sheet can create a document artifact", {
+      workObjectId: response.activeWorkObject?.id,
+      actionKind: action.payload.kind
+    });
+  });
+
+  await runCheck(checks, "active_document_can_create_sheet", async () => {
+    const response = await postJson<PublicApiAskResponse>(args, "/api/v1/ask", {
+      sessionId,
+      input: "Cree un Excel a partir de ce document.",
+      userId: "prod-api-gate",
+      projectId: "workspace-api-gate",
+      workspaceContext: {
+        activeWorkObject: {
+          id: "doc-prod-gate",
+          title: "CA note",
+          kind: "document",
+          workspaceFamilyId: "document_knowledge",
+          entryPath: "content.md",
+          contentPreview: "# CA note\n\nJanvier: 1200\nFevrier: 1600\nMars: 1400"
+        },
+        ...workspaceCapabilities(["doc.edit"])
+      },
+      options: {
+        includeProposedActions: true,
+        includeDiagnostics: true
+      }
+    });
+    const action = response.proposedActions?.[0];
+    if (action?.type !== "create_artifact" || action?.payload?.kind !== "dataset") {
+      return fail("active document did not produce a sheet artifact proposal", response);
+    }
+    if (!JSON.stringify(action.payload?.rows ?? []).includes("1600")) {
+      return fail("sheet rows did not include source document figures", action);
+    }
+    if (!response.executedActions?.some((executed) => executed.status === "executed")) {
+      return fail("sheet artifact was not executed under confirmed public API policy", response);
+    }
+    return pass("active document can create a sheet artifact", {
+      workObjectId: response.activeWorkObject?.id,
+      actionKind: action.payload.kind
+    });
+  });
+
   await runCheck(checks, "interaction_audit_contains_ask_and_workspace_action", async () => {
     if (!sessionId) {
       return fail("no sessionId from previous ask step");
