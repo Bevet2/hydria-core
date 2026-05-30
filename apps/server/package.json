@@ -55,6 +55,11 @@
     "prod:general-knowledge-reliability-gate": "tsx src/scripts/runProductionGeneralKnowledgeReliabilityGate.ts",
     "prod:chat-slo-gate": "tsx src/scripts/runChatRuntimeSloGate.ts",
     "prod:stable-factual-gate": "tsx src/scripts/runStableFactualChatGate.ts",
+    "os:office-workspace-gate": "tsx src/scripts/runHydriaOsOfficeWorkspaceActionGate.ts",
+    "os:office-workspace-model-gate": "tsx src/scripts/runHydriaOsOfficeWorkspaceModelGate.ts",
+    "os:office-workspace-ab-gate": "tsx src/scripts/runHydriaOsOfficeWorkspaceABGate.ts",
+    "os:office-workspace-shadow-report": "tsx src/scripts/runHydriaOsOfficeWorkspaceShadowReport.ts",
+    "student:office-workspace-training-request": "tsx src/scripts/runPrepareOfficeWorkspaceTrainingRequest.ts",
     "student:chat-prod-gate": "tsx src/scripts/runStudentChatProductionGate.ts",
     "models:pretraining-gate": "tsx src/scripts/runModelRolePreTrainingGate.ts",
     "models:routing-gate": "tsx src/scripts/runModelRoutingEconomicsGate.ts",
@@ -69,10 +74,13 @@
   "dependencies": {
     "cheerio": "^1.2.0",
     "cors": "^2.8.5",
+    "docx": "^9.7.1",
     "dotenv": "^16.6.1",
     "express": "^5.1.0",
     "jsonrepair": "^3.13.1",
+    "jszip": "^3.10.1",
     "pg": "^8.20.0",
+    "pptxgenjs": "^4.0.1",
     "zod": "^4.1.5"
   },
   "devDependencies": {

@@ -162,6 +162,21 @@ export type {
   ExecutionRiskLevel
 } from "../../../server/src/types/execution.js";
 
+export type {
+  WorkObject,
+  WorkObjectArtifact,
+  WorkObjectEntry,
+  WorkObjectExecutionResult,
+  WorkObjectKind
+} from "../../../server/src/types/workObjects.js";
+
+export type {
+  PublicApiAskRequest,
+  PublicApiAskResponse,
+  PublicApiProposedAction,
+  PublicApiSessionResponse
+} from "../../../server/src/types/publicApi.js";
+
 import type {
   JudgeScorePair,
   ModelSelection

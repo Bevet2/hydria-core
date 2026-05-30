@@ -246,6 +246,32 @@ const envSchema = z.object({
   MODEL_RUNTIME_FAST_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(2),
   MODEL_RUNTIME_STANDARD_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(16).default(1),
   MODEL_RUNTIME_HEAVY_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(8).default(1),
+  HYDRIA_OS_OFFICE_V11_SHADOW_ENABLED: z
+    .string()
+    .default("false")
+    .transform((value) => value.toLowerCase() === "true"),
+  HYDRIA_OS_OFFICE_V11_SHADOW_MODEL: z
+    .string()
+    .min(1)
+    .default("student-local-1p5b-toolbench-lora-v11-office-workspace-light:latest"),
+  HYDRIA_OS_OFFICE_V11_SHADOW_BASE_URL: z.string().default(""),
+  HYDRIA_OS_OFFICE_V11_SHADOW_TIMEOUT_MS: z.coerce.number().int().min(1000).default(120000),
+  HYDRIA_OS_OFFICE_V11_SHADOW_FILE: z
+    .string()
+    .min(1)
+    .default(projectPath("storage", "training", "hydria-os-office-workspace-shadow-v1.jsonl")),
+  HYDRIA_OS_WORK_OBJECT_STORE_FILE: z
+    .string()
+    .min(1)
+    .default(projectPath("storage", "os", "work-objects-v1.json")),
+  HYDRIA_OS_WORK_OBJECT_ROOT_DIR: z
+    .string()
+    .min(1)
+    .default(projectPath("storage", "os", "work-objects")),
+  HYDRIA_OS_ARTIFACT_ROOT_DIR: z
+    .string()
+    .min(1)
+    .default(projectPath("storage", "os", "artifacts")),
   MODEL_ROUTER_VLLM_BASE_URL: z.string().default(""),
   MODEL_ROUTER_VLLM_API_KEY: z.string().default(""),
   MODEL_ROUTER_OPENAI_COMPAT_BASE_URL: z.string().default(""),

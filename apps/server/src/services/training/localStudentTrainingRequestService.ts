@@ -15,6 +15,8 @@ type BuildLocalStudentTrainingRequestArgs = {
   outputFile?: string;
   trainFile?: string;
   outputDir?: string;
+  epochs?: number;
+  learningRate?: number;
   perDeviceTrainBatchSize?: number;
   gradientAccumulationSteps?: number;
   maxSeqLength?: number;
@@ -75,6 +77,8 @@ export class LocalStudentTrainingRequestService {
     const executionRecipe = args.executionRecipe ?? "qlora_4bit";
     const trainFile = args.trainFile ? resolve(args.trainFile) : defaultTrainFile();
     const outputDir = args.outputDir ? resolve(args.outputDir) : defaultOutputDir(candidateVariantId);
+    const epochs = args.epochs ?? 1;
+    const learningRate = args.learningRate ?? 2e-4;
     const perDeviceTrainBatchSize = args.perDeviceTrainBatchSize ?? 1;
     const gradientAccumulationSteps = args.gradientAccumulationSteps ?? 16;
     const maxSeqLength = args.maxSeqLength ?? 1536;
@@ -85,8 +89,8 @@ export class LocalStudentTrainingRequestService {
       `--base_model ${JSON.stringify(trainingBaseModel)}`,
       `--train_file ${JSON.stringify(trainFile)}`,
       `--output_dir ${JSON.stringify(outputDir)}`,
-      "--num_train_epochs 1",
-      "--learning_rate 2e-4",
+      `--num_train_epochs ${epochs}`,
+      `--learning_rate ${learningRate}`,
       `--per_device_train_batch_size ${perDeviceTrainBatchSize}`,
       `--gradient_accumulation_steps ${gradientAccumulationSteps}`,
       `--max_seq_length ${maxSeqLength}`,
@@ -109,8 +113,8 @@ export class LocalStudentTrainingRequestService {
       outputDir,
       method: "lora_sft",
       executionRecipe,
-      epochs: 1,
-      learningRate: 2e-4,
+      epochs,
+      learningRate,
       perDeviceTrainBatchSize,
       gradientAccumulationSteps,
       maxSeqLength,

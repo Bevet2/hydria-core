@@ -52,10 +52,12 @@ import { ModelRuntimeTelemetryService } from "./services/models/modelRuntimeTele
 import { OpenRouterService } from "./services/openrouter.js";
 import { OrchestrationPolicyService } from "./services/orchestrationPolicy.js";
 import { HydriaPublicApiV1Service } from "./services/publicApi/hydriaPublicApiV1Service.js";
+import { OfficeWorkspaceShadowService } from "./services/publicApi/officeWorkspaceShadowService.js";
 import { ResearchToolService } from "./services/researchToolService.js";
 import { RefineRouterService } from "./services/refineRouter.js";
 import { ExecutionAuditStore } from "./services/execution/executionAuditStore.js";
 import { PersistenceHealthService } from "./services/storage/persistenceHealthService.js";
+import { WorkObjectExecutionService } from "./services/workObjects/workObjectExecutionService.js";
 import { StudentChatAdapter } from "./services/studentChatAdapter.js";
 import { StudentService } from "./services/studentService.js";
 import { StudentSessionStore } from "./services/studentSessionStore.js";
@@ -149,8 +151,13 @@ const coreAskService = new HydriaCoreAskService({
   localModelService,
   interactionLogStore
 });
+const officeWorkspaceShadowService = new OfficeWorkspaceShadowService();
+const workObjectExecutionService = new WorkObjectExecutionService();
 const publicApiV1Service = new HydriaPublicApiV1Service({
-  chatRuntimeService
+  chatRuntimeService,
+  officeWorkspaceShadowService,
+  officeWorkspaceShadowEnabled: env.HYDRIA_OS_OFFICE_V11_SHADOW_ENABLED,
+  workObjectExecutionService
 });
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const webDistDir = join(currentDir, "../../web/dist");
@@ -161,6 +168,7 @@ await historyStore.ensureReady();
 await benchmarkService.ensureReady();
 await interactionLogStore.ensureReady();
 await studentService.ensureReady();
+await workObjectExecutionService.ensureReady();
 
 const app = express();
 app.use(

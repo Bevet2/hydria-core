@@ -12,13 +12,42 @@ import {
   type PublicApiSessionResponse
 } from "../../types/publicApi.js";
 import { env } from "../../utils/env.js";
+import { logger } from "../../utils/logger.js";
 import {
   planPublicApiProposedActions,
   shouldUsePublicApiWorkspaceActionFastPath
 } from "./osActionPlanner.js";
+import {
+  shouldRunOfficeWorkspaceShadow,
+  type OfficeWorkspaceShadowService
+} from "./officeWorkspaceShadowService.js";
+import { verifyPublicApiProposedActions } from "./workspaceActionVerifier.js";
+import type {
+  ExecuteWorkObjectActionArgs,
+  ListWorkObjectsOptions,
+  UpdateWorkObjectContentArgs,
+  WorkObjectExecutionService
+} from "../workObjects/workObjectExecutionService.js";
+import type {
+  WorkObject,
+  WorkObjectArtifact,
+  WorkObjectExecutionResult
+} from "../../types/workObjects.js";
 
 type HydriaPublicApiV1ServiceDeps = {
   chatRuntimeService: Pick<ChatRuntimeService, "sendMessage" | "resetSession">;
+  officeWorkspaceShadowService?: Pick<OfficeWorkspaceShadowService, "run">;
+  officeWorkspaceShadowEnabled?: boolean;
+  workObjectExecutionService?: Pick<
+    WorkObjectExecutionService,
+    | "executeAction"
+    | "listWorkObjects"
+    | "listArtifacts"
+    | "getWorkObject"
+    | "readArtifactContent"
+    | "readContent"
+    | "updateContent"
+  >;
 };
 
 function resolveQuestion(request: PublicApiAskRequest) {
@@ -68,23 +97,101 @@ function buildWorkspaceActionAnswer(actionCount: number, language: "fr" | "en") 
 export class HydriaPublicApiV1Service {
   constructor(private readonly deps: HydriaPublicApiV1ServiceDeps) {}
 
+  private shouldExecuteConfirmedWorkspaceActions(request: PublicApiAskRequest) {
+    const policy = request.workspaceContext?.executionPolicy;
+    return policy?.mode === "execute_after_confirmation" && policy.requireConfirmation === false;
+  }
+
+  private async attachExecutedWorkspaceActions(
+    request: PublicApiAskRequest,
+    response: PublicApiAskResponse
+  ): Promise<PublicApiAskResponse> {
+    if (!this.deps.workObjectExecutionService || !this.shouldExecuteConfirmedWorkspaceActions(request)) {
+      return response;
+    }
+
+    const results: WorkObjectExecutionResult[] = [];
+    for (const action of response.proposedActions.filter((candidate) => candidate.type !== "reply")) {
+      results.push(
+        await this.deps.workObjectExecutionService.executeAction({
+          action,
+          confirmed: true,
+          sessionId: response.sessionId,
+          userId: request.userId ?? null,
+          projectId: request.projectId ?? null
+        })
+      );
+    }
+
+    if (results.length === 0) {
+      return response;
+    }
+
+    const workObjects = results
+      .map((result) => result.workObject)
+      .filter((workObject): workObject is WorkObject => Boolean(workObject));
+    const artifacts = results
+      .map((result) => result.artifact)
+      .filter((artifact): artifact is WorkObjectArtifact => Boolean(artifact));
+    const activeWorkObject = workObjects.at(-1) ?? response.activeWorkObject ?? null;
+    const executedCount = results.filter((result) => result.status === "executed").length;
+    const answer =
+      executedCount > 0
+        ? response.language === "fr"
+          ? `${executedCount} action OS executee. Objet de travail pret et trace.`
+          : `${executedCount} OS action executed. Work object is ready and traceable.`
+        : response.answer;
+
+    return publicApiAskResponseSchema.parse({
+      ...response,
+      answer,
+      proposedActions: response.proposedActions.map((action) => ({
+        ...action,
+        dryRun: !results.some((result) => result.actionId === action.id && result.status === "executed")
+      })),
+      executedActions: results,
+      activeWorkObject,
+      workObjects,
+      artifacts
+    });
+  }
+
+  private triggerOfficeWorkspaceShadow(request: PublicApiAskRequest, official: PublicApiAskResponse) {
+    if (!this.deps.officeWorkspaceShadowEnabled || !this.deps.officeWorkspaceShadowService) {
+      return;
+    }
+    if (!shouldRunOfficeWorkspaceShadow(request)) {
+      return;
+    }
+
+    void this.deps.officeWorkspaceShadowService.run({ request, official }).catch((error) => {
+      logger.warn("Hydria OS Office v11 shadow comparison failed", {
+        error: String(error),
+        requestId: official.id
+      });
+    });
+  }
+
   async ask(request: PublicApiAskRequest): Promise<PublicApiAskResponse> {
     const requestId = randomUUID();
     const fastPathCreatedAt = new Date().toISOString();
 
     if (shouldUsePublicApiWorkspaceActionFastPath(request)) {
-      const proposedActions = planPublicApiProposedActions({
-        requestId,
-        createdAt: fastPathCreatedAt,
+      const proposedActions = verifyPublicApiProposedActions({
         request,
-        answer: ""
+        actions: planPublicApiProposedActions({
+          requestId,
+          createdAt: fastPathCreatedAt,
+          request,
+          answer: ""
+        })
       });
       const actionable = proposedActions.filter((action) => action.type !== "reply");
 
       if (actionable.length > 0) {
         const language = inferLanguage(resolveQuestion(request));
         const sessionId = request.sessionId ?? randomUUID();
-        return publicApiAskResponseSchema.parse({
+        const response = publicApiAskResponseSchema.parse({
           id: requestId,
           object: "hydria.answer",
           createdAt: fastPathCreatedAt,
@@ -141,6 +248,8 @@ export class HydriaPublicApiV1Service {
               }
             : {})
         });
+        this.triggerOfficeWorkspaceShadow(request, response);
+        return this.attachExecutedWorkspaceActions(request, response);
       }
     }
 
@@ -151,14 +260,17 @@ export class HydriaPublicApiV1Service {
     const includeSources = request.options.includeSources;
     const includeTrace = request.options.includeTrace;
     const includeDiagnostics = request.options.includeDiagnostics;
-    const proposedActions = planPublicApiProposedActions({
-      requestId,
-      createdAt: result.createdAt,
+    const proposedActions = verifyPublicApiProposedActions({
       request,
-      answer: result.assistantMessage.content
+      actions: planPublicApiProposedActions({
+        requestId,
+        createdAt: result.createdAt,
+        request,
+        answer: result.assistantMessage.content
+      })
     });
 
-    return publicApiAskResponseSchema.parse({
+    const response = publicApiAskResponseSchema.parse({
       id: requestId,
       object: "hydria.answer",
       createdAt: result.createdAt,
@@ -209,6 +321,57 @@ export class HydriaPublicApiV1Service {
           }
         : {})
     });
+    this.triggerOfficeWorkspaceShadow(request, response);
+    return this.attachExecutedWorkspaceActions(request, response);
+  }
+
+  executeAction(args: ExecuteWorkObjectActionArgs) {
+    if (!this.deps.workObjectExecutionService) {
+      throw new Error("Hydria OS work object execution is not configured.");
+    }
+    return this.deps.workObjectExecutionService.executeAction(args);
+  }
+
+  listWorkObjects(options: ListWorkObjectsOptions = {}) {
+    if (!this.deps.workObjectExecutionService) {
+      return Promise.resolve([]);
+    }
+    return this.deps.workObjectExecutionService.listWorkObjects(options);
+  }
+
+  listArtifacts(options: ListWorkObjectsOptions = {}) {
+    if (!this.deps.workObjectExecutionService) {
+      return Promise.resolve([]);
+    }
+    return this.deps.workObjectExecutionService.listArtifacts(options);
+  }
+
+  getWorkObject(workObjectId: string) {
+    if (!this.deps.workObjectExecutionService) {
+      return Promise.resolve(null);
+    }
+    return this.deps.workObjectExecutionService.getWorkObject(workObjectId);
+  }
+
+  readWorkObjectContent(workObjectId: string, entryPath: string) {
+    if (!this.deps.workObjectExecutionService) {
+      return Promise.resolve(null);
+    }
+    return this.deps.workObjectExecutionService.readContent(workObjectId, entryPath);
+  }
+
+  readArtifactContent(artifactId: string) {
+    if (!this.deps.workObjectExecutionService) {
+      return Promise.resolve(null);
+    }
+    return this.deps.workObjectExecutionService.readArtifactContent(artifactId);
+  }
+
+  updateWorkObjectContent(args: UpdateWorkObjectContentArgs) {
+    if (!this.deps.workObjectExecutionService) {
+      throw new Error("Hydria OS work object execution is not configured.");
+    }
+    return this.deps.workObjectExecutionService.updateContent(args);
   }
 
   createSession(): PublicApiSessionResponse {
@@ -234,6 +397,13 @@ export class HydriaPublicApiV1Service {
       version: "v1",
       endpoints: [
         "POST /api/v1/ask",
+        "POST /api/v1/actions/execute",
+        "GET /api/v1/work-objects",
+        "GET /api/v1/work-objects/:workObjectId",
+        "GET /api/v1/work-objects/:workObjectId/content",
+        "PATCH /api/v1/work-objects/:workObjectId/content",
+        "POST /api/v1/work-objects/:workObjectId/operations",
+        "GET /api/v1/artifacts/:artifactId/download",
         "POST /api/v1/sessions",
         "POST /api/v1/sessions/:sessionId/reset",
         "DELETE /api/v1/sessions/:sessionId",
@@ -251,12 +421,15 @@ export class HydriaPublicApiV1Service {
           "governed memory retrieval",
           "agentic mission plan",
           "post-answer verification",
-          "workspace action proposals"
+          "workspace action proposals",
+          "confirmed work object execution",
+          "workspace tool operation calls"
         ],
         memory: [
           "session continuity via sessionId",
           "interaction audit persistence",
-          "governed learning queue capture"
+          "governed learning queue capture",
+          "persistent work object history"
         ],
         chainOfThought: "not_exposed"
       },
@@ -267,7 +440,10 @@ export class HydriaPublicApiV1Service {
         "time",
         "release/status lookup",
         "repo facts",
-        "source-backed research"
+        "source-backed research",
+        "workspace sheet operations",
+        "workspace document operations",
+        "workspace slide operations"
       ],
       modelRoles: [
         { role: "fast_router", model: "phi3:mini", provider: "ollama" },

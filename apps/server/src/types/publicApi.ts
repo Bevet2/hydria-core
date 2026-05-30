@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  workObjectArtifactSchema,
+  workObjectExecutionResultSchema,
+  workObjectSchema
+} from "./workObjects.js";
 
 export const publicApiAskOptionsSchema = z
   .object({
@@ -19,7 +24,8 @@ export const publicApiOsActionTypeSchema = z.enum([
   "create_artifact",
   "create_work_object",
   "update_work_object",
-  "set_work_object_metadata"
+  "set_work_object_metadata",
+  "workspace_tool_call"
 ]);
 
 export const publicApiWorkspaceContextSchema = z
@@ -35,6 +41,7 @@ export const publicApiWorkspaceContextSchema = z
         id: z.string().trim().min(1).max(200),
         title: z.string().trim().max(300).optional(),
         kind: z.string().trim().max(80).optional(),
+        workspaceFamilyId: z.string().trim().max(120).optional(),
         entryPath: z.string().trim().max(260).optional(),
         contentPreview: z.string().max(5000).optional(),
         editable: z.boolean().optional()
@@ -56,7 +63,8 @@ export const publicApiWorkspaceContextSchema = z
       .object({
         actions: z.array(publicApiOsActionTypeSchema).max(20).optional(),
         workObjectKinds: z.array(z.string().trim().min(1).max(80)).max(30).optional(),
-        artifactFormats: z.array(z.string().trim().min(1).max(24)).max(30).optional()
+        artifactFormats: z.array(z.string().trim().min(1).max(24)).max(30).optional(),
+        workspaceTools: z.array(z.string().trim().min(1).max(120)).max(160).optional()
       })
       .optional(),
     executionPolicy: z
@@ -147,6 +155,10 @@ export const publicApiAskResponseSchema = z.object({
     durationMs: z.number().int().nonnegative()
   }),
   proposedActions: z.array(publicApiProposedActionSchema),
+  executedActions: z.array(workObjectExecutionResultSchema).default([]),
+  activeWorkObject: workObjectSchema.nullable().default(null),
+  workObjects: z.array(workObjectSchema).default([]),
+  artifacts: z.array(workObjectArtifactSchema).default([]),
   trace: z.unknown().optional(),
   diagnostics: z.unknown().optional()
 });
