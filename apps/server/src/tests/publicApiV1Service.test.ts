@@ -1230,6 +1230,7 @@ test("public API v1 accepts OS-style slide operation capabilities", async () => 
 
 test("public API v1 can materialize confirmed workspace actions into work objects", async () => {
   let executedActionId = "";
+  const auditRecords: any[] = [];
   const service = new HydriaPublicApiV1Service({
     chatRuntimeService: {
       async sendMessage() {
@@ -1237,6 +1238,12 @@ test("public API v1 can materialize confirmed workspace actions into work object
       },
       resetSession() {}
     } as any,
+    interactionLogStore: {
+      async safeAppend(record: any) {
+        auditRecords.push(record);
+        return record;
+      }
+    },
     workObjectExecutionService: {
       async executeAction(args: any) {
         executedActionId = args.action.id;
@@ -1316,6 +1323,11 @@ test("public API v1 can materialize confirmed workspace actions into work object
   assert.equal(response.activeWorkObject?.id, "wo_1");
   assert.equal(response.proposedActions[0]?.dryRun, false);
   assert.equal(executedActionId, response.proposedActions[0]?.id);
+  assert.equal(auditRecords.length, 2);
+  assert.equal(auditRecords[0]?.scope, "workspace_action");
+  assert.equal(auditRecords[0]?.artifactId, "wo_1");
+  assert.equal(auditRecords[1]?.scope, "public_api_ask");
+  assert.equal(auditRecords[1]?.payload.executedActions[0]?.workObjectId, "wo_1");
 });
 
 test("public API v1 returns creation proposals when an OS advertises artifact capabilities", async () => {
@@ -1541,6 +1553,85 @@ test("public API v1 can include trace and diagnostics without exposing private c
   assert.equal((response.diagnostics as any).agenticPlan.mode, "evidence_first");
 });
 
+test("public API v1 lists persisted interaction audit records for OS memory", async () => {
+  const service = new HydriaPublicApiV1Service({
+    chatRuntimeService: {
+      async sendMessage() {
+        return chatResponse();
+      },
+      resetSession() {}
+    } as any,
+    interactionLogStore: {
+      async safeAppend() {
+        return null;
+      },
+      async listRecent() {
+        return [
+          {
+            id: "77777777-7777-4777-8777-777777777777",
+            createdAt: "2026-05-30T12:00:00.000Z",
+            scope: "workspace_action",
+            source: "public_api",
+            mode: "chat",
+            status: "completed",
+            sessionId,
+            artifactId: "wo_1",
+            question: "Fais le total.",
+            answer: "Applied 1 workspace operation.",
+            summary: "Applied 1 workspace operation.",
+            routing: {
+              orchestrator: "hydria_public_api_v1",
+              provider: "workspace",
+              model: "sheet.apply_formula",
+              category: "workspace_action",
+              toolUsed: true
+            },
+            quality: {
+              passed: true,
+              score: 1,
+              issues: []
+            },
+            durationMs: null,
+            payload: null
+          },
+          {
+            id: "88888888-8888-4888-8888-888888888888",
+            createdAt: "2026-05-30T12:01:00.000Z",
+            scope: "public_api_ask",
+            source: "public_api",
+            mode: "chat",
+            status: "completed",
+            sessionId: "other-session",
+            artifactId: null,
+            question: "Qu'est-ce que NVIDIA ?",
+            answer: "NVIDIA est une entreprise.",
+            summary: "NVIDIA est une entreprise.",
+            routing: {
+              orchestrator: "hydria_public_api_v1",
+              provider: "tool",
+              model: "research_fact_check",
+              category: "technical_explanation",
+              toolUsed: true
+            },
+            quality: {
+              passed: true,
+              score: 0.9,
+              issues: []
+            },
+            durationMs: 10,
+            payload: null
+          }
+        ] as any[];
+      }
+    }
+  });
+
+  const interactions = await service.listInteractions({ sessionId, scope: "workspace_action" });
+  assert.equal(interactions.length, 1);
+  assert.equal(interactions[0]?.scope, "workspace_action");
+  assert.equal(interactions[0]?.artifactId, "wo_1");
+});
+
 test("public API v1 creates and resets sessions", () => {
   let resetId = "";
   const service = new HydriaPublicApiV1Service({
@@ -1577,6 +1668,7 @@ test("public API v1 exposes integration capabilities", () => {
   const capabilities = service.capabilities();
   assert.equal(capabilities.version, "v1");
   assert.ok(capabilities.endpoints.includes("POST /api/v1/ask"));
+  assert.ok(capabilities.endpoints.includes("GET /api/v1/interactions"));
   assert.ok(capabilities.runtime.orchestration.includes("agentic mission plan"));
   assert.ok(capabilities.runtime.orchestration.includes("workspace action proposals"));
   assert.equal(capabilities.runtime.chainOfThought, "not_exposed");

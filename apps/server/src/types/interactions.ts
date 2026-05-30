@@ -8,7 +8,9 @@ export const hydriaInteractionScopeSchema = z.enum([
   "playground_round",
   "benchmark_run",
   "benchmark_prompt",
-  "local_model_test"
+  "local_model_test",
+  "public_api_ask",
+  "workspace_action"
 ]);
 
 export const hydriaInteractionSourceSchema = z.enum([
@@ -17,7 +19,9 @@ export const hydriaInteractionSourceSchema = z.enum([
   "playground",
   "benchmark",
   "local_model",
-  "core"
+  "core",
+  "public_api",
+  "hydria_os"
 ]);
 
 export const hydriaInteractionStatusSchema = z.enum(["completed", "accepted", "failed"]);

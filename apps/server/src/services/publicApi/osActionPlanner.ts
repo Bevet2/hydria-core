@@ -169,7 +169,7 @@ function wantsWorkspaceToolCall(prompt: string) {
     /\b(formule|formula|calcul|calcule|calculate|complete|remplis|renseigne|somme|sum|total|totaux|montant|amount|resultat|result|moyenne|average|cellules?|cells?|range|plage)\b/,
     /\b(chart|graphique|validation|filtre|filter|tri|sort|pivot|tcd|lignes?|rows?|colonnes?|columns?|renomme|rename|supprime|delete|remove|format|style|gras|bold|devise|currency|pourcentage|percent)\b/,
     /\b(insere|insert|redimensionne|resize|fusionne|merge|defusionne|unmerge|note|commentaire|conditional|conditionnel|tableau|table|sparkline|segment|slicer|liste|deroulante|déroulante|dropdown|nommee|nommée|protect|protege|protège|deprotege|déprotège|fige|freeze|zoom|quadrillage|gridlines?|feuille|onglet|sheet|tab)\b/,
-    /\b(section|paragraphe|paragraph|intro|introduction|bloc|block|append|insert|replace|table|tableau)\b/,
+    /\b(section|paragraphe|paragraph|intro|introduction|bloc|block|append|insert|replace|remplace|lien|link|url|image|citation|quote|code|saut de page|page break|toc|sommaire|table|tableau)\b/,
     /\b(slide|slides|diapo|diapositive|presentation|deck)\b/
   ]);
 }
@@ -820,6 +820,32 @@ function extractParagraphContent(prompt: string) {
   return "";
 }
 
+function extractUrl(prompt: string) {
+  const match = prompt.match(/\bhttps?:\/\/[^\s"'<>]+/i);
+  return match?.[0]?.replace(/[),.;]+$/g, "") ?? "";
+}
+
+function extractReplaceTextPair(prompt: string) {
+  const pair =
+    prompt.match(/\b(?:remplace|replace)\s+["'`](.+?)["'`]\s+(?:par|with)\s+["'`](.+?)["'`]/i) ||
+    prompt.match(/\b(?:change|corrige|fix)\s+["'`](.+?)["'`]\s+(?:en|to|par|with)\s+["'`](.+?)["'`]/i);
+  if (!pair?.[1] || !pair?.[2]) {
+    return null;
+  }
+  return {
+    oldText: pair[1].trim(),
+    newText: pair[2].trim()
+  };
+}
+
+function extractInlineCodeContent(prompt: string) {
+  const fenced = prompt.match(/```[a-z0-9_-]*\n?([\s\S]*?)```/i);
+  if (fenced?.[1]) {
+    return fenced[1].trim();
+  }
+  return extractParagraphContent(prompt);
+}
+
 function stripDocumentMarkup(value: string) {
   return String(value ?? "")
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -997,7 +1023,29 @@ function supportsWorkspaceTool(request: PublicApiAskRequest, toolName: string) {
 
   const aliases: Record<string, string[]> = {
     "sheet.apply_formula": [...SHEET_WORKSPACE_TOOLS],
-    "doc.edit": ["doc.insert_section", "doc.replace_block", "doc.append_paragraph", "doc.insert_table", "doc.delete_section"],
+    "doc.edit": [
+      "doc.insert_section",
+      "doc.insert_heading",
+      "doc.insert_paragraph",
+      "doc.append_paragraph",
+      "doc.replace_block",
+      "doc.replace_text",
+      "doc.delete_text",
+      "doc.insert_table",
+      "doc.insert_list",
+      "doc.insert_image",
+      "doc.insert_link",
+      "doc.insert_page_break",
+      "doc.insert_toc",
+      "doc.insert_quote",
+      "doc.insert_code_block",
+      "doc.set_title",
+      "doc.format_block",
+      "doc.set_metadata",
+      "doc.add_comment",
+      "doc.resolve_comment",
+      "doc.delete_section"
+    ],
     "slide.edit": ["slide.add", "slide.update", "slide.reorder"]
   };
   return (aliases[normalized] || []).some((alias) => allowed.has(alias));
@@ -1082,7 +1130,7 @@ function knownColumnFromPrompt(prompt: string, preview: ReturnType<typeof sheetP
 }
 
 function resolvePromptColumnName(prompt: string, preview: ReturnType<typeof sheetPreview>) {
-  return extractColumnNameFromAction(prompt) || knownColumnFromPrompt(prompt, preview);
+  return knownColumnFromPrompt(prompt, preview) || extractColumnNameFromAction(prompt);
 }
 
 function inferFilterColumnName(prompt: string, preview: ReturnType<typeof sheetPreview>, value: string) {
@@ -1829,6 +1877,149 @@ function planDocumentWorkspaceToolOperation(request: PublicApiAskRequest, questi
         }
       ]
     };
+  }
+
+  const replacePair = extractReplaceTextPair(question);
+  if (replacePair) {
+    return {
+      toolName: "doc.edit",
+      operations: [
+        {
+          type: "doc.replace_text",
+          content: replacePair.newText,
+          target: {
+            oldText: replacePair.oldText
+          }
+        }
+      ]
+    };
+  }
+
+  if (/\b(saut de page|page break)\b/.test(normalized)) {
+    return {
+      toolName: "doc.edit",
+      operations: [
+        {
+          type: "doc.insert_page_break"
+        }
+      ]
+    };
+  }
+
+  if (/\b(lien|link|url)\b/.test(normalized)) {
+    const href = extractUrl(question);
+    if (href) {
+      return {
+        toolName: "doc.edit",
+        operations: [
+          {
+            type: "doc.insert_link",
+            title: quotedContent || extractNamedPart(question, /(?:lien|link)/, "Lien"),
+            value: href,
+            target: targetHeading ? { heading: targetHeading } : { position: "end" }
+          }
+        ]
+      };
+    }
+  }
+
+  if (/\b(image|logo|illustration)\b/.test(normalized)) {
+    const src = extractUrl(question);
+    if (src) {
+      return {
+        toolName: "doc.edit",
+        operations: [
+          {
+            type: "doc.insert_image",
+            title: extractNamedPart(question, /(?:image|logo|illustration)/, "Image"),
+            value: src,
+            target: targetHeading ? { heading: targetHeading } : { position: "end" }
+          }
+        ]
+      };
+    }
+  }
+
+  if (/\b(citation|quote|blockquote)\b/.test(normalized)) {
+    const content = quotedContent || explicitTarget;
+    if (content) {
+      return {
+        toolName: "doc.edit",
+        operations: [
+          {
+            type: "doc.insert_quote",
+            content,
+            target: targetHeading ? { heading: targetHeading } : { position: "end" }
+          }
+        ]
+      };
+    }
+  }
+
+  if (/\b(code|snippet|extrait de code)\b/.test(normalized)) {
+    const content = extractInlineCodeContent(question);
+    if (content) {
+      return {
+        toolName: "doc.edit",
+        operations: [
+          {
+            type: "doc.insert_code_block",
+            content,
+            payload: {
+              language: compact(question.match(/\b(?:js|ts|tsx|python|py|sql|bash|json|html|css)\b/i)?.[0], 40)
+            },
+            target: targetHeading ? { heading: targetHeading } : { position: "end" }
+          }
+        ]
+      };
+    }
+  }
+
+  if (/\b(commentaire|comment|note de revision|review note)\b/.test(normalized)) {
+    const content = quotedContent || explicitTarget || "A verifier.";
+    return {
+      toolName: "doc.edit",
+      operations: [
+        {
+          type: "doc.add_comment",
+          title: targetHeading || "Commentaire",
+          content,
+          target: targetHeading ? { heading: targetHeading } : { position: "end" }
+        }
+      ]
+    };
+  }
+
+  if (/\b(ajoute|add|insert|insere|cree|create)\b/.test(normalized) && /\b(titre|heading)\b/.test(normalized)) {
+    const title = explicitTarget || quotedContent || extractNamedPart(question, /(?:titre|heading)/, "Titre");
+    return {
+      toolName: "doc.edit",
+      operations: [
+        {
+          type: "doc.insert_heading",
+          title,
+          target: {
+            level: /\b(h1|niveau 1|level 1)\b/.test(normalized) ? 1 : 2
+          }
+        }
+      ]
+    };
+  }
+
+  if (/\b(ajoute|add|insert|insere|cree|create)\b/.test(normalized) && /\b(paragraphe|paragraph)\b/.test(normalized)) {
+    const content = quotedContent || explicitTarget;
+    if (content) {
+      return {
+        toolName: "doc.edit",
+        operations: [
+          {
+            type: "doc.insert_paragraph",
+            content,
+            target: targetHeading ? { heading: targetHeading } : { position: "end" }
+          }
+        ]
+      };
+    }
   }
 
   if (/\b(supprime|delete|remove)\b/.test(normalized) && /\b(section|partie|heading)\b/.test(normalized)) {

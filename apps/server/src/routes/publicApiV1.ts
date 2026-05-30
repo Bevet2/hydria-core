@@ -125,6 +125,21 @@ export function createPublicApiV1Router(publicApiService: HydriaPublicApiV1Servi
     }
   });
 
+  router.get("/interactions", async (request, response, next) => {
+    try {
+      response.json({
+        object: "hydria.interaction_list",
+        interactions: await publicApiService.listInteractions({
+          sessionId: typeof request.query.sessionId === "string" ? request.query.sessionId : null,
+          scope: typeof request.query.scope === "string" ? request.query.scope : null,
+          limit: parseLimit(request.query.limit)
+        })
+      });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get("/work-objects/:workObjectId", async (request, response, next) => {
     try {
       const parsed = workObjectIdParamSchema.parse(request.params);

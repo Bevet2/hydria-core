@@ -185,10 +185,13 @@ export class InteractionLearningDigestService {
     if (record.scope === "student_analysis") {
       return "supervised_correction";
     }
+    if (record.scope === "workspace_action") {
+      return "tool_routing_signal";
+    }
     if (record.scope === "playground_round" || record.scope === "benchmark_prompt") {
       return "reasoning_example";
     }
-    if (record.scope === "chat_turn" || record.scope === "student_preview") {
+    if (record.scope === "chat_turn" || record.scope === "student_preview" || record.scope === "public_api_ask") {
       return "answer_pattern";
     }
 

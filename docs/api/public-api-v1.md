@@ -364,6 +364,7 @@ PATCH /api/v1/work-objects/:workObjectId/content
 POST  /api/v1/work-objects/:workObjectId/operations
 POST  /api/v1/actions/execute
 GET   /api/v1/artifacts/:artifactId/download
+GET   /api/v1/interactions
 ```
 
 `PATCH /content` body:
@@ -571,6 +572,23 @@ Hydria OS can expose either family tools (`sheet.apply_formula`, `doc.edit`, `sl
 capability names and still emits one canonical `workspace_tool_call.v1` payload. The live list is available
 from Hydria OS at `GET /api/hydria/control/schema`.
 
+Every `/api/v1/ask` response and every confirmed workspace action is now stored in the interaction audit log.
+This gives the OS a reusable memory trail: original user request, active workspace preview, proposed actions,
+executed actions, model/tool routing, quality issues, and resulting work object IDs. Read it with:
+
+```bash
+curl -fsS "https://app.hydria.click/api/v1/interactions?sessionId=<sessionId>&limit=50" \
+  -H "authorization: Bearer $HYDRIA_API_KEY"
+```
+
+Useful filters:
+
+- `scope=public_api_ask`
+- `scope=workspace_action`
+- `sessionId=<conversation uuid>`
+
+This is audit/learning memory. It does not expose private chain-of-thought and it does not train a model by itself.
+
 The artifact download URL is returned on the artifact object:
 
 ```json
@@ -590,6 +608,15 @@ Hydria OS spreadsheet and document workspaces are covered by a dedicated Core ga
 ```bash
 npm run os:office-workspace-gate
 ```
+
+The broader public API workspace scenario gate validates the user/workspace/Core exchange directly:
+
+```bash
+npm run os:workspace-scenario-gate
+```
+
+It covers plain questions, numbers-to-Excel extraction, active Sheet commentary, totals, sort/filter/format/chart
+planning, document section edits, text replacement, links, code blocks, comments, summaries, and slide creation.
 
 The gate validates:
 

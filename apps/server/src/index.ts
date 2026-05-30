@@ -155,6 +155,7 @@ const officeWorkspaceShadowService = new OfficeWorkspaceShadowService();
 const workObjectExecutionService = new WorkObjectExecutionService();
 const publicApiV1Service = new HydriaPublicApiV1Service({
   chatRuntimeService,
+  interactionLogStore,
   officeWorkspaceShadowService,
   officeWorkspaceShadowEnabled: env.HYDRIA_OS_OFFICE_V11_SHADOW_ENABLED,
   workObjectExecutionService

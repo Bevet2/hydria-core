@@ -167,6 +167,109 @@ const scenarios: Scenario[] = [
     }
   },
   {
+    id: "active_sheet_sort_column",
+    request: publicApiAskRequestSchema.parse({
+      input: "Trie la colonne Prix du plus grand au plus petit.",
+      metadata: { workspaceFamilyId: "data_spreadsheet" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "sheet-1",
+          title: "Ventes",
+          kind: "dataset",
+          workspaceFamilyId: "data_spreadsheet",
+          entryPath: "table.csv",
+          contentPreview: sheetPreview(["Produit", "Prix"], [["A", "10"], ["B", "20"]])
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["sheet.sort_range"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operation = (response.proposedActions[0]?.payload.operations as any[] | undefined)?.[0];
+      return [
+        operation?.type === "sheet.sort_range" ? "" : "expected sheet.sort_range",
+        operation?.target?.columnName === "Prix" ? "" : "expected Prix target",
+        operation?.direction === "desc" ? "" : "expected descending sort"
+      ];
+    }
+  },
+  {
+    id: "active_sheet_filter_column",
+    request: publicApiAskRequestSchema.parse({
+      input: "Filtre la colonne Prix sur 10.",
+      metadata: { workspaceFamilyId: "data_spreadsheet" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "sheet-1",
+          title: "Ventes",
+          kind: "dataset",
+          workspaceFamilyId: "data_spreadsheet",
+          entryPath: "table.csv",
+          contentPreview: sheetPreview(["Produit", "Prix"], [["A", "10"], ["B", "20"]])
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["sheet.filter_rows"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operation = (response.proposedActions[0]?.payload.operations as any[] | undefined)?.[0];
+      return [
+        operation?.type === "sheet.filter_rows" ? "" : "expected sheet.filter_rows",
+        operation?.target?.columnName === "Prix" ? "" : "expected Prix target",
+        operation?.value === "10" ? "" : "expected filter value 10"
+      ];
+    }
+  },
+  {
+    id: "active_sheet_format_currency",
+    request: publicApiAskRequestSchema.parse({
+      input: "Formate la colonne Prix en devise.",
+      metadata: { workspaceFamilyId: "data_spreadsheet" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "sheet-1",
+          title: "Ventes",
+          kind: "dataset",
+          workspaceFamilyId: "data_spreadsheet",
+          entryPath: "table.csv",
+          contentPreview: sheetPreview(["Produit", "Prix"], [["A", "10"], ["B", "20"]])
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["sheet.format_cells"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operation = (response.proposedActions[0]?.payload.operations as any[] | undefined)?.[0];
+      return [
+        operation?.type === "sheet.format_cells" ? "" : "expected sheet.format_cells",
+        operation?.target?.columnName === "Prix" ? "" : "expected Prix target",
+        operation?.format?.numberFormat === "currency" ? "" : "expected currency format"
+      ];
+    }
+  },
+  {
+    id: "active_sheet_add_chart",
+    request: publicApiAskRequestSchema.parse({
+      input: "Ajoute un graphique CA sur A1:B4.",
+      metadata: { workspaceFamilyId: "data_spreadsheet" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "sheet-1",
+          title: "CA",
+          kind: "dataset",
+          workspaceFamilyId: "data_spreadsheet",
+          entryPath: "table.csv",
+          contentPreview: sheetPreview(["Mois", "CA"], [["Janvier", "1200"], ["Fevrier", "1600"], ["Mars", "1400"]])
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["sheet.add_chart"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operation = (response.proposedActions[0]?.payload.operations as any[] | undefined)?.[0];
+      return [
+        operation?.type === "sheet.add_chart" ? "" : "expected sheet.add_chart",
+        operation?.range === "A1:B4" ? "" : "expected A1:B4 range"
+      ];
+    }
+  },
+  {
     id: "active_doc_insert_section",
     request: publicApiAskRequestSchema.parse({
       input: "Ajoute une section Risques avec 'Verifier les sources avant publication.'",
@@ -189,6 +292,108 @@ const scenarios: Scenario[] = [
         response.proposedActions[0]?.payload.toolName === "doc.edit" ? "" : "expected doc.edit",
         operation?.type === "doc.insert_section" ? "" : "expected doc.insert_section",
         operation?.content === "Verifier les sources avant publication." ? "" : "expected quoted content preserved"
+      ];
+    }
+  },
+  {
+    id: "active_doc_replace_text",
+    request: publicApiAskRequestSchema.parse({
+      input: "Remplace 'Old text' par 'New text'.",
+      metadata: { workspaceFamilyId: "document_knowledge" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "doc-1",
+          title: "Plan projet",
+          kind: "document",
+          workspaceFamilyId: "document_knowledge",
+          entryPath: "content.md",
+          contentPreview: "# Plan projet\n\nOld text"
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["doc.replace_text"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operation = (response.proposedActions[0]?.payload.operations as any[] | undefined)?.[0];
+      return [
+        operation?.type === "doc.replace_text" ? "" : "expected doc.replace_text",
+        operation?.target?.oldText === "Old text" ? "" : "expected old text target",
+        operation?.content === "New text" ? "" : "expected replacement content"
+      ];
+    }
+  },
+  {
+    id: "active_doc_insert_link",
+    request: publicApiAskRequestSchema.parse({
+      input: "Ajoute un lien Hydria https://app.hydria.click.",
+      metadata: { workspaceFamilyId: "document_knowledge" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "doc-1",
+          title: "Plan projet",
+          kind: "document",
+          workspaceFamilyId: "document_knowledge",
+          entryPath: "content.md",
+          contentPreview: "# Plan projet"
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["doc.insert_link"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operation = (response.proposedActions[0]?.payload.operations as any[] | undefined)?.[0];
+      return [
+        operation?.type === "doc.insert_link" ? "" : "expected doc.insert_link",
+        operation?.value === "https://app.hydria.click" ? "" : "expected Hydria URL"
+      ];
+    }
+  },
+  {
+    id: "active_doc_insert_code_block",
+    request: publicApiAskRequestSchema.parse({
+      input: "Ajoute un bloc code js 'const ok = true;'.",
+      metadata: { workspaceFamilyId: "document_knowledge" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "doc-1",
+          title: "Plan projet",
+          kind: "document",
+          workspaceFamilyId: "document_knowledge",
+          entryPath: "content.md",
+          contentPreview: "# Plan projet"
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["doc.insert_code_block"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operation = (response.proposedActions[0]?.payload.operations as any[] | undefined)?.[0];
+      return [
+        operation?.type === "doc.insert_code_block" ? "" : "expected doc.insert_code_block",
+        operation?.content === "const ok = true;" ? "" : "expected code content"
+      ];
+    }
+  },
+  {
+    id: "active_doc_add_comment",
+    request: publicApiAskRequestSchema.parse({
+      input: "Ajoute un commentaire 'Verifier les chiffres' sur l'introduction.",
+      metadata: { workspaceFamilyId: "document_knowledge" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "doc-1",
+          title: "Plan projet",
+          kind: "document",
+          workspaceFamilyId: "document_knowledge",
+          entryPath: "content.md",
+          contentPreview: "# Plan projet\n\n## Introduction\n\nTexte."
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["doc.add_comment"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operation = (response.proposedActions[0]?.payload.operations as any[] | undefined)?.[0];
+      return [
+        operation?.type === "doc.add_comment" ? "" : "expected doc.add_comment",
+        operation?.content === "Verifier les chiffres" ? "" : "expected comment content",
+        operation?.target?.heading === "Introduction" ? "" : "expected Introduction target"
       ];
     }
   },

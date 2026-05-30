@@ -33,9 +33,11 @@ import type {
   WorkObjectArtifact,
   WorkObjectExecutionResult
 } from "../../types/workObjects.js";
+import type { InteractionLogStore } from "../interactionLogStore.js";
 
 type HydriaPublicApiV1ServiceDeps = {
   chatRuntimeService: Pick<ChatRuntimeService, "sendMessage" | "resetSession">;
+  interactionLogStore?: Pick<InteractionLogStore, "safeAppend"> & Partial<Pick<InteractionLogStore, "listRecent">>;
   officeWorkspaceShadowService?: Pick<OfficeWorkspaceShadowService, "run">;
   officeWorkspaceShadowEnabled?: boolean;
   workObjectExecutionService?: Pick<
@@ -63,11 +65,11 @@ function normalizeText(value: string | null | undefined) {
     .trim();
 }
 
-function compact(value: string | null | undefined, maxChars = 500) {
+function compact(value: unknown, maxChars = 500) {
   if (!value) {
     return null;
   }
-  const normalized = value.replace(/\s+/g, " ").trim();
+  const normalized = String(value).replace(/\s+/g, " ").trim();
   return normalized.length <= maxChars ? normalized : `${normalized.slice(0, maxChars - 1).trim()}...`;
 }
 
@@ -134,6 +136,49 @@ function buildWorkspaceActionAnswer(actionCount: number, language: "fr" | "en") 
     : "One OS action is proposed as dry-run.";
 }
 
+function summarizeAction(action: PublicApiAskResponse["proposedActions"][number]) {
+  return {
+    id: action.id,
+    type: action.type,
+    title: compact(action.title, 180),
+    target: action.target,
+    toolName: compact(action.payload.toolName, 120) || null,
+    operationTypes: Array.isArray(action.payload.operations)
+      ? action.payload.operations
+          .map((operation) =>
+            typeof operation === "object" && operation !== null
+              ? compact((operation as Record<string, unknown>).type, 120)
+              : ""
+          )
+          .filter(Boolean)
+          .slice(0, 20)
+      : [],
+    riskLevel: action.riskLevel,
+    requiresConfirmation: action.requiresConfirmation,
+    dryRun: action.dryRun
+  };
+}
+
+function summarizeWorkspaceContext(request: PublicApiAskRequest) {
+  const active = request.workspaceContext?.activeWorkObject;
+  return active
+    ? {
+        activeWorkObject: {
+          id: active.id,
+          title: compact(active.title, 180),
+          kind: compact(active.kind, 80),
+          workspaceFamilyId: compact(active.workspaceFamilyId, 120),
+          entryPath: compact(active.entryPath, 260),
+          contentPreview: compact(active.contentPreview, 1200),
+          editable: active.editable ?? null
+        },
+        capabilityActions: request.workspaceContext?.capabilities?.actions ?? [],
+        workspaceTools: request.workspaceContext?.capabilities?.workspaceTools ?? [],
+        executionPolicy: request.workspaceContext?.executionPolicy ?? null
+      }
+    : null;
+}
+
 export class HydriaPublicApiV1Service {
   constructor(private readonly deps: HydriaPublicApiV1ServiceDeps) {}
 
@@ -153,7 +198,7 @@ export class HydriaPublicApiV1Service {
     const results: WorkObjectExecutionResult[] = [];
     for (const action of response.proposedActions.filter((candidate) => candidate.type !== "reply")) {
       results.push(
-        await this.deps.workObjectExecutionService.executeAction({
+        await this.executeAndAuditAction({
           action,
           confirmed: true,
           sessionId: response.sessionId,
@@ -209,6 +254,103 @@ export class HydriaPublicApiV1Service {
         error: String(error),
         requestId: official.id
       });
+    });
+  }
+
+  private async executeAndAuditAction(args: ExecuteWorkObjectActionArgs) {
+    if (!this.deps.workObjectExecutionService) {
+      throw new Error("Hydria OS work object execution is not configured.");
+    }
+    const result = await this.deps.workObjectExecutionService.executeAction(args);
+    await this.persistWorkspaceActionAudit(args, result);
+    return result;
+  }
+
+  private async persistWorkspaceActionAudit(args: ExecuteWorkObjectActionArgs, result: WorkObjectExecutionResult) {
+    const instruction = compact(args.action.payload.instruction, 12000) || args.action.title;
+    await this.deps.interactionLogStore?.safeAppend({
+      scope: "workspace_action",
+      source: "public_api",
+      mode: "chat",
+      status:
+        result.status === "executed"
+          ? "completed"
+          : result.status === "failed"
+            ? "failed"
+            : "accepted",
+      sessionId: args.sessionId ?? null,
+      artifactId: result.workObject?.id ?? result.artifact?.id ?? args.action.id,
+      question: instruction,
+      answer: result.summary,
+      summary: result.summary,
+      routing: {
+        orchestrator: "hydria_public_api_v1",
+        provider: "workspace",
+        model: compact(args.action.payload.toolName, 120) || args.action.type,
+        category: "workspace_action",
+        toolUsed: args.action.type === "workspace_tool_call"
+      },
+      quality: {
+        passed: result.status === "executed" && result.issues.length === 0,
+        score: result.status === "executed" && result.issues.length === 0 ? 1 : 0,
+        issues: result.issues.slice(0, 24)
+      },
+      durationMs: null,
+      payload: {
+        action: summarizeAction(args.action as PublicApiAskResponse["proposedActions"][number]),
+        execution: {
+          id: result.id,
+          status: result.status,
+          confirmed: result.confirmed,
+          dryRun: result.dryRun,
+          workObjectId: result.workObject?.id ?? null,
+          artifactId: result.artifact?.id ?? null
+        }
+      }
+    });
+  }
+
+  private async persistAskAudit(request: PublicApiAskRequest, response: PublicApiAskResponse) {
+    await this.deps.interactionLogStore?.safeAppend({
+      scope: "public_api_ask",
+      source: "public_api",
+      mode: "chat",
+      status: response.quality.passed === false ? "failed" : "completed",
+      sessionId: response.sessionId,
+      artifactId: response.activeWorkObject?.id ?? request.workspaceContext?.activeWorkObject?.id ?? null,
+      question: resolveQuestion(request),
+      answer: response.answer,
+      summary: compact(response.answer, 900),
+      routing: {
+        orchestrator: "hydria_public_api_v1",
+        provider: response.models.provider,
+        model: response.models.model,
+        category: response.category,
+        toolUsed: response.tools.used || response.proposedActions.some((action) => action.type === "workspace_tool_call")
+      },
+      quality: {
+        passed: response.quality.passed,
+        score: response.confidence === null ? null : response.confidence / 100,
+        issues: response.quality.issues.slice(0, 24)
+      },
+      durationMs: response.quality.durationMs,
+      payload: {
+        language: response.language,
+        tools: response.tools,
+        models: response.models,
+        sources: response.sources.slice(0, 8),
+        proposedActions: response.proposedActions.map(summarizeAction),
+        executedActions: response.executedActions.map((result) => ({
+          id: result.id,
+          actionId: result.actionId,
+          actionType: result.actionType,
+          status: result.status,
+          workObjectId: result.workObject?.id ?? null,
+          artifactId: result.artifact?.id ?? null,
+          issues: result.issues
+        })),
+        workspaceContext: summarizeWorkspaceContext(request)
+      }
     });
   }
 
@@ -289,7 +431,9 @@ export class HydriaPublicApiV1Service {
             : {})
         });
         this.triggerOfficeWorkspaceShadow(request, response);
-        return this.attachExecutedWorkspaceActions(request, response);
+        const finalResponse = await this.attachExecutedWorkspaceActions(request, response);
+        await this.persistAskAudit(request, finalResponse);
+        return finalResponse;
       }
     }
 
@@ -362,14 +506,13 @@ export class HydriaPublicApiV1Service {
         : {})
     });
     this.triggerOfficeWorkspaceShadow(request, response);
-    return this.attachExecutedWorkspaceActions(request, response);
+    const finalResponse = await this.attachExecutedWorkspaceActions(request, response);
+    await this.persistAskAudit(request, finalResponse);
+    return finalResponse;
   }
 
   executeAction(args: ExecuteWorkObjectActionArgs) {
-    if (!this.deps.workObjectExecutionService) {
-      throw new Error("Hydria OS work object execution is not configured.");
-    }
-    return this.deps.workObjectExecutionService.executeAction(args);
+    return this.executeAndAuditAction(args);
   }
 
   listWorkObjects(options: ListWorkObjectsOptions = {}) {
@@ -384,6 +527,18 @@ export class HydriaPublicApiV1Service {
       return Promise.resolve([]);
     }
     return this.deps.workObjectExecutionService.listArtifacts(options);
+  }
+
+  async listInteractions(options: { limit?: number; sessionId?: string | null; scope?: string | null } = {}) {
+    if (!this.deps.interactionLogStore?.listRecent) {
+      return [];
+    }
+    const limit = Math.max(1, Math.min(500, Math.round(options.limit ?? 100)));
+    const records = await this.deps.interactionLogStore.listRecent(Math.max(limit, 100));
+    return records
+      .filter((record) => !options.sessionId || record.sessionId === options.sessionId)
+      .filter((record) => !options.scope || record.scope === options.scope)
+      .slice(0, limit);
   }
 
   getWorkObject(workObjectId: string) {
@@ -444,6 +599,7 @@ export class HydriaPublicApiV1Service {
         "PATCH /api/v1/work-objects/:workObjectId/content",
         "POST /api/v1/work-objects/:workObjectId/operations",
         "GET /api/v1/artifacts/:artifactId/download",
+        "GET /api/v1/interactions",
         "POST /api/v1/sessions",
         "POST /api/v1/sessions/:sessionId/reset",
         "DELETE /api/v1/sessions/:sessionId",
