@@ -94,6 +94,42 @@ test("work object execution creates a persistent editable document and export ar
   });
 });
 
+test("work object execution materializes extracted spreadsheet rows", async () => {
+  await withTempService(async (service) => {
+    const result = await service.executeAction({
+      action: action({
+        type: "create_artifact",
+        title: "Creer un Excel depuis des chiffres",
+        payload: {
+          instruction: "Presente ces chiffres dans un Excel.",
+          format: "xlsx",
+          kind: "dataset",
+          columns: ["Libelle", "Valeur", "Unite"],
+          rows: [
+            ["Janvier", "1200", "€"],
+            ["Fevrier", "1600", "€"],
+            ["Mars", "1400", "€"]
+          ]
+        }
+      }),
+      confirmed: true,
+      sessionId: "33333333-3333-4333-8333-333333333333"
+    });
+
+    assert.equal(result.status, "executed");
+    assert.equal(result.workObject?.kind, "dataset");
+    assert.equal(result.artifact?.format, "xlsx");
+    const content = await service.readContent(result.workObject!.id, "table.csv");
+    const model = JSON.parse(content?.content ?? "{}");
+    assert.deepEqual(model.sheets[0].columns, ["Libelle", "Valeur", "Unite"]);
+    assert.deepEqual(model.sheets[0].rows, [
+      ["Janvier", "1200", "€"],
+      ["Fevrier", "1600", "€"],
+      ["Mars", "1400", "€"]
+    ]);
+  });
+});
+
 test("work object execution updates a dataset by adding requested columns", async () => {
   await withTempService(async (service) => {
     const createResult = await service.executeAction({

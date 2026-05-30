@@ -59,6 +59,7 @@
     "os:office-workspace-model-gate": "tsx src/scripts/runHydriaOsOfficeWorkspaceModelGate.ts",
     "os:office-workspace-ab-gate": "tsx src/scripts/runHydriaOsOfficeWorkspaceABGate.ts",
     "os:office-workspace-shadow-report": "tsx src/scripts/runHydriaOsOfficeWorkspaceShadowReport.ts",
+    "os:workspace-scenario-gate": "tsx src/scripts/runPublicApiWorkspaceScenarioGate.ts",
     "student:office-workspace-training-request": "tsx src/scripts/runPrepareOfficeWorkspaceTrainingRequest.ts",
     "student:chat-prod-gate": "tsx src/scripts/runStudentChatProductionGate.ts",
     "models:pretraining-gate": "tsx src/scripts/runModelRolePreTrainingGate.ts",

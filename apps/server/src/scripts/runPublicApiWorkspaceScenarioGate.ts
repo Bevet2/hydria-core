@@ -1,0 +1,294 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { HydriaPublicApiV1Service } from "../services/publicApi/hydriaPublicApiV1Service.js";
+import { publicApiAskRequestSchema, type PublicApiAskRequest } from "../types/publicApi.js";
+
+type Scenario = {
+  id: string;
+  request: PublicApiAskRequest;
+  expect: (args: { response: Awaited<ReturnType<HydriaPublicApiV1Service["ask"]>>; runtimeMessages: string[] }) => string[];
+};
+
+const sessionId = "11111111-1111-4111-8111-111111111111";
+
+function fakeChatResponse(message: string) {
+  const content = message.includes("CA mensuel") && message.includes("1600")
+    ? "Le chiffre d'affaires progresse de janvier a fevrier, puis recule legerement en mars; le niveau reste au-dessus de janvier."
+    : message.toLowerCase().includes("postgresql")
+      ? "PostgreSQL est une base de donnees relationnelle robuste, adaptee aux donnees structurees et aux requetes SQL."
+      : "Hydria a traite la demande avec le contexte disponible.";
+
+  return {
+    sessionId,
+    createdAt: "2026-05-30T12:00:00.000Z",
+    runtimeMode: "conversation",
+    category: "workspace_scenario",
+    assistantMessage: { content },
+    answer: { confidence: 84 },
+    conversationState: {
+      language: "fr",
+      userGoal: message,
+      knownFacts: []
+    },
+    activeConstraintCapsule: {
+      topConstraints: []
+    },
+    tooling: {
+      used: false,
+      route: "not_needed",
+      routing: {
+        toolType: "none",
+        intent: "none"
+      },
+      sources: []
+    },
+    generation: {
+      provider: "ollama",
+      model: "qwen2.5:3b",
+      specialist: { role: "scenario_gate_stub" },
+      attempts: [{ model: "qwen2.5:3b" }]
+    },
+    conversationQuality: {
+      passed: true,
+      issues: []
+    },
+    evidenceCapsule: {
+      answerabilityMode: "direct"
+    },
+    agenticPlan: {
+      mode: "direct"
+    },
+    knowledgeRetrieval: {
+      used: false
+    },
+    orchestrationTrace: {
+      version: "public_api_workspace_scenario_gate_trace_v1",
+      disclosure: "runtime_trace_no_private_chain_of_thought",
+      steps: []
+    },
+    usedRetry: false,
+    durationMs: 10
+  } as any;
+}
+
+function sheetPreview(columns: string[], rows: string[][]) {
+  return JSON.stringify({
+    kind: "hydria-sheet",
+    version: 1,
+    activeSheetId: "sheet-1",
+    sheets: [{ id: "sheet-1", name: "Sheet 1", columns, rows }]
+  });
+}
+
+function baseWorkspace(actions: string[], workspaceTools: string[] = []) {
+  return {
+    capabilities: {
+      actions: actions as any[],
+      workspaceTools,
+      artifactFormats: ["xlsx", "csv", "docx", "md", "pptx"],
+      workObjectKinds: ["dataset", "document", "presentation"]
+    }
+  };
+}
+
+const scenarios: Scenario[] = [
+  {
+    id: "plain_question_no_workspace",
+    request: publicApiAskRequestSchema.parse({
+      input: "Explique PostgreSQL simplement.",
+      options: { includeProposedActions: true }
+    }),
+    expect: ({ response }) => [
+      response.proposedActions.length === 0 ? "" : "expected no OS action for plain question",
+      /PostgreSQL/i.test(response.answer) ? "" : "expected PostgreSQL answer"
+    ]
+  },
+  {
+    id: "numbers_to_excel_from_prompt",
+    request: publicApiAskRequestSchema.parse({
+      input: "Presente ces chiffres dans un Excel : Janvier 1200€, Fevrier 1600€, Mars 1400€.",
+      workspaceContext: baseWorkspace(["create_artifact"])
+    }),
+    expect: ({ response }) => {
+      const action = response.proposedActions[0];
+      return [
+        action?.type === "create_artifact" ? "" : "expected create_artifact",
+        action?.payload.kind === "dataset" ? "" : "expected dataset",
+        JSON.stringify(action?.payload.rows ?? []).includes("1600") ? "" : "expected extracted numeric rows"
+      ];
+    }
+  },
+  {
+    id: "active_sheet_commentary",
+    request: publicApiAskRequestSchema.parse({
+      input: "Commente ces chiffres.",
+      workspaceContext: {
+        activeWorkObject: {
+          id: "sheet-1",
+          title: "CA mensuel",
+          kind: "dataset",
+          workspaceFamilyId: "data_spreadsheet",
+          entryPath: "table.csv",
+          contentPreview: sheetPreview(["Mois", "CA"], [["Janvier", "1200"], ["Fevrier", "1600"], ["Mars", "1400"]])
+        },
+        ...baseWorkspace(["reply"], ["sheet.apply_formula"])
+      }
+    }),
+    expect: ({ response, runtimeMessages }) => [
+      runtimeMessages.some((message) => message.includes("CA mensuel") && message.includes("1600"))
+        ? ""
+        : "expected active sheet data in runtime message",
+      /progresse|recule|janvier/i.test(response.answer) ? "" : "expected data commentary"
+    ]
+  },
+  {
+    id: "active_sheet_total_formula",
+    request: publicApiAskRequestSchema.parse({
+      input: "Fais le total en C.",
+      metadata: { workspaceFamilyId: "data_spreadsheet" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "sheet-1",
+          title: "Panier",
+          kind: "dataset",
+          workspaceFamilyId: "data_spreadsheet",
+          entryPath: "table.csv",
+          contentPreview: sheetPreview(["nb de crayon", "prix"], [["10", "0.5"]])
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["sheet.apply_formula"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operations = response.proposedActions[0]?.payload.operations as any[] | undefined;
+      return [
+        response.proposedActions[0]?.payload.toolName === "sheet.apply_formula" ? "" : "expected sheet tool",
+        JSON.stringify(operations ?? []).includes("=A2*B2") ? "" : "expected quantity x price total"
+      ];
+    }
+  },
+  {
+    id: "active_doc_insert_section",
+    request: publicApiAskRequestSchema.parse({
+      input: "Ajoute une section Risques avec 'Verifier les sources avant publication.'",
+      metadata: { workspaceFamilyId: "document_knowledge" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "doc-1",
+          title: "Plan projet",
+          kind: "document",
+          workspaceFamilyId: "document_knowledge",
+          entryPath: "content.md",
+          contentPreview: "# Plan projet\n\n## Introduction\n\nHydria OS connecte Core au workspace."
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["doc.edit"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operation = (response.proposedActions[0]?.payload.operations as any[] | undefined)?.[0];
+      return [
+        response.proposedActions[0]?.payload.toolName === "doc.edit" ? "" : "expected doc.edit",
+        operation?.type === "doc.insert_section" ? "" : "expected doc.insert_section",
+        operation?.content === "Verifier les sources avant publication." ? "" : "expected quoted content preserved"
+      ];
+    }
+  },
+  {
+    id: "active_doc_summarize_intro",
+    request: publicApiAskRequestSchema.parse({
+      input: "Raccourcis l'introduction.",
+      metadata: { workspaceFamilyId: "document_knowledge" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "doc-1",
+          title: "Plan projet",
+          kind: "document",
+          workspaceFamilyId: "document_knowledge",
+          entryPath: "content.md",
+          contentPreview: "# Plan projet\n\n## Introduction\n\nHydria OS connecte Core au workspace. Les actions doivent rester tracables. Le document garde les decisions.\n\n## Risques\n\n- Mauvais routage"
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["doc.edit"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operation = (response.proposedActions[0]?.payload.operations as any[] | undefined)?.[0];
+      return [
+        operation?.type === "doc.replace_block" ? "" : "expected doc.replace_block",
+        operation?.target?.heading === "Introduction" ? "" : "expected Introduction target",
+        /Hydria OS/.test(operation?.content ?? "") ? "" : "expected summarized intro content"
+      ];
+    }
+  },
+  {
+    id: "active_slide_add",
+    request: publicApiAskRequestSchema.parse({
+      input: "Ajoute une slide Risques dans la presentation.",
+      metadata: { workspaceFamilyId: "presentation" },
+      workspaceContext: {
+        activeWorkObject: {
+          id: "deck-1",
+          title: "Comite",
+          kind: "presentation",
+          workspaceFamilyId: "presentation",
+          entryPath: "slides.md",
+          contentPreview: "# Comite"
+        },
+        ...baseWorkspace(["workspace_tool_call"], ["slide.edit"])
+      }
+    }),
+    expect: ({ response }) => {
+      const operation = (response.proposedActions[0]?.payload.operations as any[] | undefined)?.[0];
+      return [
+        response.proposedActions[0]?.payload.toolName === "slide.edit" ? "" : "expected slide.edit",
+        operation?.type === "slide.add" ? "" : "expected slide.add"
+      ];
+    }
+  }
+];
+
+const runtimeMessages: string[] = [];
+const service = new HydriaPublicApiV1Service({
+  chatRuntimeService: {
+    async sendMessage(input: { message: string }) {
+      runtimeMessages.push(input.message);
+      return fakeChatResponse(input.message);
+    },
+    resetSession() {}
+  } as any
+});
+
+const results = [];
+for (const scenario of scenarios) {
+  const before = runtimeMessages.length;
+  const response = await service.ask(scenario.request);
+  const messages = runtimeMessages.slice(before);
+  const issues = scenario.expect({ response, runtimeMessages: messages }).filter(Boolean);
+  results.push({
+    id: scenario.id,
+    passed: issues.length === 0,
+    issues,
+    answer: response.answer,
+    actionTypes: response.proposedActions.map((action) => action.type),
+    toolNames: response.proposedActions.map((action) => action.payload.toolName).filter(Boolean),
+    runtimeCalls: messages.length
+  });
+}
+
+const report = {
+  generatedAt: new Date().toISOString(),
+  summary: {
+    total: results.length,
+    passed: results.filter((result) => result.passed).length,
+    failed: results.filter((result) => !result.passed).length
+  },
+  results
+};
+
+const trainingDir = resolve(process.cwd(), "..", "..", "storage", "training");
+const output = resolve(trainingDir, "public-api-workspace-scenario-gate-v1.json");
+await mkdir(trainingDir, { recursive: true });
+await writeFile(output, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+
+console.log(JSON.stringify({ ...report.summary, output }, null, 2));
+if (report.summary.failed > 0) {
+  process.exitCode = 1;
+}

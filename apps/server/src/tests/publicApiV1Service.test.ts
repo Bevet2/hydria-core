@@ -170,6 +170,107 @@ test("public API v1 returns dry-run proposed actions for Hydria OS workspaces", 
   assert.equal(response.proposedActions[0]?.payload.workspaceFamilyId, "");
 });
 
+test("public API v1 injects active Sheet data when the user asks for commentary", async () => {
+  let receivedMessage = "";
+  const service = new HydriaPublicApiV1Service({
+    chatRuntimeService: {
+      async sendMessage(input: any) {
+        receivedMessage = input.message;
+        return chatResponse({
+          assistantMessage: {
+            content: "Le chiffre d'affaires progresse de janvier a fevrier, puis recule en mars."
+          },
+          tooling: {
+            used: false,
+            route: "not_needed",
+            routing: {
+              toolType: "none",
+              intent: "workspace_analysis"
+            },
+            sources: []
+          },
+          generation: {
+            provider: "ollama",
+            model: "qwen2.5:3b",
+            specialist: {
+              role: "workspace_analysis"
+            },
+            attempts: [{ model: "qwen2.5:3b" }]
+          }
+        });
+      },
+      resetSession() {}
+    } as any
+  });
+
+  const response = await service.ask(
+    publicApiAskRequestSchema.parse({
+      input: "Commente ces chiffres.",
+      workspaceContext: {
+        activeWorkObject: {
+          id: "sheet-1",
+          title: "CA mensuel",
+          kind: "dataset",
+          workspaceFamilyId: "data_spreadsheet",
+          entryPath: "table.csv",
+          contentPreview: JSON.stringify({
+            kind: "hydria-sheet",
+            columns: ["Mois", "CA"],
+            rows: [["Janvier", "1200"], ["Fevrier", "1600"], ["Mars", "1400"]]
+          })
+        },
+        capabilities: {
+          actions: ["reply"],
+          workspaceTools: ["sheet.apply_formula"],
+          artifactFormats: ["xlsx"],
+          workObjectKinds: ["dataset"]
+        }
+      }
+    })
+  );
+
+  assert.match(receivedMessage, /Question utilisateur:\nCommente ces chiffres\./);
+  assert.match(receivedMessage, /CA mensuel/);
+  assert.match(receivedMessage, /Janvier/);
+  assert.match(receivedMessage, /1600/);
+  assert.match(response.answer, /progresse/);
+});
+
+test("public API v1 extracts figures from a prompt into spreadsheet rows", async () => {
+  const service = new HydriaPublicApiV1Service({
+    chatRuntimeService: {
+      async sendMessage() {
+        throw new Error("numeric spreadsheet fast path should not call chat runtime");
+      },
+      resetSession() {}
+    } as any
+  });
+
+  const response = await service.ask(
+    publicApiAskRequestSchema.parse({
+      input: "Presente ces chiffres dans un Excel : Janvier 1200€, Fevrier 1600€, Mars 1400€.",
+      workspaceContext: {
+        capabilities: {
+          actions: ["create_artifact"],
+          artifactFormats: ["xlsx", "csv"],
+          workObjectKinds: ["dataset"]
+        }
+      }
+    })
+  );
+
+  assert.equal(response.models.provider, "policy");
+  assert.equal(response.proposedActions[0]?.type, "create_artifact");
+  assert.equal(response.proposedActions[0]?.payload.kind, "dataset");
+  assert.equal(response.proposedActions[0]?.payload.format, "xlsx");
+  assert.deepEqual(response.proposedActions[0]?.payload.columns, ["Libelle", "Valeur", "Unite"]);
+  assert.deepEqual(response.proposedActions[0]?.payload.rows, [
+    ["Janvier", "1200", "€"],
+    ["Fevrier", "1600", "€"],
+    ["Mars", "1400", "€"]
+  ]);
+});
+
 test("public API v1 proposes workspace tool calls for sheet formulas", async () => {
   let chatCalls = 0;
   const service = new HydriaPublicApiV1Service({

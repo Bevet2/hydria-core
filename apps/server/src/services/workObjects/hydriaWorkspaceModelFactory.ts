@@ -1672,6 +1672,7 @@ export function buildWorkspaceSourceFiles(args: {
   answerDraft?: string;
   sections?: string[];
   columns?: string[];
+  rows?: string[][];
   fallbackContent: string;
 }): WorkspaceSourceFile[] {
   if (args.kind === "dataset") {
@@ -1681,6 +1682,7 @@ export function buildWorkspaceSourceFiles(args: {
         content: serializeHydriaSheetModel(
           buildHydriaSheetModel({
             columns: args.columns,
+            rows: args.rows,
             sheetName: "Sheet 1"
           })
         )

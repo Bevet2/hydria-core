@@ -54,12 +54,52 @@ function resolveQuestion(request: PublicApiAskRequest) {
   return (request.input ?? request.question ?? "").trim();
 }
 
+function normalizeText(value: string | null | undefined) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function compact(value: string | null | undefined, maxChars = 500) {
   if (!value) {
     return null;
   }
   const normalized = value.replace(/\s+/g, " ").trim();
   return normalized.length <= maxChars ? normalized : `${normalized.slice(0, maxChars - 1).trim()}...`;
+}
+
+function shouldInjectWorkspaceContext(request: PublicApiAskRequest) {
+  const active = request.workspaceContext?.activeWorkObject;
+  if (!active?.contentPreview) {
+    return false;
+  }
+  const question = normalizeText(resolveQuestion(request));
+  return /\b(comment|commente|commenter|analyse|analyser|explique|explain|resume|résume|synthese|synthèse|insight|tendance|chiffres?|numbers?|donnees|données|tableau|sheet|excel)\b/.test(question);
+}
+
+function buildRuntimeQuestion(request: PublicApiAskRequest) {
+  const question = resolveQuestion(request);
+  if (!shouldInjectWorkspaceContext(request)) {
+    return question;
+  }
+
+  const active = request.workspaceContext?.activeWorkObject;
+  return [
+    "Question utilisateur:",
+    question,
+    "",
+    "Contexte workspace actif a utiliser pour repondre:",
+    `- titre: ${active?.title || active?.id || "objet actif"}`,
+    `- type: ${active?.kind || "unknown"}`,
+    `- fichier: ${active?.entryPath || "unknown"}`,
+    "- contenu/aperçu:",
+    compact(active?.contentPreview, 4000),
+    "",
+    "Instruction: reponds a la question utilisateur en utilisant les donnees du workspace actif. Ne pretends pas que les donnees manquent si elles sont dans l'aperçu. Garde la langue de l'utilisateur."
+  ].filter((line): line is string => Boolean(line)).join("\n");
 }
 
 function sourceList(result: Awaited<ReturnType<ChatRuntimeService["sendMessage"]>>) {
@@ -254,7 +294,7 @@ export class HydriaPublicApiV1Service {
     }
 
     const result = await this.deps.chatRuntimeService.sendMessage({
-      message: resolveQuestion(request),
+      message: buildRuntimeQuestion(request),
       ...(request.sessionId ? { sessionId: request.sessionId } : {})
     });
     const includeSources = request.options.includeSources;

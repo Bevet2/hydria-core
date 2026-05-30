@@ -123,6 +123,17 @@ function asStringArray(value: unknown) {
     : [];
 }
 
+function asStringMatrix(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((row): row is unknown[] => Array.isArray(row))
+    .map((row) => row.map((cell) => compact(cell, 500)).slice(0, 24))
+    .filter((row) => row.some(Boolean))
+    .slice(0, 500);
+}
+
 function inferKind(value: unknown): WorkObjectKind {
   const normalized = normalizeText(value);
   if (["dataset", "table", "spreadsheet", "sheet", "excel", "xlsx", "csv", "tableur"].includes(normalized)) {
@@ -272,9 +283,10 @@ function buildInitialContent(action: PublicApiProposedAction, kind: WorkObjectKi
   const title = safeTitle(instruction, action.title || "Hydria work object");
   const sections = asStringArray(action.payload.sections);
   const columns = asStringArray(action.payload.columns);
+  const rows = asStringMatrix(action.payload.rows);
 
   if (kind === "dataset") {
-    return serializeHydriaSheetModel(buildHydriaSheetModel({ columns, sheetName: "Sheet 1" }));
+    return serializeHydriaSheetModel(buildHydriaSheetModel({ columns, rows, sheetName: "Sheet 1" }));
   }
   if (kind === "presentation") {
     return buildPresentationContent(title, instruction, sections);
@@ -571,6 +583,7 @@ export class WorkObjectExecutionService {
       answerDraft: compact(args.action.payload.answerDraft ?? args.action.payload.initialContent, 12000),
       sections: asStringArray(args.action.payload.sections),
       columns: asStringArray(args.action.payload.columns),
+      rows: asStringMatrix(args.action.payload.rows),
       fallbackContent: content
     });
     for (const file of sourceFiles) {

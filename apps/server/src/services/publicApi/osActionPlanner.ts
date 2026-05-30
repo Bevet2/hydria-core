@@ -140,8 +140,8 @@ function inferWorkObjectKind(prompt: string, allowedKinds: string[]) {
 
 function wantsCreate(prompt: string) {
   return hasAny(normalizeText(prompt), [
-    /\b(cree|creer|crée|créer|fais|faire|genere|generer|génère|générer|construis|fabrique|produis)\b/,
-    /\b(redige|rediger|ecris|ecrire|write|create|build|generate|make|produce|draft|scaffold)\b/
+    /\b(cree|creer|crée|créer|fais|faire|genere|generer|génère|générer|construis|fabrique|produis|presente|presenter|présente|présenter|mets|mettre)\b/,
+    /\b(redige|rediger|ecris|ecrire|write|create|build|generate|make|produce|draft|scaffold|present)\b/
   ]);
 }
 
@@ -259,6 +259,58 @@ function extractRequestedColumns(prompt: string) {
     )
     .filter((entry) => entry.length > 0)
     .slice(0, 12);
+}
+
+function cleanNumericTableLabel(value: string) {
+  return value
+    .replace(/^[\s"'`.:;,-]+|[\s"'`.:;,-]+$/g, "")
+    .replace(/^(et|and|avec|with|les?|la|des?|du|un|une|the|a|an|pour|for)\s+/i, "")
+    .replace(/\b(dans|en|sur|vers|to|into)\s+(un\s+)?(excel|xlsx|csv|tableur|spreadsheet|sheet)\b.*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeNumericCell(value: string) {
+  return value.replace(/\s+/g, "").replace(",", ".").trim();
+}
+
+function extractNumericTableFromPrompt(prompt: string) {
+  const source =
+    prompt.match(/\b(?:excel|xlsx|csv|tableur|spreadsheet|sheet)\s*:\s*([\s\S]+)$/i)?.[1] ??
+    prompt.match(/\b(?:texte|donnees|données|chiffres|numbers|data)\s*:\s*([\s\S]+)$/i)?.[1] ??
+    prompt.match(/["'`]([\s\S]*?\d[\s\S]*?)["'`]/)?.[1] ??
+    prompt;
+  const segments = source
+    .split(/\r?\n|;|,/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  const rows: string[][] = [];
+
+  for (const segment of segments) {
+    const match = segment.match(
+      /(.{1,80}?)(?:\s*[:=]\s*|\s+)(-?\d[\d\s]*(?:[.,]\d+)?)(?:\s*(k€|m€|€|eur|euros?|usd|dollars?|\$|%|pct|points?|clients?|users?|utilisateurs?))?(?:\s*[.;:]?\s*$)/i
+    );
+    if (!match?.[1] || !match?.[2]) {
+      continue;
+    }
+    const label = cleanNumericTableLabel(match[1]);
+    const value = normalizeNumericCell(match[2]);
+    const unit = String(match[3] ?? "").trim();
+    if (!label || !/^-?\d+(?:\.\d+)?$/.test(value)) {
+      continue;
+    }
+    rows.push([label, value, unit]);
+  }
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const hasUnit = rows.some((row) => row[2]);
+  return {
+    columns: hasUnit ? ["Libelle", "Valeur", "Unite"] : ["Libelle", "Valeur"],
+    rows: hasUnit ? rows : rows.map(([label, value]) => [label, value])
+  };
 }
 
 function extractRequestedSections(prompt: string) {
@@ -2058,6 +2110,9 @@ export function planPublicApiProposedActions(args: PlanArgs): PublicApiProposedA
 
   if (wantsCreate(question) && actions.has("create_artifact")) {
     const format = inferArtifactFormat(question, allowedFormats);
+    const numericTable = inferWorkObjectKind(question, allowedKinds) === "dataset"
+      ? extractNumericTableFromPrompt(question)
+      : null;
     return [
       makeAction(args, {
         type: "create_artifact",
@@ -2072,7 +2127,8 @@ export function planPublicApiProposedActions(args: PlanArgs): PublicApiProposedA
           kind: inferWorkObjectKind(question, allowedKinds),
           workspaceFamilyId: activeWorkspaceFamilyId(request),
           answerDraft: compact(answer, 3000),
-          columns: extractRequestedColumns(question),
+          columns: numericTable?.columns ?? extractRequestedColumns(question),
+          rows: numericTable?.rows ?? [],
           sections: extractRequestedSections(question)
         },
         riskLevel: "low",
@@ -2151,9 +2207,9 @@ export function shouldUsePublicApiWorkspaceActionFastPath(request: PublicApiAskR
     /\b(renomme|rename|retitle|statut|status)\b/.test(question) ||
     /\b(change le titre|set title)\b/.test(question);
   const datasetCreate =
-    /\b(cree|create|genere|generate|fais|make)\b/.test(question) &&
+    /\b(cree|create|genere|generate|fais|make|presente|presenter|mets|mettre)\b/.test(question) &&
       /\b(excel|xlsx|csv|tableur|spreadsheet|sheet)\b/.test(question) &&
-      /\b(colonne|colonnes|column|columns|champ|fields)\b/.test(question);
+      (/\b(colonne|colonnes|column|columns|champ|fields)\b/.test(question) || Boolean(extractNumericTableFromPrompt(question)));
   const documentUpdate =
     documentRequest &&
     /\b(ajoute|add|complete|continue|ameliore|improve|reformule|rewrite|corrige|fix)\b/.test(question) &&
