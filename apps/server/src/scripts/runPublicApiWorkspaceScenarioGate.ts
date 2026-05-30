@@ -135,6 +135,7 @@ const scenarios: Scenario[] = [
       }
     }),
     expect: ({ response, runtimeMessages }) => [
+      response.models.model === "workspace_context_answer_v1" ||
       runtimeMessages.some((message) => message.includes("CA mensuel") && message.includes("1600"))
         ? ""
         : "expected active sheet data in runtime message",

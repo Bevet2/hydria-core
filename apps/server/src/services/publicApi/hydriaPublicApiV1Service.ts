@@ -52,6 +52,17 @@ type HydriaPublicApiV1ServiceDeps = {
   >;
 };
 
+type ParsedSheetPreview = {
+  columns: string[];
+  rows: string[][];
+};
+
+type NumericSheetEntry = {
+  rowIndex: number;
+  label: string;
+  value: number;
+};
+
 function resolveQuestion(request: PublicApiAskRequest) {
   return (request.input ?? request.question ?? "").trim();
 }
@@ -80,6 +91,125 @@ function shouldInjectWorkspaceContext(request: PublicApiAskRequest) {
   }
   const question = normalizeText(resolveQuestion(request));
   return /\b(comment|commente|commenter|analyse|analyser|explique|explain|resume|résume|synthese|synthèse|insight|tendance|chiffres?|numbers?|donnees|données|tableau|sheet|excel)\b/.test(question);
+}
+
+function parseNumber(value: unknown) {
+  const normalized = String(value ?? "")
+    .replace(/\s+/g, "")
+    .replace(/,/g, ".")
+    .replace(/[^\d.-]/g, "");
+  if (!normalized || normalized === "-" || normalized === ".") {
+    return null;
+  }
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatNumber(value: number) {
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)));
+}
+
+function parseSheetPreview(value: unknown): ParsedSheetPreview | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    const sheet = Array.isArray(parsed?.sheets)
+      ? parsed.sheets.find((candidate: any) => candidate?.id === parsed.activeSheetId) ?? parsed.sheets[0]
+      : null;
+    if (sheet && Array.isArray(sheet.columns) && Array.isArray(sheet.rows)) {
+      return {
+        columns: sheet.columns.map((column: unknown) => String(column ?? "")),
+        rows: sheet.rows.map((row: unknown) => Array.isArray(row) ? row.map((cell) => String(cell ?? "")) : [])
+      };
+    }
+  } catch {
+    // Fall through to CSV parsing below.
+  }
+
+  const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length < 2 || !/[;,]/.test(lines[0] ?? "")) {
+    return null;
+  }
+  const separator = (lines[0]?.match(/;/g)?.length ?? 0) > (lines[0]?.match(/,/g)?.length ?? 0) ? ";" : ",";
+  const columns = (lines[0] ?? "").split(separator).map((cell) => cell.trim());
+  const rows = lines.slice(1, 25).map((line) => line.split(separator).map((cell) => cell.trim()));
+  return { columns, rows };
+}
+
+function isWorkspaceDataReadRequest(request: PublicApiAskRequest) {
+  const question = normalizeText(resolveQuestion(request));
+  return Boolean(request.workspaceContext?.activeWorkObject?.contentPreview) &&
+    /\b(comment|commente|commenter|analyse|analyser|insight|tendance|chiffres?|numbers?|donnees|data|resume|resumer|synthese|explain)\b/.test(question);
+}
+
+function buildWorkspaceDataAnswer(request: PublicApiAskRequest) {
+  if (!isWorkspaceDataReadRequest(request)) {
+    return null;
+  }
+
+  const active = request.workspaceContext?.activeWorkObject;
+  const sheet = parseSheetPreview(active?.contentPreview);
+  if (!sheet || sheet.rows.length === 0) {
+    return null;
+  }
+
+  const question = resolveQuestion(request);
+  const language = /\b(commente|analyse|chiffres?|donnees|data)\b/i.test(normalizeText(question))
+    ? "fr"
+    : inferLanguage(question);
+  const numericColumns = sheet.columns
+    .map((column, columnIndex) => ({
+      column,
+      columnIndex,
+      values: sheet.rows
+        .map((row, rowIndex) => ({
+          rowIndex,
+          label: row[0] || `ligne ${rowIndex + 2}`,
+          value: parseNumber(row[columnIndex])
+        }))
+        .filter((entry): entry is NumericSheetEntry => entry.value !== null)
+    }))
+    .filter((candidate) => candidate.values.length > 0)
+    .sort((left, right) => right.values.length - left.values.length);
+
+  if (numericColumns.length === 0) {
+    const columns = sheet.columns.filter(Boolean).slice(0, 6).join(", ");
+    return language === "fr"
+      ? `Le tableau contient ${sheet.rows.length} ligne(s) et les colonnes principales sont : ${columns || "non nommees"}.`
+      : `The table contains ${sheet.rows.length} row(s); the main columns are: ${columns || "unnamed"}.`;
+  }
+
+  const selected = numericColumns[0]!;
+  const values = selected.values;
+  const first = values[0]!;
+  const last = values[values.length - 1]!;
+  const max = values.reduce((best, entry) => entry.value > best.value ? entry : best, first);
+  const min = values.reduce((best, entry) => entry.value < best.value ? entry : best, first);
+  const total = values.reduce((sum, entry) => sum + entry.value, 0);
+  const direction = last.value > first.value ? "up" : last.value < first.value ? "down" : "flat";
+  const columnName = selected.column || "valeur";
+
+  if (values.length === 1) {
+    return language === "fr"
+      ? `${columnName} vaut ${formatNumber(first.value)} pour ${first.label}.`
+      : `${columnName} is ${formatNumber(first.value)} for ${first.label}.`;
+  }
+
+  if (language === "fr") {
+    const trend = direction === "up"
+      ? "progresse"
+      : direction === "down"
+        ? "recule"
+        : "reste stable";
+    return `${columnName} ${trend} de ${first.label} (${formatNumber(first.value)}) a ${last.label} (${formatNumber(last.value)}); pic a ${max.label} (${formatNumber(max.value)}), minimum a ${min.label} (${formatNumber(min.value)}), total ${formatNumber(total)}.`;
+  }
+
+  const trend = direction === "up" ? "increases" : direction === "down" ? "decreases" : "stays flat";
+  return `${columnName} ${trend} from ${first.label} (${formatNumber(first.value)}) to ${last.label} (${formatNumber(last.value)}); peak at ${max.label} (${formatNumber(max.value)}), low at ${min.label} (${formatNumber(min.value)}), total ${formatNumber(total)}.`;
 }
 
 function buildRuntimeQuestion(request: PublicApiAskRequest) {
@@ -435,6 +565,81 @@ export class HydriaPublicApiV1Service {
         await this.persistAskAudit(request, finalResponse);
         return finalResponse;
       }
+    }
+
+    const workspaceDataAnswer = buildWorkspaceDataAnswer(request);
+    if (workspaceDataAnswer) {
+      const question = resolveQuestion(request);
+      const language = /\b(commente|analyse|chiffres?|donnees|data)\b/i.test(normalizeText(question))
+        ? "fr"
+        : inferLanguage(question);
+      const sessionId = request.sessionId ?? randomUUID();
+      const proposedActions = verifyPublicApiProposedActions({
+        request,
+        actions: planPublicApiProposedActions({
+          requestId,
+          createdAt: fastPathCreatedAt,
+          request,
+          answer: workspaceDataAnswer
+        })
+      });
+      const response = publicApiAskResponseSchema.parse({
+        id: requestId,
+        object: "hydria.answer",
+        createdAt: fastPathCreatedAt,
+        sessionId,
+        answer: workspaceDataAnswer,
+        language,
+        category: "workspace_context_analysis",
+        confidence: 88,
+        sources: [],
+        tools: {
+          used: true,
+          route: "workspace_context",
+          type: "workspace_context",
+          intent: "active_work_object_read",
+          sourceCount: 0
+        },
+        models: {
+          provider: "policy",
+          model: "workspace_context_answer_v1",
+          specialistRole: "workspace_data_reader",
+          attempts: ["workspace_context_answer_v1"]
+        },
+        memory: {
+          sessionId,
+          userGoal: question,
+          activeConstraints: [],
+          contextTracked: true
+        },
+        quality: {
+          passed: true,
+          issues: [],
+          retryUsed: false,
+          durationMs: 0
+        },
+        proposedActions,
+        ...(request.options.includeTrace
+          ? {
+              trace: {
+                version: "public_api_workspace_context_answer_trace_v1",
+                disclosure: "runtime_trace_no_private_chain_of_thought",
+                steps: ["workspace_context_received", "active_work_object_read", "deterministic_data_summary"]
+              }
+            }
+          : {}),
+        ...(request.options.includeDiagnostics
+          ? {
+              diagnostics: {
+                runtimeMode: "workspace_context_answer",
+                skippedModelGeneration: true,
+                activeWorkObject: summarizeWorkspaceContext(request)
+              }
+            }
+          : {})
+      });
+      await this.persistAskAudit(request, response);
+      return response;
     }
 
     const result = await this.deps.chatRuntimeService.sendMessage({
