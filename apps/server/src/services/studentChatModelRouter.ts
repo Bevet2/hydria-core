@@ -669,7 +669,7 @@ function selectBaseStudentChatModelRoute(input: StudentChatModelRoutingInput): S
     const reason =
       "Bounded strategic decision with explicit active constraints; use the primary 14B reasoner with compact context and keep the 3B model as fallback.";
     const budget = buildRuntimeBudget("deep_reasoning", reason);
-    const timeoutMs = Math.max(budget.timeoutMs, 180000);
+    const timeoutMs = Math.max(budget.timeoutMs, 240000);
     return {
       capabilityId: "qwen-14b-instruct-main",
       displayName: "Qwen 14B Strategic",
@@ -677,14 +677,14 @@ function selectBaseStudentChatModelRoute(input: StudentChatModelRoutingInput): S
       specialistRole: "deep_reasoner",
       routingReason: reason,
       pipeline: [...basePipeline, `strategic_primary_reasoner:${QWEN_MAIN}`],
-      fallbackModelNames: buildDeepReasoningFallbacks(QWEN_MAIN),
+      fallbackModelNames: [QWEN_MAIN],
       timeoutMs,
       runtimeBudget: {
         ...budget,
         timeoutMs,
         maxLatencyMs: timeoutMs,
         maxOutputTokens: Math.max(budget.maxOutputTokens, 260),
-        fallbackDepth: 1,
+        fallbackDepth: 0,
         concurrencyKey: "heavy_local_chat"
       }
     };

@@ -171,17 +171,13 @@ Keep the user's language.
 Give practical debugging steps or minimal code only when useful.
 If the user names a failing command, include that exact command once before the diagnostic steps.`;
 
-const decisionPlainTextSystemPrompt = `You are Hydria Core's local decision and reasoning specialist.
-Answer the current user message as plain final text only.
-Do not return JSON, wrapper labels, hidden reasoning, or chain-of-thought.
-Keep the user's language.
-If the user message or Language line is French, answer only in French and start with a French recommendation such as "Je recommande".
-Start with a clear recommendation, then mention the key constraint and condition.
-Reuse the user's concrete decisive terms instead of generic placeholders.
-If the user says on-prem, include the exact term on-prem in the first sentence.
-If the user gives a hard deadline or blocked budget, recommend the smallest reversible option first; do not default to microservices, distributed architecture, or broad platform work.
-Treat active budget, team, deadline, environment, and risk values as boundaries. Do not invent a new value for them; adapt scope, sequencing, milestones, or mitigations unless the user explicitly asks to change the boundary.
-For production incidents after a deploy with payment or customer risk, use the explicit term rollback or retour arriere once when recommending the previous version.`;
+const decisionPlainTextSystemPrompt = `You are Hydria Core's local decision specialist.
+Return only the final answer, without JSON, hidden reasoning, or runtime labels.
+Answer only in the user's language and begin with a direct recommendation.
+Treat active budget, team, deadline, environment, and risk values as fixed boundaries unless the user explicitly changes one.
+Adapt scope, sequencing, milestones, and mitigations; do not invent a new boundary value.
+State the dominant constraint, accepted tradeoff, next action, and a concrete condition for revising the decision.
+Preserve the user's exact decisive terms. Prefer the smallest reversible option under pressure.`;
 
 const longFormPlainTextSystemPrompt = `You are Hydria Core's long-form synthesis runtime.
 Answer the current user message as complete plain final text.
@@ -263,6 +259,21 @@ function formatCompactCapsule(capsule: ActiveConstraintCapsule) {
       : "",
     capsule.decisionNeeded ? "decisionNeeded=true" : "",
     capsule.recommendedDirection ? `direction=${compact(capsule.recommendedDirection, 140)}` : ""
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function formatDecisionCapsule(capsule: ActiveConstraintCapsule) {
+  return [
+    capsule.userGoal ? `goal=${compact(capsule.userGoal, 90)}` : "",
+    capsule.topConstraints.length > 0
+      ? `constraints=${capsule.topConstraints.slice(0, 3).map((item) => compact(item, 70)).join(" | ")}`
+      : "",
+    capsule.changedConstraints.length > 0
+      ? `changed=${capsule.changedConstraints.slice(0, 2).map((item) => compact(item, 70)).join(" | ")}`
+      : "",
+    capsule.recommendedDirection ? `direction=${compact(capsule.recommendedDirection, 100)}` : ""
   ]
     .filter(Boolean)
     .join("\n");
@@ -546,22 +557,14 @@ export function buildStudentChatPrompt(input: StudentChatAdapterInput, route = s
   if (shouldUseCompactConstraintDecisionPrompt(input, route)) {
     return [
       `Language: ${expectedLanguage(input.activeConstraintCapsule)}`,
-      `Language rule: answer only in ${expectedLanguage(input.activeConstraintCapsule)} unless the user explicitly asks for another language.`,
-      "Use only the active constraint capsule, the current user message, and the answer policy below.",
-      "Do not reconstruct or repeat previous assistant answers.",
-      "Treat active budget, team, deadline, environment, and risk values as fixed boundaries unless the user explicitly asks to change one. Adapt scope, sequencing, milestones, and mitigations instead of inventing a new boundary value.",
-      ...responseLength.guidance,
-      ...maybePlainRouteGuidance(route),
-      "ActiveConstraintCapsule:",
-      formatCompactCapsule(input.activeConstraintCapsule),
+      "The active state is authoritative. Preserve its boundary values and do not repeat prior assistant answers.",
+      "Active state:",
+      formatDecisionCapsule(input.activeConstraintCapsule),
       `Answer mode: ${input.answerPolicy.answerMode}`,
-      input.answerPolicy.guidance
-        ? `Answer policy: ${compact(input.answerPolicy.guidance, 320)}`
-        : "",
       ...retryLines,
-      "Current user message:",
+      "User:",
       input.userMessage,
-      "Return plain final text only."
+      "Answer with a recommendation, reason, concrete next action, and revision condition."
     ]
       .filter(Boolean)
       .join("\n");
