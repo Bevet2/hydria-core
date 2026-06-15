@@ -378,6 +378,55 @@ test("chat runtime synthesizes from source-backed facts when the local model fal
   assert.equal(response.conversationQuality.passed, true);
 });
 
+test("chat runtime answers public rules questions from research when local models time out", async () => {
+  const routedSubjects: unknown[] = [];
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return {
+          ...buildAdapterResult(
+            "Je n'ai pas reussi a generer une reponse fiable pour ce tour. Reformule la question."
+          ),
+          provider: "fallback" as const,
+          model: "qwen2.5:14b",
+          validationIssues: ["student_chat_generation_failed", "qwen2.5:14b: timeout"]
+        };
+      }
+    },
+    undefined,
+    {
+      async tryExecute(routing: ToolRoutingDecision) {
+        routedSubjects.push(routing.extractedArgs.subject);
+        if (routing.toolType !== "research" || routing.intent !== "fact_check") {
+          return null;
+        }
+        return {
+          toolType: "research" as const,
+          intent: "fact_check",
+          summary: ["Regles publiques verifiees du bowling."],
+          verifiedFacts: [
+            "Bowling: une partie standard comporte dix frames; le joueur lance jusqu'a deux boules par frame pour faire tomber dix quilles, avec un lancer supplementaire possible dans la dixieme frame apres un strike ou un spare."
+          ],
+          confidenceScore: 0.88,
+          resultLabel: "Bowling"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "Tu connais les règles du bowling ?" });
+
+  assert.deepEqual(routedSubjects, ["Bowling"]);
+  assert.equal(response.tooling.used, true);
+  assert.equal(response.tooling.routing.toolType, "research");
+  assert.equal(response.generation.provider, "tool");
+  assert.equal(response.generation.model, "research_fact_check");
+  assert.match(response.answer.answer, /dix frames/i);
+  assert.match(response.answer.answer, /strike|spare/i);
+  assert.doesNotMatch(response.answer.answer, /pas reussi|reformule/i);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
 test("chat runtime prioritizes verified multi-source research over unrelated memory on model fallback", async () => {
   let retrievalCalls = 0;
   const service = new ChatRuntimeService(

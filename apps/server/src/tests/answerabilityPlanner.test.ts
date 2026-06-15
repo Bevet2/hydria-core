@@ -223,6 +223,28 @@ test("answerability planner v2 requires sources for history and science facts", 
   }
 });
 
+test("answerability planner requires sources for public rules knowledge questions", () => {
+  for (const question of [
+    "Tu connais les règles du bowling ?",
+    "Quelles sont les règles des échecs ?",
+    "How do you play Go?",
+    "What are the rules of handball?"
+  ]) {
+    const plan = planner.planRequirement({
+      question,
+      userMessage: question,
+      category: "other",
+      toolRouting: route({}),
+      conversationState: createInitialState(),
+      hasPriorConversation: false
+    });
+
+    assert.equal(plan.answerabilityMode, "source_backed", question);
+    assert.equal(plan.requiresResearch, true, question);
+    assert.ok(plan.requiredEvidence.includes("source_research"), question);
+  }
+});
+
 test("answerability planner keeps conceptual streaming architecture on direct model routing", () => {
   const plan = planner.planRequirement({
     question: "Explique le traitement temps reel dans une architecture streaming.",

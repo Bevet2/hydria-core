@@ -170,6 +170,29 @@ test("tool router routes simple stable concept explanations to source-backed res
   assert.equal(decision.extractedArgs.subject, "API");
 });
 
+test("tool router routes public rules and gameplay questions to source-backed research", () => {
+  const cases = [
+    ["Tu connais les règles du bowling ?", "Bowling", "fr"],
+    ["Quelles sont les règles des échecs ?", "Échecs", "fr"],
+    ["How do you play Go?", "Go", "en"],
+    ["What are the rules of handball?", "Handball", "en"]
+  ] as const;
+
+  for (const [question, subject, language] of cases) {
+    const decision = service.route({
+      question,
+      category: "other"
+    });
+
+    assert.equal(decision.toolRequired, true, question);
+    assert.equal(decision.toolType, "research", question);
+    assert.equal(decision.intent, "fact_check", question);
+    assert.equal(decision.fallbackAllowed, false, question);
+    assert.equal(decision.extractedArgs.subject, subject, question);
+    assert.equal(decision.extractedArgs.language, language, question);
+  }
+});
+
 test("tool router routes explicit source requests to source-backed research", () => {
   const decision = service.route({
     question: "Verify with reliable sources who Ada Lovelace was.",
