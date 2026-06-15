@@ -157,6 +157,11 @@ function stripRequestTerms(value: string) {
         /\b(?:sa biographie|son histoire|biographie|biography|histoire|history|known for|connu(?:e)? pour|complete|compl(?:e|\u00e8)te|complet|courte?|fiche|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9)|diaporama|slides?|contexte|context|details?|simplement|simply|please|svp|s'il te plait|s'il vous plait|historiquement)\b/gi,
         " "
       )
+      .replace(
+        /\b(?:(?:tout\s+)?en respectant|selon|conformement a|conform[eÃ©]ment [aÃ ]|while respecting|according to|following)\s+(?:ma|mes|la|les|cette|ces|my|the|this|these)\s+(?:(?:precedente|precedentes|active|actives|previous|active)\s+)?(?:contrainte|contraintes|instruction|instructions|consigne|consignes|preference|preferences|constraint|constraints|guideline|guidelines)(?:\s+(?:precedente|precedentes|active|actives|previous|active))?\b/gi,
+        " "
+      )
+      .replace(/\b(?:et|and)\s*$/i, " ")
       .replace(/[?.!,;:]+$/g, " ")
   );
 }

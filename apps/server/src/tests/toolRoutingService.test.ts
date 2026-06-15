@@ -200,6 +200,18 @@ test("tool router keeps long-form formatting instructions out of the research su
   );
 });
 
+test("tool router keeps conversation-format instructions out of the research subject", () => {
+  const decision = service.route({
+    question: "Explique PostgreSQL en respectant ma contrainte et cite des sources fiables.",
+    category: "technical_explanation"
+  });
+
+  assert.equal(decision.toolRequired, true);
+  assert.equal(decision.toolType, "research");
+  assert.equal(decision.intent, "fact_check");
+  assert.equal(decision.extractedArgs.subject, "PostgreSQL");
+});
+
 test("tool router marks GitHub repo lookup as required repo tool use", () => {
   const decision = service.route({
     question: "Retrouve ce repo GitHub hydria-core",

@@ -68,6 +68,18 @@ test("general knowledge rewriter extracts the grammatical subject from long-form
   assert.equal(subject, "PostgreSQL");
 });
 
+test("general knowledge rewriter removes conversation-format instructions from a factual subject", () => {
+  const french = extractSalientResearchSubject(
+    "Explique PostgreSQL en respectant ma contrainte."
+  );
+  const english = extractSalientResearchSubject(
+    "Explain PostgreSQL while respecting my previous instructions."
+  );
+
+  assert.equal(french, "PostgreSQL");
+  assert.equal(english, "PostgreSQL");
+});
+
 test("general knowledge rewriter disambiguates Cleopatra person from title-only works", () => {
   const cleopatra = rewriteGeneralKnowledgeQuery({
     question: "Qui etait Cleopatre ?",
