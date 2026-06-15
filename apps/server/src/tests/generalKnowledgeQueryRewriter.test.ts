@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   extractComparisonSubjects,
+  extractSalientResearchSubject,
   rewriteGeneralKnowledgeQuery,
   subjectMatchesText
 } from "../services/research/generalKnowledgeQueryRewriter.js";
@@ -57,6 +58,14 @@ test("general knowledge rewriter strips narrative history request wrappers", () 
   });
 
   assert.equal(charlemagne.canonicalSubject, "Charlemagne");
+});
+
+test("general knowledge rewriter extracts the grammatical subject from long-form research instructions", () => {
+  const subject = extractSalientResearchSubject(
+    "Explique en profondeur, en au moins 300 mots, comment PostgreSQL assure la durabilite, la concurrence et la reprise apres incident. Structure la reponse et cite plusieurs sources fiables."
+  );
+
+  assert.equal(subject, "PostgreSQL");
 });
 
 test("general knowledge rewriter disambiguates Cleopatra person from title-only works", () => {

@@ -183,6 +183,23 @@ test("tool router routes explicit source requests to source-backed research", ()
   assert.equal(decision.extractedArgs.language, "en");
 });
 
+test("tool router keeps long-form formatting instructions out of the research subject", () => {
+  const decision = service.route({
+    question:
+      "Explique en profondeur, en au moins 300 mots, comment PostgreSQL assure la durabilite, la concurrence et la reprise apres incident. Structure la reponse et cite plusieurs sources fiables.",
+    category: "technical_explanation"
+  });
+
+  assert.equal(decision.toolRequired, true);
+  assert.equal(decision.toolType, "research");
+  assert.equal(decision.intent, "fact_check");
+  assert.equal(decision.extractedArgs.subject, "PostgreSQL");
+  assert.equal(
+    (decision.extractedArgs.semanticFrame as { domain?: string } | undefined)?.domain,
+    "software_technology"
+  );
+});
+
 test("tool router marks GitHub repo lookup as required repo tool use", () => {
   const decision = service.route({
     question: "Retrouve ce repo GitHub hydria-core",

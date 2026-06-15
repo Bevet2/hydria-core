@@ -56,6 +56,15 @@ test("question classifier v2 keeps simple who-is factual questions as general fa
   assert.equal(classifyQuestion("Who was Louis XIV?"), "other");
 });
 
+test("question classifier keeps explanatory incident terminology in technical explanation", () => {
+  assert.equal(
+    classifyQuestion(
+      "Explique en profondeur comment PostgreSQL assure la durabilite, la concurrence et la reprise apres incident."
+    ),
+    "technical_explanation"
+  );
+});
+
 test("question classifier v2 reduces other on benchmark-like prompts", () => {
   const prompts = [
     "Explique le traitement temps reel dans une architecture streaming.",

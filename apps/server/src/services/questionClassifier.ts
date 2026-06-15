@@ -103,10 +103,22 @@ function classifyTieBreak(
     return right.score - left.score;
   }
 
-  const priority: Exclude<QuestionCategory, "other">[] = /\b(?:write|draft|redige|ecris|update|email|message)\b/i.test(
-    normalizedQuestion
-  )
+  const explicitExplanation =
+    /^(?:explain|clarify|describe|what is|what are|explique|decris|decrire|c est quoi|qu est ce que)\b/i.test(
+      normalizedQuestion
+    );
+  const priority: Exclude<QuestionCategory, "other">[] = explicitExplanation
     ? [
+        "technical_explanation",
+        "incident_response",
+        "debug_diagnostic",
+        "architecture_design",
+        "product_strategy",
+        "operational_writing",
+        "mixed_reasoning"
+      ]
+    : /\b(?:write|draft|redige|ecris|update|email|message)\b/i.test(normalizedQuestion)
+      ? [
         "operational_writing",
         "incident_response",
         "debug_diagnostic",
@@ -115,15 +127,15 @@ function classifyTieBreak(
         "technical_explanation",
         "mixed_reasoning"
       ]
-    : [
-        "incident_response",
-        "debug_diagnostic",
-        "architecture_design",
-        "product_strategy",
-        "operational_writing",
-        "technical_explanation",
-        "mixed_reasoning"
-      ];
+      : [
+          "incident_response",
+          "debug_diagnostic",
+          "architecture_design",
+          "product_strategy",
+          "operational_writing",
+          "technical_explanation",
+          "mixed_reasoning"
+        ];
 
   return priority.indexOf(left.category) - priority.indexOf(right.category);
 }
@@ -151,6 +163,18 @@ export function classifyQuestionDetailed(question: string): QuestionClassificati
       }
     }
     signals.set(category, categorySignals);
+  }
+
+  const explicitExplanation =
+    /^(?:explain|clarify|describe|what is|what are|explique|decris|decrire|c est quoi|qu est ce que)\b/i.test(
+      normalized
+    );
+  const incidentSignals = signals.get("incident_response") ?? [];
+  const hasOperationalIncidentSignal = incidentSignals.some((signal) =>
+    ["security containment", "response actions", "customer impact"].includes(signal)
+  );
+  if (explicitExplanation && scores.technical_explanation >= 5 && !hasOperationalIncidentSignal) {
+    scores.incident_response = Math.min(scores.incident_response, scores.technical_explanation);
   }
 
   const ranked = CATEGORIES.map((category) => ({

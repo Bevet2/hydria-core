@@ -149,7 +149,7 @@ function stripRequestTerms(value: string) {
       .replace(/['\u2018\u2019]/g, " ")
       .replace(/[?]/g, " ")
       .replace(
-        /\b(?:who is|who was|what is|what are|tell me about|give me|make me|explain|define|definition|history of|biography of|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce qu[' ]?(?:un|une|le|la|les)?|qu[' ]?est[- ]?ce que|quest ce que|c[' ]?est quoi|ce qu'est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:\s+l\s+histoire\s+de)?|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi,
+        /\b(?:who is|who was|what is|what are|tell me about|give me|make me|explain|define|definition|history of|biography of|qui est|qui etait|qui \u00e9tait|qu[' ]?est[- ]?ce qu[' ]?(?:un|une|le|la|les)?|qu[' ]?est[- ]?ce que|quest ce que|c[' ]?est quoi|ce qu[' ]?est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:\s+l\s+histoire\s+de)?|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi,
         " "
       )
       .replace(/\b(?:c[' ]?est qui|c[' ]?est quel|c[' ]?est quoi|etait[- ]?ce|what causes|what caused|what was|what were|used for)\b/gi, " ")
@@ -261,6 +261,46 @@ export function extractComparisonSubjects(question: string) {
     }
   }
   return [];
+}
+
+export function extractSalientResearchSubject(question: string, fallbackSubject = question) {
+  const comparisonSubjects = extractComparisonSubjects(question);
+  if (comparisonSubjects.length >= 2) {
+    return comparisonSubjects.join(" vs ");
+  }
+
+  const normalizedQuestion = normalizeSpace(question);
+  const relationalSubject = normalizedQuestion.match(
+    /\b(?:comment|how (?:does|do))\s+(.{2,100}?)\s+(?:assure|assurent|garantit|garantissent|gere|gerent|g[eè]re|g[eè]rent|fonctionne|fonctionnent|utilise|utilisent|permet|permettent|handles?|ensures?|works?|uses?|provides?)\b/i
+  )?.[1];
+  if (relationalSubject) {
+    const relationalRewrite = rewriteGeneralKnowledgeQuery({
+      question,
+      subject: relationalSubject,
+      language: /\b(?:comment|explique|sources?|mots?)\b/i.test(question) ? "fr" : "en"
+    });
+    if (relationalRewrite.canonicalSubject.length >= 2) {
+      return relationalRewrite.canonicalSubject;
+    }
+  }
+
+  const stripped = normalizeSpace(
+    fallbackSubject
+      .replace(
+        /\b(?:en profondeur|in depth|deep dive|de facon detaillee|de mani[eè]re detaillee|detailed|comprehensive)\b/gi,
+        " "
+      )
+      .replace(/\b(?:au moins|minimum|at least|around|environ)\s+\d{2,4}\s+(?:mots?|words?)\b/gi, " ")
+      .replace(
+        /\b(?:structure|structuree?|organise|organisee?|format|cite|cites|citation|citations|sources?|references?)\b.*$/i,
+        " "
+      )
+  );
+  return rewriteGeneralKnowledgeQuery({
+    question,
+    subject: stripped,
+    language: /\b(?:explique|comment|sources?|mots?)\b/i.test(question) ? "fr" : "en"
+  }).canonicalSubject;
 }
 
 export function meaningfulSubjectTerms(subject: string) {

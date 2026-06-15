@@ -2,7 +2,10 @@ import type { QuestionCategory, ToolRoutingDecision } from "../../types/arena.js
 import { defaultToolRoutingDecision } from "../../types/arena.js";
 import { buildSemanticFrame } from "../orchestration/semanticMissionPlanner.js";
 import { normalizeSpace } from "../research/common.js";
-import { rewriteGeneralKnowledgeQuery } from "../research/generalKnowledgeQueryRewriter.js";
+import {
+  extractSalientResearchSubject,
+  rewriteGeneralKnowledgeQuery
+} from "../research/generalKnowledgeQueryRewriter.js";
 import { detectTemporalQuery } from "../research/temporal.js";
 
 const WRITING_OR_BRAINSTORM_PATTERN =
@@ -291,6 +294,11 @@ function extractEntitySubject(question: string) {
 }
 
 function cleanFactualLookupSubject(question: string) {
+  const salientSubject = extractSalientResearchSubject(question);
+  if (salientSubject.length >= 2 && salientSubject.length < 100) {
+    return salientSubject;
+  }
+
   const cleaned = normalizeSpace(
     extractEntitySubject(question)
       .replace(/\b(?:biographie|biography|histoire|story|known for|connu(?:e)? pour|fact[-\s]?check|verify|verifie|v(?:e|\u00e9)rifie|source|sources|cite|citation|cherche(?:r)? sur internet|recherche web|complete|compl(?:e|\u00e8)te|complet|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9))\b/gi, " ")

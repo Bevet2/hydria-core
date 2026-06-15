@@ -48,6 +48,7 @@ import {
   type EvidenceRequirementPlan
 } from "./answerability/answerabilityPlanner.js";
 import {
+  extractSalientResearchSubject,
   normalizeOrdinalAliases,
   rewriteGeneralKnowledgeQuery
 } from "./research/generalKnowledgeQueryRewriter.js";
@@ -704,6 +705,11 @@ function extractIdentitySubjectFragment(message: string) {
 }
 
 function extractAnswerabilityResearchSubject(question: string) {
+  const salientSubject = extractSalientResearchSubject(question);
+  if (salientSubject.length >= 2 && salientSubject.length < 100) {
+    return compact(salientSubject, 120);
+  }
+
   const cleaned = question
     .replace(/['’]/g, " ")
     .replace(/[?]/g, " ")
@@ -2139,6 +2145,7 @@ function isQualityTrustedDeterministicRuntimeModel(model: string) {
     "runtime_product_knowledge",
     "research_recent_updates",
     "research_multi_source_fallback",
+    "research_source_fallback",
     "weather",
     "finance",
     "web",
@@ -2399,13 +2406,15 @@ function buildResearchEvidenceFallbackDraft(args: {
   category: QuestionCategory;
   language: ConversationState["language"];
   routingQuestion: string;
+  minimumSources?: number;
 }): ChatDraft | null {
+  const minimumSources = args.minimumSources ?? 2;
   if (
     !args.tooling.used ||
     args.tooling.routing.toolType !== "research" ||
     args.tooling.routing.intent !== "fact_check" ||
     args.tooling.verifiedFacts.length === 0 ||
-    args.tooling.sources.length < 2
+    args.tooling.sources.length < minimumSources
   ) {
     return null;
   }
@@ -2419,10 +2428,11 @@ function buildResearchEvidenceFallbackDraft(args: {
   const sources = args.tooling.sources
     .slice(0, 5)
     .map((source) => `${source.title} (${source.url})`);
+  const multiSource = args.tooling.sources.length >= 2;
   const answerText = [
     isEnglish
-      ? "The local synthesis could not be validated, so here are the verified multi-source findings without unsupported extrapolation:"
-      : "La synthese locale n'a pas pu etre validee; voici donc les elements verifies issus de plusieurs sources, sans extrapolation non soutenue :",
+      ? `The local synthesis could not be validated, so here are the verified ${multiSource ? "multi-source" : "source"} findings without unsupported extrapolation:`
+      : `La synthese locale n'a pas pu etre validee; voici donc les elements verifies issus ${multiSource ? "de plusieurs sources" : "de la source disponible"}, sans extrapolation non soutenue :`,
     ...facts.map((fact) => `- ${fact}`),
     sources.length > 0
       ? `${isEnglish ? "Sources" : "Sources"}: ${sources.join(" ; ")}`
@@ -2436,18 +2446,22 @@ function buildResearchEvidenceFallbackDraft(args: {
       modelRole: "student",
       answer: answerText,
       key_points: isEnglish
-        ? ["Verified multi-source evidence", "No unsupported synthesis"]
-        : ["Preuves multi-sources verifiees", "Aucune synthese non soutenue"],
+        ? [multiSource ? "Verified multi-source evidence" : "Verified single-source evidence", "No unsupported synthesis"]
+        : [multiSource ? "Preuves multi-sources verifiees" : "Preuve sourcee verifiee", "Aucune synthese non soutenue"],
       assumptions: [],
-      confidence: args.tooling.sources.length >= 2 ? 88 : 76
+      confidence: multiSource ? 88 : 70
     },
     category: args.category,
     routingQuestion: args.routingQuestion,
-    model: "research_multi_source_fallback",
-    displayName: "Verified multi-source fallback",
+    model: multiSource ? "research_multi_source_fallback" : "research_source_fallback",
+    displayName: multiSource ? "Verified multi-source fallback" : "Verified source fallback",
     routingReason:
       "The local synthesis model failed after verified research succeeded; preserve all relevant evidence and citations instead of using an unrelated memory hit.",
-    pipeline: ["tool_routing:research", "multi_source_evidence", "deterministic_source_fallback"]
+    pipeline: [
+      "tool_routing:research",
+      multiSource ? "multi_source_evidence" : "single_source_evidence",
+      "deterministic_source_fallback"
+    ]
   });
 }
 
@@ -3730,7 +3744,8 @@ export class ChatRuntimeService {
         tooling,
         category: draft.category,
         routingQuestion: draft.routingQuestion,
-        language: conversationState.language
+        language: conversationState.language,
+        minimumSources: 1
       });
       if (evidenceFallbackDraft) {
         const rejectedGeneration = draft.generation;
