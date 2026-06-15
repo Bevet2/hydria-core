@@ -1236,3 +1236,101 @@ test("local research fact-check tool expands technical questions across official
   assert.equal(searchedQueries.some((query) => /current concurrency control/i.test(query)), true);
   assert.equal(searchedQueries.some((query) => /current crash recovery backup restore/i.test(query)), true);
 });
+
+test("local research discovers official documentation from the site index when search returns nothing", async (t) => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = new URL(String(input));
+
+    if (url.hostname === "html.duckduckgo.com") {
+      return new Response("<html><body>No search results</body></html>", {
+        status: 200,
+        headers: { "Content-Type": "text/html" }
+      });
+    }
+    if (url.hostname === "postgresql.org" && url.pathname === "/docs/current/") {
+      return new Response(
+        `<html><body>
+          <a href="/docs/current/wal-intro.html">Reliability and Write-Ahead Logging</a>
+          <a href="/docs/current/mvcc-intro.html">Concurrency Control and MVCC</a>
+          <a href="/docs/current/continuous-archiving.html">Backup, Recovery and Restore</a>
+        </body></html>`,
+        { status: 200, headers: { "Content-Type": "text/html" } }
+      );
+    }
+    if (url.hostname === "postgresql.org" && url.pathname.endsWith("/wal-intro.html")) {
+      return new Response(
+        `<html><main><h1>Write-Ahead Logging</h1><p>PostgreSQL uses write-ahead logging so committed changes remain durable after a crash and WAL records can be replayed safely during recovery.</p></main></html>`,
+        { status: 200, headers: { "Content-Type": "text/html" } }
+      );
+    }
+    if (url.hostname === "postgresql.org" && url.pathname.endsWith("/mvcc-intro.html")) {
+      return new Response(
+        `<html><main><h1>Concurrency Control</h1><p>PostgreSQL uses multi-version concurrency control and MVCC snapshots to provide transaction isolation while readers and writers operate concurrently.</p></main></html>`,
+        { status: 200, headers: { "Content-Type": "text/html" } }
+      );
+    }
+    if (url.hostname === "postgresql.org" && url.pathname.endsWith("/continuous-archiving.html")) {
+      return new Response(
+        `<html><main><h1>Backup and Recovery</h1><p>PostgreSQL restores a base backup and replays archived WAL files for crash recovery, restore operations, and point-in-time recovery.</p></main></html>`,
+        { status: 200, headers: { "Content-Type": "text/html" } }
+      );
+    }
+    if (url.hostname.endsWith("wikipedia.org") && url.pathname.endsWith("/w/api.php")) {
+      return new Response(
+        JSON.stringify({ query: { search: [{ title: "PostgreSQL" }] } }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.hostname.endsWith("wikipedia.org") && url.pathname.includes("/page/summary/PostgreSQL")) {
+      return new Response(
+        JSON.stringify({
+          title: "PostgreSQL",
+          description: "Relational database software",
+          extract:
+            "PostgreSQL is an open-source relational database system supporting transactions, concurrency control, recovery, and extensibility.",
+          content_urls: { desktop: { page: "https://en.wikipedia.org/wiki/PostgreSQL" } }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.hostname === "www.wikidata.org") {
+      return new Response(
+        JSON.stringify({
+          search: [{
+            id: "Q192490",
+            label: "PostgreSQL",
+            description: "free and open-source relational database management system",
+            concepturi: "https://www.wikidata.org/wiki/Q192490"
+          }]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const routing = buildFactCheckRouting("PostgreSQL");
+  routing.extractedArgs = {
+    ...routing.extractedArgs,
+    query:
+      "Explique comment PostgreSQL assure la durabilite, la concurrence et la reprise apres incident avec plusieurs sources fiables.",
+    language: "fr"
+  };
+
+  const result = await new LocalToolExecutionService().tryExecute(routing);
+  const officialSources =
+    result?.sources?.filter((source) => source.url.includes("postgresql.org/docs/current/")) ?? [];
+  const evidence = result?.verifiedFacts.join(" ") ?? "";
+
+  assert.equal(officialSources.length, 3, JSON.stringify(result, null, 2));
+  assert.match(evidence, /write-ahead logging/i);
+  assert.match(evidence, /MVCC/i);
+  assert.match(evidence, /point-in-time recovery/i);
+});

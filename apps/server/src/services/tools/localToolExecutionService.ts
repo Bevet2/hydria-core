@@ -777,7 +777,18 @@ const TECHNICAL_RESEARCH_ASPECTS: Array<{
     pattern: /\b(?:durabilite|durability|persistence|persistant|persistent)\b/,
     aspect: {
       query: "durability persistence",
-      matchTerms: ["durability", "durable", "persistence", "persistent"]
+      matchTerms: [
+        "durability",
+        "durable",
+        "persistence",
+        "persistent",
+        "write-ahead",
+        "write ahead",
+        "wal",
+        "fsync",
+        "crash safety",
+        "reliability"
+      ]
     }
   },
   {
@@ -948,6 +959,164 @@ function buildOfficialTechnicalResearchPlan(args: {
   };
 }
 
+function officialDocumentationRootUrls(domain: string) {
+  return [
+    `https://${domain}/docs/current/`,
+    `https://${domain}/docs/`,
+    `https://${domain}/documentation/`,
+    `https://${domain}/`
+  ];
+}
+
+function officialDocumentationLinkScore(args: {
+  label: string;
+  url: string;
+  aspect: TechnicalResearchAspect;
+  subject: string;
+}) {
+  const text = normalizeLooseText(`${args.label} ${args.url}`);
+  const aspectMatches = args.aspect.matchTerms.filter((term) =>
+    text.includes(normalizeLooseText(term))
+  ).length;
+  if (aspectMatches === 0) {
+    return 0;
+  }
+
+  const subjectMatches = normalizeLooseText(args.subject)
+    .split(/\s+/)
+    .filter((term) => term.length >= 3 && text.includes(term)).length;
+  const docsBonus = /\/(?:docs?|documentation|manual|reference)\//i.test(args.url) ? 3 : 0;
+  const currentBonus = /\/(?:current|latest|stable)\//i.test(args.url) ? 2 : 0;
+  return aspectMatches * 5 + subjectMatches * 2 + docsBonus + currentBonus;
+}
+
+function extractRelevantOfficialExcerpt(body: string, aspect: TechnicalResearchAspect) {
+  const $ = load(body);
+  $("script, style, nav, footer, header").remove();
+  const title = normalizeSpaces($("h1").first().text() || $("title").first().text());
+  const text = normalizeSpaces(
+    $("main").first().text() ||
+      $("article").first().text() ||
+      $("[role='main']").first().text() ||
+      $("body").text()
+  );
+  if (text.length < 120) {
+    return null;
+  }
+
+  const normalizedText = normalizeLooseText(text);
+  const matchedTerm = aspect.matchTerms.find((term) =>
+    normalizedText.includes(normalizeLooseText(term))
+  );
+  if (!matchedTerm) {
+    return null;
+  }
+
+  const normalizedTerm = normalizeLooseText(matchedTerm);
+  const matchIndex = normalizedText.indexOf(normalizedTerm);
+  const start = Math.max(0, matchIndex - 220);
+  const excerpt = normalizeSpaces(text.slice(start, start + 1600));
+  return excerpt.length >= 120 ? { title, excerpt } : null;
+}
+
+async function discoverOfficialTechnicalEvidence(args: {
+  subject: string;
+  semanticFrame: SemanticFrame;
+  aspects: TechnicalResearchAspect[];
+  preferredDomains: string[];
+  usedUrls: Set<string>;
+}) {
+  const selected: GeneralKnowledgeEvidence[] = [];
+
+  for (const domain of args.preferredDomains.slice(0, 2)) {
+    const rootCandidates = await Promise.all(
+      officialDocumentationRootUrls(domain).map(async (url) => ({
+        url,
+        body: await fetchText(url)
+      }))
+    );
+    const root = rootCandidates.find((candidate) => candidate.body);
+    if (!root?.body) {
+      continue;
+    }
+
+    const $ = load(root.body);
+    const links = $("a[href]")
+      .map((_index, element) => {
+        const label = normalizeSpaces($(element).text());
+        const href = $(element).attr("href") ?? "";
+        try {
+          const url = new URL(href, root.url);
+          const host = url.hostname.replace(/^www\./, "");
+          if (
+            !args.preferredDomains.some((preferred) => host.endsWith(preferred)) ||
+            !["http:", "https:"].includes(url.protocol) ||
+            /\.(?:css|js|png|jpe?g|gif|svg|ico|zip|tar|gz|pdf)$/i.test(url.pathname)
+          ) {
+            return null;
+          }
+          url.hash = "";
+          return { label, url: url.toString() };
+        } catch {
+          return null;
+        }
+      })
+      .get()
+      .filter((value): value is { label: string; url: string } => Boolean(value?.url));
+
+    for (const aspect of args.aspects) {
+      const candidates = links
+        .map((link) => ({
+          ...link,
+          score: officialDocumentationLinkScore({
+            ...link,
+            aspect,
+            subject: args.subject
+          })
+        }))
+        .filter((candidate) => candidate.score > 0 && !args.usedUrls.has(candidate.url))
+        .sort((left, right) => right.score - left.score)
+        .slice(0, 4);
+
+      for (const candidate of candidates) {
+        const body = await fetchText(candidate.url);
+        if (!body) {
+          continue;
+        }
+        const relevant = extractRelevantOfficialExcerpt(body, aspect);
+        if (!relevant) {
+          continue;
+        }
+        const evidenceText = `${args.subject} ${relevant.title} ${relevant.excerpt}`;
+        if (
+          !sourceMatchesSemanticFrame(
+            { ...args.semanticFrame, subject: args.subject },
+            evidenceText
+          ).passed
+        ) {
+          continue;
+        }
+
+        args.usedUrls.add(candidate.url);
+        selected.push({
+          title: relevant.title || candidate.label || `${args.subject} official documentation`,
+          url: candidate.url,
+          snippet: relevant.excerpt.slice(0, 280),
+          excerpt: relevant.excerpt,
+          engine: "known_endpoint",
+          origin: "known_endpoint",
+          confidence: 0.94,
+          modifiedAt: null,
+          dateSource: "unknown"
+        });
+        break;
+      }
+    }
+  }
+
+  return selected;
+}
+
 async function fetchOfficialTechnicalEvidence(args: {
   subject: string;
   question: string;
@@ -1041,13 +1210,33 @@ async function fetchOfficialTechnicalEvidence(args: {
       });
     }
 
-    return selected;
+    if (selected.length < aspects.length) {
+      for (const evidence of await discoverOfficialTechnicalEvidence({
+        subject: args.subject,
+        semanticFrame: args.semanticFrame,
+        aspects,
+        preferredDomains,
+        usedUrls
+      })) {
+        if (!selected.some((current) => current.url === evidence.url)) {
+          selected.push(evidence);
+        }
+      }
+    }
+
+    return selected.slice(0, aspects.length);
   } catch (error) {
     logger.warn("Official technical research acquisition failed", {
       subject: args.subject,
       error: String(error)
     });
-    return [];
+    return discoverOfficialTechnicalEvidence({
+      subject: args.subject,
+      semanticFrame: args.semanticFrame,
+      aspects,
+      preferredDomains,
+      usedUrls: new Set<string>()
+    });
   }
 }
 
