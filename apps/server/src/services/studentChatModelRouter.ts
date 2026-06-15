@@ -294,15 +294,24 @@ function buildFallbacks(primary: string, role: StudentChatSpecialistRole) {
 
   return unique([
     primary,
-    env.STUDENT_CHAT_LOCAL_MODEL_NAME,
-    env.LOCAL_MODEL_NAME,
     ...roleFallbacks,
+    env.STUDENT_CHAT_LOCAL_MODEL_NAME,
+    env.LOCAL_MODEL_NAME
   ]);
 }
 
 function buildSpecialistOnlyFallbacks(primary: string) {
   return unique([
     primary,
+    env.STUDENT_CHAT_LOCAL_MODEL_NAME,
+    env.LOCAL_MODEL_NAME
+  ]);
+}
+
+function buildDeepReasoningFallbacks(primary: string) {
+  return unique([
+    primary,
+    QWEN_3B,
     env.STUDENT_CHAT_LOCAL_MODEL_NAME,
     env.LOCAL_MODEL_NAME
   ]);
@@ -526,7 +535,7 @@ function selectBaseStudentChatModelRoute(input: StudentChatModelRoutingInput): S
       specialistRole: "deep_reasoner",
       routingReason: reason,
       pipeline: [...basePipeline, "verified_context", `deep_reasoner_cpu:${QWEN_MAIN}`],
-      fallbackModelNames: buildSpecialistOnlyFallbacks(QWEN_MAIN),
+      fallbackModelNames: buildDeepReasoningFallbacks(QWEN_MAIN),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
     };
@@ -701,7 +710,7 @@ function selectBaseStudentChatModelRoute(input: StudentChatModelRoutingInput): S
       specialistRole: "deep_reasoner",
       routingReason: reason,
       pipeline: [...basePipeline, `deep_reasoner_cpu:${QWEN_MAIN}`],
-      fallbackModelNames: buildSpecialistOnlyFallbacks(QWEN_MAIN),
+      fallbackModelNames: buildDeepReasoningFallbacks(QWEN_MAIN),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
     };

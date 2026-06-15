@@ -901,6 +901,75 @@ test("student chat adapter routes bounded strategic decisions to the light local
   assert.match(prompt, /minimal reversible path/i);
 });
 
+test("student chat adapter falls back from a timed-out 14B reasoner to Qwen 3B before static failure", async () => {
+  const attemptedModels: string[] = [];
+  const state = createInitialState();
+  const question =
+    "Le budget tombe a 12000 euros et la date avance au 31 juillet. Que dois-je changer dans le plan et pourquoi ?";
+  const capsule = buildActiveConstraintCapsule(state, question);
+  const policy = decideMultiTurnAnswerPolicy({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    newUserMessage: question,
+    category: "product_strategy",
+    toolRouting: null,
+    lastAssistantAnswer: ""
+  });
+  const evidenceCapsule = buildEvidenceCapsule({
+    question,
+    category: "product_strategy"
+  });
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "mistral:7b";
+    },
+    async testPrompt(_prompt, _system, options) {
+      const model = options?.modelName ?? "";
+      attemptedModels.push(model);
+      if (model === "qwen2.5:14b") {
+        throw new Error("14B timeout");
+      }
+      return {
+        provider: "ollama",
+        model,
+        response: JSON.stringify({
+          modelRole: "student",
+          answer:
+            "Je recommande de reduire le perimetre au chemin critique, de phaser les livrables et de proteger les controles essentiels. Le budget plus faible et la date avancee imposent ce compromis; reevalue le plan si le delai ou le financement change.",
+          key_points: ["Perimetre reduit", "Livraison phasee"],
+          assumptions: [],
+          confidence: 84
+        }),
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer({
+    question,
+    routingQuestion: question,
+    userMessage: question,
+    runtimeMode: "conversation",
+    category: "product_strategy",
+    recentMessages: [],
+    activeConstraintCapsule: capsule,
+    answerPolicy: policy,
+    evidenceCapsule,
+    agenticPlan: buildAgenticPlan({
+      question,
+      category: "product_strategy",
+      evidenceCapsule
+    }),
+    requiresExternalGrounding: false,
+    tooling: defaultChatToolMetadata,
+    knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata
+  });
+
+  assert.deepEqual(attemptedModels, ["qwen2.5:14b", "qwen2.5:3b"]);
+  assert.equal(result.model, "qwen2.5:3b");
+  assert.match(result.answer.answer, /perimetre|livrables/i);
+});
+
 test("student chat adapter routes strategic setup turns to the fast local path", async () => {
   let selectedModel = "";
   const state = createInitialState();
