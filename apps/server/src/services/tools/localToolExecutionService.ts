@@ -1482,6 +1482,74 @@ async function searchDuckDuckGo(query: string): Promise<SearchResult[]> {
   return results.slice(0, 3);
 }
 
+function paragraphScoreForSemanticFrame(paragraph: string, semanticFrame: SemanticFrame, expectedSubject: string) {
+  const normalized = normalizeLooseText(paragraph);
+  const tokens = new Set(normalized.split(/\s+/).filter(Boolean));
+  const subjectScore = subjectMatchesText(expectedSubject, paragraph) ? 3 : 0;
+  const expectedScore = semanticFrame.expectedSenseTerms.filter((term) => {
+    const normalizedTerm = normalizeLooseText(term);
+    return normalizedTerm.includes(" ")
+      ? normalized.includes(normalizedTerm)
+      : tokens.has(normalizedTerm);
+  }).length;
+  const rulesDetailScore =
+    semanticFrame.intent === "rules"
+      ? (
+          normalized.match(
+            /\b(?:setup|objective|territory|libert(?:y|ies)|captur(?:e|ing)|scoring|score|points?|turns?|players?|stones?|ko|seki|board|rules?|gameplay|but|jeu|joueur|points?|capture|territoire|plateau)\b/g
+          ) ?? []
+        ).length
+      : 0;
+  const rejectedPenalty = semanticFrame.rejectedSenseTerms.some((term) =>
+    normalized.includes(normalizeLooseText(term))
+  )
+    ? 8
+    : 0;
+  return subjectScore + expectedScore * 2 + Math.min(12, rulesDetailScore) - rejectedPenalty;
+}
+
+async function fetchSearchResultEvidenceExcerpt(
+  result: SearchResult,
+  semanticFrame: SemanticFrame,
+  expectedSubject: string
+) {
+  const body = await fetchText(result.url);
+  if (!body) {
+    return null;
+  }
+  const $ = load(body);
+  $("script, style, nav, footer, header, aside").remove();
+  const title = normalizeSpaces($("h1").first().text() || $("title").first().text() || result.title);
+  const paragraphs = $("p, li")
+    .map((_index, element) => normalizeSpaces($(element).text()))
+    .get()
+    .filter((paragraph) => paragraph.length >= 60 && paragraph.length <= 1400);
+  const ranked = paragraphs
+    .map((paragraph, index) => ({
+      paragraph,
+      index,
+      score: paragraphScoreForSemanticFrame(paragraph, semanticFrame, expectedSubject)
+    }))
+    .filter((item) => item.score >= (semanticFrame.intent === "rules" ? 6 : 3))
+    .sort((left, right) => right.score - left.score || left.index - right.index);
+  const selected = ranked.slice(0, semanticFrame.intent === "rules" ? 3 : 2).map((item) => item.paragraph);
+  if (selected.length === 0) {
+    return null;
+  }
+  const excerpt = normalizeSpaces(selected.join(" "));
+  const semanticCheck = sourceMatchesSemanticFrame(
+    { ...semanticFrame, subject: semanticFrame.subject ?? expectedSubject },
+    `${title} ${excerpt}`
+  );
+  if (!semanticCheck.passed) {
+    return null;
+  }
+  return {
+    title,
+    excerpt: excerpt.slice(0, 1800)
+  };
+}
+
 async function fetchWikidataEntity(
   searchQuery: string,
   language: string,
@@ -1648,28 +1716,37 @@ async function searchGenericFactSources(
   expectedSubject: string
 ): Promise<GeneralKnowledgeEvidence[]> {
   const results = await searchDuckDuckGo(searchQuery);
-  return results
-    .filter((result) => {
-      const text = `${result.title} ${result.snippet}`;
-      return (
-        sourceTitleMatchesResolvedSubject(expectedSubject, result.title) &&
-        subjectMatchesText(expectedSubject, text) &&
-        sourceMatchesSemanticFrame({ ...semanticFrame, subject: semanticFrame.subject ?? expectedSubject }, text).passed
-      );
-    })
-    .slice(0, 3)
-    .map((result) => ({
-      title: result.title,
+  const selected: GeneralKnowledgeEvidence[] = [];
+  for (const result of results) {
+    const text = `${result.title} ${result.snippet}`;
+    if (
+      isLowTrustGenericSource(result.url) ||
+      !sourceTitleMatchesResolvedSubject(expectedSubject, result.title) ||
+      !subjectMatchesText(expectedSubject, text) ||
+      !sourceMatchesSemanticFrame({ ...semanticFrame, subject: semanticFrame.subject ?? expectedSubject }, text).passed
+    ) {
+      continue;
+    }
+    const pageEvidence = await fetchSearchResultEvidenceExcerpt(result, semanticFrame, expectedSubject);
+    const excerpt = pageEvidence?.excerpt ?? result.snippet;
+    const title = pageEvidence?.title ?? result.title;
+    selected.push({
+      title,
       url: result.url,
       snippet: result.snippet,
-      excerpt: result.snippet,
+      excerpt,
       engine: "duckduckgo",
       origin: "generic_search" as const,
-      confidence: 0.64,
-      language: inferEvidenceLanguage(`${result.title} ${result.snippet}`, result.url),
+      confidence: pageEvidence ? 0.72 : 0.64,
+      language: inferEvidenceLanguage(`${title} ${excerpt}`, result.url),
       modifiedAt: null,
       dateSource: "search_result" as const
-    }));
+    });
+    if (selected.length >= 3) {
+      break;
+    }
+  }
+  return selected;
 }
 
 function evidenceKey(evidence: GeneralKnowledgeEvidence) {
@@ -1691,6 +1768,26 @@ function evidenceFamily(evidence: GeneralKnowledgeEvidence) {
     return host;
   } catch {
     return evidence.engine;
+  }
+}
+
+function isLowTrustGenericSource(url: string) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+    return [
+      "scribd.com",
+      "slideshare.net",
+      "pinterest.",
+      "facebook.com",
+      "instagram.com",
+      "tiktok.com",
+      "youtube.com",
+      "youtu.be",
+      "reddit.com",
+      "quora.com"
+    ].some((blocked) => host === blocked || host.includes(blocked));
+  } catch {
+    return true;
   }
 }
 

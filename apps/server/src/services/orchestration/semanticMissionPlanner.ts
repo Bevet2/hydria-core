@@ -515,9 +515,9 @@ export function buildSemanticFrame(args: {
   language?: string | null;
   toolRouting?: ToolRoutingDecision | null;
 }): SemanticFrame {
-  const domain = inferDomain(args);
-  const language = args.language === "fr" || args.language === "en" ? args.language : "unknown";
   const intent = inferIntent(args.question, args.toolRouting);
+  const domain = intent === "rules" ? "general" : inferDomain(args);
+  const language = args.language === "fr" || args.language === "en" ? args.language : "unknown";
   const expectedSenseTerms = unique([
     ...expectedTermsForDomain(domain),
     ...expectedTermsForIntent(intent)

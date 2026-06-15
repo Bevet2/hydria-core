@@ -63,6 +63,20 @@ test("semantic frame resolves public rules questions and rejects homonyms", () =
   assert.equal(rightSense.passed, true);
 });
 
+test("semantic frame keeps game rules for Go out of software-technology routing", () => {
+  const frame = buildSemanticFrame({
+    question: "How do you play Go?",
+    category: "other",
+    subject: "Go",
+    language: "en"
+  });
+
+  assert.equal(frame.intent, "rules");
+  assert.equal(frame.domain, "general");
+  assert.equal(frame.expectedSenseTerms.includes("rules"), true);
+  assert.equal(frame.expectedSenseTerms.includes("software"), false);
+});
+
 test("semantic frame keeps technical crash recovery explanations out of strategy routing", () => {
   const frame = buildSemanticFrame({
     question:

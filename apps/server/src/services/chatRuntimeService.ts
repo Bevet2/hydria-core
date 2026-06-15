@@ -2511,14 +2511,34 @@ function rulesEvidenceSentenceScore(sentence: string) {
     ) ?? []
   ).length;
   const rejected = /\b(?:youtube|channel|videos?|company|chaine|entreprise)\b/.test(normalized) ? 4 : 0;
-  return hits - rejected;
+  const metaPenalty =
+    /\b(?:complete rules guide|quick and easy guide|discover setup|and there you have|tout savoir|quelle est|what is|faq)\b/.test(
+      normalized
+    ) || /\?\s*$/.test(sentence)
+      ? 5
+      : 0;
+  return hits - rejected - metaPenalty;
 }
 
 function cleanEvidenceSentence(sentence: string) {
   return sentence
     .replace(/^[A-Za-z0-9 ._'’()-]{1,80}:\s*/, "")
+    .replace(/^\s*\d+[.)]?\s+/, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function isUsefulRulesSentence(sentence: string) {
+  const normalized = normalizeText(sentence);
+  return (
+    sentence.length >= 30 &&
+    !/[.…]{2,}/.test(sentence) &&
+    !/\?\s*$/.test(sentence) &&
+    !/^(?:what|which|how|quelle|quel|comment)\b/i.test(sentence) &&
+    !/\b(?:complete rules guide|quick and easy guide|discover setup|and there you have|tout savoir|faq)\b/.test(
+      normalized
+    )
+  );
 }
 
 function buildRulesEvidenceFallbackText(args: {
@@ -2530,7 +2550,7 @@ function buildRulesEvidenceFallbackText(args: {
   const sentences = args.facts
     .flatMap((fact) => splitFactualSentences(fact))
     .map(cleanEvidenceSentence)
-    .filter((sentence) => sentence.length >= 30)
+    .filter(isUsefulRulesSentence)
     .map((sentence, index) => ({
       sentence,
       index,
@@ -2763,6 +2783,22 @@ function buildDeterministicVerifiedToolDraft(args: {
   const recentUpdatesDraft = buildRecentUpdatesToolDraft(args);
   if (recentUpdatesDraft) {
     return recentUpdatesDraft;
+  }
+
+  const semanticFrame = args.tooling.routing.extractedArgs?.semanticFrame;
+  const isRulesResearch =
+    args.tooling.routing.toolType === "research" &&
+    typeof semanticFrame === "object" &&
+    semanticFrame !== null &&
+    (semanticFrame as { intent?: unknown }).intent === "rules";
+  if (isRulesResearch) {
+    return buildResearchEvidenceFallbackDraft({
+      tooling: args.tooling,
+      category: args.category,
+      language: args.language,
+      routingQuestion: args.routingQuestion,
+      minimumSources: 1
+    });
   }
 
   const verifiedFactAnswer = buildVerifiedFactAnswer(args.tooling);
