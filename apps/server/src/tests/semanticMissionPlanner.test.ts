@@ -316,6 +316,77 @@ test("post-answer verifier rejects weakly sourced technical prose with the wrong
   assert.ok(result.issues.includes("unsupported_named_entity_claim"));
 });
 
+test("post-answer verifier accepts sourced technical names with harmless morphological variants", () => {
+  const semanticFrame = buildSemanticFrame({
+    question:
+      "Explique comment PostgreSQL assure la durabilite et la reprise apres incident. Cite plusieurs sources.",
+    category: "technical_explanation",
+    subject: "PostgreSQL",
+    language: "fr"
+  });
+  const routing = route({
+    toolRequired: true,
+    toolType: "research",
+    intent: "fact_check",
+    fallbackAllowed: false,
+    extractedArgs: {
+      subject: "PostgreSQL",
+      language: "fr",
+      semanticFrame
+    }
+  });
+
+  const result = verifyPostAnswerGrounding({
+    question:
+      "Explique comment PostgreSQL assure la durabilite et la reprise apres incident. Cite plusieurs sources.",
+    category: "technical_explanation",
+    answer:
+      "PostgreSQL ecrit les changements dans le Write Ahead Logging avant les pages de donnees. Le Point In Time Recovery restaure ensuite une sauvegarde et rejoue le WAL. Sources : postgresql.org et wikipedia.org.",
+    toolRouting: routing,
+    tooling: {
+      ...defaultChatToolMetadata,
+      route: "used",
+      used: true,
+      routing,
+      verifiedFacts: [
+        "PostgreSQL uses write-ahead log records before data files are written.",
+        "Point-in-Time Recovery restores a base backup and replays archived WAL files."
+      ],
+      sources: [
+        {
+          title: "PostgreSQL Write-Ahead Log",
+          url: "https://www.postgresql.org/docs/current/wal-intro.html",
+          snippet: "Write-ahead logging provides crash safety.",
+          excerpt: "PostgreSQL uses a write-ahead log before data files are written.",
+          publishedAt: null,
+          modifiedAt: null,
+          effectiveDate: null,
+          dateSource: "unknown",
+          retrievalChannel: "live",
+          retrievalOrigin: "generic_search",
+          retrievalEngine: "duckduckgo"
+        },
+        {
+          title: "Wikipedia: PostgreSQL",
+          url: "https://fr.wikipedia.org/wiki/PostgreSQL",
+          snippet: "PostgreSQL est un systeme de gestion de base de donnees.",
+          excerpt: "PostgreSQL prend en charge les transactions ACID.",
+          publishedAt: null,
+          modifiedAt: null,
+          effectiveDate: null,
+          dateSource: "unknown",
+          retrievalChannel: "live",
+          retrievalOrigin: "known_endpoint",
+          retrievalEngine: "known_endpoint"
+        }
+      ]
+    }
+  });
+
+  assert.equal(result.passed, true);
+  assert.deepEqual(result.issues, []);
+});
+
 test("agentic planner builds an evidence-first mission graph from accepted sources", () => {
   const semanticFrame = buildSemanticFrame({
     question: "Qu'est-ce que NVIDIA ?",

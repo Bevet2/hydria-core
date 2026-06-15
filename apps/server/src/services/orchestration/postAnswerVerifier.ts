@@ -197,7 +197,25 @@ function unsupportedNamedEntities(args: {
   );
   const candidates =
     args.answer.match(/\b\p{Lu}[\p{Ll}\p{M}'’-]{2,}(?:\s+\p{Lu}[\p{Ll}\p{M}'’-]{2,})+\b/gu) ?? [];
-  return [...new Set(candidates)].filter((candidate) => !evidence.includes(normalizeLooseText(candidate)));
+  const evidenceTerms = new Set(extractTerms(evidence));
+  const termIsSupported = (term: string) =>
+    evidenceTerms.has(term) ||
+    [...evidenceTerms].some((evidenceTerm) => {
+      const shortestLength = Math.min(term.length, evidenceTerm.length);
+      return (
+        shortestLength >= 3 &&
+        Math.abs(term.length - evidenceTerm.length) <= 4 &&
+        (term.startsWith(evidenceTerm) || evidenceTerm.startsWith(term))
+      );
+    });
+  return [...new Set(candidates)].filter((candidate) => {
+    const normalizedCandidate = normalizeLooseText(candidate);
+    if (evidence.includes(normalizedCandidate)) {
+      return false;
+    }
+    const candidateTerms = extractTerms(candidate);
+    return candidateTerms.length === 0 || !candidateTerms.every(termIsSupported);
+  });
 }
 
 function extractFactualNumbers(value: string) {

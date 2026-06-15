@@ -196,6 +196,11 @@ function buildGuidance(args: {
   const hasExplicitLengthConstraint = capsule.topConstraints.some((constraint) =>
     /\b(?:user preference:.*(?:short|court|courte|moins de|less than|\d+\s+(?:mots?|words?)))\b/i.test(constraint)
   );
+  const hasExplicitLengthRequest =
+    /\b(?:(?:au moins|minimum|at least)\s+\d+\s+(?:mots?|words?)|(?:environ|around|about)\s+\d+\s+(?:mots?|words?)|\d+\s+(?:mots?|words?)\s+(?:minimum|minimal|minimums?))\b/i.test(
+      args.input.newUserMessage
+    );
+  const shouldHonorExplicitLength = hasExplicitLengthConstraint || hasExplicitLengthRequest;
 
   if (language === "fr") {
     return [
@@ -242,8 +247,8 @@ function buildGuidance(args: {
         ? "Continue le raisonnement avec les contraintes existantes et une hypothese explicite si necessaire."
         : "",
       "Garde la langue de l'utilisateur.",
-      hasExplicitLengthConstraint
-        ? "Respecte la contrainte active de format ou de brievete; ne force pas la longueur 65-115 mots."
+      shouldHonorExplicitLength
+        ? "Respecte la contrainte active de format ou de brievete et toute longueur explicitement demandee; ne force pas la longueur 65-115 mots."
         : "Vise 65 a 115 mots avec une decision, un compromis et une prochaine etape concrete.",
       "Evite les formules generiques comme bonnes pratiques, ca depend, ou plus de contexte.",
       "Reste concis et n'expose pas de chaine de pensee brute."
@@ -294,8 +299,8 @@ function buildGuidance(args: {
       ? "Continue with the existing constraints and state a reasonable assumption if needed."
       : "",
     "Keep the user's language.",
-    hasExplicitLengthConstraint
-      ? "Respect the active format or brevity constraint; do not force the 65-115 word length."
+    shouldHonorExplicitLength
+      ? "Respect the explicitly requested length or active format constraint; do not force the 65-115 word length."
       : "Aim for 65 to 115 words with a decision, a tradeoff, and a concrete next step.",
     "Avoid generic phrasing such as best practices, it depends, or more context.",
     "Stay concise and do not expose raw chain-of-thought."
@@ -338,11 +343,16 @@ export function decideMultiTurnAnswerPolicy(
     Boolean(activeConstraintCapsule.recommendedDirection);
   const canProceedFromConversationRecall = canTreatToolBlockerAsConversationRecall(input, activeConstraintCapsule);
   const isContextSettingTurn = clarification.reason === "conversation_context_setting_turn";
+  const requiredToolHasNoExecutableRoute = Boolean(
+    input.toolRouting?.toolRequired &&
+      input.toolRouting.fallbackAllowed === false &&
+      input.toolRouting.toolType === "none"
+  );
   const shouldAbstain =
     !isContextSettingTurn &&
     !canProceedFromConversationRecall &&
-    (Boolean(input.toolRouting?.toolRequired && input.toolRouting.fallbackAllowed === false) ||
-      ABSTAIN_ONLY_PATTERN.test(input.newUserMessage));
+    (requiredToolHasNoExecutableRoute ||
+      (ABSTAIN_ONLY_PATTERN.test(input.newUserMessage) && !input.toolRouting?.toolRequired));
 
   const answerMode: MultiTurnAnswerMode = shouldAbstain
     ? "abstain"

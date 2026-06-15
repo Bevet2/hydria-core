@@ -76,17 +76,6 @@ export function evaluateClarificationPolicy(input: ClarificationPolicyInput): Cl
     };
   }
 
-  if (input.toolRouting?.toolRequired && input.toolRouting.fallbackAllowed === false) {
-    return {
-      needsClarification: true,
-      reason: "required_tool_or_resource_missing",
-      questionToAsk:
-        language === "fr"
-          ? "Quelle donnee ou ressource dois-je utiliser pour executer cette demande ?"
-          : "Which data or resource should I use to execute this request?"
-    };
-  }
-
   if (CRITICAL_MISSING_PATTERN.test(message)) {
     return {
       needsClarification: true,
@@ -95,6 +84,32 @@ export function evaluateClarificationPolicy(input: ClarificationPolicyInput): Cl
         language === "fr"
           ? "Peux-tu fournir la ressource ou la precision manquante ?"
           : "Can you provide the missing resource or detail?"
+    };
+  }
+
+  if (
+    input.toolRouting?.toolRequired &&
+    input.toolRouting.fallbackAllowed === false &&
+    input.toolRouting.toolType !== "none"
+  ) {
+    return {
+      needsClarification: false,
+      reason: "routed_tool_can_execute",
+      assumedPath:
+        language === "fr"
+          ? "Executer l'outil route, puis repondre uniquement avec les resultats verifies."
+          : "Execute the routed tool, then answer only from verified results."
+    };
+  }
+
+  if (input.toolRouting?.toolRequired && input.toolRouting.fallbackAllowed === false) {
+    return {
+      needsClarification: true,
+      reason: "required_tool_or_resource_missing",
+      questionToAsk:
+        language === "fr"
+          ? "Quelle donnee ou ressource dois-je utiliser pour executer cette demande ?"
+          : "Which data or resource should I use to execute this request?"
     };
   }
 

@@ -379,6 +379,35 @@ test("multi-turn answer policy clarifies only when critical context is missing",
   assert.equal(policy.shouldAskClarification, true);
 });
 
+test("multi-turn answer policy executes routed research instead of abstaining or asking for a source", () => {
+  const message =
+    "Explique en profondeur, en au moins 300 mots, comment PostgreSQL assure la durabilite.";
+  const state = updateConversationState(createInitialState(), message, "");
+  const policy = decideMultiTurnAnswerPolicy({
+    conversationState: state,
+    newUserMessage: message,
+    category: "technical_explanation",
+    toolRouting: {
+      considered: true,
+      toolRequired: true,
+      toolRecommended: false,
+      toolType: "research",
+      intent: "fact_check",
+      confidence: 0.9,
+      fallbackAllowed: false,
+      reason: "Verified public sources are required.",
+      extractedArgs: { subject: "PostgreSQL", language: "fr" },
+      toolResultUsed: false
+    }
+  });
+
+  assert.equal(policy.answerMode, "continue");
+  assert.equal(policy.shouldAskClarification, false);
+  assert.equal(policy.clarification.reason, "routed_tool_can_execute");
+  assert.match(policy.guidance, /toute longueur explicitement/i);
+  assert.doesNotMatch(policy.guidance, /Vise 65 a 115 mots/i);
+});
+
 test("multi-turn answer policy revises when the user contradicts prior context", () => {
   const policy = decideMultiTurnAnswerPolicy({
     conversationState: stateWithContext({
