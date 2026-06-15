@@ -97,6 +97,11 @@ This validates DNS, TLS, Caddy, API, PostgreSQL, and the direct student chat run
 
 `POST /api/core/ask` is the shared entrypoint for asking Hydria through a declared runtime mode. The browser actions that ask Hydria or start an execution now use this contract for Chat, Student Lab draft, Playground arena runs, benchmark starts, and local model tests. Legacy read/history/analyze routes remain available for compatibility and detailed inspection.
 
+`POST /api/core/ask/stream` exposes the same contract as
+`application/x-ndjson`. It emits `start`, native Ollama `delta`, and `final`
+records. The `final.result` envelope is authoritative because the runtime may
+normalize or repair the generated draft after token streaming.
+
 Public modes:
 
 ```text
@@ -119,6 +124,15 @@ Example chat request:
 curl -fsS https://app.hydria.click/api/core/ask \
   -H 'content-type: application/json' \
   -d '{"mode":"chat","question":"Donne moi une recette de tiramisu"}'
+```
+
+Example native stream request:
+
+```bash
+curl -N https://app.hydria.click/api/core/ask/stream \
+  -H 'accept: application/x-ndjson' \
+  -H 'content-type: application/json' \
+  -d '{"mode":"chat","question":"Explique Hydria Core en une phrase"}'
 ```
 
 Example Student Lab draft request:

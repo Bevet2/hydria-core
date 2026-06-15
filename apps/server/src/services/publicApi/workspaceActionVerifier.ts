@@ -42,12 +42,15 @@ function canonicalToolName(operationType: string, fallback: unknown) {
   if (normalized.startsWith("slide.")) {
     return "slide.edit";
   }
+  if (normalized.startsWith("crm.")) {
+    return compact(operationType, 120);
+  }
   return compact(fallback, 120) || "workspace.apply_operations";
 }
 
 function isSupportedOperationType(value: unknown) {
   const type = compact(value, 120);
-  return /^(sheet|doc|slide)\.[a-z][a-z0-9_]*$/i.test(type);
+  return /^(sheet|doc|slide|crm)\.[a-z][a-z0-9_]*$/i.test(type);
 }
 
 function normalizeTupleOperation(tuple: unknown[]): CanonicalOperation | null {
@@ -109,7 +112,42 @@ function normalizeOperation(raw: unknown): CanonicalOperation | null {
     "blockTitle",
     "slideIndex",
     "afterSlideIndex",
-    "bullets"
+    "bullets",
+    "firstName",
+    "lastName",
+    "email",
+    "phone",
+    "jobTitle",
+    "companyName",
+    "name",
+    "description",
+    "status",
+    "priority",
+    "dueAt",
+    "rating",
+    "currency",
+    "probability",
+    "stageName",
+    "dealName",
+    "nextStep",
+    "entity",
+    "recordId",
+    "fields",
+    "ownerId",
+    "createDeal",
+    "dealValue",
+    "productName",
+    "sku",
+    "quantity",
+    "unitPrice",
+    "discountPercent",
+    "taxPercent",
+    "validUntil",
+    "notes",
+    "contactId",
+    "leadId",
+    "dealId",
+    "companyId"
   ]) {
     if (source[key] !== undefined) {
       operation[key] = source[key];

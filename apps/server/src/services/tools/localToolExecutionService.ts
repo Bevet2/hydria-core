@@ -8,6 +8,7 @@ import { projectRoot } from "../../utils/env.js";
 import { logger } from "../../utils/logger.js";
 import { ExecutionGovernanceService } from "../execution/executionGovernanceService.js";
 import {
+  extractComparisonSubjects,
   normalizeLooseText,
   rewriteGeneralKnowledgeQuery,
   subjectMatchesText
@@ -1149,67 +1150,94 @@ async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<L
   }
 
   const language = extractLanguage(args);
-  const semanticFrame = {
-    ...semanticFrameFromRouting({
-      routing: args,
-      question: extractStringArg(args, "query") ?? subject
-    }),
-    subject
-  };
-  const researchCandidates = uniqueStrings([
-    ...buildSemanticSearchCandidates(subject, semanticFrame),
-    ...rewrite.candidates
-  ]);
+  const question = extractStringArg(args, "query") ?? subject;
+  const comparisonSubjects = extractComparisonSubjects(question);
+  const resolvedSubjects = comparisonSubjects.length === 2 ? comparisonSubjects : [subject];
   const evidence: GeneralKnowledgeEvidence[] = [];
-  for (const candidate of researchCandidates) {
-    for (const wikipediaLanguage of wikipediaLanguageOrder(language)) {
-      const summary = await fetchWikipediaSummary(candidate, wikipediaLanguage, semanticFrame, subject);
-      if (!summary) {
-        continue;
-      }
-      addEvidence(evidence, {
-        title: `Wikipedia: ${summary.title}`,
-        url: summary.url,
-        snippet: summary.description || summary.excerpt.slice(0, 180),
-        excerpt: `${summary.title}: ${summary.excerpt}`,
-        engine: "known_endpoint",
-        origin: "known_endpoint",
-        confidence: 0.88,
-        modifiedAt: summary.timestamp,
-        dateSource: summary.timestamp ? "meta" : "unknown"
-      });
-      break;
-    }
-    if (evidence.length > 0) {
-      break;
-    }
-  }
-
-  for (const candidate of researchCandidates) {
-    addEvidence(evidence, await fetchWikidataEntity(candidate, language, semanticFrame, subject));
-    if (evidence.length >= 2) {
-      break;
-    }
-  }
-
-  if (evidence.length < 2) {
+  for (const resolvedSubject of resolvedSubjects) {
+    const subjectRewrite = rewriteGeneralKnowledgeQuery({
+      question,
+      subject: resolvedSubject,
+      language
+    });
+    const subjectFrame = {
+      ...semanticFrameFromRouting({
+        routing: args,
+        question
+      }),
+      subject: subjectRewrite.canonicalSubject
+    };
+    const researchCandidates = uniqueStrings([
+      ...buildSemanticSearchCandidates(subjectRewrite.canonicalSubject, subjectFrame),
+      ...subjectRewrite.candidates
+    ]);
+    const subjectEvidence: GeneralKnowledgeEvidence[] = [];
     for (const candidate of researchCandidates) {
-      addEvidence(evidence, await searchBritannica(candidate, semanticFrame, subject));
-      if (evidence.length >= 2) {
+      for (const wikipediaLanguage of wikipediaLanguageOrder(language)) {
+        const summary = await fetchWikipediaSummary(
+          candidate,
+          wikipediaLanguage,
+          subjectFrame,
+          subjectRewrite.canonicalSubject
+        );
+        if (!summary) {
+          continue;
+        }
+        addEvidence(subjectEvidence, {
+          title: `Wikipedia: ${summary.title}`,
+          url: summary.url,
+          snippet: summary.description || summary.excerpt.slice(0, 180),
+          excerpt: `${summary.title}: ${summary.excerpt}`,
+          engine: "known_endpoint",
+          origin: "known_endpoint",
+          confidence: 0.88,
+          modifiedAt: summary.timestamp,
+          dateSource: summary.timestamp ? "meta" : "unknown"
+        });
+        break;
+      }
+      if (subjectEvidence.length > 0) {
         break;
       }
     }
-  }
 
-  if (evidence.length < 2) {
     for (const candidate of researchCandidates) {
-      for (const item of await searchGenericFactSources(candidate, semanticFrame, subject)) {
-        addEvidence(evidence, item);
-      }
-      if (evidence.length >= 2) {
+      addEvidence(
+        subjectEvidence,
+        await fetchWikidataEntity(candidate, language, subjectFrame, subjectRewrite.canonicalSubject)
+      );
+      if (subjectEvidence.length >= 2) {
         break;
       }
     }
+
+    if (subjectEvidence.length < 2) {
+      for (const candidate of researchCandidates) {
+        addEvidence(
+          subjectEvidence,
+          await searchBritannica(candidate, subjectFrame, subjectRewrite.canonicalSubject)
+        );
+        if (subjectEvidence.length >= 2) {
+          break;
+        }
+      }
+    }
+
+    if (subjectEvidence.length < 2) {
+      for (const candidate of researchCandidates) {
+        for (const item of await searchGenericFactSources(candidate, subjectFrame, subjectRewrite.canonicalSubject)) {
+          addEvidence(subjectEvidence, item);
+        }
+        if (subjectEvidence.length >= 2) {
+          break;
+        }
+      }
+    }
+
+    if (subjectEvidence.length === 0) {
+      return null;
+    }
+    subjectEvidence.slice(0, comparisonSubjects.length === 2 ? 3 : 5).forEach((item) => addEvidence(evidence, item));
   }
 
   if (!hasReliableGeneralKnowledgeEvidence(evidence)) {
@@ -1220,10 +1248,10 @@ async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<L
   const topEvidence = evidence.slice(0, 5);
   const sourceLabel =
     language === "fr"
-      ? `Recherche factuelle v2: ${topEvidence.length} source(s) pertinente(s) trouvee(s) pour ${subject}; score de corroboration ${Math.round(
+      ? `Recherche factuelle v2: ${topEvidence.length} source(s) pertinente(s) trouvee(s) pour ${resolvedSubjects.join(" / ")}; score de corroboration ${Math.round(
           confidenceScore * 100
         )}%.`
-      : `Factual research v2: ${topEvidence.length} relevant source(s) found for ${subject}; corroboration score ${Math.round(
+      : `Factual research v2: ${topEvidence.length} relevant source(s) found for ${resolvedSubjects.join(" / ")}; corroboration score ${Math.round(
           confidenceScore * 100
         )}%.`;
 
@@ -1233,7 +1261,7 @@ async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<L
     summary: [sourceLabel],
     verifiedFacts: topEvidence.map((item) => item.excerpt),
     confidenceScore,
-    resultLabel: subject,
+    resultLabel: resolvedSubjects.join(" vs "),
     sources: topEvidence.map(evidenceToSource)
   };
 }

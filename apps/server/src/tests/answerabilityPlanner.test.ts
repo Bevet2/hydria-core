@@ -86,6 +86,24 @@ test("answerability planner marks conversation memory as required for recall tur
   assert.equal(capsule.missingEvidence.length, 0);
 });
 
+test("answerability planner does not confuse current conversation values with live web facts", () => {
+  const state = createInitialState();
+  state.knownFacts.push("budget: 12000 euros", "deadline: 31 juillet");
+
+  const plan = planner.planRequirement({
+    question: "Rappelle-moi le budget actuel et la date actuelle du projet.",
+    userMessage: "Rappelle-moi le budget actuel et la date actuelle du projet.",
+    category: "technical_explanation",
+    toolRouting: route({}),
+    conversationState: state,
+    hasPriorConversation: true
+  });
+
+  assert.ok(plan.requiredEvidence.includes("conversation_memory"));
+  assert.equal(plan.requiredEvidence.includes("source_research"), false);
+  assert.equal(plan.answerabilityMode, "conversation_state");
+});
+
 test("answerability capsule reports missing required evidence before generation", () => {
   const toolRouting = route({
     toolRequired: true,
@@ -122,6 +140,20 @@ test("answerability planner uses specialist synthesis for strategic decisions", 
   assert.equal(plan.answerabilityMode, "specialist_synthesis");
   assert.ok(plan.requiredEvidence.includes("multi_specialist_synthesis"));
   assert.equal(plan.requiresSynthesis, true);
+});
+
+test("answerability planner does not research the phrase decision now", () => {
+  const requirement = planner.planRequirement({
+    question: "Decision maintenant ?",
+    userMessage: "Decision maintenant ?",
+    category: "incident_response",
+    toolRouting: route({}),
+    conversationState: createInitialState(),
+    hasPriorConversation: true
+  });
+
+  assert.equal(requirement.requiresResearch, false);
+  assert.equal(requirement.requiredEvidence.includes("multi_specialist_synthesis"), true);
 });
 
 test("answerability planner uses governed knowledge for Hydria runtime questions", () => {

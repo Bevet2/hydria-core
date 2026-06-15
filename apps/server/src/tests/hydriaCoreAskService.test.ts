@@ -52,6 +52,46 @@ test("core ask routes chat questions through chat runtime and returns a coherent
   assert.equal(response.artifacts[0]?.kind, "chat_session");
 });
 
+test("core ask forwards native chat tokens while keeping the validated final answer", async () => {
+  const tokens: string[] = [];
+  const service = createService({
+    chatRuntimeService: {
+      async sendMessage(input: {
+        message: string;
+        onToken?: (token: string) => void;
+      }) {
+        input.onToken?.("Hydria ");
+        input.onToken?.("repond");
+        return {
+          sessionId: "5f45d5b6-301a-4c98-a809-5c4d797d1a99",
+          assistantMessage: {
+            content: "Hydria répond."
+          },
+          generation: {
+            provider: "ollama",
+            model: "qwen2.5:3b",
+            attempts: [{ model: "qwen2.5:3b" }]
+          },
+          tooling: { used: false }
+        };
+      }
+    } as any
+  });
+
+  const response = await service.ask(
+    {
+      mode: "chat",
+      question: "Réponds."
+    },
+    {
+      onToken: (token) => tokens.push(token)
+    }
+  );
+
+  assert.deepEqual(tokens, ["Hydria ", "repond"]);
+  assert.equal(response.answer, "Hydria répond.");
+});
+
 test("core ask routes student preview through the student draft path", async () => {
   let skippedResearch = false;
   const service = createService({

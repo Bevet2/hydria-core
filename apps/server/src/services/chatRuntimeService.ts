@@ -51,6 +51,7 @@ import {
   normalizeOrdinalAliases,
   rewriteGeneralKnowledgeQuery
 } from "./research/generalKnowledgeQueryRewriter.js";
+import { planResponseLength } from "./response/responseLengthPolicy.js";
 import { buildSemanticFrame } from "./orchestration/semanticMissionPlanner.js";
 import {
   verifyPostAnswerGrounding,
@@ -106,6 +107,8 @@ const IDENTITY_LOOKUP_PATTERN =
   /\b(?:who is|who was|who are|qui est|qui etait|qui était|qui sont)\b/i;
 const MEMORY_RECALL_PATTERN =
   /\b(?:comment je m[' ]?appelle|quel est mon nom|comment s[' ]?appelle mon projet|quel est le nom du projet|tu te souviens|souviens[- ]toi|what is my name|what is my project called|what is the project called|what did i say|do you remember|remember what i said|what did we decide|qu[' ]?est[- ]ce qu[' ]?on a decide|qu[' ]?est[- ]ce qu[' ]?on a d[eÃ©]cid[eÃ©])\b/i;
+const EXTENDED_MEMORY_RECALL_PATTERN =
+  /\b(?:rappelle(?:-moi)?|ancien budget|budget actuel|date actuelle|echeance actuelle|plus haut|dans cette conversation|remind me|previous budget|current budget|current deadline|earlier in this conversation)\b/i;
 const EXTERNAL_GROUNDING_PATTERN =
   /\b(?:today|current|currently|latest|recent|this week|this month|now|live|news|release|version|weather|price|stock|crypto|exchange rate|ceo|president|official|source|cite|verify|aujourd'hui|actuel|actuelle|maintenant|dernier|derni[eÃ¨]re|r[eÃ©]cent|cette semaine|ce mois|m[eÃ©]t[eÃ©]o|prix|bourse|crypto|taux de change|pdg|pr[eÃ©]sident|officiel|source fiable|v[eÃ©]rifie)\b/i;
 const STABLE_FACTUAL_EXPLANATION_PATTERN =
@@ -412,6 +415,40 @@ function qualityScore(quality: ConversationQualityGateResult) {
   return quality.passed ? 0 : quality.issues.length;
 }
 
+function applyRequestedLengthQuality(args: {
+  quality: ConversationQualityGateResult;
+  userMessage: string;
+  answer: string;
+}) {
+  const responseLength = planResponseLength(args.userMessage);
+  if (responseLength.mode !== "long_form" || !responseLength.targetWords) {
+    return args.quality;
+  }
+
+  const minimumWords =
+    responseLength.requestedMinimumWords ??
+    Math.max(250, Math.floor(responseLength.targetWords * 0.55));
+  const actualWords = countWords(args.answer);
+  if (actualWords >= minimumWords) {
+    return args.quality;
+  }
+
+  return {
+    passed: false,
+    issues: [...new Set([...args.quality.issues, "insufficient_requested_length"])],
+    penalties: [
+      ...new Set([
+        ...args.quality.penalties,
+        `answer has ${actualWords} words but the requested developed response requires at least ${minimumWords}`
+      ])
+    ],
+    recommendedAction:
+      args.quality.recommendedAction === "ask_clarification"
+        ? "ask_clarification"
+        : "retry_with_context"
+  } satisfies ConversationQualityGateResult;
+}
+
 function shouldUseConversationRuntime(args: {
   previousState: ConversationState;
   conversationState: ConversationState;
@@ -521,7 +558,7 @@ function isLikelyContextFollowUp(message: string) {
 }
 
 function isLikelyMemoryRecall(message: string) {
-  return MEMORY_RECALL_PATTERN.test(message);
+  return MEMORY_RECALL_PATTERN.test(message) || EXTENDED_MEMORY_RECALL_PATTERN.test(message);
 }
 
 function isIdentityLookup(message: string) {
@@ -581,6 +618,18 @@ function shouldProbeKnowledgeAlongsideTool(args: {
     args.tooling.routing.toolType === "research" &&
     args.tooling.routing.intent === "fact_check" &&
     !args.evidenceRequirement.riskFlags.includes("freshness_required")
+  );
+}
+
+function asksForRecentUpdatesResearch(question: string) {
+  const normalized = normalizeText(question);
+  return (
+    /\b(?:news|updates?|announcements?|headlines?|release notes?|what changed|nouveautes?|actualites?|annonces?|sorties?|changements?|recap)\b/.test(
+      normalized
+    ) &&
+    /\b(?:today|this week|this month|latest|recent|now|aujourd hui|cette semaine|ce mois|dernier|derniere|recent|recente|maintenant)\b/.test(
+      normalized
+    )
   );
 }
 
@@ -1127,7 +1176,11 @@ function buildSourceBackedFactualRepair(args: {
   answer: StudentAnswer;
   tooling: ChatToolMetadata;
   force?: boolean;
+  preserveLongForm?: boolean;
 }): StudentAnswer | null {
+  if (args.preserveLongForm) {
+    return null;
+  }
   if (
     !args.tooling.used ||
     args.tooling.routing.toolType !== "research" ||
@@ -1809,7 +1862,8 @@ function shouldRepairConversationQuality(quality: ConversationQualityGateResult)
     "strategic_conflict_not_resolved",
     "missing_strategic_revision_condition",
     "over_rigid_strategic_answer",
-    "ignored_brevity_constraint"
+    "ignored_brevity_constraint",
+    "insufficient_requested_length"
   ].some((issue) => quality.issues.includes(issue));
 }
 
@@ -1873,7 +1927,10 @@ function buildConversationMemoryRecallAnswer(args: {
 
   const asksName = /\b(?:appelle|nom|name)\b/i.test(args.newUserMessage);
   const asksProject = /\b(?:project|projet)\b/i.test(args.newUserMessage);
-  if (asksName && !asksProject) {
+  const asksBudget = /\b(?:budget|cout|cost)\b/i.test(normalizeText(args.newUserMessage));
+  const asksTeam = /\b(?:equipe|team|staff|personnes|people)\b/i.test(normalizeText(args.newUserMessage));
+  const asksDeadline = /\b(?:date|deadline|echeance|date limite)\b/i.test(normalizeText(args.newUserMessage));
+  if (asksName && !asksProject && !asksBudget && !asksTeam && !asksDeadline) {
     const nameFact = args.conversationState.knownFacts.find((fact) => /^user name:/i.test(fact));
     const name = nameFact?.replace(/^user name:\s*/i, "").replace(/[.!?]+$/g, "").trim();
     if (name) {
@@ -1894,28 +1951,84 @@ function buildConversationMemoryRecallAnswer(args: {
     }
   }
 
+  const requestedValues: Array<{ labelFr: string; labelEn: string; value: string }> = [];
   if (asksProject) {
-    const projectFact = args.conversationState.knownFacts.find((fact) => /^project name:/i.test(fact));
+    const projectFact = [...args.conversationState.knownFacts]
+      .reverse()
+      .find((fact) => /^project name:/i.test(fact));
     const projectName = projectFact?.replace(/^project name:\s*/i, "").replace(/[.!?]+$/g, "").trim();
     if (projectName) {
-      const answer =
-        args.conversationState.language === "fr"
-          ? `Ton projet s'appelle ${projectName}, d'apres ce que tu m'as dit plus haut.`
-          : `Your project is called ${projectName}, based on what you told me earlier.`;
-      return {
-        modelRole: "student",
-        answer,
-        key_points:
-          args.conversationState.language === "fr"
-            ? ["Memoire de conversation", "Projet fourni par l'utilisateur"]
-            : ["Conversation memory", "User-provided project"],
-        assumptions: [],
-        confidence: 90
-      };
+      requestedValues.push({ labelFr: "Projet", labelEn: "Project", value: projectName });
     }
   }
 
-  return null;
+  if (asksBudget) {
+    const budgets = [
+      ...args.conversationState.knownFacts
+        .filter((fact) => /^budget:/i.test(fact))
+        .map((fact) => fact.replace(/^budget:\s*/i, "").trim()),
+      ...args.conversationState.constraints
+        .filter((constraint) => /^budget:/i.test(constraint))
+        .map((constraint) => constraint.match(/\b\d+(?:[.,]\d+)?\s*(?:euros?|eur)\b/i)?.[0] ?? "")
+    ].filter(Boolean);
+    const uniqueBudgets = budgets.filter(
+      (value, index) => budgets.findIndex((candidate) => normalizeText(candidate) === normalizeText(value)) === index
+    );
+    const currentBudget = uniqueBudgets.at(-1);
+    const previousBudget = uniqueBudgets.length > 1 ? uniqueBudgets.at(-2) : null;
+    if (currentBudget) {
+      requestedValues.push({ labelFr: "Budget actuel", labelEn: "Current budget", value: currentBudget });
+    }
+    if (previousBudget && /\b(?:ancien|precedent|previous|former|old)\b/i.test(normalizeText(args.newUserMessage))) {
+      requestedValues.push({ labelFr: "Budget precedent", labelEn: "Previous budget", value: previousBudget });
+    }
+  }
+
+  if (asksTeam) {
+    const teamFact = [...args.conversationState.knownFacts]
+      .reverse()
+      .find((fact) => /^team size:/i.test(fact));
+    const teamSize = teamFact?.replace(/^team size:\s*/i, "").trim();
+    if (teamSize) {
+      requestedValues.push({
+        labelFr: "Equipe",
+        labelEn: "Team",
+        value: args.conversationState.language === "en" ? `${teamSize} people` : `${teamSize} personnes`
+      });
+    }
+  }
+
+  if (asksDeadline) {
+    const deadlineFact = [...args.conversationState.knownFacts]
+      .reverse()
+      .find((fact) => /^deadline:/i.test(fact));
+    const deadline = deadlineFact?.replace(/^deadline:\s*/i, "").trim();
+    if (deadline) {
+      requestedValues.push({
+        labelFr: "Echeance actuelle",
+        labelEn: "Current deadline",
+        value: deadline
+      });
+    }
+  }
+
+  if (requestedValues.length === 0) {
+    return null;
+  }
+
+  const isFrench = args.conversationState.language !== "en";
+  const answer = requestedValues
+    .map((entry) => `${isFrench ? entry.labelFr : entry.labelEn}: ${entry.value}`)
+    .join(". ");
+  return {
+    modelRole: "student",
+    answer: `${answer}.`,
+    key_points: isFrench
+      ? ["Memoire de conversation", "Etat actif et historique"]
+      : ["Conversation memory", "Active and historical state"],
+    assumptions: [],
+    confidence: 92
+  };
 }
 
 function buildUserFactAcknowledgementAnswer(args: {
@@ -2733,7 +2846,12 @@ export class ChatRuntimeService {
     this.sessions.delete(sessionId);
   }
 
-  async sendMessage(args: { sessionId?: string; message: string }): Promise<ChatMessageResponse> {
+  async sendMessage(args: {
+    sessionId?: string;
+    message: string;
+    onToken?: (token: string) => void;
+    signal?: AbortSignal;
+  }): Promise<ChatMessageResponse> {
     const session = this.getOrCreateSession(args.sessionId);
     const userMessage: ChatMessage = {
       id: randomUUID(),
@@ -2885,7 +3003,9 @@ export class ChatRuntimeService {
         agenticPlan,
         routingQuestion,
         tooling,
-        knowledgeRetrieval
+        knowledgeRetrieval,
+        onToken: args.onToken,
+        signal: args.signal
       }));
     let conversationQuality = this.analyzeQuality({
       runtimeMode,
@@ -2899,12 +3019,16 @@ export class ChatRuntimeService {
       toolRouting: tooling.routing
     });
     if (isQualityTrustedDeterministicRuntimeModel(draft.generation.model)) {
-      conversationQuality = {
-        passed: true,
-        issues: [],
-        penalties: [],
-        recommendedAction: "accept"
-      };
+      conversationQuality = applyRequestedLengthQuality({
+        quality: {
+          passed: true,
+          issues: [],
+          penalties: [],
+          recommendedAction: "accept"
+        },
+        userMessage: args.message,
+        answer: draft.answer.answer
+      });
     }
     let usedRetry = draft.generation.usedRetry;
 
@@ -3035,7 +3159,8 @@ export class ChatRuntimeService {
       ? buildSourceBackedFactualRepair({
           answer: finalAnswer,
           tooling,
-          force: forceSourceBackedRepair
+          force: forceSourceBackedRepair,
+          preserveLongForm: planResponseLength(args.message, routingQuestion).mode === "long_form"
         })
       : null;
     if (sourceBackedFactualRepair) {
@@ -3451,7 +3576,8 @@ export class ChatRuntimeService {
       const verifiedRepair = buildSourceBackedFactualRepair({
         answer: finalAnswer,
         tooling,
-        force: true
+        force: true,
+        preserveLongForm: planResponseLength(args.message, routingQuestion).mode === "long_form"
       });
       if (verifiedRepair && verifiedRepair.answer !== finalAnswer.answer) {
         finalAnswer = verifiedRepair;
@@ -3645,6 +3771,8 @@ export class ChatRuntimeService {
     tooling: ChatToolMetadata;
     knowledgeRetrieval: ChatKnowledgeRetrievalMetadata;
     qualityRetry?: ConversationQualityGateResult;
+    onToken?: (token: string) => void;
+    signal?: AbortSignal;
   }): Promise<ChatDraft> {
     const question = buildQuestionForHydria({
       ...args,
@@ -3668,7 +3796,9 @@ export class ChatRuntimeService {
       qualityRetry: args.qualityRetry,
       requiresExternalGrounding: shouldUseExternalGrounding,
       tooling: args.tooling,
-      knowledgeRetrieval: args.knowledgeRetrieval
+      knowledgeRetrieval: args.knowledgeRetrieval,
+      onToken: args.onToken,
+      signal: args.signal
     });
     return {
       answer: generation.answer,
@@ -3795,7 +3925,9 @@ export class ChatRuntimeService {
       toolRequired: true,
       toolRecommended: false,
       toolType: "research",
-      intent: args.evidenceRequirement.riskFlags.includes("freshness_required")
+      intent:
+        args.evidenceRequirement.riskFlags.includes("freshness_required") &&
+        asksForRecentUpdatesResearch(args.question)
         ? "recent_updates"
         : "fact_check",
       confidence: 0.81,
@@ -3914,23 +4046,27 @@ export class ChatRuntimeService {
     recentMessages: ChatMessage[];
     toolRouting: ToolRoutingDecision;
   }) {
-    if (args.runtimeMode === "conversation") {
-      return analyzeConversationQuality({
-        conversationState: args.conversationState,
-        activeConstraintCapsule: args.activeConstraintCapsule,
-        policy: args.answerPolicy,
-        newUserMessage: args.newUserMessage,
-        answer: args.answer,
-        lastAssistantAnswer: args.lastAssistantAnswer,
-        toolRouting: args.toolRouting
-      });
-    }
-
-    return analyzeDirectChatQuality({
-      newUserMessage: args.newUserMessage,
-      recentMessages: args.recentMessages,
-      answer: args.answer,
-      toolRouting: args.toolRouting
+    const quality =
+      args.runtimeMode === "conversation"
+        ? analyzeConversationQuality({
+            conversationState: args.conversationState,
+            activeConstraintCapsule: args.activeConstraintCapsule,
+            policy: args.answerPolicy,
+            newUserMessage: args.newUserMessage,
+            answer: args.answer,
+            lastAssistantAnswer: args.lastAssistantAnswer,
+            toolRouting: args.toolRouting
+          })
+        : analyzeDirectChatQuality({
+            newUserMessage: args.newUserMessage,
+            recentMessages: args.recentMessages,
+            answer: args.answer,
+            toolRouting: args.toolRouting
+          });
+    return applyRequestedLengthQuality({
+      quality,
+      userMessage: args.newUserMessage,
+      answer: args.answer
     });
   }
 

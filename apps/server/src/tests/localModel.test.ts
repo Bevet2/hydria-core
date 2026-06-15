@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { LocalModelService } from "../services/localModel.js";
+import {
+  LocalModelService,
+  readOllamaGenerateStream
+} from "../services/localModel.js";
 import { studentAnswerSchema } from "../types/student.js";
 
 test("student answer schema normalizes non-finite confidence", () => {
@@ -13,6 +16,30 @@ test("student answer schema normalizes non-finite confidence", () => {
   });
 
   assert.equal(parsed.confidence, 50);
+});
+
+test("local model stream reconstructs Ollama JSONL tokens in order", async () => {
+  const received: string[] = [];
+  const response = new Response(
+    [
+      JSON.stringify({ model: "qwen2.5:3b", response: "Bonjour", done: false }),
+      JSON.stringify({ model: "qwen2.5:3b", response: " Hydria", done: false }),
+      JSON.stringify({ model: "qwen2.5:3b", response: ".", done: true })
+    ].join("\n"),
+    {
+      headers: {
+        "Content-Type": "application/x-ndjson"
+      }
+    }
+  );
+
+  const result = await readOllamaGenerateStream(response, (token) => {
+    received.push(token);
+  });
+
+  assert.deepEqual(received, ["Bonjour", " Hydria", "."]);
+  assert.equal(result.response, "Bonjour Hydria.");
+  assert.equal(result.done, true);
 });
 
 test("local model observation parser repairs array-shaped payloads", () => {

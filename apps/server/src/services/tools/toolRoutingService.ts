@@ -39,6 +39,10 @@ const TIME_PATTERN =
   /\b(?:what time is it|current time|time now|date today|today'?s date|heure actuelle|quelle heure est-il)\b/i;
 const ARITHMETIC_PATTERN =
   /\b(?:calculate|compute|what is|calcule|calculer|combien font)\b[\s:]+[-+/*().%\d\s]+$/i;
+const CONVERSATION_RECALL_PATTERN =
+  /\b(?:remember|remind me|what did i say|do you remember|earlier|previous budget|current budget|current deadline|tu te souviens|souviens(?:-toi)?|rappelle(?:-moi)?|ancien budget|budget actuel|date actuelle|echeance actuelle|[e\u00e9]ch[e\u00e9]ance actuelle|plus haut|dans cette conversation)\b/i;
+const RECENT_UPDATES_INTENT_PATTERN =
+  /\b(?:news|updates?|announcements?|headlines?|release notes?|what changed|nouveautes?|actualites?|annonces?|sorties?|changements?|recap)\b/i;
 
 const CURRENCY_ALIASES: Record<string, string> = {
   usd: "USD",
@@ -113,7 +117,7 @@ function isConversationPlanningCategory(category: QuestionCategory | null | unde
 }
 
 function detectQuestionLanguage(question: string) {
-  return /\b(?:fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|recap|r(?:e|\u00e9)cap|nouveaut(?:e|\u00e9)s?|sorties?|semaine|quel|quelle|quels|temps|aujourd|meteo|m(?:e|\u00e9|\u00c3\u00a9|\ufffd)t(?:e|\u00e9|\u00c3\u00a9|\ufffd)o|pluie|vent|neige|fait-il|fait il|qui est|qui etait|qui (?:e|\u00e9)tait|biographie|presentation|pr(?:e|\u00e9)sentation|expos(?:e|\u00e9)|calcule|calculer|combien|convertis|convertir|euros?|dollars?|taux)\b/i.test(
+  return /\b(?:fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|recap|r(?:e|\u00e9)cap|nouveaut(?:e|\u00e9)s?|sorties?|semaine|quel|quelle|quels|temps|aujourd|meteo|m(?:e|\u00e9|\u00c3\u00a9|\ufffd)t(?:e|\u00e9|\u00c3\u00a9|\ufffd)o|pluie|vent|neige|fait-il|fait il|qui est|qui etait|qui (?:e|\u00e9)tait|biographie|presentation|pr(?:e|\u00e9)sentation|expos(?:e|\u00e9)|calcule|calculer|combien|convertis|convertir|euros?|dollars?|taux|avec|plusieurs|fiables?|limites?|pour)\b/i.test(
     question
   )
     ? "fr"
@@ -715,7 +719,8 @@ function isSourceBackedConceptLookup(question: string) {
 }
 
 function shouldUseGeneralFactResearch(question: string, category: QuestionCategory | null | undefined) {
-  if (isConversationPlanningCategory(category)) {
+  const explicitlyRequestsSources = EXPLICIT_FACTUAL_RESEARCH_PATTERN.test(question);
+  if (isConversationPlanningCategory(category) && !explicitlyRequestsSources) {
     return false;
   }
   if (WRITING_OR_BRAINSTORM_PATTERN.test(question)) {
@@ -724,7 +729,7 @@ function shouldUseGeneralFactResearch(question: string, category: QuestionCatego
   return (
     isIdentityOrBiographyLookup(question) ||
     isSourceBackedConceptLookup(question) ||
-    EXPLICIT_FACTUAL_RESEARCH_PATTERN.test(question)
+    explicitlyRequestsSources
   );
 }
 
@@ -773,6 +778,12 @@ export class ToolRoutingService {
     const lowered = question.toLowerCase();
     const temporalProfile = detectTemporalQuery(question);
     const temporalCue = temporalProfile.isTemporal || containsTemporalFreshCue(lowered);
+
+    if (CONVERSATION_RECALL_PATTERN.test(question)) {
+      return defaultRouting(
+        "The request asks for information already supplied in the active conversation; use conversation memory instead of external research."
+      );
+    }
 
     if (EXECUTION_PATTERN.test(lowered)) {
       return buildDecision({
@@ -1142,7 +1153,11 @@ export class ToolRoutingService {
       });
     }
 
-    if (temporalProfile.queryType === "recent_updates" && !isStableWritingOrBrainstormingTask(question)) {
+    if (
+      temporalProfile.queryType === "recent_updates" &&
+      RECENT_UPDATES_INTENT_PATTERN.test(question) &&
+      !isStableWritingOrBrainstormingTask(question)
+    ) {
       return buildDecision({
         toolRequired: true,
         toolType: "research",

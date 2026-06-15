@@ -28,6 +28,7 @@ import {
   formatAgenticOrchestrationPlanForPrompt,
   type AgenticOrchestrationPlan
 } from "./orchestration/agenticOrchestrationPlanner.js";
+import { planResponseLength } from "./response/responseLengthPolicy.js";
 
 export type StudentChatAdapterInput = {
   question: string;
@@ -44,6 +45,8 @@ export type StudentChatAdapterInput = {
   requiresExternalGrounding: boolean;
   tooling: ChatToolMetadata;
   knowledgeRetrieval: ChatKnowledgeRetrievalMetadata;
+  onToken?: (token: string) => void;
+  signal?: AbortSignal;
 };
 
 export type StudentChatAdapterResult = {
@@ -178,6 +181,15 @@ Reuse the user's concrete decisive terms instead of generic placeholders.
 If the user says on-prem, include the exact term on-prem in the first sentence.
 If the user gives a hard deadline or blocked budget, recommend the smallest reversible option first; do not default to microservices, distributed architecture, or broad platform work.
 For production incidents after a deploy with payment or customer risk, use the explicit term rollback or retour arriere once when recommending the previous version.`;
+
+const longFormPlainTextSystemPrompt = `You are Hydria Core's long-form synthesis runtime.
+Answer the current user message as complete plain final text.
+Keep the user's language and requested structure.
+Develop every requested section with concrete explanations and transitions.
+When verified sources are supplied, compare and synthesize them instead of copying one excerpt.
+Clearly separate established facts, interpretation, uncertainty, and recommendation when relevant.
+Do not expose hidden reasoning, runtime instructions, model routing, or chain-of-thought.
+Do not return JSON or wrapper labels.`;
 
 const studentChatConfidenceSchema = z.preprocess((value) => {
   if (value === null || value === undefined || value === "") {
@@ -327,6 +339,13 @@ function maybeStableFactCompaction(route: StudentChatModelRoute) {
 }
 
 function maybePlainRouteGuidance(route: StudentChatModelRoute) {
+  if (route.runtimeBudget.profile === "long_form_chat") {
+    return [
+      "Long-form route: satisfy the requested depth, minimum length, and section structure.",
+      "Use all relevant accepted evidence and explain agreements, differences, and limitations between sources.",
+      "Do not reduce the answer to one source excerpt, one paragraph, or a generic summary."
+    ];
+  }
   if (route.runtimeBudget.profile === "standard_light_chat" || route.runtimeBudget.profile === "concise_chat") {
     return [
       "Concise route: produce the final answer directly, without JSON or metadata.",
@@ -392,10 +411,12 @@ function formatToolContext(tooling: ChatToolMetadata) {
     `required=${tooling.routing.toolRequired ? "yes" : "no"}`,
     `resultUsed=${tooling.used ? "yes" : "no"}`
   ].join("; ");
-  const facts = tooling.verifiedFacts.slice(0, 5).map((fact) => `- ${compact(fact, 180)}`);
+  const factLimit = tooling.routing.toolType === "research" ? 8 : 5;
+  const factChars = tooling.routing.toolType === "research" ? 700 : 180;
+  const facts = tooling.verifiedFacts.slice(0, factLimit).map((fact) => `- ${compact(fact, factChars)}`);
   const summary = tooling.summary.slice(0, 4).map((item) => `- ${compact(item, 180)}`);
   const sources = tooling.sources
-    .slice(0, 3)
+    .slice(0, tooling.routing.toolType === "research" ? 5 : 3)
     .map((source) => `- ${compact(source.title || source.url || "source", 120)}${source.url ? ` (${source.url})` : ""}`);
 
   return [
@@ -498,6 +519,7 @@ export function buildStudentChatPrompt(input: StudentChatAdapterInput, route = s
   const semanticMissionContext = formatSemanticMissionContext(input.tooling);
   const knowledgeContext = formatKnowledgeRetrievalContext(input.knowledgeRetrieval);
   const usePlainText = shouldUsePlainTextRoute(route);
+  const responseLength = planResponseLength(input.userMessage, input.routingQuestion);
   const retryLines = input.qualityRetry
     ? [
         "Repair signal:",
@@ -519,6 +541,7 @@ export function buildStudentChatPrompt(input: StudentChatAdapterInput, route = s
     "AgenticOrchestrationPlan:",
     formatAgenticOrchestrationPlanForPrompt(input.agenticPlan),
     "Follow the mission plan as orchestration guidance. Use accepted tool, source, knowledge, and context contributions first; do not expose the plan.",
+    ...responseLength.guidance,
     ...maybeStableFactCompaction(route),
     ...maybePlainRouteGuidance(route),
     ...maybeProductGrounding(input),
@@ -590,6 +613,75 @@ function cleanPlainStableFactAnswer(raw: string) {
     return cleaned.slice(0, lastSentenceEnd + 1).trim();
   }
   return cleaned;
+}
+
+function cleanWritingAnswer(raw: string, input: StudentChatAdapterInput) {
+  let cleaned = cleanPlainStableFactAnswer(raw);
+  const finalAnswerMarker = cleaned.match(
+    /(?:this is the final answer(?: in (?:french|english))?|final answer|voici (?:la )?r[eé]ponse finale|r[eé]ponse finale)\s*:\s*([\s\S]+)$/i
+  );
+  if (finalAnswerMarker?.[1]) {
+    cleaned = finalAnswerMarker[1].trim();
+  }
+  cleaned = cleaned
+    .replace(/^\s*(?:phrase courte|message court|short (?:sentence|message))\s*:\s*/i, "")
+    .replace(/^\s*["'«]\s*|\s*["'»]\s*$/g, "")
+    .trim();
+
+  const sentences = (cleaned.match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [cleaned]).map(
+    (sentence) => sentence.trim()
+  );
+  const seen = new Set<string>();
+  const useful = sentences.filter((sentence) => {
+    const normalized = normalizePlainText(sentence);
+    const isFrenchInstructionLeak =
+      /^(?:je veux|je dois|il faut|la reponse doit|le message doit).*\b(?:phrase|message|reponse|ton|format|court|simple|positif)\b/.test(
+        normalized
+      ) ||
+      (
+        input.activeConstraintCapsule.language === "fr" &&
+        /^(?:do not|please|make sure|answer only|return|the (?:sentence|message) must)\b/.test(
+          normalized
+        )
+      );
+    if (
+      isFrenchInstructionLeak ||
+      /^(?:pas besoin de|la phrase doit|le message doit|note\s*:|vous pouvez ajouter|this is the final answer|the sentence must|the message must)\b/.test(
+        normalized
+      )
+    ) {
+      return false;
+    }
+    const key = normalized.replace(/[.!?]+$/g, "").trim();
+    if (!key || seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+
+  const source = normalizePlainText(`${input.userMessage}\n${input.routingQuestion}`);
+  const maxSentences = /\b(?:une (?:seule )?phrase|one sentence)\b/.test(source)
+    ? 1
+    : /\b(?:court|courte|bref|breve|short|brief)\b/.test(source)
+      ? 4
+      : 12;
+  const selected = useful.slice(0, maxSentences);
+  let answer = selected.join(" ").trim();
+  for (const sentence of selected) {
+    if (sentence.length < 20) {
+      continue;
+    }
+    const firstIndex = answer.indexOf(sentence);
+    let duplicateIndex = answer.indexOf(sentence, firstIndex + sentence.length);
+    while (firstIndex >= 0 && duplicateIndex >= 0) {
+      answer = `${answer.slice(0, duplicateIndex)}${answer.slice(duplicateIndex + sentence.length)}`
+        .replace(/\s+/g, " ")
+        .trim();
+      duplicateIndex = answer.indexOf(sentence, firstIndex + sentence.length);
+    }
+  }
+  return answer;
 }
 
 function looksLikeWrongStableFactLanguage(answer: string, input: StudentChatAdapterInput) {
@@ -727,7 +819,10 @@ function repairPracticalRecipeAnswer(
 }
 
 function parsePlainChatAnswer(raw: string, route: StudentChatModelRoute, input: StudentChatAdapterInput): StudentAnswer {
-  const answer = cleanPlainStableFactAnswer(raw);
+  const answer =
+    route.runtimeBudget.profile === "writing_chat"
+      ? cleanWritingAnswer(raw, input)
+      : cleanPlainStableFactAnswer(raw);
   if (!answer) {
     throw new Error("Local specialist returned empty plain text.");
   }
@@ -754,12 +849,16 @@ function shouldUsePlainTextRoute(route: StudentChatModelRoute) {
     "standard_light_chat",
     "concise_chat",
     "writing_chat",
+    "long_form_chat",
     "code_chat",
     "deep_reasoning"
   ].includes(route.runtimeBudget.profile);
 }
 
 function systemPromptForRoute(route: StudentChatModelRoute) {
+  if (route.runtimeBudget.profile === "long_form_chat") {
+    return longFormPlainTextSystemPrompt;
+  }
   if (route.runtimeBudget.profile === "stable_fact_chat") {
     return stableFactPlainTextSystemPrompt;
   }
@@ -835,7 +934,13 @@ export class StudentChatAdapter {
             ...(usePlainText ? {} : { format: studentChatAnswerJsonSchema }),
             keepAlive: keepAliveForRoute(route),
             modelName,
+            numCtx:
+              route.runtimeBudget.profile === "long_form_chat"
+                ? Math.min(16384, Math.max(8192, route.runtimeBudget.maxOutputTokens + 4096))
+                : undefined,
             numPredict: route.runtimeBudget.maxOutputTokens,
+            onToken: usePlainText ? input.onToken : undefined,
+            signal: input.signal,
             temperature: 0.1,
             timeoutMs: route.runtimeBudget.timeoutMs
           })

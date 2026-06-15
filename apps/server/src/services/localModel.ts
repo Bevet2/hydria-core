@@ -49,7 +49,9 @@ type OllamaTagsResponse = {
 };
 
 type OllamaGenerateResponse = {
+  model?: string;
   response?: string;
+  done?: boolean;
 };
 
 type OllamaGenerateFormat = "json" | Record<string, unknown>;
@@ -58,10 +60,61 @@ type LocalModelPromptOptions = {
   format?: OllamaGenerateFormat;
   keepAlive?: string;
   modelName?: string;
+  numCtx?: number;
   numPredict?: number;
+  onToken?: (token: string) => void;
+  signal?: AbortSignal;
   temperature?: number;
   timeoutMs?: number;
 };
+
+export async function readOllamaGenerateStream(
+  response: Response,
+  onToken: (token: string) => void
+) {
+  if (!response.body) {
+    throw new Error("Local model returned an empty streaming body.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let output = "";
+  let finalPayload: OllamaGenerateResponse = {};
+
+  const consumeLine = (line: string) => {
+    const normalized = line.trim();
+    if (!normalized) {
+      return;
+    }
+    const payload = JSON.parse(normalized) as OllamaGenerateResponse;
+    finalPayload = payload;
+    const token = payload.response ?? "";
+    if (token) {
+      output += token;
+      onToken(token);
+    }
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      consumeLine(line);
+    }
+    if (done) {
+      break;
+    }
+  }
+
+  consumeLine(buffer);
+  return {
+    ...finalPayload,
+    response: output
+  };
+}
 
 type LocalObservationArgs = {
   question: string;
@@ -1430,6 +1483,10 @@ export class LocalModelService {
     const startedAt = Date.now();
     const format = options.format;
     const modelName = options.modelName ?? this.modelName;
+    const timeoutSignal = AbortSignal.timeout(options.timeoutMs ?? env.LOCAL_MODEL_TIMEOUT_MS);
+    const signal = options.signal
+      ? AbortSignal.any([timeoutSignal, options.signal])
+      : timeoutSignal;
     const response = await fetch(`${env.LOCAL_MODEL_BASE_URL}/api/generate`, {
       method: "POST",
       headers: {
@@ -1439,15 +1496,16 @@ export class LocalModelService {
         model: modelName,
         system,
         prompt,
-        stream: false,
+        stream: Boolean(options.onToken),
         ...(options.keepAlive ? { keep_alive: options.keepAlive } : {}),
         ...(format ? { format } : {}),
         options: {
           temperature: options.temperature ?? 0.2,
+          ...(options.numCtx ? { num_ctx: options.numCtx } : {}),
           num_predict: options.numPredict ?? 320
         }
       }),
-      signal: AbortSignal.timeout(options.timeoutMs ?? env.LOCAL_MODEL_TIMEOUT_MS)
+      signal
     });
 
     if (!response.ok) {
@@ -1455,7 +1513,9 @@ export class LocalModelService {
       throw new Error(`Local model returned ${response.status}: ${errorText}`);
     }
 
-    const payload = (await response.json()) as OllamaGenerateResponse;
+    const payload = options.onToken
+      ? await readOllamaGenerateStream(response, options.onToken)
+      : ((await response.json()) as OllamaGenerateResponse);
     return localModelTestResponseSchema.parse({
       model: modelName,
       provider: "ollama",

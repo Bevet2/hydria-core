@@ -133,6 +133,8 @@ const CONTRADICTION_PATTERN =
 const DECISION_REQUEST_PATTERN =
   /\b(?:recommandes?|recommande|choisis|choisir|decision|d(?:e|é)cide|donc tu|finale|quoi faire|recommend|choose|decision|what should|so what|final|rollback|no rollback|prochain diagnostic|next concrete|next step)\b/i;
 const QUESTION_PATTERN = /\?|(?:\b(?:quoi|comment|pourquoi|quel|quelle|what|how|why|which)\b)/i;
+const CONVERSATION_RECALL_PATTERN =
+  /\b(?:rappelle(?:-moi)?|souviens(?:-toi)?|tu te souviens|d[' ]?apres ce que je t[' ]?ai dit|dans cette conversation|plus haut|precedent|pr[eÃ©]c[eÃ©]dent|ancien budget|budget actuel|date actuelle|echeance actuelle|[eÃ©]ch[eÃ©]ance actuelle|what did i say|do you remember|remind me|earlier|previous budget|current budget|current deadline)\b/i;
 const RISK_PATTERN =
   /\b(?:production|prod|incident|rollback|retour arriere|revenir en arriere|deux heures|two hours|irreversible|irreversible|paiement|payment|donnee sensible|sensitive data|legal risk|legal requirement|risque juridique|juridique|audit|securite|security|breach|outage|urgence|urgent|critical|critique|high impact|important users|affected users|utilisateurs touches|utilisateurs sont touches|support explose|40%)\b/i;
 
@@ -148,7 +150,11 @@ const CONSTRAINT_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
   },
   { label: "environment", pattern: /\b(?:aws|on[- ]prem|on prem|cloud|gcp|azure|kubernetes|k8s|serverless)\b/i },
   { label: "urgency", pattern: /\b(?:urgent|urgence|critical|critique|incident|outage|thirty minutes|30 minutes)\b/i },
-  { label: "deadline", pattern: /\b(?:deadline|avant|weeks?|semaines?|tomorrow|demain)\b/i },
+  {
+    label: "deadline",
+    pattern:
+      /\b(?:deadline|date limite|echeance|[eÃ©]ch[eÃ©]ance|date\s+(?:avance|recule|passe|change)|avant|weeks?|semaines?|tomorrow|demain|\d{1,2}\s+(?:janvier|fevrier|f[eÃ©]vrier|mars|avril|mai|juin|juillet|aout|ao[uÃ»]t|septembre|octobre|novembre|decembre|d[eÃ©]cembre|january|february|march|april|may|june|july|august|september|october|november|december))\b/i
+  },
   { label: "team", pattern: /\b(?:equipe|[eé]quipe|team|staff|personnes|engineers?|reduced|r[eé]duite?)\b/i },
   {
     label: "risk",
@@ -237,7 +243,20 @@ function isFreshExternalUpdateRequest(message: string) {
   return hasFreshWindow && hasUpdateIntent && hasExternalTopic;
 }
 
+function isConversationRecallQuestion(message: string) {
+  return (
+    CONVERSATION_RECALL_PATTERN.test(message) &&
+    (QUESTION_PATTERN.test(message) ||
+      /\b(?:budget|equipe|[eÃ©]quipe|team|date|deadline|echeance|[eÃ©]ch[eÃ©]ance|projet|project|nom|name)\b/i.test(
+        message
+      ))
+  );
+}
+
 function extractConstraints(message: string) {
+  if (isConversationRecallQuestion(message)) {
+    return [];
+  }
   const constraints: string[] = [];
   const freshExternalUpdateRequest = isFreshExternalUpdateRequest(message);
   for (const { label, pattern } of CONSTRAINT_PATTERNS) {
@@ -269,6 +288,9 @@ function isNegatedConstraint(label: string, message: string) {
 }
 
 function extractKnownFacts(message: string) {
+  if (isConversationRecallQuestion(message)) {
+    return [];
+  }
   const facts: string[] = [];
   const normalized = normalizeText(message);
   const nameMatch =
@@ -284,6 +306,30 @@ function extractKnownFacts(message: string) {
   if (projectMatch?.[1]) {
     const projectName = projectMatch[1].replace(/[.!?]+$/g, "").trim();
     facts.push(`project name: ${compact(projectName, 80)}`);
+  }
+  if (!projectMatch) {
+    const shortProjectMatch = message.match(
+      /\b(?:projet|project)\s+(?!est\b|is\b|sera\b|will\b)([A-Z][A-Za-z0-9_-]{1,60})\b/u
+    );
+    if (shortProjectMatch?.[1]) {
+      facts.push(`project name: ${compact(shortProjectMatch[1], 80)}`);
+    }
+  }
+  const budgetMatch = message.match(/\b(\d+(?:[.,]\d+)?)\s*(euros?|eur|â‚¬)\b/i);
+  if (budgetMatch?.[1] && budgetMatch[2] && /\bbudget\b/i.test(message)) {
+    facts.push(`budget: ${budgetMatch[1]} ${budgetMatch[2]}`);
+  }
+  const teamMatch = message.match(
+    /\b(?:equipe|[eÃ©]quipe|team)\s+(?:de|of|avec|with)?\s*(\d+)\s*(?:personnes?|people|engineers?|ingenieurs?|ing[eÃ©]nieurs?)?\b/i
+  );
+  if (teamMatch?.[1]) {
+    facts.push(`team size: ${teamMatch[1]}`);
+  }
+  const deadlineMatch = message.match(
+    /\b(?:date limite|deadline|echeance|[eÃ©]ch[eÃ©]ance|date\s+(?:avance|recule|passe|change)|avant|au)\s+(?:finalement\s+)?(?:au|le|the|on)?\s*(\d{1,2}\s+(?:janvier|fevrier|f[eÃ©]vrier|mars|avril|mai|juin|juillet|aout|ao[uÃ»]t|septembre|octobre|novembre|decembre|d[eÃ©]cembre|january|february|march|april|may|june|july|august|september|october|november|december)(?:\s+\d{4})?)\b/i
+  );
+  if (deadlineMatch?.[1]) {
+    facts.push(`deadline: ${compact(deadlineMatch[1], 80)}`);
   }
   const preferenceMatch = message.match(
     /\b(?:je prefere|je pr[eé]f[eè]re|i prefer|i would rather|call me|appelle[- ]moi)\s+(.{2,120})/iu
@@ -440,6 +486,12 @@ function summarizeConstraintText(label: string, value: string) {
     const weeks = value.match(/\b(?:\d+\s*)?(?:weeks?|semaines?)\b/i);
     if (weeks) {
       return weeks[0];
+    }
+    const date = value.match(
+      /\b\d{1,2}\s+(?:janvier|fevrier|f[eÃ©]vrier|mars|avril|mai|juin|juillet|aout|ao[uÃ»]t|septembre|octobre|novembre|decembre|d[eÃ©]cembre|january|february|march|april|may|june|july|august|september|october|november|december)(?:\s+\d{4})?\b/i
+    );
+    if (date) {
+      return date[0];
     }
   }
   if (label === "team") {

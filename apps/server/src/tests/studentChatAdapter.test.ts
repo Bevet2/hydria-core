@@ -214,7 +214,7 @@ test("student chat adapter routes simple stable definitions through standard-lig
   assert.equal(selectedModel, "qwen2.5:3b");
   assert.equal(result.specialist.role, "primary_brain");
   assert.equal(result.runtimeBudget?.profile, "standard_light_chat");
-  assert.equal(result.runtimeBudget?.fallbackDepth, 0);
+  assert.equal(result.runtimeBudget?.fallbackDepth, 1);
   assert.equal(timeoutMs >= 45000, true);
 });
 
@@ -324,7 +324,7 @@ test("student chat adapter routes code questions to the local code specialist", 
   assert.equal(selectedModel, "qwen2.5-coder:7b");
   assert.equal(result.specialist.role, "code_specialist");
   assert.equal(result.specialist.pipeline.some((step) => step.includes("qwen2.5-coder:7b")), true);
-  assert.equal(result.runtimeBudget?.fallbackDepth, 0);
+  assert.equal(result.runtimeBudget?.fallbackDepth, 1);
   assert.equal(usedFormat, false);
   assert.match(usedSystem, /failing command/i);
   assert.match(buildStudentChatPrompt(input), /npm install/i);
@@ -522,10 +522,71 @@ test("student chat adapter routes French writing tasks through plain Qwen 3B wit
   assert.equal(selectedModel, "qwen2.5:3b");
   assert.equal(result.specialist.role, "writing_business");
   assert.equal(result.runtimeBudget?.profile, "writing_chat");
-  assert.equal(result.runtimeBudget?.fallbackDepth, 0);
+  assert.equal(result.runtimeBudget?.fallbackDepth, 2);
   assert.equal(usedFormat, false);
   assert.equal(timeoutMs >= 45000, true);
   assert.match(result.answer.answer, /retard/);
+});
+
+test("student chat adapter removes writing instructions and repeated final text", async () => {
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "student-local";
+    },
+    async testPrompt(_prompt, _system, options) {
+      return {
+        provider: "ollama",
+        model: options?.modelName ?? "student-local",
+        response:
+          "Phrase courte : \"Ne garde pas ceci.\" Final answer: \"Merci pour votre confiance. Nous restons à votre disposition. Cordialement, Hydria Merci pour votre confiance.\"",
+        durationMs: 12
+      };
+    }
+  });
+
+  const input = {
+    ...buildInput(),
+    question: "Ecris un court message pour remercier un client.",
+    routingQuestion: "Ecris un court message pour remercier un client.",
+    userMessage: "Ecris un court message pour remercier un client.",
+    category: "operational_writing" as const,
+    requiresExternalGrounding: false
+  };
+  const result = await adapter.answer(input);
+
+  assert.equal(
+    result.answer.answer,
+    "Merci pour votre confiance. Nous restons à votre disposition. Cordialement, Hydria"
+  );
+  assert.doesNotMatch(result.answer.answer, /final answer|phrase doit|pas besoin/i);
+});
+
+test("student chat adapter enforces a one-sentence French writing request", async () => {
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "student-local";
+    },
+    async testPrompt(_prompt, _system, options) {
+      return {
+        provider: "ollama",
+        model: options?.modelName ?? "student-local",
+        response:
+          "Je veux une seule phrase simple et positive. Merci pour votre confiance. Nous restons à votre disposition.",
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer({
+    ...buildInput(),
+    question: "Ecris une phrase courte pour remercier un client.",
+    routingQuestion: "Ecris une phrase courte pour remercier un client.",
+    userMessage: "Ecris une phrase courte pour remercier un client.",
+    category: "operational_writing",
+    requiresExternalGrounding: false
+  });
+
+  assert.equal(result.answer.answer, "Merci pour votre confiance.");
 });
 
 test("student chat adapter routes English writing tasks through plain Mistral", async () => {
@@ -607,7 +668,7 @@ test("student chat adapter routes French recipe requests through practical writi
   assert.equal(result.specialist.role, "writing_business");
   assert.match(result.specialist.routingReason, /Practical recipe/i);
   assert.equal(result.runtimeBudget?.profile, "writing_chat");
-  assert.equal(result.runtimeBudget?.fallbackDepth, 1);
+  assert.equal(result.runtimeBudget?.fallbackDepth, 2);
   assert.equal(timeoutMs < 150000, true);
   assert.equal(numPredict >= 180, true);
   assert.equal(numPredict <= 220, true);
@@ -830,7 +891,7 @@ test("student chat adapter routes bounded strategic decisions to the light local
   assert.equal(result.specialist.role, "deep_reasoner");
   assert.equal(result.specialist.pipeline.some((step) => step.includes("strategic_light_reasoner:qwen2.5:3b")), true);
   assert.equal(result.runtimeBudget?.profile, "deep_reasoning");
-  assert.equal(result.runtimeBudget?.fallbackDepth, 0);
+  assert.equal(result.runtimeBudget?.fallbackDepth, 1);
   assert.equal(result.runtimeBudget?.maxOutputTokens, 140);
   assert.match(result.answer.answer, /on-prem/i);
   assert.equal(usedFormat, false);
@@ -902,7 +963,76 @@ test("student chat adapter routes strategic setup turns to the fast local path",
   assert.equal(selectedModel, "qwen2.5:3b");
   assert.equal(result.specialist.role, "primary_brain");
   assert.equal(result.runtimeBudget?.profile, "concise_chat");
-  assert.equal(result.runtimeBudget?.fallbackDepth, 0);
+  assert.equal(result.runtimeBudget?.fallbackDepth, 1);
+});
+
+test("student chat adapter allocates a long-form budget when the user requests 900 words", async () => {
+  let selectedModel = "";
+  let maxTokens = 0;
+  let numCtx = 0;
+  const state = createInitialState();
+  const question =
+    "Explique en profondeur, en au moins 900 mots, comment PostgreSQL assure la durabilite, la concurrence et la reprise apres incident.";
+  const capsule = buildActiveConstraintCapsule(state, question);
+  const policy = decideMultiTurnAnswerPolicy({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    newUserMessage: question,
+    category: "technical_explanation",
+    toolRouting: null,
+    lastAssistantAnswer: ""
+  });
+  const evidenceCapsule = buildEvidenceCapsule({
+    question,
+    category: "technical_explanation"
+  });
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "qwen2.5:14b";
+    },
+    async testPrompt(_prompt, _system, options) {
+      selectedModel = options?.modelName ?? "";
+      maxTokens = options?.numPredict ?? 0;
+      numCtx = options?.numCtx ?? 0;
+      return {
+        provider: "ollama",
+        model: selectedModel,
+        response:
+          "PostgreSQL combine le journal WAL, les transactions MVCC, les checkpoints et la reprise pour proteger les donnees.",
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer({
+    question,
+    routingQuestion: question,
+    userMessage: question,
+    runtimeMode: "direct",
+    category: "technical_explanation",
+    recentMessages: [],
+    activeConstraintCapsule: capsule,
+    answerPolicy: policy,
+    evidenceCapsule,
+    agenticPlan: buildAgenticPlan({
+      question,
+      category: "technical_explanation",
+      evidenceCapsule
+    }),
+    requiresExternalGrounding: false,
+    tooling: defaultChatToolMetadata,
+    knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata
+  });
+
+  assert.ok(selectedModel.length > 0);
+  assert.equal(result.runtimeBudget?.profile, "long_form_chat");
+  assert.ok((result.runtimeBudget?.maxOutputTokens ?? 0) >= 1600);
+  assert.equal(maxTokens, result.runtimeBudget?.maxOutputTokens);
+  assert.ok(numCtx >= 8192);
+  assert.equal(
+    result.specialist.pipeline.some((step) => step.includes("response_length:long_form_900_words")),
+    true
+  );
 });
 
 test("student chat adapter does not call cloud fallback when local generation fails", async () => {

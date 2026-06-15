@@ -22,6 +22,11 @@ type HydriaCoreAskServiceDeps = {
   interactionLogStore?: Pick<InteractionLogStore, "safeAppend"> | null;
 };
 
+export type HydriaCoreAskStreamOptions = {
+  onToken?: (token: string) => void;
+  signal?: AbortSignal;
+};
+
 function compact(value: string, maxChars = 360) {
   const normalized = value.replace(/\s+/g, " ").trim();
   return normalized.length <= maxChars ? normalized : `${normalized.slice(0, maxChars - 1).trim()}...`;
@@ -34,7 +39,10 @@ function modelList(models: Record<string, string>) {
 export class HydriaCoreAskService {
   constructor(private readonly deps: HydriaCoreAskServiceDeps) {}
 
-  async ask(request: HydriaCoreAskRequest): Promise<HydriaCoreAskResponse> {
+  async ask(
+    request: HydriaCoreAskRequest,
+    stream: HydriaCoreAskStreamOptions = {}
+  ): Promise<HydriaCoreAskResponse> {
     const startedAt = performance.now();
     const requestId = randomUUID();
     const finish = (response: Omit<HydriaCoreAskResponse, "requestId" | "durationMs">) =>
@@ -47,7 +55,9 @@ export class HydriaCoreAskService {
     if (request.mode === "chat") {
       const result = await this.deps.chatRuntimeService.sendMessage({
         message: request.question,
-        ...(request.sessionId ? { sessionId: request.sessionId } : {})
+        ...(request.sessionId ? { sessionId: request.sessionId } : {}),
+        onToken: stream.onToken,
+        signal: stream.signal
       });
 
       return finish({
@@ -221,7 +231,10 @@ export class HydriaCoreAskService {
       });
     }
 
-    const local = await this.deps.localModelService.testPrompt(request.question, request.system);
+    const local = await this.deps.localModelService.testPrompt(request.question, request.system, {
+      onToken: stream.onToken,
+      signal: stream.signal
+    });
 
     const response = finish({
       mode: request.mode,

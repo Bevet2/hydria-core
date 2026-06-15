@@ -1373,3 +1373,85 @@ test("chat runtime repairs concise stable concept timeouts instead of returning 
   assert.doesNotMatch(third.answer.answer, /pas reussi|reformule/i);
   assert.equal(third.conversationQuality.passed, true);
 });
+
+test("chat runtime recalls structured project state without calling external research", async () => {
+  const adapterMessages: string[] = [];
+  let toolCalls = 0;
+  const service = new ChatRuntimeService(
+    {
+      async answer(input) {
+        adapterMessages.push(input.userMessage);
+        return buildAdapterResult(
+          "Je recommande de reduire le perimetre au lancement essentiel parce que le budget et le delai ont baisse."
+        );
+      }
+    },
+    undefined,
+    {
+      async tryExecute() {
+        toolCalls += 1;
+        return null;
+      }
+    }
+  );
+
+  const first = await service.sendMessage({
+    message:
+      "Je prepare le lancement du projet Atlas. Budget 30000 euros, equipe de 3 personnes, date limite au 30 septembre. Garde ces informations."
+  });
+  await service.sendMessage({
+    sessionId: first.sessionId,
+    message: "Le budget tombe finalement a 12000 euros et la date avance au 31 juillet. Que dois-je changer ?"
+  });
+  const adapterCallsBeforeRecall = adapterMessages.length;
+  const recall = await service.sendMessage({
+    sessionId: first.sessionId,
+    message: "Rappelle-moi le nom du projet, le budget actuel, l'ancien budget, l'equipe et la date actuelle."
+  });
+
+  assert.equal(recall.generation.model, "conversation_memory");
+  assert.match(recall.answer.answer, /Atlas/);
+  assert.match(recall.answer.answer, /12000 euros/);
+  assert.match(recall.answer.answer, /30000 euros/);
+  assert.match(recall.answer.answer, /3 personnes/);
+  assert.match(recall.answer.answer, /31 juillet/);
+  assert.equal(toolCalls, 0);
+  assert.equal(adapterMessages.length, adapterCallsBeforeRecall);
+  assert.equal(adapterMessages.some((message) => /Rappelle-moi/i.test(message)), false);
+});
+
+test("chat runtime retries an answer that ignores an explicit minimum word count", async () => {
+  let calls = 0;
+  const developedAnswer = [
+    "Une migration du monolithe vers des modules doit commencer par une cartographie claire des responsabilites et des dependances.",
+    "Il faut ensuite definir des frontieres fonctionnelles stables autour des capacites metier qui changent a des rythmes differents.",
+    "Le premier module extrait doit rester reversible afin de limiter le risque et de verifier les contrats techniques en production.",
+    "Les appels internes peuvent d'abord rester dans le meme processus avant toute separation en services reseau.",
+    "Chaque etape doit ajouter des tests de contrat, des mesures de latence et une procedure de retour arriere.",
+    "Les donnees partagees doivent etre traitees explicitement pour eviter les doubles ecritures et les incoherences silencieuses.",
+    "Une equipe responsable par module simplifie aussi les decisions, les revues et le suivi des incidents.",
+    "Le deploiement progressif permet de comparer le comportement du module avec celui du monolithe existant.",
+    "La migration avance seulement lorsque les indicateurs de fiabilite et de maintenance montrent un gain reel.",
+    "Cette approche produit une architecture modulaire utile sans imposer trop tot la complexite operationnelle des microservices."
+  ].join(" ");
+  const service = new ChatRuntimeService({
+    async answer() {
+      calls += 1;
+      return buildAdapterResult(
+        calls === 1
+          ? "La migration doit etre progressive."
+          : developedAnswer
+      );
+    }
+  });
+
+  const response = await service.sendMessage({
+    message:
+      "Redige une analyse detaillee d'au moins 80 mots sur une migration pragmatique d'un monolithe vers des modules."
+  });
+
+  assert.equal(calls, 2);
+  assert.ok(response.answer.answer.split(/\s+/).length >= 80);
+  assert.equal(response.conversationQuality.passed, true);
+  assert.equal(response.conversationQuality.issues.includes("insufficient_requested_length"), false);
+});

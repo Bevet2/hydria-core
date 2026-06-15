@@ -8,6 +8,7 @@ import {
   capTimeout,
   type ModelRuntimeBudget
 } from "./models/modelRuntimeGovernor.js";
+import { planResponseLength } from "./response/responseLengthPolicy.js";
 
 export type StudentChatSpecialistRole =
   | "fast_router"
@@ -293,14 +294,18 @@ function buildFallbacks(primary: string, role: StudentChatSpecialistRole) {
 
   return unique([
     primary,
-    ...roleFallbacks,
     env.STUDENT_CHAT_LOCAL_MODEL_NAME,
-    env.LOCAL_MODEL_NAME
+    env.LOCAL_MODEL_NAME,
+    ...roleFallbacks,
   ]);
 }
 
 function buildSpecialistOnlyFallbacks(primary: string) {
-  return unique([primary]);
+  return unique([
+    primary,
+    env.STUDENT_CHAT_LOCAL_MODEL_NAME,
+    env.LOCAL_MODEL_NAME
+  ]);
 }
 
 function buildPracticalWritingFallbacks(primary: string) {
@@ -315,10 +320,10 @@ function buildPracticalWritingFallbacks(primary: string) {
 function buildStandardLightFallbacks(primary: string) {
   return unique([
     primary,
-    MISTRAL_BUSINESS,
-    QWEN_MAIN,
     env.STUDENT_CHAT_LOCAL_MODEL_NAME,
-    env.LOCAL_MODEL_NAME
+    env.LOCAL_MODEL_NAME,
+    MISTRAL_BUSINESS,
+    QWEN_MAIN
   ]);
 }
 
@@ -376,7 +381,7 @@ function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: stri
       maxLatencyMs: standardLightTimeoutMs,
       maxOutputTokens: env.MODEL_RUNTIME_STANDARD_MAX_OUTPUT_TOKENS,
       maxConcurrent: env.MODEL_RUNTIME_STANDARD_MAX_CONCURRENCY,
-      fallbackDepth: 0,
+      fallbackDepth: 1,
       concurrencyKey: "standard_light_local_chat"
     };
   }
@@ -391,7 +396,7 @@ function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: stri
       maxLatencyMs: stableFactTimeoutMs,
       maxOutputTokens: stableFactMaxOutputTokens,
       maxConcurrent: env.MODEL_RUNTIME_STANDARD_MAX_CONCURRENCY,
-      fallbackDepth: 1,
+      fallbackDepth: 2,
       concurrencyKey: "standard_local_chat"
     };
   }
@@ -408,7 +413,7 @@ function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: stri
       maxLatencyMs: codeTimeoutMs,
       maxOutputTokens: env.MODEL_RUNTIME_CODE_MAX_OUTPUT_TOKENS,
       maxConcurrent: env.MODEL_RUNTIME_HEAVY_MAX_CONCURRENCY,
-      fallbackDepth: 0,
+      fallbackDepth: 1,
       concurrencyKey: "code_local_chat"
     };
   }
@@ -425,7 +430,7 @@ function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: stri
       maxLatencyMs: deepTimeoutMs,
       maxOutputTokens: Math.min(env.MODEL_RUNTIME_DEEP_MAX_OUTPUT_TOKENS, 180),
       maxConcurrent: env.MODEL_RUNTIME_HEAVY_MAX_CONCURRENCY,
-      fallbackDepth: 0,
+      fallbackDepth: 1,
       concurrencyKey: "heavy_local_chat"
     };
   }
@@ -442,7 +447,7 @@ function buildRuntimeBudget(profile: ModelRuntimeBudget["profile"], reason: stri
       maxLatencyMs: writingTimeoutMs,
       maxOutputTokens: Math.max(env.MODEL_RUNTIME_STANDARD_MAX_OUTPUT_TOKENS, 240),
       maxConcurrent: env.MODEL_RUNTIME_STANDARD_MAX_CONCURRENCY,
-      fallbackDepth: 0,
+      fallbackDepth: 2,
       concurrencyKey: "standard_local_chat"
     };
   }
@@ -474,7 +479,7 @@ function governedKnowledgeContextPath(input: StudentChatModelRoutingInput) {
   return Boolean(input.knowledgeRetrieval?.used);
 }
 
-export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput): StudentChatModelRoute {
+function selectBaseStudentChatModelRoute(input: StudentChatModelRoutingInput): StudentChatModelRoute {
   const text = normalizeText(`${input.routingQuestion}\n${input.userMessage}`);
   const basePipeline = [`fast_router:${PHI_ROUTER}`];
 
@@ -577,7 +582,7 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
       runtimeBudget: {
         ...budget,
         maxOutputTokens: Math.min(budget.maxOutputTokens, 96),
-        fallbackDepth: 0,
+        fallbackDepth: 1,
         concurrencyKey: "fast_local_chat"
       }
     };
@@ -617,7 +622,7 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
         timeoutMs: budget.timeoutMs,
         maxLatencyMs: budget.maxLatencyMs,
         maxOutputTokens: Math.min(budget.maxOutputTokens, 220),
-        fallbackDepth: 1,
+        fallbackDepth: 2,
         concurrencyKey: "standard_local_chat"
       }
     };
@@ -662,7 +667,7 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
         timeoutMs,
         maxLatencyMs: timeoutMs,
         maxOutputTokens: Math.min(budget.maxOutputTokens, 140),
-        fallbackDepth: 0,
+        fallbackDepth: 1,
         concurrencyKey: "fast_local_chat"
       }
     };
@@ -836,5 +841,36 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
     fallbackModelNames: buildFallbacks(QWEN_MAIN, "primary_brain"),
     timeoutMs: budget.timeoutMs,
     runtimeBudget: budget
+  };
+}
+
+export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput): StudentChatModelRoute {
+  const route = selectBaseStudentChatModelRoute(input);
+  const responseLength = planResponseLength(input.userMessage, input.routingQuestion);
+  if (responseLength.mode !== "long_form" || !responseLength.maxOutputTokens) {
+    return route;
+  }
+
+  const timeoutMs = Math.max(
+    route.runtimeBudget.timeoutMs,
+    Math.min(600000, 90000 + responseLength.maxOutputTokens * 180)
+  );
+  return {
+    ...route,
+    routingReason: `${route.routingReason} The user explicitly requested a developed long-form answer.`,
+    pipeline: [...route.pipeline, `response_length:long_form_${responseLength.targetWords ?? "developed"}_words`],
+    timeoutMs,
+    runtimeBudget: {
+      ...route.runtimeBudget,
+      profile: "long_form_chat",
+      label: "Developed long-form answer",
+      reason: "The user explicitly requested a long, structured, or minimum-word response.",
+      timeoutMs,
+      maxLatencyMs: timeoutMs,
+      maxOutputTokens: responseLength.maxOutputTokens,
+      maxConcurrent: env.MODEL_RUNTIME_HEAVY_MAX_CONCURRENCY,
+      fallbackDepth: Math.max(1, route.runtimeBudget.fallbackDepth),
+      concurrencyKey: "heavy_local_chat"
+    }
   };
 }

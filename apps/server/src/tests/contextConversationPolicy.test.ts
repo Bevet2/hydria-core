@@ -155,6 +155,34 @@ test("context state tracker does not treat weekly AI news recaps as deadline con
   assert.deepEqual(capsule.topConstraints.filter((constraint) => /^deadline:/i.test(constraint)), []);
 });
 
+test("context state tracker keeps structured project facts and does not turn recall wording into constraints", () => {
+  const initial = updateConversationState(
+    createInitialState(),
+    "Je prepare le lancement du projet Atlas. Budget 30000 euros, equipe de 3 personnes, date limite au 30 septembre.",
+    ""
+  );
+  const changed = updateConversationState(
+    initial,
+    "Le budget tombe finalement a 12000 euros et la date avance au 31 juillet.",
+    ""
+  );
+  const recalled = updateConversationState(
+    changed,
+    "Rappelle-moi le nom du projet, le budget actuel, l'ancien budget, l'equipe et la date actuelle.",
+    ""
+  );
+  const capsule = buildActiveConstraintCapsule(recalled, "Rappelle-moi les informations.");
+
+  assert.ok(recalled.knownFacts.some((fact) => fact === "project name: Atlas"));
+  assert.ok(recalled.knownFacts.some((fact) => /^budget: 30000 euros$/i.test(fact)));
+  assert.ok(recalled.knownFacts.some((fact) => /^budget: 12000 euros$/i.test(fact)));
+  assert.ok(recalled.knownFacts.some((fact) => /^team size: 3$/i.test(fact)));
+  assert.ok(recalled.knownFacts.some((fact) => /^deadline: 31 juillet$/i.test(fact)));
+  assert.doesNotMatch(capsule.topConstraints.join(" "), /rappelle-moi/i);
+  assert.match(capsule.topConstraints.join(" "), /12000 euros/i);
+  assert.match(capsule.topConstraints.join(" "), /31 juillet/i);
+});
+
 test("active constraint capsule marks changed budget obsolete and keeps latest budget active", () => {
   const initial = updateConversationState(
     createInitialState(),

@@ -8,6 +8,7 @@ export type ModelRuntimeBudgetProfile =
   | "standard_chat"
   | "code_chat"
   | "writing_chat"
+  | "long_form_chat"
   | "deep_reasoning";
 
 export type ModelRuntimeBudget = {

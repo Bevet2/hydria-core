@@ -524,3 +524,27 @@ test("tool router does not use finance current price for broad future market for
   assert.equal(decision.toolType, "finance");
   assert.equal(decision.intent, "future_market_prediction");
 });
+
+test("tool router keeps conversation recall local even when the user says current", () => {
+  const decision = service.route({
+    question: "Rappelle-moi le budget actuel, l'ancien budget et la date actuelle du projet.",
+    category: "technical_explanation"
+  });
+
+  assert.equal(decision.toolRequired, false);
+  assert.equal(decision.toolRecommended, false);
+  assert.equal(decision.toolType, "none");
+});
+
+test("tool router treats sourced current comparisons as fact checks, not news recaps", () => {
+  const decision = service.route({
+    question:
+      "Compare avec plusieurs sources fiables les limites actuelles de PostgreSQL et MySQL pour une plateforme SaaS.",
+    category: "mixed_reasoning"
+  });
+
+  assert.notEqual(decision.intent, "recent_updates");
+  assert.equal(decision.toolType, "research");
+  assert.equal(decision.intent, "fact_check");
+  assert.equal(decision.extractedArgs?.language, "fr");
+});

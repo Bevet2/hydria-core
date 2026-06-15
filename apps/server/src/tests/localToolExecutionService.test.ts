@@ -1034,3 +1034,86 @@ test("local research fact-check tool falls back to web search snippets", async (
   assert.equal(result?.sources?.[0]?.retrievalEngine, "duckduckgo");
   assert.equal(result?.sources?.length, 2);
 });
+
+test("local research fact-check tool researches both sides of a comparison independently", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const searchedSubjects: string[] = [];
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = new URL(String(input));
+    if (url.hostname.endsWith("wikipedia.org") && url.pathname.endsWith("/w/api.php")) {
+      const search = url.searchParams.get("srsearch") ?? "";
+      searchedSubjects.push(search);
+      const title = /mysql/i.test(search) ? "MySQL" : "PostgreSQL";
+      return new Response(
+        JSON.stringify({
+          query: {
+            search: [{ title, snippet: `${title} relational database software.` }]
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.pathname.includes("/api/rest_v1/page/summary/PostgreSQL")) {
+      return new Response(
+        JSON.stringify({
+          title: "PostgreSQL",
+          description: "Open-source relational database software",
+          extract:
+            "PostgreSQL is open-source relational database software with transactions, extensibility, concurrency control, and SQL compliance.",
+          content_urls: { desktop: { page: "https://en.wikipedia.org/wiki/PostgreSQL" } }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.pathname.includes("/api/rest_v1/page/summary/MySQL")) {
+      return new Response(
+        JSON.stringify({
+          title: "MySQL",
+          description: "Open-source relational database software",
+          extract:
+            "MySQL is open-source relational database software using SQL, transactions, replication, and a client-server architecture.",
+          content_urls: { desktop: { page: "https://en.wikipedia.org/wiki/MySQL" } }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.hostname === "www.wikidata.org") {
+      const search = url.searchParams.get("search") ?? "";
+      const isMySql = /mysql/i.test(search);
+      return new Response(
+        JSON.stringify({
+          search: [
+            {
+              id: isMySql ? "Q850" : "Q192490",
+              label: isMySql ? "MySQL" : "PostgreSQL",
+              description: "free and open-source relational database management system"
+            }
+          ]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const routing = buildFactCheckRouting("PostgreSQL et MySQL");
+  routing.extractedArgs = {
+    ...routing.extractedArgs,
+    query:
+      "Compare avec plusieurs sources fiables les performances et limites actuelles de PostgreSQL et MySQL pour un SaaS.",
+    language: "fr"
+  };
+  const result = await new LocalToolExecutionService().tryExecute(routing);
+
+  assert.equal(result?.resultLabel, "PostgreSQL vs MySQL");
+  assert.equal(result?.sources?.length, 4);
+  assert.match(result?.verifiedFacts.join(" "), /PostgreSQL/);
+  assert.match(result?.verifiedFacts.join(" "), /MySQL/);
+  assert.equal(searchedSubjects.some((subject) => /^PostgreSQL\b/i.test(subject)), true);
+  assert.equal(searchedSubjects.some((subject) => /^MySQL\b/i.test(subject)), true);
+});

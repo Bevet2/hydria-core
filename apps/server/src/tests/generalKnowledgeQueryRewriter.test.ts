@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  extractComparisonSubjects,
   rewriteGeneralKnowledgeQuery,
   subjectMatchesText
 } from "../services/research/generalKnowledgeQueryRewriter.js";
@@ -68,4 +69,13 @@ test("general knowledge rewriter disambiguates Cleopatra person from title-only 
   assert.ok(cleopatra.candidates.includes("Cléopâtre VII"));
   assert.equal(subjectMatchesText("Cleopatra VII", "Cléopâtre is an opera by Jules Massenet."), false);
   assert.equal(subjectMatchesText("Cleopatra VII", "Cléopâtre VII est la dernière reine d'Égypte."), true);
+});
+
+test("general knowledge rewriter extracts named subjects from comparison requests", () => {
+  assert.deepEqual(
+    extractComparisonSubjects(
+      "Compare avec plusieurs sources fiables les performances et limites actuelles de PostgreSQL et MySQL pour un SaaS."
+    ),
+    ["PostgreSQL", "MySQL"]
+  );
 });

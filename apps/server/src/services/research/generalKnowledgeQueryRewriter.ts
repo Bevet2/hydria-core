@@ -247,6 +247,22 @@ export function rewriteGeneralKnowledgeQuery(input: {
   };
 }
 
+export function extractComparisonSubjects(question: string) {
+  const normalized = normalizeSpace(question);
+  const patterns = [
+    /\b(?:compare|comparison of|comparison between|versus)\s+([A-Z][A-Za-z0-9.+#_-]{1,50})\s+(?:and|vs\.?|versus)\s+([A-Z][A-Za-z0-9.+#_-]{1,50})\b/i,
+    /\b(?:compare|comparaison de|comparaison entre|versus)\s+([A-Z][A-Za-z0-9.+#_-]{1,50})\s+(?:et|vs\.?|versus)\s+([A-Z][A-Za-z0-9.+#_-]{1,50})\b/i,
+    /\b(?:de|entre|between)\s+([A-Z][A-Za-z0-9.+#_-]{1,50})\s+(?:et|and|vs\.?|versus)\s+([A-Z][A-Za-z0-9.+#_-]{1,50})\b/
+  ];
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern);
+    if (match?.[1] && match[2]) {
+      return unique([match[1], match[2]]).slice(0, 2);
+    }
+  }
+  return [];
+}
+
 export function meaningfulSubjectTerms(subject: string) {
   return normalizeLooseText(normalizeOrdinalAliases(subject))
     .replace(MATCH_STOPWORD_PATTERN, " ")

@@ -170,7 +170,8 @@ function wantsWorkspaceToolCall(prompt: string) {
     /\b(chart|graphique|validation|filtre|filter|tri|sort|pivot|tcd|lignes?|rows?|colonnes?|columns?|renomme|rename|supprime|delete|remove|format|style|gras|bold|devise|currency|pourcentage|percent)\b/,
     /\b(insere|insert|redimensionne|resize|fusionne|merge|defusionne|unmerge|note|commentaire|conditional|conditionnel|tableau|table|sparkline|segment|slicer|liste|deroulante|déroulante|dropdown|nommee|nommée|protect|protege|protège|deprotege|déprotège|fige|freeze|zoom|quadrillage|gridlines?|feuille|onglet|sheet|tab)\b/,
     /\b(section|paragraphe|paragraph|intro|introduction|bloc|block|append|insert|replace|remplace|lien|link|url|image|citation|quote|code|saut de page|page break|toc|sommaire|table|tableau)\b/,
-    /\b(slide|slides|diapo|diapositive|presentation|deck)\b/
+    /\b(slide|slides|diapo|diapositive|presentation|deck)\b/,
+    /\b(crm|contact|client|company|entreprise|societe|lead|prospect|deal|opportunite|pipeline|tache|task|relance|follow-up)\b/
   ]);
 }
 
@@ -232,6 +233,16 @@ function isPresentationWorkspaceRequest(request: PublicApiAskRequest, question: 
     kind === "presentation" ||
     /\.(pptx|odp|slides\.md)\b/.test(entryPath) ||
     /\b(presentation|slides?|diapos?|diapositive|deck|powerpoint|pptx)\b/.test(question)
+  );
+}
+
+function isCrmWorkspaceRequest(request: PublicApiAskRequest, question: string) {
+  const family = activeWorkspaceFamilyId(request);
+  const tools = request.workspaceContext?.capabilities?.workspaceTools ?? [];
+  return (
+    family === "crm_sales" ||
+    tools.some((tool) => tool.toLowerCase().startsWith("crm.")) ||
+    /\b(crm|contact|client|company|entreprise|societe|lead|prospect|deal|opportunite|pipeline|tache|task)\b/.test(question)
   );
 }
 
@@ -1186,6 +1197,9 @@ function supportsWorkspaceTool(request: PublicApiAskRequest, toolName: string) {
   if (normalized === "slide.edit" && Array.from(allowed).some((tool) => tool.startsWith("slide."))) {
     return true;
   }
+  if (normalized.startsWith("crm.") && Array.from(allowed).some((tool) => tool.startsWith("crm."))) {
+    return allowed.has(normalized);
+  }
 
   const aliases: Record<string, string[]> = {
     "sheet.apply_formula": [...SHEET_WORKSPACE_TOOLS],
@@ -1215,6 +1229,273 @@ function supportsWorkspaceTool(request: PublicApiAskRequest, toolName: string) {
     "slide.edit": ["slide.add", "slide.update", "slide.reorder"]
   };
   return (aliases[normalized] || []).some((alias) => allowed.has(alias));
+}
+
+function crmPreview(request: PublicApiAskRequest) {
+  try {
+    return JSON.parse(String(request.workspaceContext?.activeWorkObject?.contentPreview || "{}")) as {
+      pipelineStages?: Array<{ id?: string; name?: string }>;
+      recentDeals?: Array<{ id?: string; name?: string }>;
+      recentContacts?: Array<{ id?: string; firstName?: string; lastName?: string; email?: string }>;
+      recentCompanies?: Array<{ id?: string; name?: string }>;
+      recentLeads?: Array<{ id?: string; firstName?: string; lastName?: string; email?: string; status?: string; rating?: string }>;
+      openTasks?: Array<{ id?: string; title?: string; status?: string }>;
+      products?: Array<{ id?: string; name?: string; sku?: string; unitPrice?: number }>;
+      quotes?: Array<{ id?: string; number?: string; name?: string; status?: string; dealId?: string }>;
+    };
+  } catch {
+    return {};
+  }
+}
+
+function extractCrmEmail(prompt: string) {
+  return prompt.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i)?.[0] || "";
+}
+
+function extractCrmPersonName(prompt: string) {
+  const match = prompt.match(
+    /\b(?:contact|client|lead|prospect)\s+(?:nomme|appele|named|called)?\s*["']?([A-Za-zÀ-ÖØ-öø-ÿ'-]{2,})\s+([A-Za-zÀ-ÖØ-öø-ÿ'-]{2,})/i
+  );
+  return {
+    firstName: compact(match?.[1] || "", 80),
+    lastName: compact(match?.[2] || "", 80)
+  };
+}
+
+function extractCrmCompanyName(prompt: string) {
+  const explicit = prompt.match(
+    /\b(?:entreprise|societe|company)\s+(?:nommee|appelee|named|called)?\s*["']?([^"',.;]+?)(?=\s+(?:avec|with|email|tel|phone|dans|in|pour|for)\b|$)/i
+  )?.[1];
+  const relation = prompt.match(/\b(?:pour|chez|for|at)\s+["']?([^"',.;]+?)(?=\s+(?:avec|with|email|tel|phone|de|d['’]un|worth)\b|$)/i)?.[1];
+  return compact(explicit || relation || "", 160);
+}
+
+function extractCrmTaskTitle(prompt: string) {
+  const quoted = prompt.match(/["']([^"']{2,180})["']/)?.[1];
+  if (quoted) return compact(quoted, 180);
+  return compact(
+    prompt
+      .replace(/^.*?\b(?:tache|task|relance|follow-up)\b\s*/i, "")
+      .replace(/\s+\b(?:pour|avant|due|le|on)\b.*$/i, ""),
+    180
+  );
+}
+
+function extractCrmAmount(prompt: string) {
+  const match = prompt.match(/\b(\d[\d\s.,]*)\s*(?:EUR|€|euros?|USD|\$)?\b/i);
+  if (!match?.[1]) return 0;
+  const normalized = match[1].replace(/\s/g, "").replace(",", ".");
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function extractCrmDealName(prompt: string, stageNames: string[] = []) {
+  let value = prompt
+    .replace(/^.*?\b(?:deal|opportunite|opportunity)\b\s*/i, "")
+    .replace(/\s+\b(?:de|d['’]une valeur de|worth|pour|for|vers|en|to)\b.*$/i, "")
+    .trim();
+  for (const stageName of stageNames) {
+    value = value.replace(new RegExp(`\\s+${stageName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i"), "");
+  }
+  return compact(value.replace(/^["']|["']$/g, ""), 160);
+}
+
+function planCrmWorkspaceToolOperation(request: PublicApiAskRequest, question: string) {
+  const normalized = normalizeText(question);
+  if (!request.workspaceContext?.activeWorkObject || !isCrmWorkspaceRequest(request, normalized)) {
+    return null;
+  }
+  const preview = crmPreview(request);
+  const person = extractCrmPersonName(question);
+  const email = extractCrmEmail(question);
+  const companyName = extractCrmCompanyName(question);
+  const recentLead = (preview.recentLeads || []).find((candidate) => {
+    const fullName = `${candidate.firstName || ""} ${candidate.lastName || ""}`.trim();
+    return (candidate.email && normalized.includes(normalizeText(candidate.email))) ||
+      (fullName && normalized.includes(normalizeText(fullName)));
+  });
+  const recentCompany = (preview.recentCompanies || []).find((candidate) =>
+    candidate.name && normalized.includes(normalizeText(candidate.name))
+  );
+  const recentTask = (preview.openTasks || []).find((candidate) =>
+    candidate.title && normalized.includes(normalizeText(candidate.title))
+  );
+
+  if (/\b(?:cree|creer|ajoute|add|create)\b/.test(normalized) && /\b(?:contact|client)\b/.test(normalized)) {
+    if (!supportsWorkspaceTool(request, "crm.create_contact") || !person.firstName || !person.lastName) return null;
+    return {
+      toolName: "crm.create_contact",
+      operations: [{
+        type: "crm.create_contact",
+        firstName: person.firstName,
+        lastName: person.lastName,
+        email: email || undefined,
+        companyName: companyName || undefined
+      }]
+    };
+  }
+
+  if (/\b(?:cree|creer|ajoute|add|create)\b/.test(normalized) && /\b(?:lead|prospect)\b/.test(normalized)) {
+    if (!supportsWorkspaceTool(request, "crm.create_lead") || !person.firstName || !person.lastName) return null;
+    return {
+      toolName: "crm.create_lead",
+      operations: [{
+        type: "crm.create_lead",
+        firstName: person.firstName,
+        lastName: person.lastName,
+        email: email || undefined,
+        companyName: companyName || undefined
+      }]
+    };
+  }
+
+  if (/\b(?:cree|creer|ajoute|add|create)\b/.test(normalized) && /\b(?:entreprise|societe|company)\b/.test(normalized)) {
+    if (!supportsWorkspaceTool(request, "crm.create_company") || !companyName) return null;
+    return {
+      toolName: "crm.create_company",
+      operations: [{ type: "crm.create_company", name: companyName }]
+    };
+  }
+
+  if (/\b(?:cree|creer|ajoute|add|create|planifie|schedule)\b/.test(normalized) && /\b(?:tache|task|relance|follow-up)\b/.test(normalized)) {
+    const title = extractCrmTaskTitle(question);
+    if (!supportsWorkspaceTool(request, "crm.create_task") || !title) return null;
+    return {
+      toolName: "crm.create_task",
+      operations: [{ type: "crm.create_task", title }]
+    };
+  }
+
+  if (/\b(?:convertis|convertir|transforme|transformer|convert)\b/.test(normalized) && /\b(?:lead|prospect)\b/.test(normalized)) {
+    if (!supportsWorkspaceTool(request, "crm.convert_lead") || !recentLead) return null;
+    return {
+      toolName: "crm.convert_lead",
+      operations: [{
+        type: "crm.convert_lead",
+        email: recentLead.email,
+        createDeal: !/\b(?:sans deal|sans opportunite|without deal)\b/.test(normalized),
+        target: { recordId: recentLead.id }
+      }]
+    };
+  }
+
+  if (/\b(?:mets|met|passe|set|update|modifie|change)\b/.test(normalized) && /\b(?:lead|prospect)\b/.test(normalized) && recentLead) {
+    const status = ["NEW", "WORKING", "QUALIFIED", "UNQUALIFIED"]
+      .find((value) => normalized.includes(normalizeText(value))) ||
+      (/\b(?:qualifie|qualified)\b/.test(normalized) ? "QUALIFIED" : undefined);
+    const rating = ["HOT", "WARM", "COLD"].find((value) => normalized.includes(normalizeText(value)));
+    if (!supportsWorkspaceTool(request, "crm.update_lead") || (!status && !rating)) return null;
+    return {
+      toolName: "crm.update_lead",
+      operations: [{
+        type: "crm.update_lead",
+        status,
+        rating,
+        target: { recordId: recentLead.id }
+      }]
+    };
+  }
+
+  if (/\b(?:mets|met|passe|set|update|modifie|change)\b/.test(normalized) && /\b(?:tache|task)\b/.test(normalized) && recentTask) {
+    const status = /\b(?:terminee|termine|done|completee|completed)\b/.test(normalized)
+      ? "DONE"
+      : /\b(?:en cours|in progress)\b/.test(normalized) ? "IN_PROGRESS" : undefined;
+    if (!supportsWorkspaceTool(request, "crm.update_task") || !status) return null;
+    return {
+      toolName: "crm.update_task",
+      operations: [{ type: "crm.update_task", status, target: { recordId: recentTask.id } }]
+    };
+  }
+
+  const stageNames = (preview.pipelineStages || []).map((stage) => stage.name || "").filter(Boolean);
+  const requestedStage = stageNames.find((stage) => normalized.includes(normalizeText(stage))) || "";
+  if (/\b(?:passe|deplace|move|mets|set)\b/.test(normalized) && /\b(?:deal|opportunite|opportunity)\b/.test(normalized) && requestedStage) {
+    const deal = (preview.recentDeals || []).find((candidate) =>
+      normalized.includes(normalizeText(candidate.name || ""))
+    );
+    if (!supportsWorkspaceTool(request, "crm.update_deal_stage") || !deal) return null;
+    return {
+      toolName: "crm.update_deal_stage",
+      operations: [{
+        type: "crm.update_deal_stage",
+        dealName: deal.name,
+        stageName: requestedStage,
+        target: { recordId: deal.id }
+      }]
+    };
+  }
+
+  if (
+    /\b(?:cree|creer|ajoute|add|create)\b/.test(normalized) &&
+    /\b(?:deal|opportunite|opportunity)\b/.test(normalized) &&
+    !/\b(?:devis|quote|proposal|proposition|produit|product|article)\b/.test(normalized)
+  ) {
+    const name = extractCrmDealName(question, stageNames);
+    if (!supportsWorkspaceTool(request, "crm.create_deal") || !name) return null;
+    return {
+      toolName: "crm.create_deal",
+      operations: [{
+        type: "crm.create_deal",
+        name,
+        companyName: companyName || undefined,
+        value: extractCrmAmount(question),
+        currency: /\b(?:USD|\$)\b/i.test(question) ? "USD" : "EUR",
+        stageName: requestedStage || undefined
+      }]
+    };
+  }
+
+  const deal = (preview.recentDeals || []).find((candidate) =>
+    normalized.includes(normalizeText(candidate.name || ""))
+  );
+  const product = (preview.products || []).find((candidate) =>
+    normalized.includes(normalizeText(candidate.name || "")) ||
+    normalized.includes(normalizeText(candidate.sku || ""))
+  );
+  if (/\b(?:ajoute|add)\b/.test(normalized) && /\b(?:produit|product|article)\b/.test(normalized) && deal && product) {
+    if (!supportsWorkspaceTool(request, "crm.add_product_to_deal")) return null;
+    return {
+      toolName: "crm.add_product_to_deal",
+      operations: [{
+        type: "crm.add_product_to_deal",
+        dealName: deal.name,
+        productName: product.name,
+        sku: product.sku,
+        quantity: extractCrmAmount(question) || 1,
+        target: { recordId: deal.id }
+      }]
+    };
+  }
+
+  if (/\b(?:cree|creer|genere|generer|create|generate)\b/.test(normalized) && /\b(?:devis|quote|proposal|proposition)\b/.test(normalized) && deal) {
+    if (!supportsWorkspaceTool(request, "crm.create_quote")) return null;
+    return {
+      toolName: "crm.create_quote",
+      operations: [{
+        type: "crm.create_quote",
+        dealName: deal.name,
+        name: `Proposition ${deal.name}`,
+        target: { recordId: deal.id }
+      }]
+    };
+  }
+
+  if (/\b(?:resume|resumer|summary|synthese|recap)\b/.test(normalized) && /\b(?:client|entreprise|societe|company)\b/.test(normalized)) {
+    const company = recentCompany || (preview.recentCompanies || []).find((candidate) =>
+      companyName && normalizeText(candidate.name || "") === normalizeText(companyName)
+    );
+    if (!supportsWorkspaceTool(request, "crm.summarize_customer") || !company) return null;
+    return {
+      toolName: "crm.summarize_customer",
+      operations: [{
+        type: "crm.summarize_customer",
+        companyName: company.name,
+        target: { recordId: company.id }
+      }]
+    };
+  }
+
+  return null;
 }
 
 function extractColumnRename(prompt: string) {
@@ -2353,6 +2634,7 @@ function planSlideWorkspaceToolOperation(request: PublicApiAskRequest, question:
 
 function planWorkspaceToolOperation(request: PublicApiAskRequest, question: string, answer: string) {
   return (
+    planCrmWorkspaceToolOperation(request, question) ||
     planSheetWorkspaceToolOperation(request, question) ||
     planDocumentWorkspaceToolOperation(request, question, answer) ||
     planSlideWorkspaceToolOperation(request, question, answer)

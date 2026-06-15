@@ -52,8 +52,10 @@ const FACTUAL_QUESTION_SHAPE_PATTERN =
   /\b(?:who|what|when|where|why|how|qui|quoi|quand|ou|o[u\u00f9]|pourquoi|comment|quel|quelle|quels|quelles|qu[' ]?est[- ]?ce|explique|explain|define|definition|d[e\u00e9]finis|raconte|fiche)\b/i;
 const LIVE_OR_CURRENT_PATTERN =
   /\b(?:today|current|currently|latest|recent|this week|now|live|news|weather|price|stock|crypto|release|version|ceo|president|official|source|cite|verify|aujourd'hui|actuel|actuelle|dernier|derniere|derni[e\u00e8]re|r[e\u00e9]cent|cette semaine|maintenant|m[e\u00e9]t[e\u00e9]o|prix|bourse|crypto|version|sortie|pdg|pr[e\u00e9]sident|officiel|source|cite|v[e\u00e9]rifie)\b/i;
+const EXTERNAL_FRESHNESS_BEYOND_DECISION_NOW_PATTERN =
+  /\b(?:today|current|currently|latest|recent|this week|live|news|weather|price|stock|crypto|release|version|ceo|president|official|source|cite|verify|aujourd'hui|actuel|actuelle|dernier|derniere|derni[e\u00e8]re|r[e\u00e9]cent|cette semaine|m[e\u00e9]t[e\u00e9]o|prix|bourse|crypto|version|sortie|pdg|pr[e\u00e9]sident|officiel|source|cite|v[e\u00e9]rifie)\b/i;
 const MEMORY_PATTERN =
-  /\b(?:remember|what did i say|what is my name|my project|do you remember|tu te souviens|souviens toi|comment je m[' ]?appelle|mon projet|qu[' ]?est[- ]?ce qu[' ]?on a dit|qu[' ]?est[- ]?ce qu[' ]?on a decide)\b/i;
+  /\b(?:remember|remind me|what did i say|what is my name|my project|do you remember|earlier|previous budget|current budget|current deadline|tu te souviens|souviens toi|souviens-toi|rappelle(?:-moi)?|comment je m[' ]?appelle|mon projet|ancien budget|budget actuel|date actuelle|echeance actuelle|[e\u00e9]ch[e\u00e9]ance actuelle|plus haut|dans cette conversation|qu[' ]?est[- ]?ce qu[' ]?on a dit|qu[' ]?est[- ]?ce qu[' ]?on a decide)\b/i;
 const KNOWLEDGE_PATTERN =
   /\b(?:hydria|core|watcher|knowledge|memoire|m[e\u00e9]moire|base de connaissance|runtime|dataset|benchmark|gate|student lab|obsidian)\b/i;
 const PRACTICAL_EVERYDAY_PATTERN =
@@ -137,6 +139,16 @@ export function decideEvidenceRequirement(input: EvidenceRequirementPolicyInput)
     CONCEPTUAL_SYSTEM_PATTERN.test(text) &&
     CONCEPTUAL_EXPLANATION_PATTERN.test(text) &&
     !DECISION_SYNTHESIS_PATTERN.test(text);
+  const isStrategicDecisionTurn =
+    STRATEGIC_PATTERN.test(text) ||
+    input.category === "architecture_design" ||
+    input.category === "incident_response" ||
+    input.category === "product_strategy" ||
+    input.category === "mixed_reasoning";
+  const asksOnlyForImmediateDecisionTiming =
+    isStrategicDecisionTurn &&
+    /\b(?:now|maintenant)\b/.test(text) &&
+    !EXTERNAL_FRESHNESS_BEYOND_DECISION_NOW_PATTERN.test(text);
   const isGeneralKnowledgeFactQuestion =
     FACTUAL_QUESTION_SHAPE_PATTERN.test(text) &&
     GENERAL_KNOWLEDGE_FACT_PATTERN.test(text) &&
@@ -171,7 +183,13 @@ export function decideEvidenceRequirement(input: EvidenceRequirementPolicyInput)
     reasons.push("the question targets Hydria governed knowledge or runtime memory");
   }
 
-  if (!input.toolRouting.toolRequired && LIVE_OR_CURRENT_PATTERN.test(text) && !isHydriaKnowledgeQuestion) {
+  if (
+    !input.toolRouting.toolRequired &&
+    LIVE_OR_CURRENT_PATTERN.test(text) &&
+    !isHydriaKnowledgeQuestion &&
+    !MEMORY_PATTERN.test(text) &&
+    !asksOnlyForImmediateDecisionTiming
+  ) {
     requiredEvidence.push("source_research");
     riskFlags.push("freshness_required");
     reasons.push("the question asks for current, dated, official, or source-backed facts");
