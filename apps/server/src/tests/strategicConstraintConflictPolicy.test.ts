@@ -291,6 +291,34 @@ test("conversation quality gate rejects recommendation that contradicts active e
   assert.equal(result.recommendedAction, "revise");
 });
 
+test("conversation quality gate rejects an invented team-size change", () => {
+  const state = stateFromMessages([
+    "Je prepare le projet Boreal avec une equipe de 3 personnes, un budget de 30000 euros et une date au 30 septembre.",
+    "Le budget tombe a 12000 euros et la date avance au 31 juillet."
+  ]);
+  const currentUserMessage = "Que dois-je changer dans le plan et pourquoi ?";
+  const capsule = buildActiveConstraintCapsule(state, currentUserMessage);
+  const policy = decideMultiTurnAnswerPolicy({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    newUserMessage: currentUserMessage,
+    category: "product_strategy",
+    toolRouting: null
+  });
+  const result = analyzeConversationQuality({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    policy,
+    newUserMessage: currentUserMessage,
+    answer:
+      "Je recommande de reduire l'equipe a deux personnes pour tenir le budget de 12000 euros et la date du 31 juillet. Je reconsidererais ce choix si une contrainte change.",
+    toolRouting: null
+  });
+
+  assert.ok(result.issues.includes("active_constraint_contradicted"));
+  assert.equal(result.recommendedAction, "revise");
+});
+
 test("conversation quality gate rejects current user message echo", () => {
   const state = stateFromMessages([
     "Bonjour, on doit choisir entre AWS et on-prem.",

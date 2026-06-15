@@ -667,28 +667,25 @@ function selectBaseStudentChatModelRoute(input: StudentChatModelRoutingInput): S
 
   if (containsBoundedStrategicDecisionSignal(input, text)) {
     const reason =
-      "Bounded strategic decision with explicit active constraints; use the light local reasoner with decision guidance instead of the slow 14B CPU path.";
+      "Bounded strategic decision with explicit active constraints; use the primary 14B reasoner with compact context and keep the 3B model as fallback.";
     const budget = buildRuntimeBudget("deep_reasoning", reason);
-    const timeoutMs = Math.max(
-      budget.timeoutMs,
-      Math.min(env.MODEL_RUNTIME_DEEP_TIMEOUT_MS, 120000)
-    );
+    const timeoutMs = Math.max(budget.timeoutMs, 180000);
     return {
-      capabilityId: "qwen-3b-standard-light",
-      displayName: "Qwen 3B Strategic Light",
-      modelName: QWEN_3B,
+      capabilityId: "qwen-14b-instruct-main",
+      displayName: "Qwen 14B Strategic",
+      modelName: QWEN_MAIN,
       specialistRole: "deep_reasoner",
       routingReason: reason,
-      pipeline: [...basePipeline, `strategic_light_reasoner:${QWEN_3B}`],
-      fallbackModelNames: buildSpecialistOnlyFallbacks(QWEN_3B),
+      pipeline: [...basePipeline, `strategic_primary_reasoner:${QWEN_MAIN}`],
+      fallbackModelNames: buildDeepReasoningFallbacks(QWEN_MAIN),
       timeoutMs,
       runtimeBudget: {
         ...budget,
         timeoutMs,
         maxLatencyMs: timeoutMs,
-        maxOutputTokens: Math.max(budget.maxOutputTokens, 220),
-        fallbackDepth: 0,
-        concurrencyKey: "fast_local_chat"
+        maxOutputTokens: Math.max(budget.maxOutputTokens, 260),
+        fallbackDepth: 1,
+        concurrencyKey: "heavy_local_chat"
       }
     };
   }

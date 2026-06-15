@@ -180,6 +180,7 @@ Start with a clear recommendation, then mention the key constraint and condition
 Reuse the user's concrete decisive terms instead of generic placeholders.
 If the user says on-prem, include the exact term on-prem in the first sentence.
 If the user gives a hard deadline or blocked budget, recommend the smallest reversible option first; do not default to microservices, distributed architecture, or broad platform work.
+Treat active budget, team, deadline, environment, and risk values as boundaries. Do not invent a new value for them; adapt scope, sequencing, milestones, or mitigations unless the user explicitly asks to change the boundary.
 For production incidents after a deploy with payment or customer risk, use the explicit term rollback or retour arriere once when recommending the previous version.`;
 
 const longFormPlainTextSystemPrompt = `You are Hydria Core's long-form synthesis runtime.
@@ -273,7 +274,7 @@ function shouldUseCompactConstraintDecisionPrompt(
 ) {
   return (
     input.runtimeMode === "conversation" &&
-    route.modelName === "qwen2.5:3b" &&
+    (route.modelName === "qwen2.5:14b" || route.modelName === "qwen2.5:3b") &&
     route.specialistRole === "deep_reasoner" &&
     !input.requiresExternalGrounding &&
     !input.tooling.used &&
@@ -548,6 +549,7 @@ export function buildStudentChatPrompt(input: StudentChatAdapterInput, route = s
       `Language rule: answer only in ${expectedLanguage(input.activeConstraintCapsule)} unless the user explicitly asks for another language.`,
       "Use only the active constraint capsule, the current user message, and the answer policy below.",
       "Do not reconstruct or repeat previous assistant answers.",
+      "Treat active budget, team, deadline, environment, and risk values as fixed boundaries unless the user explicitly asks to change one. Adapt scope, sequencing, milestones, and mitigations instead of inventing a new boundary value.",
       ...responseLength.guidance,
       ...maybePlainRouteGuidance(route),
       "ActiveConstraintCapsule:",
@@ -918,6 +920,9 @@ function systemPromptForRoute(route: StudentChatModelRoute) {
 }
 
 function keepAliveForRoute(route: StudentChatModelRoute) {
+  if (route.modelName === "qwen2.5:14b") {
+    return "10m";
+  }
   if (
     route.modelName === "qwen2.5:3b" ||
     route.runtimeBudget.profile === "stable_fact_chat" ||

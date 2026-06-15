@@ -143,8 +143,8 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
     id: "chat_strategic_conflict_deep_reasoner",
     surface: "chat_route",
     priority: "critical",
-    description: "Bounded strategic conflict with explicit constraints should use the light local deep-reasoning role on CPU.",
-    tags: ["chat", "deep_reasoning", "strategic_conflict", "cpu_bounded"],
+    description: "Bounded strategic conflict with explicit constraints should use compact local 14B reasoning, with the 3B model reserved for fallback.",
+    tags: ["chat", "deep_reasoning", "strategic_conflict", "compact_context"],
     chat: {
       routingQuestion: "On-prem obligatoire, deadline demain, budget bloque. Tu recommandes quoi ?",
       category: "architecture_design",
@@ -161,9 +161,9 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
       recommendedDirection: "Choisir une option on-prem minimale et reversible."
     },
     expected: {
-      capabilityId: "qwen-3b-standard-light",
+      capabilityId: "qwen-14b-instruct-main",
       role: "deep_reasoner",
-      maxCostTier: "low",
+      maxCostTier: "medium",
       maxEstimatedCostUnits: 1,
       localOnly: true,
       allowDeepReasoning: true

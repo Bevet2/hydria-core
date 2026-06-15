@@ -424,6 +424,68 @@ function contradictsActiveEnvironmentConstraint(input: ConversationQualityGateIn
   return cloudRecommendation && !rejectsCloud;
 }
 
+const SMALL_NUMBER_WORDS: Record<string, number> = {
+  zero: 0,
+  un: 1,
+  une: 1,
+  one: 1,
+  deux: 2,
+  two: 2,
+  trois: 3,
+  three: 3,
+  quatre: 4,
+  four: 4,
+  cinq: 5,
+  five: 5,
+  six: 6,
+  sept: 7,
+  seven: 7,
+  huit: 8,
+  eight: 8,
+  neuf: 9,
+  nine: 9,
+  dix: 10,
+  ten: 10
+};
+
+function parseSmallNumber(value: string) {
+  const normalized = normalizeText(value);
+  if (/^\d+$/.test(normalized)) {
+    return Number(normalized);
+  }
+  return SMALL_NUMBER_WORDS[normalized] ?? null;
+}
+
+function contradictsActiveTeamConstraint(input: ConversationQualityGateInput) {
+  const constraints = [
+    ...(input.activeConstraintCapsule?.blockingConstraints ?? []),
+    ...(input.activeConstraintCapsule?.topConstraints ?? [])
+  ];
+  const activeText = normalizeText(constraints.join(" "));
+  const activeMatch = activeText.match(
+    /\b(?:team|equipe)\s*:\s*(\d+|un|une|one|deux|two|trois|three|quatre|four|cinq|five|six|sept|seven|huit|eight|neuf|nine|dix|ten)\b/
+  );
+  const activeTeamSize = activeMatch?.[1] ? parseSmallNumber(activeMatch[1]) : null;
+  if (activeTeamSize === null) {
+    return false;
+  }
+
+  const answer = normalizeText(input.answer);
+  const changeFragments = answer.match(
+    /\b(?:reduire|ramener|limiter|passer|augmenter|modifier|changer|reduce|cut|limit|move|increase|change)\b.{0,90}\b(?:l[' ]?)?(?:equipe|team)\b.{0,45}/g
+  ) ?? [];
+  for (const fragment of changeFragments) {
+    const targets = [...fragment.matchAll(
+      /\b(?:a|to)\s+(\d+|un|une|one|deux|two|trois|three|quatre|four|cinq|five|six|sept|seven|huit|eight|neuf|nine|dix|ten)\b/g
+    )];
+    const target = targets.at(-1)?.[1];
+    if (target && parseSmallNumber(target) !== activeTeamSize) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function missesStrategicRevisionCondition(input: ConversationQualityGateInput) {
   const calibration = input.policy.strategicCoherencePolicy;
   if (!calibration?.requiresRevisionCondition || !calibration.revisionTrigger) {
@@ -584,9 +646,9 @@ export function analyzeConversationQuality(input: ConversationQualityGateInput):
     penalties.push("answer detects context but does not explicitly arbitrate the strategic constraint conflict");
   }
 
-  if (contradictsActiveEnvironmentConstraint(input)) {
+  if (contradictsActiveEnvironmentConstraint(input) || contradictsActiveTeamConstraint(input)) {
     issues.push("active_constraint_contradicted");
-    penalties.push("answer recommends an option that contradicts the active environment constraint");
+    penalties.push("answer recommends an option that contradicts an active boundary constraint");
   }
 
   if (missesStrategicRevisionCondition(input)) {

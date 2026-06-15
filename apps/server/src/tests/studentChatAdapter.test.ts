@@ -887,13 +887,13 @@ test("student chat adapter routes bounded strategic decisions to the light local
     knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata
   });
 
-  assert.equal(selectedModel, "qwen2.5:3b");
+  assert.equal(selectedModel, "qwen2.5:14b");
   assert.equal(result.specialist.role, "deep_reasoner");
-  assert.equal(result.specialist.pipeline.some((step) => step.includes("strategic_light_reasoner:qwen2.5:3b")), true);
+  assert.equal(result.specialist.pipeline.some((step) => step.includes("strategic_primary_reasoner:qwen2.5:14b")), true);
   assert.equal(result.runtimeBudget?.profile, "deep_reasoning");
-  assert.equal(result.runtimeBudget?.fallbackDepth, 0);
-  assert.equal((result.runtimeBudget?.timeoutMs ?? 0) >= 90000, true);
-  assert.equal((result.runtimeBudget?.maxOutputTokens ?? 0) >= 220, true);
+  assert.equal(result.runtimeBudget?.fallbackDepth, 1);
+  assert.equal((result.runtimeBudget?.timeoutMs ?? 0) >= 180000, true);
+  assert.equal((result.runtimeBudget?.maxOutputTokens ?? 0) >= 260, true);
   assert.match(result.answer.answer, /on-prem/i);
   assert.equal(usedFormat, false);
   assert.match(system, /exact term on-prem/i);
@@ -905,7 +905,7 @@ test("student chat adapter routes bounded strategic decisions to the light local
   assert.equal(prompt.length < 3000, true);
 });
 
-test("student chat adapter routes bounded budget and deadline changes directly to Qwen 3B", async () => {
+test("student chat adapter routes bounded budget and deadline changes through compact Qwen 14B reasoning", async () => {
   const attemptedModels: string[] = [];
   const state = createInitialState();
   const question =
@@ -966,8 +966,8 @@ test("student chat adapter routes bounded budget and deadline changes directly t
     knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata
   });
 
-  assert.deepEqual(attemptedModels, ["qwen2.5:3b"]);
-  assert.equal(result.model, "qwen2.5:3b");
+  assert.deepEqual(attemptedModels, ["qwen2.5:14b"]);
+  assert.equal(result.model, "qwen2.5:14b");
   assert.match(result.answer.answer, /perimetre|livrables/i);
 });
 
