@@ -1754,6 +1754,7 @@ async function searchGenericFactSources(
     const text = `${result.title} ${result.snippet}`;
     if (
       isLowTrustGenericSource(result.url) ||
+      !genericSearchResultMatchesIntent(result, semanticFrame) ||
       !sourceTitleMatchesResolvedSubject(expectedSubject, result.title) ||
       !subjectMatchesText(expectedSubject, text) ||
       !sourceMatchesSemanticFrame({ ...semanticFrame, subject: semanticFrame.subject ?? expectedSubject }, text).passed
@@ -1780,6 +1781,16 @@ async function searchGenericFactSources(
     }
   }
   return selected;
+}
+
+function genericSearchResultMatchesIntent(result: SearchResult, semanticFrame: SemanticFrame) {
+  if (semanticFrame.intent !== "rules") {
+    return true;
+  }
+  const text = normalizeLooseText(`${result.title} ${result.snippet} ${result.url}`);
+  return /\b(?:rules?|gameplay|scoring|score|points?|frames?|strike|spare|setup|guide|how to play|regles?|regle|jouer|deroulement du jeu|comptage des points|carreaux|quilles)\b/.test(
+    text
+  );
 }
 
 function evidenceKey(evidence: GeneralKnowledgeEvidence) {
