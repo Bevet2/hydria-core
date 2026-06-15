@@ -807,6 +807,81 @@ test("local research fact-check tool reuses recent verified evidence when source
   assert.deepEqual(second?.sources?.map((source) => source.url), first?.sources?.map((source) => source.url));
 });
 
+test("local research fact-check tool rejects secondary sources with a conflicting entity type", async (t) => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    if (url.includes("fr.wikipedia.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          query: {
+            search: [
+              {
+                title: "Charlemagne",
+                snippet: "Roi des Francs et empereur."
+              }
+            ]
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("fr.wikipedia.org/api/rest_v1/page/summary/Charlemagne")) {
+      return new Response(
+        JSON.stringify({
+          title: "Charlemagne",
+          description: "Roi des Francs et empereur",
+          extract:
+            "Charlemagne est un roi des Francs et empereur appartenant a la dynastie des Carolingiens.",
+          timestamp: "2026-05-01T12:00:00Z",
+          content_urls: {
+            desktop: {
+              page: "https://fr.wikipedia.org/wiki/Charlemagne"
+            }
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("wikidata.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          search: [
+            {
+              id: "Q142017",
+              label: "Charlemagne",
+              description: "ville au Quebec (Canada)",
+              concepturi: "http://www.wikidata.org/entity/Q142017"
+            }
+          ]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("duckduckgo.com/html")) {
+      return new Response(
+        `<html><body><div class="result"><a class="result__a" href="https://www.britannica.com/biography/Charlemagne">Charlemagne | Biography</a><a class="result__snippet">Charlemagne was king of the Franks and emperor of the Romans.</a></div></body></html>`,
+        { status: 200, headers: { "Content-Type": "text/html" } }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const service = new LocalToolExecutionService();
+  const result = await service.tryExecute(buildFactCheckRouting("Charlemagne"));
+
+  assert.equal(result?.toolType, "research");
+  assert.match(result?.verifiedFacts.join(" ") ?? "", /roi des Francs|king of the Franks/i);
+  assert.doesNotMatch(result?.verifiedFacts.join(" ") ?? "", /ville au Quebec/i);
+  assert.equal(result?.sources?.some((source) => /wikidata/i.test(source.url)), false);
+  assert.equal(result?.sources?.some((source) => /britannica/i.test(source.url)), true);
+});
+
 test("local research fact-check tool abstains when only one source family is available", async (t) => {
   const originalFetch = globalThis.fetch;
 

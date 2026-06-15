@@ -1804,6 +1804,42 @@ function evidenceFamily(evidence: GeneralKnowledgeEvidence) {
   }
 }
 
+function inferEvidenceEntityKind(evidence: GeneralKnowledgeEvidence): "person" | "place" | "organization" | "game" | "unknown" {
+  const text = normalizeLooseText(`${evidence.title} ${evidence.snippet} ${evidence.excerpt}`);
+  if (
+    /\b(?:city|town|village|municipality|commune|ville|municipalite|quebec|canada|department|province)\b/.test(text)
+  ) {
+    return "place";
+  }
+  if (
+    /\b(?:king|queen|emperor|pope|scientist|writer|mathematician|roi|reine|empereur|imperatrice|souverain|ne le|nee le|mort le|dynastie|carolingien|human|person)\b/.test(text)
+  ) {
+    return "person";
+  }
+  if (
+    /\b(?:company|corporation|manufacturer|enterprise|semiconductor|societe|entreprise|fabricant|multinationale|inc|corp)\b/.test(text)
+  ) {
+    return "organization";
+  }
+  if (
+    /\b(?:game|sport|rules|gameplay|player|score|jeu|sport|regles|joueur|points|quilles|boule|plateau)\b/.test(text)
+  ) {
+    return "game";
+  }
+  return "unknown";
+}
+
+function evidenceEntityKindsCompatible(left: "person" | "place" | "organization" | "game" | "unknown", right: "person" | "place" | "organization" | "game" | "unknown") {
+  return left === "unknown" || right === "unknown" || left === right;
+}
+
+function hasCompatibleEntityKind(existing: GeneralKnowledgeEvidence[], candidate: GeneralKnowledgeEvidence) {
+  const anchorKind = existing
+    .map(inferEvidenceEntityKind)
+    .find((kind) => kind !== "unknown") ?? "unknown";
+  return evidenceEntityKindsCompatible(anchorKind, inferEvidenceEntityKind(candidate));
+}
+
 function isLowTrustGenericSource(url: string) {
   try {
     const parsed = new URL(url);
@@ -1866,6 +1902,9 @@ function evidenceIntentScore(evidence: GeneralKnowledgeEvidence, semanticFrame: 
 
 function addEvidence(list: GeneralKnowledgeEvidence[], evidence: GeneralKnowledgeEvidence | null) {
   if (!evidence) {
+    return;
+  }
+  if (!hasCompatibleEntityKind(list, evidence)) {
     return;
   }
   if (!list.some((current) => evidenceKey(current) === evidenceKey(evidence))) {
