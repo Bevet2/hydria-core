@@ -179,6 +179,19 @@ const STRATEGY_TERMS = [
   "budget",
   "delai"
 ];
+const STRONG_STRATEGY_TERMS = [
+  "recommend",
+  "decision",
+  "strategy",
+  "architecture",
+  "budget",
+  "deadline",
+  "recommande",
+  "decision",
+  "strategie",
+  "budget",
+  "delai"
+];
 const CURRENT_TERMS = [
   "today",
   "current",
@@ -229,6 +242,28 @@ function inferDomain(args: {
   toolRouting?: ToolRoutingDecision | null;
 }): SemanticDomain {
   const text = normalizeLooseText(`${args.question} ${args.subject ?? ""}`);
+  const hasTechnologySignal = hasAny(text, [
+    "api",
+    "docker",
+    "kubernetes",
+    "postgres",
+    "postgresql",
+    "http",
+    "dns",
+    "sql",
+    "json",
+    "tls",
+    "cdn",
+    "oauth",
+    "latency",
+    "cache",
+    "database",
+    "base de donnees",
+    "informatique",
+    "logiciel",
+    "software",
+    "computing"
+  ]);
   if (args.toolRouting?.toolType === "weather") {
     return "weather";
   }
@@ -245,40 +280,27 @@ function inferDomain(args: {
     args.category === "architecture_design" ||
     args.category === "incident_response" ||
     args.category === "product_strategy" ||
-    args.category === "mixed_reasoning" ||
-    (args.category !== "technical_explanation" && hasAny(text, STRATEGY_TERMS))
+    args.category === "mixed_reasoning"
   ) {
     return "strategy_decision";
   }
-  if (args.category === "operational_writing" || hasAny(text, WRITING_TERMS)) {
+  if (args.category === "operational_writing") {
     return "writing";
   }
   if (
     args.category === "technical_explanation" ||
-    hasAny(text, [
-      "api",
-      "docker",
-      "kubernetes",
-      "postgres",
-      "postgresql",
-      "http",
-      "dns",
-      "sql",
-      "json",
-      "tls",
-      "cdn",
-      "oauth",
-      "latency",
-      "cache",
-      "database",
-      "base de donnees",
-      "informatique",
-      "logiciel",
-      "software",
-      "computing"
-    ])
+    (hasTechnologySignal && !hasAny(text, STRONG_STRATEGY_TERMS))
   ) {
     return "software_technology";
+  }
+  if (hasAny(text, STRATEGY_TERMS)) {
+    return "strategy_decision";
+  }
+  if (hasTechnologySignal) {
+    return "software_technology";
+  }
+  if (hasAny(text, WRITING_TERMS)) {
+    return "writing";
   }
   if (hasAny(text, SCIENCE_TERMS)) {
     return "science";

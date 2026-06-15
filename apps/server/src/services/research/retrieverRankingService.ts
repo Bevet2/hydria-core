@@ -209,6 +209,10 @@ export class ResearchRetrieverRankingService {
       }
     }
 
+    if (/\/docs\/current\//i.test(path) && !plan.temporalProfile.isTemporal) {
+      score += 8;
+    }
+
     if (isNewsPath || isReleasePath) {
       if (plan.intent === "recent_updates") {
         score += this.isHighTrustDomain(domain, plan) ? 12 : 5;

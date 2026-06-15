@@ -13,6 +13,10 @@ import {
   rewriteGeneralKnowledgeQuery,
   subjectMatchesText
 } from "../research/generalKnowledgeQueryRewriter.js";
+import { ResearchAcquisitionService } from "../research/acquisitionService.js";
+import type { SearchPlan } from "../research/common.js";
+import { buildDefaultTemporalProfile } from "../research/temporal.js";
+import { TERM_DOMAIN_HINTS } from "../research/trust.js";
 import {
   buildSemanticSearchCandidates,
   semanticFrameFromRouting,
@@ -178,6 +182,11 @@ type GeneralKnowledgeEvidence = {
   confidence: number;
   modifiedAt?: string | null;
   dateSource?: ResearchSource["dateSource"];
+};
+
+type TechnicalResearchAspect = {
+  query: string;
+  matchTerms: string[];
 };
 
 const CITY_TIMEZONES: Record<string, string> = {
@@ -760,6 +769,288 @@ function rewriteResearchQuery(args: ToolRoutingDecision) {
   });
 }
 
+const TECHNICAL_RESEARCH_ASPECTS: Array<{
+  pattern: RegExp;
+  aspect: TechnicalResearchAspect;
+}> = [
+  {
+    pattern: /\b(?:durabilite|durability|persistence|persistant|persistent)\b/,
+    aspect: {
+      query: "durability persistence",
+      matchTerms: ["durability", "durable", "persistence", "persistent"]
+    }
+  },
+  {
+    pattern: /\b(?:concurrence|concurrency|concurrent|simultane|simultaneous)\b/,
+    aspect: {
+      query: "concurrency control",
+      matchTerms: ["concurrency", "concurrent", "locking", "isolation", "mvcc"]
+    }
+  },
+  {
+    pattern: /\b(?:reprise|recovery|recover|restauration|restore|crash|incident|sinistre|disaster)\b/,
+    aspect: {
+      query: "crash recovery backup restore",
+      matchTerms: ["recovery", "recover", "backup", "restore", "crash", "replay"]
+    }
+  },
+  {
+    pattern: /\b(?:securite|security|authentification|authentication|autorisation|authorization)\b/,
+    aspect: {
+      query: "security authentication authorization",
+      matchTerms: ["security", "authentication", "authorization", "access control"]
+    }
+  },
+  {
+    pattern: /\b(?:performance|latence|latency|debit|throughput)\b/,
+    aspect: {
+      query: "performance latency throughput",
+      matchTerms: ["performance", "latency", "throughput", "optimization"]
+    }
+  },
+  {
+    pattern: /\b(?:scalabilite|scalability|scale|dimensionnement)\b/,
+    aspect: {
+      query: "scalability scaling",
+      matchTerms: ["scalability", "scaling", "scale", "partitioning", "sharding"]
+    }
+  },
+  {
+    pattern: /\b(?:disponibilite|availability|fiabilite|reliability|failover)\b/,
+    aspect: {
+      query: "availability reliability failover",
+      matchTerms: ["availability", "reliability", "failover", "redundancy"]
+    }
+  },
+  {
+    pattern: /\b(?:replication|replica)\b/,
+    aspect: {
+      query: "replication replicas",
+      matchTerms: ["replication", "replica", "standby"]
+    }
+  },
+  {
+    pattern: /\b(?:coherence|consistency|consistent)\b/,
+    aspect: {
+      query: "consistency guarantees",
+      matchTerms: ["consistency", "consistent", "isolation"]
+    }
+  },
+  {
+    pattern: /\b(?:transaction|transactions|transactionnel|transactional)\b/,
+    aspect: {
+      query: "transactions transaction management",
+      matchTerms: ["transaction", "transactions", "commit", "rollback"]
+    }
+  },
+  {
+    pattern: /\b(?:index|indexes|indices|indexation|indexing)\b/,
+    aspect: {
+      query: "indexes indexing",
+      matchTerms: ["index", "indexes", "indexing"]
+    }
+  }
+];
+
+const TECHNICAL_QUERY_NOISE = new Set([
+  "ainsi",
+  "answer",
+  "avec",
+  "cite",
+  "citer",
+  "comment",
+  "dans",
+  "detail",
+  "details",
+  "donne",
+  "explain",
+  "explique",
+  "fiable",
+  "fiables",
+  "moins",
+  "mots",
+  "plusieurs",
+  "profondeur",
+  "reponse",
+  "response",
+  "source",
+  "sources",
+  "structure",
+  "structured",
+  "the",
+  "with"
+]);
+
+function extractTechnicalResearchAspects(question: string, subject: string) {
+  const normalizedQuestion = normalizeLooseText(question);
+  const matched = TECHNICAL_RESEARCH_ASPECTS
+    .filter((entry) => entry.pattern.test(normalizedQuestion))
+    .map((entry) => entry.aspect);
+  if (matched.length > 0) {
+    return matched.slice(0, 3);
+  }
+
+  const subjectTokens = new Set(normalizeLooseText(subject).split(/\s+/).filter(Boolean));
+  const fallbackTerms = normalizedQuestion
+    .split(/\s+/)
+    .map((term) => term.replace(/[^a-z0-9-]/g, ""))
+    .filter(
+      (term) =>
+        term.length >= 4 &&
+        !subjectTokens.has(term) &&
+        !TECHNICAL_QUERY_NOISE.has(term)
+    )
+    .slice(0, 3);
+
+  return fallbackTerms.length > 0
+    ? fallbackTerms.map((term) => ({ query: term, matchTerms: [term] }))
+    : [{ query: "overview official documentation", matchTerms: [] }];
+}
+
+function resolveOfficialResearchDomains(subject: string, question: string) {
+  const subjectDomains = uniqueStrings(
+    TERM_DOMAIN_HINTS.filter((hint) => hint.pattern.test(subject)).flatMap((hint) => hint.domains)
+  );
+  if (subjectDomains.length > 0) {
+    return subjectDomains.slice(0, 3);
+  }
+
+  return uniqueStrings(
+    TERM_DOMAIN_HINTS.filter((hint) => hint.pattern.test(question)).flatMap((hint) => hint.domains)
+  ).slice(0, 3);
+}
+
+function buildOfficialTechnicalResearchPlan(args: {
+  subject: string;
+  question: string;
+  aspects: TechnicalResearchAspect[];
+  preferredDomains: string[];
+}): SearchPlan {
+  const subjectTerms = normalizeLooseText(args.subject).split(/\s+/).filter((term) => term.length >= 2);
+  const aspectTerms = uniqueStrings(args.aspects.flatMap((aspect) => aspect.matchTerms));
+  const primaryDomain = args.preferredDomains[0] ?? "";
+  const queries = args.aspects.map((aspect) =>
+    primaryDomain
+      ? `site:${primaryDomain} ${args.subject} current ${aspect.query} documentation`
+      : `${args.subject} ${aspect.query} official documentation`
+  );
+
+  return {
+    intent: "fact_check",
+    mode: "targeted_verify",
+    queries: uniqueStrings(queries).slice(0, 3),
+    requiredTerms: uniqueStrings([...subjectTerms, ...aspectTerms]).slice(0, 10),
+    preferredDomains: args.preferredDomains,
+    factFocusTerms: aspectTerms.slice(0, 8),
+    entityTerms: subjectTerms.slice(0, 6),
+    temporalProfile: buildDefaultTemporalProfile(),
+    reasoning: `Official technical documentation lookup for ${args.subject}, split by the requested aspects.`
+  };
+}
+
+async function fetchOfficialTechnicalEvidence(args: {
+  subject: string;
+  question: string;
+  semanticFrame: SemanticFrame;
+}): Promise<GeneralKnowledgeEvidence[]> {
+  if (!["software_technology", "code_debug"].includes(args.semanticFrame.domain)) {
+    return [];
+  }
+
+  const preferredDomains = resolveOfficialResearchDomains(args.subject, args.question);
+  if (preferredDomains.length === 0) {
+    return [];
+  }
+
+  const aspects = extractTechnicalResearchAspects(args.question, args.subject);
+
+  try {
+    const acquisitions = await Promise.all(
+      aspects.map((aspect) =>
+        new ResearchAcquisitionService({
+          sourceCacheEnabled: false,
+          knownEndpointService: {
+            getCandidates: () => []
+          }
+        }).collect(
+          buildOfficialTechnicalResearchPlan({
+            subject: args.subject,
+            question: args.question,
+            aspects: [aspect],
+            preferredDomains
+          })
+        )
+      )
+    );
+    const usedUrls = new Set<string>();
+    const selected: GeneralKnowledgeEvidence[] = [];
+
+    for (const [index, acquisition] of acquisitions.entries()) {
+      const aspect = aspects[index];
+      if (!aspect) {
+        continue;
+      }
+      const matchingSources = acquisition.sources
+        .filter((source) => {
+          const text = `${source.title} ${source.snippet} ${source.excerpt}`;
+          const host = (() => {
+            try {
+              return new URL(source.url).hostname.replace(/^www\./, "");
+            } catch {
+              return "";
+            }
+          })();
+          const officialDomainMatch = preferredDomains.some((domain) => host.endsWith(domain));
+          const semanticCheck = sourceMatchesSemanticFrame(
+            { ...args.semanticFrame, subject: args.subject },
+            text
+          );
+          const aspectMatch =
+            aspect.matchTerms.length === 0 ||
+            aspect.matchTerms.some((term) =>
+              normalizeLooseText(text).includes(normalizeLooseText(term))
+            );
+          return (
+            officialDomainMatch &&
+            semanticCheck.passed &&
+            aspectMatch &&
+            source.excerpt.length >= 120
+          );
+        })
+        .sort((left, right) => {
+          const leftCurrent = /\/docs\/current\//i.test(left.url) ? 1 : 0;
+          const rightCurrent = /\/docs\/current\//i.test(right.url) ? 1 : 0;
+          return rightCurrent - leftCurrent || right.excerpt.length - left.excerpt.length;
+        });
+      const source =
+        matchingSources.find((candidate) => !usedUrls.has(candidate.url)) ?? matchingSources[0];
+      if (!source || usedUrls.has(source.url)) {
+        continue;
+      }
+      usedUrls.add(source.url);
+      selected.push({
+        title: source.title,
+        url: source.url,
+        snippet: source.snippet,
+        excerpt: source.excerpt,
+        engine: source.retrievalEngine,
+        origin: source.retrievalOrigin,
+        confidence: 0.93,
+        modifiedAt: source.modifiedAt,
+        dateSource: source.dateSource
+      });
+    }
+
+    return selected;
+  } catch (error) {
+    logger.warn("Official technical research acquisition failed", {
+      subject: args.subject,
+      error: String(error)
+    });
+    return [];
+  }
+}
+
 function uniqueStrings(values: string[]) {
   const seen = new Set<string>();
   return values.filter((value) => {
@@ -1172,6 +1463,14 @@ async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<L
       ...subjectRewrite.candidates
     ]);
     const subjectEvidence: GeneralKnowledgeEvidence[] = [];
+    for (const officialEvidence of await fetchOfficialTechnicalEvidence({
+      subject: subjectRewrite.canonicalSubject,
+      question,
+      semanticFrame: subjectFrame
+    })) {
+      addEvidence(subjectEvidence, officialEvidence);
+    }
+
     for (const candidate of researchCandidates) {
       for (const wikipediaLanguage of wikipediaLanguageOrder(language)) {
         const summary = await fetchWikipediaSummary(
@@ -1237,7 +1536,10 @@ async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<L
     if (subjectEvidence.length === 0) {
       return null;
     }
-    subjectEvidence.slice(0, comparisonSubjects.length === 2 ? 3 : 5).forEach((item) => addEvidence(evidence, item));
+    subjectEvidence
+      .sort((left, right) => right.confidence - left.confidence)
+      .slice(0, comparisonSubjects.length === 2 ? 3 : 5)
+      .forEach((item) => addEvidence(evidence, item));
   }
 
   if (!hasReliableGeneralKnowledgeEvidence(evidence)) {

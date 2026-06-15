@@ -38,6 +38,17 @@ test("semantic frame rejects same-word but wrong-sense technical sources", () =>
   assert.equal(rightSense.passed, true);
 });
 
+test("semantic frame keeps technical crash recovery explanations out of strategy routing", () => {
+  const frame = buildSemanticFrame({
+    question:
+      "Explique comment PostgreSQL assure la durabilite, la concurrence et la reprise apres incident.",
+    subject: "PostgreSQL",
+    language: "fr"
+  });
+
+  assert.equal(frame.domain, "software_technology");
+});
+
 test("post-answer verifier flags answers that use a rejected source sense", () => {
   const semanticFrame = buildSemanticFrame({
     question: "Explique Docker simplement.",

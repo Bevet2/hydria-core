@@ -124,7 +124,13 @@ export class ResearchRetrieverSearchService {
           }
         }
 
-        if (aggregated.length >= 10) {
+        const hasEnoughTrustedCandidates =
+          aggregated.length >= 3 &&
+          plan.preferredDomains.length > 0 &&
+          aggregated.every((candidate) =>
+            this.isHighTrustDomain(getHostname(candidate.url), plan)
+          );
+        if (aggregated.length >= 10 || hasEnoughTrustedCandidates) {
           break;
         }
       } catch (error) {
