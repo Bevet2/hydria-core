@@ -54,7 +54,7 @@ import {
   rewriteGeneralKnowledgeQuery
 } from "./research/generalKnowledgeQueryRewriter.js";
 import { planResponseLength } from "./response/responseLengthPolicy.js";
-import { buildSemanticFrame } from "./orchestration/semanticMissionPlanner.js";
+import { buildSemanticFrame, type SemanticFrame } from "./orchestration/semanticMissionPlanner.js";
 import {
   verifyPostAnswerGrounding,
   type PostAnswerVerificationResult
@@ -3169,6 +3169,56 @@ function buildChatOrchestrationTrace(args: {
   };
 }
 
+function buildRelaxedEntityFactCheckRouting(routing: ToolRoutingDecision): ToolRoutingDecision | null {
+  if (
+    routing.toolType !== "research" ||
+    routing.intent !== "fact_check" ||
+    !routing.toolRequired
+  ) {
+    return null;
+  }
+
+  const subject = typeof routing.extractedArgs?.subject === "string"
+    ? routing.extractedArgs.subject.trim()
+    : "";
+  const query = typeof routing.extractedArgs?.query === "string"
+    ? routing.extractedArgs.query
+    : subject;
+  const frame = routing.extractedArgs?.semanticFrame as Partial<SemanticFrame> | undefined;
+  const normalizedQuery = normalizeText(query).replace(/[^a-z0-9]+/g, " ");
+  if (
+    !subject ||
+    frame?.domain !== "software_technology" ||
+    frame.intent === "rules" ||
+    !/\b(?:qu est ce que|c est quoi|what is|what are|define|definition|explique|decris)\b/.test(normalizedQuery)
+  ) {
+    return null;
+  }
+
+  const relaxedFrame: SemanticFrame = {
+    subject,
+    domain: "general",
+    intent: typeof frame.intent === "string" ? frame.intent : "explain",
+    expectedSenseTerms: [],
+    rejectedSenseTerms: Array.isArray(frame.rejectedSenseTerms) ? frame.rejectedSenseTerms : [],
+    searchModifiers: [],
+    ambiguityLevel: "medium",
+    componentMissions: Array.isArray(frame.componentMissions) ? frame.componentMissions : []
+  };
+
+  return {
+    ...routing,
+    reason: `${routing.reason} Retrying as a broad entity lookup because the technology frame was too restrictive.`,
+    extractedArgs: {
+      ...routing.extractedArgs,
+      subject,
+      query,
+      semanticFrame: relaxedFrame
+    },
+    toolResultUsed: false
+  };
+}
+
 export class ChatRuntimeService {
   private readonly sessions = new Map<string, ChatRuntimeSession>();
 
@@ -4254,8 +4304,11 @@ export class ChatRuntimeService {
     }
 
     let result: LocalToolExecutionResult | null = null;
+    let executedRouting = routing;
     try {
-      result = await this.localToolExecutionService.tryExecute(routing);
+      const execution = await this.executeLocalToolRouting(routing);
+      result = execution.result;
+      executedRouting = execution.routing;
     } catch (error) {
       return buildFailedTooling(
         routing,
@@ -4269,7 +4322,7 @@ export class ChatRuntimeService {
         route: "used",
         used: true,
         routing: {
-          ...routing,
+          ...executedRouting,
           toolResultUsed: true
         },
         summary: result.summary,
@@ -4281,8 +4334,8 @@ export class ChatRuntimeService {
 
     if (routing.toolRequired) {
       return buildFailedTooling(
-        routing,
-        `Required tool path ${routing.toolType}/${routing.intent} did not return a structured result.`,
+        executedRouting,
+        `Required tool path ${executedRouting.toolType}/${executedRouting.intent} did not return a structured result.`,
         "unsupported"
       );
     }
@@ -4290,12 +4343,31 @@ export class ChatRuntimeService {
     return {
       route: "recommended_not_executed",
       used: false,
-      routing,
+      routing: executedRouting,
       summary: [],
       verifiedFacts: [],
       sources: [],
       failureReason: null
     };
+  }
+
+  private async executeLocalToolRouting(
+    routing: ToolRoutingDecision
+  ): Promise<{ routing: ToolRoutingDecision; result: LocalToolExecutionResult | null }> {
+    const result = await this.localToolExecutionService.tryExecute(routing);
+    if (result) {
+      return { routing, result };
+    }
+
+    const relaxedRouting = buildRelaxedEntityFactCheckRouting(routing);
+    if (!relaxedRouting) {
+      return { routing, result: null };
+    }
+
+    const relaxedResult = await this.localToolExecutionService.tryExecute(relaxedRouting);
+    return relaxedResult
+      ? { routing: relaxedRouting, result: relaxedResult }
+      : { routing, result: null };
   }
 
   private normalizeRoutedToolLanguage(routing: ToolRoutingDecision, question: string): ToolRoutingDecision {
@@ -4369,13 +4441,14 @@ export class ChatRuntimeService {
     };
 
     try {
-      const result = await this.localToolExecutionService.tryExecute(routing);
+      const execution = await this.executeLocalToolRouting(routing);
+      const result = execution.result;
       if (result) {
         return {
           route: "used",
           used: true,
           routing: {
-            ...routing,
+            ...execution.routing,
             toolResultUsed: true
           },
           summary: result.summary,

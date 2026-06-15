@@ -146,6 +146,103 @@ test("chat runtime corrects routed research language from French user message be
   assert.doesNotMatch(response.answer.answer, /\bwas Queen\b/i);
 });
 
+test("chat runtime retries over-constrained tech entity research as a general entity lookup", async () => {
+  const attemptedDomains: string[] = [];
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult("NVIDIA est une entreprise americaine de technologie qui concoit des GPU.");
+      }
+    },
+    {
+      route() {
+        return {
+          ...defaultToolRoutingDecision,
+          considered: true,
+          toolRequired: true,
+          toolRecommended: false,
+          toolType: "research",
+          intent: "fact_check",
+          confidence: 0.83,
+          fallbackAllowed: false,
+          reason: "source-backed entity lookup",
+          extractedArgs: {
+            subject: "NVIDIA",
+            query: "Qu'est-ce que NVIDIA ?",
+            language: "fr",
+            semanticFrame: {
+              subject: "NVIDIA",
+              domain: "software_technology",
+              intent: "answer",
+              expectedSenseTerms: ["software", "technology", "informatique", "logiciel"],
+              rejectedSenseTerms: ["dockworker", "serpent"],
+              searchModifiers: ["logiciel", "informatique", "technologie"],
+              ambiguityLevel: "high",
+              componentMissions: []
+            }
+          },
+          toolResultUsed: false
+        };
+      }
+    },
+    {
+      async tryExecute(routing: ToolRoutingDecision) {
+        const frame = routing.extractedArgs?.semanticFrame as { domain?: string } | undefined;
+        attemptedDomains.push(frame?.domain ?? "none");
+        if (frame?.domain !== "general") {
+          return null;
+        }
+        return {
+          toolType: "research" as const,
+          intent: "fact_check",
+          summary: ["Recherche factuelle v2: sources pertinentes trouvees pour NVIDIA."],
+          verifiedFacts: [
+            "NVIDIA: entreprise americaine de technologie qui concoit des processeurs graphiques et accelerateurs d'IA.",
+            "NVIDIA Corporation: fabricant de semi-conducteurs connu pour ses GPU."
+          ],
+          confidenceScore: 0.9,
+          resultLabel: "NVIDIA",
+          sources: [
+            {
+              title: "Wikipedia: Nvidia",
+              url: "https://fr.wikipedia.org/wiki/Nvidia",
+              snippet: "Entreprise americaine de technologie.",
+              excerpt: "NVIDIA concoit des processeurs graphiques et accelerateurs d'IA.",
+              publishedAt: null,
+              modifiedAt: null,
+              effectiveDate: null,
+              dateSource: "unknown",
+              retrievalChannel: "live",
+              retrievalOrigin: "known_endpoint",
+              retrievalEngine: "known_endpoint"
+            },
+            {
+              title: "Britannica: NVIDIA Corporation",
+              url: "https://www.britannica.com/money/NVIDIA-Corporation",
+              snippet: "Semiconductor company and GPU manufacturer.",
+              excerpt: "NVIDIA Corporation is a semiconductor company and GPU manufacturer.",
+              publishedAt: null,
+              modifiedAt: null,
+              effectiveDate: null,
+              dateSource: "unknown",
+              retrievalChannel: "live",
+              retrievalOrigin: "generic_search",
+              retrievalEngine: "duckduckgo"
+            }
+          ]
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "Qu'est-ce que NVIDIA ?" });
+
+  assert.deepEqual(attemptedDomains, ["software_technology", "general"]);
+  assert.equal(response.tooling.used, true);
+  assert.equal((response.tooling.routing.extractedArgs?.semanticFrame as { domain?: string }).domain, "general");
+  assert.match(response.answer.answer, /NVIDIA/i);
+});
+
 test("chat runtime keeps follow-up context in the direct student chat adapter", async () => {
   const calls: StudentChatAdapterInput[] = [];
   const service = new ChatRuntimeService(
