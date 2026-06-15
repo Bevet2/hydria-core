@@ -196,6 +196,36 @@ test("learning queue captures governed chat failure candidates and validates wit
   }
 });
 
+test("learning queue bounds long answer previews without dropping the candidate", async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), "hydria-learning-queue-long-answer-"));
+  try {
+    const service = new LearningQueueService({
+      queueFile: join(tempRoot, "queue.json"),
+      gateReportFile: join(tempRoot, "gate.json")
+    });
+    const longAnswer = "PostgreSQL source-backed analysis. ".repeat(80);
+
+    await service.captureChatResponse({
+      response: response({
+        assistantMessage: {
+          ...response().assistantMessage,
+          content: longAnswer
+        },
+        answer: {
+          ...response().answer,
+          answer: longAnswer
+        }
+      })
+    });
+
+    const queue = await service.loadQueue();
+    assert.ok(queue.candidates.length > 0);
+    assert.ok(queue.candidates.every((candidate) => candidate.answerPreview.length <= 1200));
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test("chat runtime writes model fallback signals to the learning queue", async () => {
   const tempRoot = await mkdtemp(join(tmpdir(), "hydria-chat-learning-queue-"));
   try {

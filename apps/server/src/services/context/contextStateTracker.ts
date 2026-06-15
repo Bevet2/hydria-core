@@ -243,6 +243,24 @@ function isFreshExternalUpdateRequest(message: string) {
   return hasFreshWindow && hasUpdateIntent && hasExternalTopic;
 }
 
+function isConceptualRiskReference(message: string) {
+  const normalized = normalizeText(message);
+  const hasExplanationIntent =
+    /\b(?:explique|explain|definition|definis|define|comment .* fonctionne|comment .* assure|how .* works?|how .* handles?|what is|qu est ce)\b/.test(
+      normalized
+    );
+  const hasTechnicalTopic =
+    /\b(?:postgres|postgresql|database|base de donnees|software|logiciel|systeme|system|wal|mvcc|backup|recovery|reprise|durabilite|durability|concurrence|concurrency)\b/.test(
+      normalized
+    );
+  const hasActiveOperationalIncident =
+    /\b(?:en production|in production|prod|outage|panne|erreurs? 5\d\d|5\d\d errors?|deploy|deploiement|paiement|payment|utilisateurs? touches?|affected users?|support explose|incident en cours|ongoing incident|we have an incident|on a un incident)\b/.test(
+      normalized
+    );
+
+  return hasExplanationIntent && hasTechnicalTopic && !hasActiveOperationalIncident;
+}
+
 function isConversationRecallQuestion(message: string) {
   return (
     CONVERSATION_RECALL_PATTERN.test(message) &&
@@ -259,8 +277,12 @@ function extractConstraints(message: string) {
   }
   const constraints: string[] = [];
   const freshExternalUpdateRequest = isFreshExternalUpdateRequest(message);
+  const conceptualRiskReference = isConceptualRiskReference(message);
   for (const { label, pattern } of CONSTRAINT_PATTERNS) {
     if (freshExternalUpdateRequest && label === "deadline") {
+      continue;
+    }
+    if (conceptualRiskReference && (label === "urgency" || label === "risk")) {
       continue;
     }
     if (pattern.test(message) && !isNegatedConstraint(label, message)) {
@@ -414,7 +436,7 @@ function detectContradictions(previousState: ConversationState, message: string)
 }
 
 function extractRiskFlags(message: string) {
-  if (isNegatedConstraint("sensitive data", message)) {
+  if (isNegatedConstraint("sensitive data", message) || isConceptualRiskReference(message)) {
     return [];
   }
   return RISK_PATTERN.test(message) ? [compact(message, 180)] : [];

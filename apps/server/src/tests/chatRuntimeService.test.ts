@@ -563,6 +563,95 @@ test("chat runtime replaces an ungrounded long-form synthesis with verified rese
   assert.doesNotMatch(response.answer.answer, /Michael Stonebraker|affronte MySQL|rend ce choix prioritaire/i);
 });
 
+test("chat runtime keeps enough verified evidence to satisfy a long-form fallback", async () => {
+  const durabilityFact =
+    "La durabilite de PostgreSQL repose sur le write-ahead logging. Les changements sont inscrits dans le WAL avant que les pages de donnees correspondantes soient considerees comme persistees. Un commit peut ainsi etre reconstruit apres un arret brutal en rejouant les enregistrements valides du journal. Les checkpoints limitent la quantite de WAL a rejouer, tandis que le commit synchrone controle le moment ou le succes est confirme au client. Desactiver ces garanties peut ameliorer le debit, mais la documentation officielle precise alors le risque de perdre des transactions recemment validees.";
+  const concurrencyFact =
+    "Le controle de concurrence de PostgreSQL utilise le multi-version concurrency control, ou MVCC. Chaque instruction observe un instantane coherent au lieu de lire des lignes partiellement modifiees. Les lectures ne bloquent normalement pas les ecritures et les ecritures ne bloquent normalement pas les lectures, meme si les modifications concurrentes et les verrous explicites exigent encore une coordination. Les niveaux d'isolation definissent les changements visibles par une transaction. Ce modele reduit la contention tout en preservant l'integrite, mais les applications doivent gerer les echecs de serialisation et choisir des frontieres transactionnelles adaptees.";
+  const recoveryFact =
+    "La reprise PostgreSQL combine les checkpoints, le rejeu du WAL, les sauvegardes de base et l'archivage continu optionnel. Apres un crash, le serveur rejoue les enregistrements produits depuis le dernier checkpoint afin de restaurer un etat coherent. Pour une point-in-time recovery, les operateurs restaurent une sauvegarde de base puis rejouent les archives WAL jusqu'a la cible choisie. Ce processus protege les changements enregistres dans le journal, mais les fichiers de configuration demandent une sauvegarde separee. Les objectifs de reprise dependent donc de la frequence des sauvegardes, de la continuite de l'archivage, de la durabilite du stockage et de tests reguliers de restauration.";
+  const sources = [
+    {
+      title: "PostgreSQL WAL documentation",
+      url: "https://www.postgresql.org/docs/current/wal-intro.html",
+      snippet: durabilityFact,
+      excerpt: durabilityFact,
+      publishedAt: null,
+      modifiedAt: null,
+      effectiveDate: null,
+      dateSource: null,
+      retrievalChannel: "live" as const,
+      retrievalOrigin: "generic_search" as const,
+      retrievalEngine: "duckduckgo" as const
+    },
+    {
+      title: "PostgreSQL MVCC documentation",
+      url: "https://www.postgresql.org/docs/current/mvcc-intro.html",
+      snippet: concurrencyFact,
+      excerpt: concurrencyFact,
+      publishedAt: null,
+      modifiedAt: null,
+      effectiveDate: null,
+      dateSource: null,
+      retrievalChannel: "live" as const,
+      retrievalOrigin: "generic_search" as const,
+      retrievalEngine: "duckduckgo" as const
+    },
+    {
+      title: "PostgreSQL recovery documentation",
+      url: "https://www.postgresql.org/docs/current/continuous-archiving.html",
+      snippet: recoveryFact,
+      excerpt: recoveryFact,
+      publishedAt: null,
+      modifiedAt: null,
+      effectiveDate: null,
+      dateSource: null,
+      retrievalChannel: "live" as const,
+      retrievalOrigin: "generic_search" as const,
+      retrievalEngine: "duckduckgo" as const
+    }
+  ];
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult(
+          "PostgreSQL est robuste grace a Michael Stonebraker, mais la concurrence vient surtout de MySQL."
+        );
+      }
+    },
+    undefined,
+    {
+      async tryExecute(routing: ToolRoutingDecision) {
+        if (routing.toolType !== "research" || routing.intent !== "fact_check") {
+          return null;
+        }
+        return {
+          toolType: "research" as const,
+          intent: "fact_check",
+          summary: ["Official PostgreSQL documentation."],
+          verifiedFacts: [durabilityFact, concurrencyFact, recoveryFact],
+          sources,
+          confidenceScore: 0.95,
+          resultLabel: "PostgreSQL"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({
+    message:
+      "Explique en au moins 220 mots comment PostgreSQL assure la durabilite, la concurrence et la reprise apres incident. Cite plusieurs sources."
+  });
+
+  assert.equal(response.generation.model, "research_multi_source_fallback");
+  assert.ok(response.answer.answer.split(/\s+/).length >= 220);
+  assert.equal(response.conversationQuality.passed, true);
+  assert.equal(response.activeConstraintCapsule.blockingConstraints.length, 0);
+  assert.match(response.answer.answer, /write-ahead logging/i);
+  assert.match(response.answer.answer, /MVCC/i);
+  assert.match(response.answer.answer, /point-in-time recovery/i);
+});
+
 test("chat runtime repairs wrong-language source-backed concept answers from verified facts", async () => {
   const service = new ChatRuntimeService(
     {

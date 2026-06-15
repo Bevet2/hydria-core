@@ -155,6 +155,19 @@ test("context state tracker does not treat weekly AI news recaps as deadline con
   assert.deepEqual(capsule.topConstraints.filter((constraint) => /^deadline:/i.test(constraint)), []);
 });
 
+test("context state tracker does not turn technical incident recovery explanations into active incidents", () => {
+  const updated = updateConversationState(
+    createInitialState(),
+    "Explique comment PostgreSQL assure la durabilite, la concurrence et la reprise apres incident.",
+    ""
+  );
+  const capsule = buildActiveConstraintCapsule(updated, updated.userGoal ?? "");
+
+  assert.equal(updated.constraints.some((constraint) => /^urgency:|^risk:/i.test(constraint)), false);
+  assert.deepEqual(updated.riskFlags, []);
+  assert.deepEqual(capsule.blockingConstraints, []);
+});
+
 test("context state tracker keeps structured project facts and does not turn recall wording into constraints", () => {
   const initial = updateConversationState(
     createInitialState(),

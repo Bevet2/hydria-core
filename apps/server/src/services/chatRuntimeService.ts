@@ -2421,8 +2421,29 @@ function buildResearchEvidenceFallbackDraft(args: {
 
   const effectiveLanguage = extractedToolLanguage(args.tooling) ?? args.language;
   const isEnglish = effectiveLanguage === "en";
+  const responseLength = planResponseLength(args.routingQuestion);
+  const preserveLongForm = responseLength.mode === "long_form";
   const facts = args.tooling.verifiedFacts
-    .map((fact) => compact(fact.replace(/\s+/g, " ").trim(), 320))
+    .map((fact, index) => {
+      const sourceTitle = args.tooling.sources[index]?.title?.trim() ?? "";
+      let cleaned = fact
+        .replace(/&nbsp;|&#160;/gi, " ")
+        .replace(/&amp;/gi, "&")
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;|&apos;/gi, "'")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (sourceTitle && cleaned.includes(sourceTitle)) {
+        const firstTitleIndex = cleaned.indexOf(sourceTitle);
+        const beforeTitle = cleaned.slice(0, firstTitleIndex + sourceTitle.length);
+        const afterTitle = cleaned
+          .slice(firstTitleIndex + sourceTitle.length)
+          .split(sourceTitle)
+          .join(" ");
+        cleaned = `${beforeTitle} ${afterTitle}`.replace(/\s+/g, " ").trim();
+      }
+      return compact(cleaned, preserveLongForm ? 1400 : 320);
+    })
     .filter(Boolean)
     .slice(0, 6);
   const sources = args.tooling.sources
