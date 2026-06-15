@@ -1773,7 +1773,12 @@ function evidenceFamily(evidence: GeneralKnowledgeEvidence) {
 
 function isLowTrustGenericSource(url: string) {
   try {
-    const host = new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
+    const path = normalizeLooseText(parsed.pathname);
+    if (/\b(?:driver|drivers|download|downloads|confirmation|installer|exe|support|login|forum)\b/.test(path)) {
+      return true;
+    }
     return [
       "scribd.com",
       "slideshare.net",
