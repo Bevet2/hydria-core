@@ -901,7 +901,7 @@ test("student chat adapter routes bounded strategic decisions to the light local
   assert.match(prompt, /minimal reversible path/i);
 });
 
-test("student chat adapter falls back from a timed-out 14B reasoner to Qwen 3B before static failure", async () => {
+test("student chat adapter routes bounded budget and deadline changes directly to Qwen 3B", async () => {
   const attemptedModels: string[] = [];
   const state = createInitialState();
   const question =
@@ -926,9 +926,6 @@ test("student chat adapter falls back from a timed-out 14B reasoner to Qwen 3B b
     async testPrompt(_prompt, _system, options) {
       const model = options?.modelName ?? "";
       attemptedModels.push(model);
-      if (model === "qwen2.5:14b") {
-        throw new Error("14B timeout");
-      }
       return {
         provider: "ollama",
         model,
@@ -965,9 +962,53 @@ test("student chat adapter falls back from a timed-out 14B reasoner to Qwen 3B b
     knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata
   });
 
-  assert.deepEqual(attemptedModels, ["qwen2.5:14b", "qwen2.5:3b"]);
+  assert.deepEqual(attemptedModels, ["qwen2.5:3b"]);
   assert.equal(result.model, "qwen2.5:3b");
   assert.match(result.answer.answer, /perimetre|livrables/i);
+});
+
+test("student chat adapter falls back from an unavailable 14B route to Qwen 3B", async () => {
+  const attemptedModels: string[] = [];
+  const input = {
+    ...buildInput(),
+    category: "other" as const,
+    routingQuestion: "Explain consistency model tradeoffs for a payment ledger migration.",
+    userMessage: "Explain consistency model tradeoffs for a payment ledger migration.",
+    question: "Explain consistency model tradeoffs for a payment ledger migration.",
+    runtimeMode: "direct" as const,
+    requiresExternalGrounding: false
+  };
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "mistral:7b";
+    },
+    async testPrompt(_prompt, _system, options) {
+      const model = options?.modelName ?? "";
+      attemptedModels.push(model);
+      if (model === "qwen2.5:14b") {
+        throw new Error("14B timeout");
+      }
+      return {
+        provider: "ollama",
+        model,
+        response: JSON.stringify({
+          modelRole: "student",
+          answer:
+            "Use strong consistency for ledger writes and eventual consistency for derived read models, then revise only if measured availability requirements demand it.",
+          key_points: ["Consistency tradeoff"],
+          assumptions: [],
+          confidence: 84
+        }),
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer(input);
+
+  assert.deepEqual(attemptedModels, ["qwen2.5:14b", "qwen2.5:3b"]);
+  assert.equal(result.model, "qwen2.5:3b");
+  assert.match(result.answer.answer, /strong consistency/i);
 });
 
 test("student chat adapter routes strategic setup turns to the fast local path", async () => {

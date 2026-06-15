@@ -263,7 +263,11 @@ function containsBoundedStrategicDecisionSignal(input: StudentChatModelRoutingIn
     /\b(?:tu recommandes|recommandes quoi|decision maintenant|d[eé]cision maintenant|what should|should we|choose|choisis|tranche|recommend)\b/.test(
       text
     );
-  if (!directDecisionAsk) {
+  const explicitPlanChangeAsk =
+    /\b(?:que dois-je (?:changer|faire|prioriser)|quoi (?:changer|faire|prioriser)|what do i (?:change|do|prioritize))\b/.test(
+      text
+    );
+  if (!directDecisionAsk && !explicitPlanChangeAsk) {
     return false;
   }
   const context = normalizeText([
@@ -277,7 +281,11 @@ function containsBoundedStrategicDecisionSignal(input: StudentChatModelRoutingIn
   const boundedIncident =
     /\b(?:incident|500|deploy|deploiement|deploi)\b/.test(context) &&
     /\b(?:paiement|payment|checkout|risque|risk)\b/.test(context);
-  return boundedOnPrem || boundedIncident;
+  const boundedPlanChange =
+    /\bbudget\b/.test(context) &&
+    /\b(?:deadline|date|delai|echeance)\b/.test(context) &&
+    /\b(?:tombe|baisse|reduit|avance|raccourcit|change|changed|drops?|reduced?|moved|earlier)\b/.test(context);
+  return boundedOnPrem || boundedIncident || boundedPlanChange;
 }
 
 function buildFallbacks(primary: string, role: StudentChatSpecialistRole) {
