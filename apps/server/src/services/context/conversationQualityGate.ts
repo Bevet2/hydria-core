@@ -33,9 +33,9 @@ const GENERIC_PATTERNS = [
 const ABSTENTION_PATTERN =
   /\b(?:cannot verify|could not verify|cannot confirm|no reliable source|i cannot answer|je ne peux pas verifier|impossible de verifier|source fiable|je ne peux pas repondre)\b/i;
 const RECOMMENDATION_REQUEST_PATTERN =
-  /\b(?:recommandes?|recommande|choisis|choisir|decision|d[eé]cision|quoi faire|recommend|choose|decision|what should|final)\b/i;
+  /(?:\b(?:recommandes?|recommande|choisis|choisir|decision|d[eé]cision|quoi faire|recommend|choose|decision|what should|final)\b|\b(?:donne|formule|adapte|revise|give|provide|adapt|revise)\b.{0,40}\b(?:recommandation|recommendation)\b)/i;
 const RECOMMENDATION_MARKER =
-  /\b(?:recommend|recommande|recommander|propose|proposer|proposal|decision|d[eé]cision|choose|choisis|choisir|option|go with|partir sur|prioritise|priorise|tranche|trancher|arbitrate|arbitrer|arbitre)\b/i;
+  /\b(?:recommend|recommande|recommander|recommendations?|recommandations?|propose|proposer|proposal|decision|d[eé]cision|choose|choisis|choisir|option|go with|partir sur|prioritise|priorise|tranche|trancher|arbitrate|arbitrer|arbitre)\b/i;
 const NATURAL_COMMITMENT_MARKER =
   /\b(?:i would (?:keep|reject|choose|answer|allow|make)|je (?:garde|refuse|traite|choisis|recommande|propose|fais primer)|j[' ]?accepte)\b/i;
 const CONCRETE_ACTION_MARKER =

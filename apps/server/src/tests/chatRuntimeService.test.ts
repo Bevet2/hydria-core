@@ -1695,6 +1695,47 @@ test("chat runtime recalls structured project state without calling external res
   assert.equal(adapterMessages.some((message) => /Rappelle-moi/i.test(message)), false);
 });
 
+test("chat runtime uses the model when memory recall also asks for a recommendation", async () => {
+  const adapterMessages: string[] = [];
+  const service = new ChatRuntimeService({
+    async answer(input) {
+      adapterMessages.push(input.userMessage);
+      return buildAdapterResult(
+        /Rappelle-moi/i.test(input.userMessage)
+          ? "Projet Orion, equipe de 4 personnes, ancien budget de 50000 euros, budget actuel de 20000 euros et echeance actuelle au 31 aout. Ma recommandation est de limiter la premiere livraison au perimetre essentiel, car le budget reduit et la date avancee imposent un plan plus court."
+          : "Je revise le plan: je priorise maintenant le livrable essentiel parce que le budget et le delai ont baisse."
+      );
+    }
+  });
+
+  const first = await service.sendMessage({
+    message:
+      "Je prepare le projet Orion. Equipe de 4 personnes, budget 50000 euros, date limite au 15 octobre. Garde ces informations."
+  });
+  await service.sendMessage({
+    sessionId: first.sessionId,
+    message: "Finalement, budget 20000 euros et date au 31 aout. Adapte ta recommandation."
+  });
+  const recallAndRecommend = await service.sendMessage({
+    sessionId: first.sessionId,
+    message:
+      "Rappelle-moi le nom du projet, l'equipe, l'ancien budget, le budget actuel et la date actuelle, puis donne ta recommandation."
+  });
+
+  assert.notEqual(recallAndRecommend.generation.model, "conversation_memory");
+  assert.match(recallAndRecommend.answer.answer, /recommandation/i);
+  assert.match(recallAndRecommend.answer.answer, /Orion/);
+  assert.match(recallAndRecommend.answer.answer, /50000/);
+  assert.match(recallAndRecommend.answer.answer, /20000/);
+  assert.match(recallAndRecommend.answer.answer, /31 aout/i);
+  assert.equal(
+    recallAndRecommend.conversationQuality.passed,
+    true,
+    JSON.stringify(recallAndRecommend.conversationQuality.issues)
+  );
+  assert.equal(adapterMessages.some((message) => /donne ta recommandation/i.test(message)), true);
+});
+
 test("chat runtime retries an answer that ignores an explicit minimum word count", async () => {
   let calls = 0;
   const developedAnswer = [

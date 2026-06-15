@@ -16,7 +16,7 @@ export type ClarificationPolicyResult = {
 };
 
 const RECOMMENDATION_REQUEST_PATTERN =
-  /\b(?:recommandes?|recommande|choisis|choisir|decision|d[eé]cision|quoi faire|recommend|choose|decision|what should|final)\b/i;
+  /(?:\b(?:recommandes?|recommande|choisis|choisir|decision|d[eé]cision|quoi faire|recommend|choose|decision|what should|final)\b|\b(?:donne|formule|adapte|revise|give|provide|adapt|revise)\b.{0,40}\b(?:recommandation|recommendation)\b)/i;
 const RISKY_ACTION_PATTERN =
   /\b(?:delete|drop|rollback|migrate production|irreversible|wire money|rotate keys|revoke|supprimer|effacer|rollback|migration prod|irreversible|paiement|revoquer)\b/i;
 const CRITICAL_MISSING_PATTERN =

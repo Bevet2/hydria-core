@@ -131,7 +131,7 @@ const CHANGE_PATTERN =
 const CONTRADICTION_PATTERN =
   /\b(?:ignore ce que|ignore what|contrairement|correction|actually|turns out|en fait|not anymore|no longer|plus de|n[' ]?est plus|is not|isn't|there is now|there are now|il y a bien|il n[' ]?y a pas)\b/i;
 const DECISION_REQUEST_PATTERN =
-  /\b(?:recommandes?|recommande|choisis|choisir|decision|d(?:e|é)cide|donc tu|finale|quoi faire|recommend|choose|decision|what should|so what|final|rollback|no rollback|prochain diagnostic|next concrete|next step)\b/i;
+  /(?:\b(?:recommandes?|recommande|choisis|choisir|decision|d(?:e|é)cide|donc tu|finale|quoi faire|recommend|choose|decision|what should|so what|final|rollback|no rollback|prochain diagnostic|next concrete|next step)\b|\b(?:donne|formule|adapte|revise|give|provide|adapt|revise)\b.{0,40}\b(?:recommandation|recommendation)\b)/i;
 const QUESTION_PATTERN = /\?|(?:\b(?:quoi|comment|pourquoi|quel|quelle|what|how|why|which)\b)/i;
 const CONVERSATION_RECALL_PATTERN =
   /\b(?:rappelle(?:-moi)?|souviens(?:-toi)?|tu te souviens|d[' ]?apres ce que je t[' ]?ai dit|dans cette conversation|plus haut|precedent|pr[eÃ©]c[eÃ©]dent|ancien budget|budget actuel|date actuelle|echeance actuelle|[eÃ©]ch[eÃ©]ance actuelle|what did i say|do you remember|remind me|earlier|previous budget|current budget|current deadline)\b/i;

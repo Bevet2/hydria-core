@@ -16,6 +16,7 @@ import {
   decideMultiTurnAnswerPolicy,
   type MultiTurnAnswerPolicyResult
 } from "./context/multiTurnAnswerPolicy.js";
+import { recommendationRequested } from "./context/clarificationPolicy.js";
 import type { StudentChatAdapter, StudentChatAdapterResult } from "./studentChatAdapter.js";
 import { defaultToolRoutingDecision, type QuestionCategory, type ToolRoutingDecision } from "../types/arena.js";
 import type {
@@ -1497,8 +1498,13 @@ function buildRuntimeProductKnowledgeDraft(args: {
 }
 
 function isDirectStrategicDecisionRequest(message: string) {
-  return /\b(?:tu recommandes|recommandes quoi|decision maintenant|d[eé]cision maintenant|what should|should we|choose|choisis|tranche|recommande moi|recommend)\b/i.test(
-    message
+  return (
+    /\b(?:tu recommandes|recommandes quoi|decision maintenant|d[eé]cision maintenant|what should|should we|choose|choisis|tranche|recommande moi|recommend)\b/i.test(
+      message
+    ) ||
+    /\b(?:donne|formule|adapte|revise|give|provide|adapt|revise)\b.{0,40}\b(?:recommandation|recommendation)\b/i.test(
+      message
+    )
   );
 }
 
@@ -1934,7 +1940,7 @@ function buildConversationMemoryRecallAnswer(args: {
   conversationState: ConversationState;
   newUserMessage: string;
 }): StudentAnswer | null {
-  if (!isLikelyMemoryRecall(args.newUserMessage)) {
+  if (!isLikelyMemoryRecall(args.newUserMessage) || recommendationRequested(args.newUserMessage)) {
     return null;
   }
 
