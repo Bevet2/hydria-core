@@ -1736,6 +1736,45 @@ test("chat runtime uses the model when memory recall also asks for a recommendat
   assert.equal(adapterMessages.some((message) => /donne ta recommandation/i.test(message)), true);
 });
 
+test("chat runtime repairs a timed-out memory-grounded recommendation from active constraints", async () => {
+  const service = new ChatRuntimeService({
+    async answer() {
+      return {
+        ...buildAdapterResult(
+          "Je n'ai pas reussi a generer une reponse fiable pour ce tour. Reformule la question ou donne un peu plus de contexte."
+        ),
+        provider: "fallback" as const,
+        model: "qwen2.5:3b",
+        validationIssues: ["student_chat_generation_failed", "qwen2.5:3b: timeout"]
+      };
+    }
+  });
+
+  const first = await service.sendMessage({
+    message:
+      "Je prepare le projet Orion. Equipe de 4 personnes, budget 50000 euros, date limite au 15 octobre. Garde ces informations."
+  });
+  await service.sendMessage({
+    sessionId: first.sessionId,
+    message: "Finalement, budget 20000 euros et date au 31 aout. Conserve cette mise a jour."
+  });
+  const response = await service.sendMessage({
+    sessionId: first.sessionId,
+    message:
+      "Rappelle-moi le nom du projet, l'equipe, l'ancien budget, le budget actuel et la date actuelle, puis donne ta recommandation."
+  });
+
+  assert.equal(response.generation.provider, "tool");
+  assert.equal(response.generation.model, "runtime_strategic_decision_repair");
+  assert.match(response.answer.answer, /Orion/);
+  assert.match(response.answer.answer, /50000 euros/);
+  assert.match(response.answer.answer, /20000 euros/);
+  assert.match(response.answer.answer, /31 aout/);
+  assert.match(response.answer.answer, /livrable essentiel et reversible/i);
+  assert.doesNotMatch(response.answer.answer, /pas reussi|reformule/i);
+  assert.equal(response.conversationQuality.passed, true);
+});
+
 test("chat runtime retries an answer that ignores an explicit minimum word count", async () => {
   let calls = 0;
   const developedAnswer = [

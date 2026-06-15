@@ -1667,6 +1667,8 @@ function preserveStrategicDecisionTerms(args: {
 }
 
 const STRATEGIC_REPAIR_ISSUES = new Set([
+  "generic_answer",
+  "unnecessary_abstention",
   "ignored_added_constraint",
   "ignored_context_change",
   "active_constraint_contradicted",
@@ -1738,6 +1740,44 @@ function normalizeFrenchStrategicPhrases(answer: string, language: ConversationS
     .replace(/\brollback\b/gi, "retour arriere")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function buildMemoryGroundedDecisionRepair(args: {
+  conversationState: ConversationState;
+  activeConstraintCapsule: ActiveConstraintCapsule;
+  userMessage: string;
+  language: ConversationState["language"];
+}) {
+  const memoryRecall = buildConversationMemoryRecallAnswer({
+    conversationState: args.conversationState,
+    newUserMessage: args.userMessage,
+    allowRecommendationRequest: true
+  });
+  if (!memoryRecall || !recommendationRequested(args.userMessage)) {
+    return null;
+  }
+
+  const normalizedConstraints = args.activeConstraintCapsule.topConstraints.map(normalizeText);
+  const hasBudget = normalizedConstraints.some((constraint) => constraint.startsWith("budget:"));
+  const hasDeadline = normalizedConstraints.some((constraint) => constraint.startsWith("deadline:"));
+  const hasTeam = normalizedConstraints.some((constraint) => constraint.startsWith("team:"));
+  const isFrench = args.language !== "en";
+
+  const recommendation =
+    hasBudget && hasDeadline
+      ? isFrench
+        ? "Ma recommandation est de reduire le perimetre a un livrable essentiel et reversible, puis de classer le reste par valeur et effort, parce que le budget actuel et l'echeance avancee limitent ce que l'equipe peut livrer de facon fiable. Verrouille d'abord le resultat indispensable, son responsable et un jalon de validation. Reevalue ce choix si le budget, l'equipe ou la date change."
+        : "My recommendation is to reduce scope to one essential, reversible deliverable, then rank the remainder by value and effort, because the active budget and earlier deadline limit what the team can deliver reliably. Lock the required outcome, owner, and validation milestone first. Reevaluate if the budget, team, or deadline changes."
+      : isFrench
+        ? `Ma recommandation est de choisir l'option la plus reversible compatible avec les contraintes actives${hasTeam ? " et la capacite de l'equipe" : ""}, puis de valider un premier jalon avant d'elargir le perimetre. Reevalue si une contrainte forte change.`
+        : `My recommendation is to choose the most reversible option compatible with the active constraints${hasTeam ? " and team capacity" : ""}, then validate one milestone before expanding scope. Reevaluate if a strong constraint changes.`;
+
+  return {
+    ...memoryRecall,
+    answer: `${memoryRecall.answer} ${recommendation}`.replace(/\s+/g, " ").trim(),
+    key_points: [...memoryRecall.key_points, "Constraint-grounded decision repair"].slice(0, 6),
+    confidence: Math.max(memoryRecall.confidence, 82)
+  };
 }
 
 function buildStrategicDecisionQualityRepair(args: {
@@ -1820,6 +1860,16 @@ function buildStrategicDecisionQualityRepair(args: {
       key_points: [...args.answer.key_points, "Incident containment repair"].slice(0, 6),
       confidence: Math.max(args.answer.confidence, 80)
     };
+  }
+
+  const memoryGroundedRepair = buildMemoryGroundedDecisionRepair({
+    conversationState: args.conversationState,
+    activeConstraintCapsule: args.activeConstraintCapsule,
+    userMessage: args.userMessage,
+    language: args.language
+  });
+  if (memoryGroundedRepair) {
+    return memoryGroundedRepair;
   }
 
   let repaired = normalizeFrenchStrategicPhrases(args.answer.answer, args.language);
@@ -1939,8 +1989,12 @@ function needsResolvedCorrectionTaskRetry(args: {
 function buildConversationMemoryRecallAnswer(args: {
   conversationState: ConversationState;
   newUserMessage: string;
+  allowRecommendationRequest?: boolean;
 }): StudentAnswer | null {
-  if (!isLikelyMemoryRecall(args.newUserMessage) || recommendationRequested(args.newUserMessage)) {
+  if (
+    !isLikelyMemoryRecall(args.newUserMessage) ||
+    (!args.allowRecommendationRequest && recommendationRequested(args.newUserMessage))
+  ) {
     return null;
   }
 
