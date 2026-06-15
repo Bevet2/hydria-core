@@ -614,6 +614,13 @@ function shouldProbeKnowledgeAlongsideTool(args: {
   tooling: ChatToolMetadata;
   evidenceRequirement: EvidenceRequirementPlan;
 }) {
+  if (
+    args.tooling.used &&
+    args.tooling.routing.toolType === "research" &&
+    args.tooling.sources.length >= 2
+  ) {
+    return false;
+  }
   return (
     args.tooling.routing.toolType === "research" &&
     args.tooling.routing.intent === "fact_check" &&
@@ -2131,6 +2138,7 @@ function isQualityTrustedDeterministicRuntimeModel(model: string) {
     "conversation_memory",
     "runtime_product_knowledge",
     "research_recent_updates",
+    "research_multi_source_fallback",
     "weather",
     "finance",
     "web",
@@ -2383,6 +2391,63 @@ function buildRecentUpdatesToolDraft(args: {
     displayName: "Verified research feed answer",
     routingReason: "Recent-updates research returned dated official feed entries; no local model call was needed.",
     pipeline: ["tool_routing:research", "official_feed_retrieval", "deterministic_recap"]
+  });
+}
+
+function buildResearchEvidenceFallbackDraft(args: {
+  tooling: ChatToolMetadata;
+  category: QuestionCategory;
+  language: ConversationState["language"];
+  routingQuestion: string;
+}): ChatDraft | null {
+  if (
+    !args.tooling.used ||
+    args.tooling.routing.toolType !== "research" ||
+    args.tooling.routing.intent !== "fact_check" ||
+    args.tooling.verifiedFacts.length === 0 ||
+    args.tooling.sources.length < 2
+  ) {
+    return null;
+  }
+
+  const effectiveLanguage = extractedToolLanguage(args.tooling) ?? args.language;
+  const isEnglish = effectiveLanguage === "en";
+  const facts = args.tooling.verifiedFacts
+    .map((fact) => compact(fact.replace(/\s+/g, " ").trim(), 320))
+    .filter(Boolean)
+    .slice(0, 6);
+  const sources = args.tooling.sources
+    .slice(0, 5)
+    .map((source) => `${source.title} (${source.url})`);
+  const answerText = [
+    isEnglish
+      ? "The local synthesis model was unavailable, so here are the verified multi-source findings without unsupported extrapolation:"
+      : "Le modele local de synthese etait indisponible; voici donc les elements verifies issus de plusieurs sources, sans extrapolation non soutenue :",
+    ...facts.map((fact) => `- ${fact}`),
+    sources.length > 0
+      ? `${isEnglish ? "Sources" : "Sources"}: ${sources.join(" ; ")}`
+      : ""
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return buildDeterministicRuntimeDraft({
+    answer: {
+      modelRole: "student",
+      answer: answerText,
+      key_points: isEnglish
+        ? ["Verified multi-source evidence", "No unsupported synthesis"]
+        : ["Preuves multi-sources verifiees", "Aucune synthese non soutenue"],
+      assumptions: [],
+      confidence: args.tooling.sources.length >= 2 ? 88 : 76
+    },
+    category: args.category,
+    routingQuestion: args.routingQuestion,
+    model: "research_multi_source_fallback",
+    displayName: "Verified multi-source fallback",
+    routingReason:
+      "The local synthesis model failed after verified research succeeded; preserve all relevant evidence and citations instead of using an unrelated memory hit.",
+    pipeline: ["tool_routing:research", "multi_source_evidence", "deterministic_source_fallback"]
   });
 }
 
@@ -3032,15 +3097,25 @@ export class ChatRuntimeService {
     }
     let usedRetry = draft.generation.usedRetry;
 
-    if (draft.generation.provider === "fallback" && knowledgeRetrieval.used) {
-      const retrievalFallbackDraft = buildKnowledgeRetrievalFallbackDraft({
-        knowledgeRetrieval,
+    if (draft.generation.provider === "fallback") {
+      const researchEvidenceFallbackDraft = buildResearchEvidenceFallbackDraft({
+        tooling,
         category,
         routingQuestion: draft.routingQuestion,
         language: conversationState.language
       });
-      if (retrievalFallbackDraft) {
-        draft = retrievalFallbackDraft;
+      const retrievalFallbackDraft =
+        !researchEvidenceFallbackDraft && knowledgeRetrieval.used
+          ? buildKnowledgeRetrievalFallbackDraft({
+              knowledgeRetrieval,
+              category,
+              routingQuestion: draft.routingQuestion,
+              language: conversationState.language
+            })
+          : null;
+      const governedFallbackDraft = researchEvidenceFallbackDraft ?? retrievalFallbackDraft;
+      if (governedFallbackDraft) {
+        draft = governedFallbackDraft;
         conversationQuality = this.analyzeQuality({
           runtimeMode,
           conversationState,
@@ -3151,6 +3226,7 @@ export class ChatRuntimeService {
       conversationQuality.issues.includes("off_topic_direct_answer");
     const shouldAttemptSourceBackedRepair =
       !knowledgeRetrieval.used &&
+      !isQualityTrustedDeterministicRuntimeModel(draft.generation.model) &&
       (runtimeMode === "direct" ||
         draft.generation.provider === "fallback" ||
         forceSourceBackedRepair ||

@@ -237,7 +237,11 @@ test("chat runtime injects governed knowledge into model prompt and public trace
         }
       },
       undefined,
-      undefined,
+      {
+        async tryExecute() {
+          return null;
+        }
+      },
       null,
       null,
       knowledgeRetrievalService

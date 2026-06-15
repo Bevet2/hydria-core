@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { ChatRuntimeService } from "../services/chatRuntimeService.js";
 import type { StudentChatAdapterInput, StudentChatAdapterResult } from "../services/studentChatAdapter.js";
 import { defaultToolRoutingDecision, type ToolRoutingDecision } from "../types/arena.js";
+import type { ChatKnowledgeRetrievalMetadata } from "../types/knowledgeRetrieval.js";
 import type { StudentAnswer } from "../types/student.js";
 
 function buildAnswer(answer: string): StudentAnswer {
@@ -375,6 +376,119 @@ test("chat runtime synthesizes from source-backed facts when the local model fal
   assert.equal(response.generation.model, "research_fact_check");
   assert.equal(response.generation.usedStaticFallback, false);
   assert.equal(response.conversationQuality.passed, true);
+});
+
+test("chat runtime prioritizes verified multi-source research over unrelated memory on model fallback", async () => {
+  let retrievalCalls = 0;
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return {
+          ...buildAdapterResult(
+            "Je n'ai pas reussi a generer une reponse fiable pour ce tour. Reformule la question."
+          ),
+          provider: "fallback" as const,
+          model: "qwen2.5:14b",
+          validationIssues: ["student_chat_generation_failed", "qwen2.5:14b: timeout"]
+        };
+      }
+    },
+    undefined,
+    {
+      async tryExecute(routing: ToolRoutingDecision) {
+        if (routing.toolType !== "research" || routing.intent !== "fact_check") {
+          return null;
+        }
+        return {
+          toolType: "research" as const,
+          intent: "fact_check",
+          summary: ["Comparaison sourcee PostgreSQL et MySQL."],
+          verifiedFacts: [
+            "PostgreSQL: moteur relationnel extensible, adapte aux requetes complexes et aux contraintes avancees.",
+            "MySQL: moteur relationnel largement deploye, avec un ecosysteme mature pour les applications web."
+          ],
+          sources: [
+            {
+              title: "PostgreSQL documentation",
+              url: "https://www.postgresql.org/docs/",
+              snippet: "Official PostgreSQL documentation.",
+              excerpt: "PostgreSQL is an object-relational database system.",
+              publishedAt: null,
+              modifiedAt: null,
+              effectiveDate: null,
+              dateSource: null,
+              retrievalChannel: "live" as const,
+              retrievalOrigin: "known_endpoint" as const,
+              retrievalEngine: "known_endpoint" as const
+            },
+            {
+              title: "MySQL documentation",
+              url: "https://dev.mysql.com/doc/",
+              snippet: "Official MySQL documentation.",
+              excerpt: "MySQL documentation and reference manuals.",
+              publishedAt: null,
+              modifiedAt: null,
+              effectiveDate: null,
+              dateSource: null,
+              retrievalChannel: "live" as const,
+              retrievalOrigin: "known_endpoint" as const,
+              retrievalEngine: "known_endpoint" as const
+            }
+          ],
+          confidenceScore: 0.9,
+          resultLabel: "PostgreSQL vs MySQL"
+        };
+      }
+    },
+    null,
+    null,
+    {
+      async retrieve(): Promise<ChatKnowledgeRetrievalMetadata> {
+        retrievalCalls += 1;
+        return {
+          route: "used",
+          used: true,
+          query: "PostgreSQL vs MySQL",
+          category: "technical_explanation",
+          hitCount: 1,
+          hits: [
+            {
+              objectId: "unrelated-watcher",
+              title: "Code and runtime release source pack",
+              summary: "Creates acquisition tasks for Node.js, Docker, PostgreSQL, and Kubernetes.",
+              content: "Watcher acquisition task.",
+              state: "active",
+              knowledgeClass: "stable",
+              domain: "watchers",
+              category: "technical_explanation",
+              confidence: 0.9,
+              riskLevel: "low",
+              score: 0.8,
+              matchedTerms: ["postgresql"],
+              sourceUris: ["storage/learning/hydria-watchers-v1.json"],
+              sourceLabels: ["watcher"]
+            }
+          ],
+          guidance: [],
+          issues: []
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({
+    message: "Compare PostgreSQL et MySQL avec plusieurs sources fiables."
+  });
+
+  assert.equal(retrievalCalls, 0);
+  assert.equal(response.knowledgeRetrieval.route, "skipped_tool_route");
+  assert.equal(response.generation.provider, "tool");
+  assert.equal(response.generation.model, "research_multi_source_fallback");
+  assert.match(response.answer.answer, /PostgreSQL/i);
+  assert.match(response.answer.answer, /MySQL/i);
+  assert.match(response.answer.answer, /postgresql\.org\/docs/i);
+  assert.match(response.answer.answer, /dev\.mysql\.com\/doc/i);
+  assert.doesNotMatch(response.answer.answer, /release source pack|watcher acquisition/i);
 });
 
 test("chat runtime repairs wrong-language source-backed concept answers from verified facts", async () => {
