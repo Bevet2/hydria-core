@@ -669,7 +669,10 @@ function selectBaseStudentChatModelRoute(input: StudentChatModelRoutingInput): S
     const reason =
       "Bounded strategic decision with explicit active constraints; use the light local reasoner with decision guidance instead of the slow 14B CPU path.";
     const budget = buildRuntimeBudget("deep_reasoning", reason);
-    const timeoutMs = Math.min(budget.timeoutMs, 45000);
+    const timeoutMs = Math.max(
+      budget.timeoutMs,
+      Math.min(env.MODEL_RUNTIME_DEEP_TIMEOUT_MS, 120000)
+    );
     return {
       capabilityId: "qwen-3b-standard-light",
       displayName: "Qwen 3B Strategic Light",
@@ -683,8 +686,8 @@ function selectBaseStudentChatModelRoute(input: StudentChatModelRoutingInput): S
         ...budget,
         timeoutMs,
         maxLatencyMs: timeoutMs,
-        maxOutputTokens: Math.min(budget.maxOutputTokens, 140),
-        fallbackDepth: 1,
+        maxOutputTokens: Math.max(budget.maxOutputTokens, 220),
+        fallbackDepth: 0,
         concurrencyKey: "fast_local_chat"
       }
     };

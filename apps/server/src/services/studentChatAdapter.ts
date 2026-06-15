@@ -267,6 +267,20 @@ function formatCompactCapsule(capsule: ActiveConstraintCapsule) {
     .join("\n");
 }
 
+function shouldUseCompactConstraintDecisionPrompt(
+  input: StudentChatAdapterInput,
+  route: StudentChatModelRoute
+) {
+  return (
+    input.runtimeMode === "conversation" &&
+    route.modelName === "qwen2.5:3b" &&
+    route.specialistRole === "deep_reasoner" &&
+    !input.requiresExternalGrounding &&
+    !input.tooling.used &&
+    !input.knowledgeRetrieval.used
+  );
+}
+
 function expectedLanguage(capsule: ActiveConstraintCapsule) {
   if (capsule.language === "fr") {
     return "French";
@@ -527,6 +541,29 @@ export function buildStudentChatPrompt(input: StudentChatAdapterInput, route = s
         "Rewrite the answer once, using the active conversation context and the current user message."
       ]
     : [];
+
+  if (shouldUseCompactConstraintDecisionPrompt(input, route)) {
+    return [
+      `Language: ${expectedLanguage(input.activeConstraintCapsule)}`,
+      `Language rule: answer only in ${expectedLanguage(input.activeConstraintCapsule)} unless the user explicitly asks for another language.`,
+      "Use only the active constraint capsule, the current user message, and the answer policy below.",
+      "Do not reconstruct or repeat previous assistant answers.",
+      ...responseLength.guidance,
+      ...maybePlainRouteGuidance(route),
+      "ActiveConstraintCapsule:",
+      formatCompactCapsule(input.activeConstraintCapsule),
+      `Answer mode: ${input.answerPolicy.answerMode}`,
+      input.answerPolicy.guidance
+        ? `Answer policy: ${compact(input.answerPolicy.guidance, 320)}`
+        : "",
+      ...retryLines,
+      "Current user message:",
+      input.userMessage,
+      "Return plain final text only."
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
 
   return [
     `Language: ${expectedLanguage(input.activeConstraintCapsule)}`,
@@ -882,6 +919,7 @@ function systemPromptForRoute(route: StudentChatModelRoute) {
 
 function keepAliveForRoute(route: StudentChatModelRoute) {
   if (
+    route.modelName === "qwen2.5:3b" ||
     route.runtimeBudget.profile === "stable_fact_chat" ||
     route.runtimeBudget.profile === "writing_chat" ||
     route.runtimeBudget.profile === "standard_light_chat" ||

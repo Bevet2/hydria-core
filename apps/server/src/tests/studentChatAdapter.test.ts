@@ -891,14 +891,18 @@ test("student chat adapter routes bounded strategic decisions to the light local
   assert.equal(result.specialist.role, "deep_reasoner");
   assert.equal(result.specialist.pipeline.some((step) => step.includes("strategic_light_reasoner:qwen2.5:3b")), true);
   assert.equal(result.runtimeBudget?.profile, "deep_reasoning");
-  assert.equal(result.runtimeBudget?.fallbackDepth, 1);
-  assert.equal(result.runtimeBudget?.maxOutputTokens, 140);
+  assert.equal(result.runtimeBudget?.fallbackDepth, 0);
+  assert.equal((result.runtimeBudget?.timeoutMs ?? 0) >= 90000, true);
+  assert.equal((result.runtimeBudget?.maxOutputTokens ?? 0) >= 220, true);
   assert.match(result.answer.answer, /on-prem/i);
   assert.equal(usedFormat, false);
   assert.match(system, /exact term on-prem/i);
   assert.match(prompt, /exact term on-prem/i);
   assert.match(system, /smallest reversible option/i);
   assert.match(prompt, /minimal reversible path/i);
+  assert.doesNotMatch(prompt, /AgenticOrchestrationPlan:/i);
+  assert.doesNotMatch(prompt, /Recent conversation turns:/i);
+  assert.equal(prompt.length < 3000, true);
 });
 
 test("student chat adapter routes bounded budget and deadline changes directly to Qwen 3B", async () => {
