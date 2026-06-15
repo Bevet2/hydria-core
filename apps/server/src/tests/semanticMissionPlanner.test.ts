@@ -47,6 +47,10 @@ test("semantic frame resolves public rules questions and rejects homonyms", () =
   });
 
   const wrongSense = sourceMatchesSemanticFrame(frame, "Bowling : nom de famille britannique.");
+  const wrongSourceType = sourceMatchesSemanticFrame(
+    frame,
+    "YouTube channel videos: bowling rules, gameplay, scoring, strikes and spares playlist."
+  );
   const rightSense = sourceMatchesSemanticFrame(
     frame,
     "Une partie de bowling compte dix carreaux. Chaque joueur lance deux boules, avec un comptage des points pour les strikes et les spares."
@@ -55,6 +59,7 @@ test("semantic frame resolves public rules questions and rejects homonyms", () =
   assert.equal(frame.intent, "rules");
   assert.ok(frame.searchModifiers.includes("regles"));
   assert.equal(wrongSense.passed, false);
+  assert.equal(wrongSourceType.passed, false);
   assert.equal(rightSense.passed, true);
 });
 

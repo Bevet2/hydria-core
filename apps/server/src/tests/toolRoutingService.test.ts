@@ -170,9 +170,22 @@ test("tool router routes simple stable concept explanations to source-backed res
   assert.equal(decision.extractedArgs.subject, "API");
 });
 
+test("tool router keeps French language on what-is concept lookups", () => {
+  const decision = service.route({
+    question: "Qu'est-ce que NVIDIA ?",
+    category: "other"
+  });
+
+  assert.equal(decision.toolRequired, true);
+  assert.equal(decision.toolType, "research");
+  assert.equal(decision.extractedArgs.subject, "NVIDIA");
+  assert.equal(decision.extractedArgs.language, "fr");
+});
+
 test("tool router routes public rules and gameplay questions to source-backed research", () => {
   const cases = [
     ["Tu connais les r\ufffdgles du bowling ?", "Bowling", "fr"],
+    ["Tu connais les r?gles du bowling ?", "Bowling", "fr"],
     ["Tu connais les règles du bowling ?", "Bowling", "fr"],
     ["Quelles sont les règles des échecs ?", "Échecs", "fr"],
     ["How do you play Go?", "Go", "en"],

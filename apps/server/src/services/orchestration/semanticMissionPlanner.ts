@@ -248,12 +248,19 @@ const RULES_REJECTED_SENSE_TERMS = [
   "film",
   "album",
   "university",
+  "youtube",
+  "channel",
+  "videos",
+  "company",
   "nom de famille",
   "village",
   "commune",
   "film",
   "album",
-  "universite"
+  "universite",
+  "chaine",
+  "videos",
+  "entreprise"
 ];
 
 function unique(values: string[]) {
@@ -613,7 +620,10 @@ export function sourceMatchesSemanticFrame(frame: SemanticFrame, text: string): 
     };
   }
 
-  if (rejectedTerms.length > 0 && matchedExpectedTerms.length === 0) {
+  if (
+    rejectedTerms.length > 0 &&
+    (matchedExpectedTerms.length === 0 || frame.intent === "rules")
+  ) {
     return {
       passed: false,
       score: 0.25,

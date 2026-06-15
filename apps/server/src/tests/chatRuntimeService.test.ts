@@ -497,6 +497,7 @@ test("chat runtime keeps deterministic research fallback in the requested langua
   assert.equal(response.generation.provider, "tool");
   assert.match(response.answer.answer, /dix carreaux/i);
   assert.doesNotMatch(response.answer.answer, /standard game|players roll/i);
+  assert.doesNotMatch(response.answer.answer, /synthese locale|local synthesis/i);
   assert.equal(response.conversationQuality.issues.includes("wrong_language_expected_fr"), false);
 });
 

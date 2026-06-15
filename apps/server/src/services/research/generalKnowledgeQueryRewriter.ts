@@ -102,7 +102,7 @@ function unique(values: string[]) {
 
 export function normalizeLooseText(value: string) {
   return value
-    .replace(/r(?:\ufffd|\u00c3\u00a8|\u00c3\u00a9)gles?/gi, "regles")
+    .replace(/r(?:\?|\ufffd|\u00c3\u00a8|\u00c3\u00a9)gles?/gi, "regles")
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
@@ -146,7 +146,7 @@ export function normalizeOrdinalAliases(value: string) {
 function stripRequestTerms(value: string) {
   return normalizeSpace(
     value
-      .replace(/r(?:\ufffd|\u00c3\u00a8|\u00c3\u00a9)gles?/gi, "regles")
+      .replace(/r(?:\?|\ufffd|\u00c3\u00a8|\u00c3\u00a9)gles?/gi, "regles")
       .replace(/['’]/g, " ")
       .replace(/['\u2018\u2019]/g, " ")
       .replace(/[?]/g, " ")
@@ -304,10 +304,16 @@ export function extractSalientResearchSubject(question: string, fallbackSubject 
         " "
       )
   );
+  const requestedLanguage = /\b(?:explique|comment|sources?|mots?|qu[' ]?est[- ]?ce|c[' ]?est quoi|qui est|qui etait|qui [eé]tait)\b/i.test(
+    question
+  )
+    ? "fr"
+    : "en";
+
   return rewriteGeneralKnowledgeQuery({
     question,
     subject: stripped,
-    language: /\b(?:explique|comment|sources?|mots?)\b/i.test(question) ? "fr" : "en"
+    language: requestedLanguage
   }).canonicalSubject;
 }
 

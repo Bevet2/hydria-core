@@ -2503,6 +2503,56 @@ function buildRecentUpdatesToolDraft(args: {
   });
 }
 
+function rulesEvidenceSentenceScore(sentence: string) {
+  const normalized = normalizeText(sentence);
+  const hits = (
+    normalized.match(
+      /\b(?:rules?|gameplay|scoring|score|points?|frames?|strike|spare|pins?|libert(?:y|ies)|captur(?:e|ing)|ko|setup|objective|regles?|jeu|joueur|lance|quilles?|carreaux?|abat|reserve|lancer|territoire)\b/g
+    ) ?? []
+  ).length;
+  const rejected = /\b(?:youtube|channel|videos?|company|chaine|entreprise)\b/.test(normalized) ? 4 : 0;
+  return hits - rejected;
+}
+
+function cleanEvidenceSentence(sentence: string) {
+  return sentence
+    .replace(/^[A-Za-z0-9 ._'’()-]{1,80}:\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildRulesEvidenceFallbackText(args: {
+  facts: string[];
+  sources: string[];
+  isEnglish: boolean;
+  multiSource: boolean;
+}) {
+  const sentences = args.facts
+    .flatMap((fact) => splitFactualSentences(fact))
+    .map(cleanEvidenceSentence)
+    .filter((sentence) => sentence.length >= 30)
+    .map((sentence, index) => ({
+      sentence,
+      index,
+      score: rulesEvidenceSentenceScore(sentence)
+    }))
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .map((item) => item.sentence);
+  const selected = (sentences.length > 0 ? sentences : args.facts.map(cleanEvidenceSentence))
+    .filter(Boolean)
+    .slice(0, 4);
+  return [
+    args.isEnglish
+      ? `Yes. Based on verified ${args.multiSource ? "sources" : "source"}, here is the useful rules summary:`
+      : `Oui. D'apres ${args.multiSource ? "les sources verifiees" : "la source verifiee"}, voici le resume utile des regles :`,
+    ...selected.map((sentence) => `- ${compactToCompleteSentence(sentence, 320)}`),
+    args.sources.length > 0 ? `Sources: ${args.sources.join(" ; ")}` : ""
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 function buildResearchEvidenceFallbackDraft(args: {
   tooling: ChatToolMetadata;
   category: QuestionCategory;
@@ -2566,17 +2616,29 @@ function buildResearchEvidenceFallbackDraft(args: {
     .slice(0, 5)
     .map((source) => `${source.title} (${source.url})`);
   const multiSource = sources.length >= 2;
-  const answerText = [
-    isEnglish
-      ? `The local synthesis could not be validated, so here are the verified ${multiSource ? "multi-source" : "source"} findings without unsupported extrapolation:`
-      : `La synthese locale n'a pas pu etre validee; voici donc les elements verifies issus ${multiSource ? "de plusieurs sources" : "de la source disponible"}, sans extrapolation non soutenue :`,
-    ...facts.map((fact) => `- ${fact}`),
-    sources.length > 0
-      ? `${isEnglish ? "Sources" : "Sources"}: ${sources.join(" ; ")}`
-      : ""
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const semanticFrame = args.tooling.routing.extractedArgs?.semanticFrame;
+  const isRulesIntent =
+    typeof semanticFrame === "object" &&
+    semanticFrame !== null &&
+    (semanticFrame as { intent?: unknown }).intent === "rules";
+  const answerText = isRulesIntent
+    ? buildRulesEvidenceFallbackText({
+        facts,
+        sources,
+        isEnglish,
+        multiSource
+      })
+    : [
+        isEnglish
+          ? `The local synthesis could not be validated, so here are the verified ${multiSource ? "multi-source" : "source"} findings without unsupported extrapolation:`
+          : `La synthese locale n'a pas pu etre validee; voici donc les elements verifies issus ${multiSource ? "de plusieurs sources" : "de la source disponible"}, sans extrapolation non soutenue :`,
+        ...facts.map((fact) => `- ${fact}`),
+        sources.length > 0
+          ? `${isEnglish ? "Sources" : "Sources"}: ${sources.join(" ; ")}`
+          : ""
+      ]
+        .filter(Boolean)
+        .join("\n");
 
   return buildDeterministicRuntimeDraft({
     answer: {
