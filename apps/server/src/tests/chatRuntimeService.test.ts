@@ -598,6 +598,80 @@ test("chat runtime keeps deterministic research fallback in the requested langua
   assert.equal(response.conversationQuality.issues.includes("wrong_language_expected_fr"), false);
 });
 
+test("chat runtime formats source-backed general facts as a user answer when local synthesis fails", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return {
+          ...buildAdapterResult(
+            "Je n'ai pas reussi a generer une reponse fiable pour ce tour. Reformule la question."
+          ),
+          provider: "fallback" as const,
+          model: "qwen2.5:3b",
+          validationIssues: ["student_chat_generation_failed", "qwen2.5:3b: timeout"]
+        };
+      }
+    },
+    undefined,
+    {
+      async tryExecute(routing: ToolRoutingDecision) {
+        if (routing.toolType !== "research" || routing.intent !== "fact_check") {
+          return null;
+        }
+        return {
+          toolType: "research" as const,
+          intent: "fact_check",
+          summary: ["Recherche factuelle v2: 2 sources pertinentes trouvees pour Photosynthese."],
+          verifiedFacts: [
+            "Photosynthese: la photosynthese est un processus bioenergetique qui permet aux organismes de biosynthetiser de la matiere organique avec l'energie lumineuse, l'eau et le dioxyde de carbone.",
+            "photosynthese: processus effectue par les plantes pour produire de la matiere organique avec l'aide du soleil."
+          ],
+          sources: [
+            {
+              title: "Wikipedia: Photosynthese",
+              url: "https://fr.wikipedia.org/wiki/Photosynth%C3%A8se",
+              snippet: "Processus bioenergetique.",
+              excerpt:
+                "Photosynthese: la photosynthese est un processus bioenergetique qui permet aux organismes de biosynthetiser de la matiere organique.",
+              publishedAt: null,
+              modifiedAt: null,
+              effectiveDate: null,
+              dateSource: null,
+              retrievalChannel: "live" as const,
+              retrievalOrigin: "known_endpoint" as const,
+              retrievalEngine: "known_endpoint" as const
+            },
+            {
+              title: "Wikidata: photosynthese",
+              url: "http://www.wikidata.org/entity/Q11982",
+              snippet: "Processus effectue par les plantes.",
+              excerpt:
+                "photosynthese: processus effectue par les plantes pour produire de la matiere organique avec l'aide du soleil.",
+              publishedAt: null,
+              modifiedAt: null,
+              effectiveDate: null,
+              dateSource: null,
+              retrievalChannel: "live" as const,
+              retrievalOrigin: "known_endpoint" as const,
+              retrievalEngine: "known_endpoint" as const
+            }
+          ],
+          confidenceScore: 0.94,
+          resultLabel: "Photosynthese"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "Qu'est-ce que la photosynthese ?" });
+
+  assert.equal(response.generation.provider, "tool");
+  assert.equal(response.generation.model, "research_multi_source_fallback");
+  assert.match(response.answer.answer, /processus bioenergetique/i);
+  assert.match(response.answer.answer, /Sources:/i);
+  assert.doesNotMatch(response.answer.answer, /synthese locale|local synthesis|reformule/i);
+});
+
 test("chat runtime prioritizes verified multi-source research over unrelated memory on model fallback", async () => {
   let retrievalCalls = 0;
   const service = new ChatRuntimeService(

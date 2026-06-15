@@ -2573,6 +2573,34 @@ function buildRulesEvidenceFallbackText(args: {
     .join("\n");
 }
 
+function buildGeneralEvidenceFallbackText(args: {
+  facts: string[];
+  sources: string[];
+  isEnglish: boolean;
+  multiSource: boolean;
+}) {
+  const selected = args.facts
+    .flatMap((fact) => splitFactualSentences(fact))
+    .map(cleanEvidenceSentence)
+    .map((sentence) => compactToCompleteSentence(sentence, 360))
+    .filter(Boolean)
+    .filter((sentence, index, all) => {
+      const normalized = normalizeText(sentence);
+      return all.findIndex((candidate) => normalizeText(candidate) === normalized) === index;
+    })
+    .slice(0, 4);
+
+  return [
+    args.isEnglish
+      ? `Based on verified ${args.multiSource ? "sources" : "source"}:`
+      : `D'apres ${args.multiSource ? "les sources verifiees" : "la source verifiee"} :`,
+    ...selected.map((sentence) => `- ${sentence}`),
+    args.sources.length > 0 ? `Sources: ${args.sources.join(" ; ")}` : ""
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 function buildResearchEvidenceFallbackDraft(args: {
   tooling: ChatToolMetadata;
   category: QuestionCategory;
@@ -2648,17 +2676,12 @@ function buildResearchEvidenceFallbackDraft(args: {
         isEnglish,
         multiSource
       })
-    : [
-        isEnglish
-          ? `The local synthesis could not be validated, so here are the verified ${multiSource ? "multi-source" : "source"} findings without unsupported extrapolation:`
-          : `La synthese locale n'a pas pu etre validee; voici donc les elements verifies issus ${multiSource ? "de plusieurs sources" : "de la source disponible"}, sans extrapolation non soutenue :`,
-        ...facts.map((fact) => `- ${fact}`),
-        sources.length > 0
-          ? `${isEnglish ? "Sources" : "Sources"}: ${sources.join(" ; ")}`
-          : ""
-      ]
-        .filter(Boolean)
-        .join("\n");
+    : buildGeneralEvidenceFallbackText({
+        facts,
+        sources,
+        isEnglish,
+        multiSource
+      });
 
   return buildDeterministicRuntimeDraft({
     answer: {
