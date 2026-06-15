@@ -196,6 +196,13 @@ type GeneralKnowledgeEvidence = {
   dateSource?: ResearchSource["dateSource"];
 };
 
+type GeneralFactResearchCacheEntry = {
+  expiresAt: number;
+  result: LocalToolExecutionResult;
+};
+
+type GeneralFactResearchCache = Map<string, GeneralFactResearchCacheEntry>;
+
 type TechnicalResearchAspect = {
   query: string;
   matchTerms: string[];
@@ -526,6 +533,10 @@ function formatResolvedLocation(location: WeatherLocation) {
   return parts.join(", ");
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function fetchWeatherJson<T>(url: URL): Promise<T | null> {
   try {
     const response = await fetch(url, {
@@ -546,41 +557,63 @@ async function fetchWeatherJson<T>(url: URL): Promise<T | null> {
 }
 
 async function fetchJson<T>(url: URL): Promise<T | null> {
-  try {
-    const response = await fetch(url, {
-      headers: {
-        Accept: "application/json"
-      },
-      signal: AbortSignal.timeout(8000)
-    });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Accept: "application/json"
+        },
+        signal: AbortSignal.timeout(8000)
+      });
 
-    if (!response.ok) {
+      if (!response.ok) {
+        if ((response.status === 429 || response.status >= 500) && attempt === 0) {
+          await sleep(180);
+          continue;
+        }
+        return null;
+      }
+
+      return (await response.json()) as T;
+    } catch {
+      if (attempt === 0) {
+        await sleep(180);
+        continue;
+      }
       return null;
     }
-
-    return (await response.json()) as T;
-  } catch {
-    return null;
   }
+  return null;
 }
 
 async function fetchText(url: string): Promise<string | null> {
-  try {
-    const response = await fetch(url, {
-      headers: {
-        Accept: "application/rss+xml,application/xml,text/xml,text/html,text/plain"
-      },
-      signal: AbortSignal.timeout(8000)
-    });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Accept: "application/rss+xml,application/xml,text/xml,text/html,text/plain"
+        },
+        signal: AbortSignal.timeout(8000)
+      });
 
-    if (!response.ok) {
+      if (!response.ok) {
+        if ((response.status === 429 || response.status >= 500) && attempt === 0) {
+          await sleep(180);
+          continue;
+        }
+        return null;
+      }
+
+      return await response.text();
+    } catch {
+      if (attempt === 0) {
+        await sleep(180);
+        continue;
+      }
       return null;
     }
-
-    return await response.text();
-  } catch {
-    return null;
   }
+  return null;
 }
 
 async function fetchReadableText(url: string): Promise<string | null> {
@@ -1863,7 +1896,60 @@ function corroborationScore(evidence: GeneralKnowledgeEvidence[]) {
   return Math.min(0.96, base + corroborationBonus);
 }
 
-async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<LocalToolExecutionResult | null> {
+const GENERAL_FACT_RESEARCH_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
+function buildGeneralFactResearchCacheKey(args: {
+  language: WeatherLanguage;
+  question: string;
+  subject: string;
+}) {
+  return normalizeLooseText(`${args.language} ${args.subject} ${args.question}`).slice(0, 240);
+}
+
+function cloneLocalToolExecutionResult(result: LocalToolExecutionResult): LocalToolExecutionResult {
+  const cloned: LocalToolExecutionResult = {
+    ...result,
+    summary: [...result.summary],
+    verifiedFacts: [...result.verifiedFacts]
+  };
+  if (result.sources) {
+    cloned.sources = result.sources.map((source) => ({ ...source }));
+  }
+  if (result.executionAuditIds) {
+    cloned.executionAuditIds = [...result.executionAuditIds];
+  }
+  return cloned;
+}
+
+function getCachedGeneralFactResearch(
+  cache: GeneralFactResearchCache | undefined,
+  key: string
+): LocalToolExecutionResult | null {
+  const entry = cache?.get(key);
+  if (!entry || entry.expiresAt <= Date.now()) {
+    if (entry) {
+      cache?.delete(key);
+    }
+    return null;
+  }
+  return cloneLocalToolExecutionResult(entry.result);
+}
+
+function rememberGeneralFactResearch(
+  cache: GeneralFactResearchCache | undefined,
+  key: string,
+  result: LocalToolExecutionResult
+) {
+  cache?.set(key, {
+    expiresAt: Date.now() + GENERAL_FACT_RESEARCH_CACHE_TTL_MS,
+    result: cloneLocalToolExecutionResult(result)
+  });
+}
+
+async function tryFetchGeneralFactResearch(
+  args: ToolRoutingDecision,
+  cache?: GeneralFactResearchCache
+): Promise<LocalToolExecutionResult | null> {
   const rewrite = rewriteResearchQuery(args);
   const subject = rewrite.canonicalSubject;
   if (!subject || subject.length < 2) {
@@ -1872,6 +1958,8 @@ async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<L
 
   const language = extractLanguage(args);
   const question = extractStringArg(args, "query") ?? subject;
+  const cacheKey = buildGeneralFactResearchCacheKey({ language, question, subject });
+  const fallbackToCached = () => getCachedGeneralFactResearch(cache, cacheKey);
   const comparisonSubjects = extractComparisonSubjects(question);
   const resolvedSubjects = comparisonSubjects.length === 2 ? comparisonSubjects : [subject];
   const evidence: GeneralKnowledgeEvidence[] = [];
@@ -1965,10 +2053,10 @@ async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<L
     }
 
     if (subjectEvidence.length === 0) {
-      return null;
+      return fallbackToCached();
     }
     if (!hasIntentAdequateEvidence(subjectEvidence, subjectFrame)) {
-      return null;
+      return fallbackToCached();
     }
     subjectEvidence
       .sort(
@@ -1982,7 +2070,7 @@ async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<L
   }
 
   if (!hasReliableGeneralKnowledgeEvidence(evidence)) {
-    return null;
+    return fallbackToCached();
   }
 
   const confidenceScore = corroborationScore(evidence);
@@ -1996,7 +2084,7 @@ async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<L
           confidenceScore * 100
         )}%.`;
 
-  return {
+  const result: LocalToolExecutionResult = {
     toolType: "research",
     intent: args.intent,
     summary: [sourceLabel],
@@ -2005,6 +2093,8 @@ async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<L
     resultLabel: resolvedSubjects.join(" vs "),
     sources: topEvidence.map(evidenceToSource)
   };
+  rememberGeneralFactResearch(cache, cacheKey, result);
+  return result;
 }
 
 function sourceTimestamp() {
@@ -2913,6 +3003,7 @@ async function tryFetchNodeLatestRelease(args: ToolRoutingDecision): Promise<Loc
 
 export class LocalToolExecutionService {
   private readonly executionGovernanceService: Pick<ExecutionGovernanceService, "plan"> | null;
+  private readonly generalFactResearchCache: GeneralFactResearchCache = new Map();
 
   constructor(options: LocalToolExecutionServiceOptions = {}) {
     this.executionGovernanceService =
@@ -2956,7 +3047,7 @@ export class LocalToolExecutionService {
     }
 
     if (routing.toolType === "research" && routing.intent === "fact_check") {
-      return attachAuditIds(await tryFetchGeneralFactResearch(routing));
+      return attachAuditIds(await tryFetchGeneralFactResearch(routing, this.generalFactResearchCache));
     }
 
     if (routing.toolType === "time" && (routing.intent === "current_time" || routing.intent === "current_date")) {

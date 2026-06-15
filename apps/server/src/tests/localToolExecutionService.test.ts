@@ -725,6 +725,88 @@ test("local research fact-check tool rejects same-brand wrong-sense source pages
   assert.doesNotMatch(result?.verifiedFacts.join(" "), /Tegra|processeur tout en un/i);
 });
 
+test("local research fact-check tool reuses recent verified evidence when source endpoints fail", async (t) => {
+  const originalFetch = globalThis.fetch;
+  let failSources = false;
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    if (failSources) {
+      return new Response("temporarily unavailable", { status: 503 });
+    }
+    if (url.includes("fr.wikipedia.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          query: {
+            search: [
+              { title: "Nvidia", snippet: "Societe americaine de technologie." }
+            ]
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("fr.wikipedia.org/api/rest_v1/page/summary/Nvidia")) {
+      return new Response(
+        JSON.stringify({
+          title: "Nvidia",
+          description: "Societe americaine de technologie",
+          extract:
+            "Nvidia Corporation est une societe americaine de technologie specialisee dans les processeurs graphiques et les accelerateurs d'intelligence artificielle.",
+          timestamp: "2026-05-01T12:00:00Z",
+          content_urls: {
+            desktop: {
+              page: "https://fr.wikipedia.org/wiki/Nvidia"
+            }
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("wikidata.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          search: [
+            {
+              id: "Q182477",
+              label: "NVIDIA",
+              description: "fabricant americain de cartes graphiques et accelerateurs d'IA",
+              concepturi: "https://www.wikidata.org/wiki/Q182477"
+            }
+          ]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const service = new LocalToolExecutionService();
+  const routing = buildFactCheckRouting("NVIDIA");
+  routing.extractedArgs = {
+    ...routing.extractedArgs,
+    query: "Qu'est-ce que NVIDIA ?",
+    semanticFrame: buildSemanticFrame({
+      question: "Qu'est-ce que NVIDIA ?",
+      category: "other"
+    })
+  };
+
+  const first = await service.tryExecute(routing);
+  assert.equal(first?.toolType, "research");
+  assert.match(first?.verifiedFacts.join(" ") ?? "", /processeurs graphiques/i);
+
+  failSources = true;
+  const second = await service.tryExecute(routing);
+  assert.equal(second?.toolType, "research");
+  assert.match(second?.verifiedFacts.join(" ") ?? "", /processeurs graphiques/i);
+  assert.deepEqual(second?.sources?.map((source) => source.url), first?.sources?.map((source) => source.url));
+});
+
 test("local research fact-check tool abstains when only one source family is available", async (t) => {
   const originalFetch = globalThis.fetch;
 
