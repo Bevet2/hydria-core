@@ -491,6 +491,78 @@ test("chat runtime prioritizes verified multi-source research over unrelated mem
   assert.doesNotMatch(response.answer.answer, /release source pack|watcher acquisition/i);
 });
 
+test("chat runtime replaces an ungrounded long-form synthesis with verified research evidence", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return buildAdapterResult(
+          "PostgreSQL est robuste. Michael Stonebraker a lance Ingres. En termes de concurrence, PostgreSQL affronte MySQL sur le marche. La reprise apres incident est fiable."
+        );
+      }
+    },
+    undefined,
+    {
+      async tryExecute(routing: ToolRoutingDecision) {
+        if (routing.toolType !== "research" || routing.intent !== "fact_check") {
+          return null;
+        }
+        return {
+          toolType: "research" as const,
+          intent: "fact_check",
+          summary: ["Documentation technique PostgreSQL."],
+          verifiedFacts: [
+            "PostgreSQL: le WAL journalise les changements avant leur ecriture dans les fichiers de donnees.",
+            "PostgreSQL: MVCC coordonne les lectures et ecritures concurrentes avec des instantanes transactionnels.",
+            "PostgreSQL: les checkpoints et le rejeu du WAL contribuent a la reprise apres incident."
+          ],
+          sources: [
+            {
+              title: "PostgreSQL WAL documentation",
+              url: "https://www.postgresql.org/docs/current/wal-intro.html",
+              snippet: "Write-ahead logging documentation.",
+              excerpt: "WAL records changes before data files are written.",
+              publishedAt: null,
+              modifiedAt: null,
+              effectiveDate: null,
+              dateSource: null,
+              retrievalChannel: "live" as const,
+              retrievalOrigin: "known_endpoint" as const,
+              retrievalEngine: "known_endpoint" as const
+            },
+            {
+              title: "PostgreSQL MVCC documentation",
+              url: "https://www.postgresql.org/docs/current/mvcc-intro.html",
+              snippet: "MVCC documentation.",
+              excerpt: "MVCC provides transactional snapshots for concurrent access.",
+              publishedAt: null,
+              modifiedAt: null,
+              effectiveDate: null,
+              dateSource: null,
+              retrievalChannel: "live" as const,
+              retrievalOrigin: "known_endpoint" as const,
+              retrievalEngine: "known_endpoint" as const
+            }
+          ],
+          confidenceScore: 0.9,
+          resultLabel: "PostgreSQL durability and concurrency"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({
+    message:
+      "Explique en profondeur comment PostgreSQL assure la durabilite, la concurrence et la reprise apres incident. Cite plusieurs sources."
+  });
+
+  assert.equal(response.generation.provider, "tool");
+  assert.equal(response.generation.model, "research_multi_source_fallback");
+  assert.match(response.answer.answer, /WAL/i);
+  assert.match(response.answer.answer, /MVCC/i);
+  assert.match(response.answer.answer, /postgresql\.org\/docs/i);
+  assert.doesNotMatch(response.answer.answer, /Michael Stonebraker|affronte MySQL|rend ce choix prioritaire/i);
+});
+
 test("chat runtime repairs wrong-language source-backed concept answers from verified facts", async () => {
   const service = new ChatRuntimeService(
     {

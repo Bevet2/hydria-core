@@ -577,6 +577,8 @@ export function buildStudentChatPrompt(input: StudentChatAdapterInput, route = s
       `Target length: ${responseLength.targetWords ?? "developed"} words minimum target.`,
       "Write the complete final answer in clear sections.",
       "Resolve ambiguous terms from the subject, domain, and surrounding requested dimensions. Do not switch to an unrelated lexical sense.",
+      "In software and database questions, concurrency means simultaneous operations and transaction coordination, not market competition, unless the user explicitly asks for competitors.",
+      "Stay on the requested dimensions. Do not add historical background, biographies, or market comparisons unless they are requested and supported.",
       "Explain mechanisms, causal links, tradeoffs, and limitations instead of paraphrasing source excerpts.",
       "Use every relevant verified fact, cite the supplied sources, and never invent a claim that depends on missing evidence.",
       semanticMissionContext,

@@ -231,6 +231,80 @@ test("post-answer verifier rejects unsupported dates or figures in sourced answe
   assert.ok(result.issues.includes("unsupported_numeric_or_date_claim"));
 });
 
+test("post-answer verifier rejects weakly sourced technical prose with the wrong concurrency sense", () => {
+  const semanticFrame = buildSemanticFrame({
+    question:
+      "Explique comment PostgreSQL assure la durabilite, la concurrence et la reprise apres incident. Cite plusieurs sources.",
+    category: "technical_explanation",
+    subject: "PostgreSQL",
+    language: "fr"
+  });
+  const routing = route({
+    toolRequired: true,
+    toolType: "research",
+    intent: "fact_check",
+    fallbackAllowed: false,
+    extractedArgs: {
+      subject: "PostgreSQL",
+      language: "fr",
+      semanticFrame
+    }
+  });
+
+  const result = verifyPostAnswerGrounding({
+    question:
+      "Explique comment PostgreSQL assure la durabilite, la concurrence et la reprise apres incident. Cite plusieurs sources.",
+    category: "technical_explanation",
+    answer:
+      "PostgreSQL est robuste. Michael Stonebraker a lance Ingres. En termes de concurrence, PostgreSQL affronte MySQL sur le marche. Il assure aussi la reprise apres incident.",
+    toolRouting: routing,
+    tooling: {
+      ...defaultChatToolMetadata,
+      route: "used",
+      used: true,
+      routing,
+      verifiedFacts: [
+        "PostgreSQL est un systeme libre de gestion de base de donnees relationnelle.",
+        "PostgreSQL utilise un journal de transactions pour contribuer a la reprise."
+      ],
+      sources: [
+        {
+          title: "Wikipedia: PostgreSQL",
+          url: "https://fr.wikipedia.org/wiki/PostgreSQL",
+          snippet: "PostgreSQL est un systeme de gestion de base de donnees relationnelle.",
+          excerpt: "PostgreSQL est un systeme libre de gestion de base de donnees relationnelle.",
+          publishedAt: null,
+          modifiedAt: null,
+          effectiveDate: null,
+          dateSource: "unknown",
+          retrievalChannel: "live",
+          retrievalOrigin: "known_endpoint",
+          retrievalEngine: "known_endpoint"
+        },
+        {
+          title: "Wikidata: PostgreSQL",
+          url: "https://www.wikidata.org/wiki/Q192490",
+          snippet: "systeme de gestion de base de donnees",
+          excerpt: "PostgreSQL: systeme de gestion de base de donnees.",
+          publishedAt: null,
+          modifiedAt: null,
+          effectiveDate: null,
+          dateSource: "unknown",
+          retrievalChannel: "live",
+          retrievalOrigin: "known_endpoint",
+          retrievalEngine: "known_endpoint"
+        }
+      ]
+    }
+  });
+
+  assert.equal(result.passed, false);
+  assert.ok(result.issues.includes("weak_source_corroboration"));
+  assert.ok(result.issues.includes("missing_requested_citations"));
+  assert.ok(result.issues.includes("technical_concurrency_sense_mismatch"));
+  assert.ok(result.issues.includes("unsupported_named_entity_claim"));
+});
+
 test("agentic planner builds an evidence-first mission graph from accepted sources", () => {
   const semanticFrame = buildSemanticFrame({
     question: "Qu'est-ce que NVIDIA ?",

@@ -1743,7 +1743,7 @@ function buildStrategicDecisionQualityRepair(args: {
     args.userMessage
   ].join(" "));
   if (
-    (!isStrategicRuntimeCategory(args.category) && !hasStrategicDecisionSignal(context)) ||
+    (!isStrategicRuntimeCategory(args.category) && !isDirectStrategicDecisionRequest(args.userMessage)) ||
     !hasStrategicRepairIssue(args.quality)
   ) {
     return null;
@@ -2421,8 +2421,8 @@ function buildResearchEvidenceFallbackDraft(args: {
     .map((source) => `${source.title} (${source.url})`);
   const answerText = [
     isEnglish
-      ? "The local synthesis model was unavailable, so here are the verified multi-source findings without unsupported extrapolation:"
-      : "Le modele local de synthese etait indisponible; voici donc les elements verifies issus de plusieurs sources, sans extrapolation non soutenue :",
+      ? "The local synthesis could not be validated, so here are the verified multi-source findings without unsupported extrapolation:"
+      : "La synthese locale n'a pas pu etre validee; voici donc les elements verifies issus de plusieurs sources, sans extrapolation non soutenue :",
     ...facts.map((fact) => `- ${fact}`),
     sources.length > 0
       ? `${isEnglish ? "Sources" : "Sources"}: ${sources.join(" ; ")}`
@@ -2449,6 +2449,37 @@ function buildResearchEvidenceFallbackDraft(args: {
       "The local synthesis model failed after verified research succeeded; preserve all relevant evidence and citations instead of using an unrelated memory hit.",
     pipeline: ["tool_routing:research", "multi_source_evidence", "deterministic_source_fallback"]
   });
+}
+
+function appendRequestedSourceCitations(args: {
+  answer: StudentAnswer;
+  question: string;
+  tooling: ChatToolMetadata;
+  language: ConversationState["language"];
+}) {
+  if (
+    !/\b(?:cite|cites|citation|citations|sources?|references?|sourcee|sourcees|sourced)\b/i.test(
+      normalizeText(args.question)
+    ) ||
+    args.tooling.sources.length === 0 ||
+    /https?:\/\//i.test(args.answer.answer)
+  ) {
+    return args.answer;
+  }
+
+  const sources = args.tooling.sources
+    .slice(0, 5)
+    .map((source) => `${source.title || source.url} (${source.url})`)
+    .filter(Boolean);
+  if (sources.length === 0) {
+    return args.answer;
+  }
+
+  return {
+    ...args.answer,
+    answer: `${args.answer.answer.trim()}\n\n${args.language === "en" ? "Sources" : "Sources"}: ${sources.join(" ; ")}`,
+    key_points: [...args.answer.key_points, "Visible source citations"].slice(0, 6)
+  };
 }
 
 function buildRequiredToolUnavailableDraft(args: {
@@ -3625,7 +3656,17 @@ export class ChatRuntimeService {
       });
     }
 
-    const deterministicRuntimeAnswer = isQualityTrustedDeterministicRuntimeModel(draft.generation.model);
+    const citationAdjustedAnswer = appendRequestedSourceCitations({
+      answer: finalAnswer,
+      question: draft.routingQuestion,
+      tooling,
+      language: conversationState.language
+    });
+    if (citationAdjustedAnswer.answer !== finalAnswer.answer) {
+      finalAnswer = citationAdjustedAnswer;
+    }
+
+    let deterministicRuntimeAnswer = isQualityTrustedDeterministicRuntimeModel(draft.generation.model);
     let postAnswerVerification: PostAnswerVerificationResult = deterministicRuntimeAnswer
       ? {
           passed: true,
@@ -3676,6 +3717,65 @@ export class ChatRuntimeService {
           tooling,
           toolRouting: tooling.routing
         });
+      }
+    }
+
+    if (
+      !deterministicRuntimeAnswer &&
+      !postAnswerVerification.passed &&
+      postAnswerVerification.recommendedAction === "repair_from_verified_sources" &&
+      !knowledgeRetrieval.used
+    ) {
+      const evidenceFallbackDraft = buildResearchEvidenceFallbackDraft({
+        tooling,
+        category: draft.category,
+        routingQuestion: draft.routingQuestion,
+        language: conversationState.language
+      });
+      if (evidenceFallbackDraft) {
+        const rejectedGeneration = draft.generation;
+        draft = {
+          ...evidenceFallbackDraft,
+          generation: {
+            ...evidenceFallbackDraft.generation,
+            usedRetry: true,
+            validationIssues: [
+              ...rejectedGeneration.validationIssues,
+              `post_answer_verifier_rejected:${postAnswerVerification.issues.join(",")}`
+            ],
+            latencyMs: rejectedGeneration.latencyMs,
+            attempts: rejectedGeneration.attempts
+          }
+        };
+        finalAnswer = draft.answer;
+        deterministicRuntimeAnswer = true;
+        conversationQuality = applyRequestedLengthQuality({
+          quality: this.analyzeQuality({
+            runtimeMode,
+            conversationState,
+            activeConstraintCapsule,
+            answerPolicy,
+            newUserMessage: args.message,
+            answer: finalAnswer.answer,
+            lastAssistantAnswer: session.lastAssistantAnswer,
+            recentMessages: session.messages,
+            toolRouting: tooling.routing
+          }),
+          userMessage: args.message,
+          answer: finalAnswer.answer
+        });
+        postAnswerVerification = {
+          passed: true,
+          score: 0.9,
+          issues: [],
+          subject:
+            typeof tooling.routing.extractedArgs?.subject === "string"
+              ? tooling.routing.extractedArgs.subject
+              : null,
+          domain: "deterministic_research_evidence",
+          recommendedAction: "accept"
+        };
+        usedRetry = true;
       }
     }
 

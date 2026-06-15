@@ -122,11 +122,8 @@ function dominantVerifiedEntityKind(args: ChatToolMetadata): EntityKind {
 function sourceFamily(url: string) {
   try {
     const host = new URL(url).hostname.replace(/^www\./, "");
-    if (host.endsWith("wikipedia.org")) {
-      return "wikipedia";
-    }
-    if (host.endsWith("wikidata.org")) {
-      return "wikidata";
+    if (host.endsWith("wikipedia.org") || host.endsWith("wikidata.org")) {
+      return "wikimedia";
     }
     if (host.endsWith("britannica.com")) {
       return "britannica";
@@ -139,6 +136,68 @@ function sourceFamily(url: string) {
 
 function acceptedSourceFamilies(tooling: ChatToolMetadata) {
   return new Set(tooling.sources.map((source) => sourceFamily(source.url || source.title || "")));
+}
+
+function asksForVisibleCitations(question: string) {
+  return /\b(?:cite|cites|citation|citations|sources?|references?|sourcee|sourcees|sourced)\b/i.test(
+    normalizeLooseText(question)
+  );
+}
+
+function answerIncludesCitation(answer: string, tooling: ChatToolMetadata) {
+  const normalizedAnswer = normalizeLooseText(answer);
+  if (/https?:\/\//i.test(answer)) {
+    return true;
+  }
+  return tooling.sources.some((source) => {
+    const titleTerms = extractTerms(source.title).slice(0, 4);
+    let host = "";
+    try {
+      host = new URL(source.url).hostname.replace(/^www\./, "");
+    } catch {
+      host = "";
+    }
+    return (
+      (host.length > 0 && normalizedAnswer.includes(normalizeLooseText(host))) ||
+      (titleTerms.length >= 2 && titleTerms.filter((term) => normalizedAnswer.includes(term)).length >= 2)
+    );
+  });
+}
+
+function missesTechnicalConcurrencySense(args: {
+  question: string;
+  answer: string;
+  domain: string;
+}) {
+  if (
+    !["software_technology", "code_debug"].includes(args.domain) ||
+    !/\b(?:concurrence|concurrency|concurrent)\b/i.test(normalizeLooseText(args.question))
+  ) {
+    return false;
+  }
+  return !/\b(?:mvcc|multi version|multi-version|isolation|snapshot|instantane|simultan|verrou|verrous|locking|locks?|concurrency control|controle de concurrence|lectures? et ecritures?|reads? and writes?)\b/i.test(
+    normalizeLooseText(args.answer)
+  );
+}
+
+function unsupportedNamedEntities(args: {
+  answer: string;
+  question: string;
+  tooling: ChatToolMetadata;
+}) {
+  const evidence = normalizeLooseText(
+    [
+      args.question,
+      ...args.tooling.verifiedFacts,
+      ...args.tooling.summary,
+      ...args.tooling.sources.flatMap((source) => [source.title, source.snippet, source.excerpt])
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+  const candidates =
+    args.answer.match(/\b\p{Lu}[\p{Ll}\p{M}'’-]{2,}(?:\s+\p{Lu}[\p{Ll}\p{M}'’-]{2,})+\b/gu) ?? [];
+  return [...new Set(candidates)].filter((candidate) => !evidence.includes(normalizeLooseText(candidate)));
 }
 
 function extractFactualNumbers(value: string) {
@@ -270,6 +329,39 @@ export function verifyPostAnswerGrounding(args: {
     if (unsupportedNumbers.length > 0) {
       issues.push("unsupported_numeric_or_date_claim");
     }
+  }
+
+  if (
+    args.tooling.used &&
+    args.tooling.sources.length > 0 &&
+    asksForVisibleCitations(args.question) &&
+    !answerIncludesCitation(args.answer, args.tooling)
+  ) {
+    issues.push("missing_requested_citations");
+  }
+
+  if (
+    args.tooling.used &&
+    ["research", "web"].includes(args.tooling.routing.toolType) &&
+    missesTechnicalConcurrencySense({
+      question: args.question,
+      answer: args.answer,
+      domain: frame.domain
+    })
+  ) {
+    issues.push("technical_concurrency_sense_mismatch");
+  }
+
+  if (
+    args.tooling.used &&
+    ["research", "web"].includes(args.tooling.routing.toolType) &&
+    unsupportedNamedEntities({
+      answer: args.answer,
+      question: args.question,
+      tooling: args.tooling
+    }).length > 0
+  ) {
+    issues.push("unsupported_named_entity_claim");
   }
 
   const passed = issues.length === 0;

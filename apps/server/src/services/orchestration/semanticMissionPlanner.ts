@@ -246,7 +246,7 @@ function inferDomain(args: {
     args.category === "incident_response" ||
     args.category === "product_strategy" ||
     args.category === "mixed_reasoning" ||
-    hasAny(text, STRATEGY_TERMS)
+    (args.category !== "technical_explanation" && hasAny(text, STRATEGY_TERMS))
   ) {
     return "strategy_decision";
   }
