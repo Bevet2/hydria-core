@@ -553,6 +553,13 @@ function selectBaseStudentChatModelRoute(input: StudentChatModelRoutingInput): S
     const reason =
       "Verified external tool facts are already available; use the CPU-aware 3B route to verbalize them without heavy-model fallback.";
     const budget = buildRuntimeBudget("standard_light_chat", reason);
+    const sourceSynthesisTimeoutMs = Math.max(
+      budget.timeoutMs,
+      Math.min(
+        120000,
+        Math.max(env.MODEL_ROUTER_LOCAL_TIMEOUT_MS, env.MODEL_RUNTIME_DEEP_TIMEOUT_MS)
+      )
+    );
     return {
       capabilityId: "qwen-3b-standard-light",
       displayName: "Qwen 3B Standard Light",
@@ -561,8 +568,17 @@ function selectBaseStudentChatModelRoute(input: StudentChatModelRoutingInput): S
       routingReason: reason,
       pipeline: [...basePipeline, `verified_context_answer:${QWEN_3B}`],
       fallbackModelNames: buildSpecialistOnlyFallbacks(QWEN_3B),
-      timeoutMs: budget.timeoutMs,
-      runtimeBudget: budget
+      timeoutMs: sourceSynthesisTimeoutMs,
+      runtimeBudget: {
+        ...budget,
+        label: "Source-backed CPU synthesis",
+        reason:
+          "Verified evidence is available; allow the local 3B model enough time to synthesize it in the requested language.",
+        timeoutMs: sourceSynthesisTimeoutMs,
+        maxLatencyMs: sourceSynthesisTimeoutMs,
+        fallbackDepth: 0,
+        concurrencyKey: "source_backed_local_chat"
+      }
     };
   }
 

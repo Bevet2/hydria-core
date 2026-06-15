@@ -172,6 +172,7 @@ test("tool router routes simple stable concept explanations to source-backed res
 
 test("tool router routes public rules and gameplay questions to source-backed research", () => {
   const cases = [
+    ["Tu connais les r\ufffdgles du bowling ?", "Bowling", "fr"],
     ["Tu connais les règles du bowling ?", "Bowling", "fr"],
     ["Quelles sont les règles des échecs ?", "Échecs", "fr"],
     ["How do you play Go?", "Go", "en"],

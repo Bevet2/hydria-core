@@ -102,6 +102,7 @@ function unique(values: string[]) {
 
 export function normalizeLooseText(value: string) {
   return value
+    .replace(/r(?:\ufffd|\u00c3\u00a8|\u00c3\u00a9)gles?/gi, "regles")
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
@@ -145,6 +146,7 @@ export function normalizeOrdinalAliases(value: string) {
 function stripRequestTerms(value: string) {
   return normalizeSpace(
     value
+      .replace(/r(?:\ufffd|\u00c3\u00a8|\u00c3\u00a9)gles?/gi, "regles")
       .replace(/['’]/g, " ")
       .replace(/['\u2018\u2019]/g, " ")
       .replace(/[?]/g, " ")
@@ -152,7 +154,7 @@ function stripRequestTerms(value: string) {
         /\b(?:who is|who was|what is|what are|tell me about|do you know|give me|make me|explain|define|definition|history of|biography of|how (?:do you play|to play)|qui est|qui etait|qui \u00e9tait|quelles? sont|tu connais|connais[- ]?tu|comment (?:joue[- ]?t[- ]?on|jouer)|qu[' ]?est[- ]?ce qu[' ]?(?:un|une|le|la|les)?|qu[' ]?est[- ]?ce que|quest ce que|c[' ]?est quoi|ce qu[' ]?est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:\s+l\s+histoire\s+de)?|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi,
         " "
       )
-      .replace(/\b(?:the\s+)?rules?\s+(?:of|for)\b|\b(?:les?\s+)?r[eè]gles?\s+(?:de|du|des|de la|pour)\b/gi, " ")
+      .replace(/\b(?:the\s+)?rules?\s+(?:of|for)\b|\b(?:les?\s+)?r(?:e|\u00e8|\u00e9)gles?\s+(?:de|du|des|de la|pour)\b/gi, " ")
       .replace(/\b(?:c[' ]?est qui|c[' ]?est quel|c[' ]?est quoi|etait[- ]?ce|what causes|what caused|what was|what were|used for)\b/gi, " ")
       .replace(
         /\b(?:sa biographie|son histoire|biographie|biography|histoire|history|known for|connu(?:e)? pour|complete|compl(?:e|\u00e8)te|complet|courte?|fiche|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9)|diaporama|slides?|contexte|context|details?|simplement|simply|please|svp|s'il te plait|s'il vous plait|historiquement)\b/gi,

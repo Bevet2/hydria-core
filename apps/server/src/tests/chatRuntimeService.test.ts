@@ -427,6 +427,79 @@ test("chat runtime answers public rules questions from research when local model
   assert.equal(response.conversationQuality.passed, true);
 });
 
+test("chat runtime keeps deterministic research fallback in the requested language", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return {
+          ...buildAdapterResult(
+            "Je n'ai pas reussi a generer une reponse fiable pour ce tour. Reformule la question."
+          ),
+          provider: "fallback" as const,
+          model: "qwen2.5:3b",
+          validationIssues: ["student_chat_generation_failed", "qwen2.5:3b: timeout"]
+        };
+      }
+    },
+    undefined,
+    {
+      async tryExecute(routing: ToolRoutingDecision) {
+        if (routing.toolType !== "research" || routing.intent !== "fact_check") {
+          return null;
+        }
+        return {
+          toolType: "research" as const,
+          intent: "fact_check",
+          summary: ["Recherche factuelle v2: 2 sources pertinentes trouvees pour Bowling."],
+          verifiedFacts: [
+            "Bowling: une partie compte dix carreaux; chaque joueur lance deux boules par carreau, avec un calcul des points pour les strikes et les spares.",
+            "Bowling: a standard game consists of ten frames and players roll balls to knock down pins."
+          ],
+          sources: [
+            {
+              title: "Wikipedia: Bowling",
+              url: "https://fr.wikipedia.org/wiki/Bowling",
+              snippet: "Regles du bowling.",
+              excerpt:
+                "Bowling: une partie compte dix carreaux; chaque joueur lance deux boules par carreau.",
+              publishedAt: null,
+              modifiedAt: null,
+              effectiveDate: null,
+              dateSource: null,
+              retrievalChannel: "live" as const,
+              retrievalOrigin: "known_endpoint" as const,
+              retrievalEngine: "known_endpoint" as const
+            },
+            {
+              title: "Wikipedia: Bowling",
+              url: "https://en.wikipedia.org/wiki/Bowling",
+              snippet: "Bowling rules.",
+              excerpt:
+                "Bowling: a standard game consists of ten frames and players roll balls to knock down pins.",
+              publishedAt: null,
+              modifiedAt: null,
+              effectiveDate: null,
+              dateSource: null,
+              retrievalChannel: "live" as const,
+              retrievalOrigin: "known_endpoint" as const,
+              retrievalEngine: "known_endpoint" as const
+            }
+          ],
+          confidenceScore: 0.9,
+          resultLabel: "Bowling"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "Tu connais les regles du bowling ?" });
+
+  assert.equal(response.generation.provider, "tool");
+  assert.match(response.answer.answer, /dix carreaux/i);
+  assert.doesNotMatch(response.answer.answer, /standard game|players roll/i);
+  assert.equal(response.conversationQuality.issues.includes("wrong_language_expected_fr"), false);
+});
+
 test("chat runtime prioritizes verified multi-source research over unrelated memory on model fallback", async () => {
   let retrievalCalls = 0;
   const service = new ChatRuntimeService(

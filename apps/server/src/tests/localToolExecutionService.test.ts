@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { LocalToolExecutionService } from "../services/tools/localToolExecutionService.js";
+import { buildSemanticFrame } from "../services/orchestration/semanticMissionPlanner.js";
 import type { ToolRoutingDecision } from "../types/arena.js";
 
 function buildWeatherRouting(location: string | null): ToolRoutingDecision {
@@ -1333,4 +1334,106 @@ test("local research discovers official documentation from the site index when s
   assert.match(evidence, /write-ahead logging/i);
   assert.match(evidence, /MVCC/i);
   assert.match(evidence, /point-in-time recovery/i);
+});
+
+test("local research extracts gameplay evidence and rejects homonym corroboration", async (t) => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = new URL(String(input));
+
+    if (url.hostname === "fr.wikipedia.org" && url.pathname.endsWith("/w/api.php")) {
+      if (url.searchParams.get("list") === "search") {
+        return new Response(
+          JSON.stringify({ query: { search: [{ title: "Bowling" }] } }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      if (url.searchParams.get("prop") === "extracts") {
+        return new Response(
+          JSON.stringify({
+            query: {
+              pages: {
+                "1": {
+                  extract: [
+                    "Bowling historique",
+                    "Le bowling est un jeu de quilles apparu sous sa forme moderne aux Etats-Unis.",
+                    "",
+                    "Deroulement du jeu et comptage des points",
+                    "Une partie de bowling compte dix carreaux ou frames. Chaque joueur lance deux boules a chaque carreau, sauf en cas de strike. Un spare donne un lancer supplementaire pour le calcul des points."
+                  ].join("\n")
+                }
+              }
+            }
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    if (url.hostname === "fr.wikipedia.org" && url.pathname.includes("/page/summary/Bowling")) {
+      return new Response(
+        JSON.stringify({
+          title: "Bowling",
+          description: "sport consistant a lancer une boule dans des quilles",
+          extract:
+            "Le bowling est un jeu qui consiste a renverser des quilles a l'aide d'une boule.",
+          content_urls: { desktop: { page: "https://fr.wikipedia.org/wiki/Bowling" } },
+          timestamp: "2026-06-09T20:58:30.000Z"
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    if (url.hostname === "www.wikidata.org") {
+      return new Response(
+        JSON.stringify({
+          search: [
+            {
+              id: "Q1",
+              label: "Bowling",
+              description: "nom de famille",
+              concepturi: "https://www.wikidata.org/wiki/Q1"
+            },
+            {
+              id: "Q2",
+              label: "bowling",
+              description: "sport consistant a lancer une boule dans des quilles",
+              concepturi: "https://www.wikidata.org/wiki/Q2"
+            }
+          ]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const routing = buildFactCheckRouting("Bowling");
+  const question = "Tu connais les regles du bowling ?";
+  routing.extractedArgs = {
+    ...routing.extractedArgs,
+    query: question,
+    language: "fr",
+    semanticFrame: buildSemanticFrame({
+      question,
+      category: "other",
+      subject: "Bowling",
+      language: "fr"
+    })
+  };
+
+  const result = await new LocalToolExecutionService().tryExecute(routing);
+  const evidence = result?.verifiedFacts.join(" ") ?? "";
+
+  assert.equal(result?.toolType, "research");
+  assert.match(evidence, /dix carreaux|frames/i);
+  assert.match(evidence, /strike|spare/i);
+  assert.doesNotMatch(evidence, /nom de famille/i);
+  assert.equal(result?.sources?.some((source) => source.url.includes("/Q1")), false);
 });

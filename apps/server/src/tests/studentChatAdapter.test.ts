@@ -825,6 +825,64 @@ test("student chat adapter uses fast budget for verified calculator tool answers
   assert.equal(numPredict <= 96, true);
 });
 
+test("student chat adapter gives source-backed research synthesis a longer single local attempt", async () => {
+  let selectedModel = "";
+  let timeoutMs = 0;
+  const input = {
+    ...buildInput(),
+    category: "other" as const,
+    routingQuestion: "Tu connais les regles du bowling ?",
+    userMessage: "Tu connais les regles du bowling ?",
+    question: "Tu connais les regles du bowling ?",
+    requiresExternalGrounding: true,
+    tooling: {
+      ...defaultChatToolMetadata,
+      route: "used" as const,
+      used: true,
+      routing: {
+        ...defaultChatToolMetadata.routing,
+        toolRequired: true,
+        toolRecommended: true,
+        toolResultUsed: true,
+        toolType: "research" as const,
+        intent: "fact_check",
+        fallbackAllowed: false,
+        extractedArgs: {
+          subject: "Bowling",
+          language: "fr"
+        }
+      },
+      verifiedFacts: [
+        "Bowling: une partie compte dix carreaux; chaque joueur lance deux boules par carreau."
+      ]
+    }
+  };
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "mistral:7b";
+    },
+    async testPrompt(_prompt, _system, options) {
+      selectedModel = options?.modelName ?? "";
+      timeoutMs = options?.timeoutMs ?? 0;
+      return {
+        provider: "ollama",
+        model: selectedModel,
+        response:
+          "Au bowling, une partie compte dix carreaux. A chaque carreau, le joueur lance jusqu'a deux boules pour renverser les quilles.",
+        durationMs: 12
+      };
+    }
+  });
+
+  const result = await adapter.answer(input);
+
+  assert.equal(selectedModel, "qwen2.5:3b");
+  assert.equal(result.runtimeBudget?.profile, "standard_light_chat");
+  assert.equal(result.runtimeBudget?.fallbackDepth, 0);
+  assert.equal(timeoutMs >= 90000, true);
+  assert.match(result.specialist.routingReason, /Verified external tool facts/i);
+});
+
 test("student chat adapter routes bounded strategic decisions to the light local reasoner", async () => {
   let selectedModel = "";
   let usedFormat = false;

@@ -38,6 +38,26 @@ test("semantic frame rejects same-word but wrong-sense technical sources", () =>
   assert.equal(rightSense.passed, true);
 });
 
+test("semantic frame resolves public rules questions and rejects homonyms", () => {
+  const frame = buildSemanticFrame({
+    question: "Tu connais les r\u00e8gles du bowling ?",
+    category: "other",
+    subject: "Bowling",
+    language: "fr"
+  });
+
+  const wrongSense = sourceMatchesSemanticFrame(frame, "Bowling : nom de famille britannique.");
+  const rightSense = sourceMatchesSemanticFrame(
+    frame,
+    "Une partie de bowling compte dix carreaux. Chaque joueur lance deux boules, avec un comptage des points pour les strikes et les spares."
+  );
+
+  assert.equal(frame.intent, "rules");
+  assert.ok(frame.searchModifiers.includes("regles"));
+  assert.equal(wrongSense.passed, false);
+  assert.equal(rightSense.passed, true);
+});
+
 test("semantic frame keeps technical crash recovery explanations out of strategy routing", () => {
   const frame = buildSemanticFrame({
     question:

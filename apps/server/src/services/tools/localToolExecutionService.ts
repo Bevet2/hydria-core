@@ -157,6 +157,17 @@ type WikipediaSummaryResponse = {
   };
 };
 
+type WikipediaExtractResponse = {
+  query?: {
+    pages?: Record<
+      string,
+      {
+        extract?: string;
+      }
+    >;
+  };
+};
+
 type WikidataSearchResponse = {
   search?: Array<{
     id?: string;
@@ -180,6 +191,7 @@ type GeneralKnowledgeEvidence = {
   engine: ResearchSource["retrievalEngine"];
   origin: ResearchSource["retrievalOrigin"];
   confidence: number;
+  language?: WeatherLanguage | "unknown";
   modifiedAt?: string | null;
   dateSource?: ResearchSource["dateSource"];
 };
@@ -1346,7 +1358,12 @@ async function fetchWikipediaSummary(
     const timestamp = summary.timestamp && !Number.isNaN(new Date(summary.timestamp).getTime())
       ? new Date(summary.timestamp).toISOString()
       : null;
-    const excerpt = normalizeSpaces(summary.extract);
+    const summaryExcerpt = normalizeSpaces(summary.extract);
+    const focusedExcerpt =
+      semanticFrame.intent === "rules"
+        ? await fetchWikipediaFocusedExtract(pageTitle, language, semanticFrame)
+        : null;
+    const excerpt = focusedExcerpt ?? summaryExcerpt;
     const description = summary.description ? normalizeSpaces(summary.description) : null;
     if (!sourceTitleMatchesResolvedSubject(expectedSubject, pageTitle)) {
       continue;
@@ -1370,6 +1387,62 @@ async function fetchWikipediaSummary(
     };
   }
   return null;
+}
+
+function scoreFocusedWikipediaParagraph(paragraph: string, semanticFrame: SemanticFrame) {
+  const normalized = normalizeLooseText(paragraph);
+  const tokens = new Set(normalized.split(/\s+/).filter(Boolean));
+  const matchedTerms = semanticFrame.expectedSenseTerms.filter((term) => {
+    const normalizedTerm = normalizeLooseText(term);
+    return normalizedTerm.includes(" ")
+      ? normalized.includes(normalizedTerm)
+      : tokens.has(normalizedTerm);
+  });
+  const scoringDetailHits = (
+    normalized.match(
+      /\b(?:scoring|score|points|frame|frames|strike|spare|carreau|carreaux|abat|reserve|lancer supplementaire|dix jeux?)\b/g
+    ) ?? []
+  ).length;
+  const sectionHeadingBonus =
+    /\b(?:deroulement du jeu|comptage des points|gameplay|scoring|how to play)\b/.test(normalized)
+      ? 5
+      : 0;
+  const numericBonus = /\b\d+\b/.test(paragraph) ? 1 : 0;
+  return matchedTerms.length * 2 + Math.min(10, scoringDetailHits * 2) + sectionHeadingBonus + numericBonus;
+}
+
+async function fetchWikipediaFocusedExtract(
+  title: string,
+  language: string,
+  semanticFrame: SemanticFrame
+) {
+  const url = new URL(`https://${language}.wikipedia.org/w/api.php`);
+  url.searchParams.set("action", "query");
+  url.searchParams.set("prop", "extracts");
+  url.searchParams.set("explaintext", "1");
+  url.searchParams.set("exsectionformat", "plain");
+  url.searchParams.set("titles", title);
+  url.searchParams.set("format", "json");
+  url.searchParams.set("origin", "*");
+  const body = await fetchJson<WikipediaExtractResponse>(url);
+  const extract = Object.values(body?.query?.pages ?? {})[0]?.extract;
+  if (!extract) {
+    return null;
+  }
+
+  const paragraphs = extract
+    .split(/\n{2,}/)
+    .map((paragraph) => normalizeSpaces(paragraph))
+    .filter((paragraph) => paragraph.length >= 80);
+  const ranked = paragraphs
+    .map((paragraph, index) => ({
+      paragraph,
+      index,
+      score: scoreFocusedWikipediaParagraph(paragraph, semanticFrame)
+    }))
+    .sort((left, right) => right.score - left.score || left.index - right.index);
+  const best = ranked[0];
+  return best && best.score >= 4 ? best.paragraph.slice(0, 1800) : null;
 }
 
 function unwrapDuckDuckGoUrl(rawUrl: string) {
@@ -1492,6 +1565,7 @@ async function fetchWikidataEntity(
     engine: "known_endpoint",
     origin: "known_endpoint",
     confidence: Math.max(0.72, best.semanticCheck.score),
+    language: language === "fr" ? "fr" : "en",
     modifiedAt: null,
     dateSource: "unknown"
   };
@@ -1529,9 +1603,43 @@ async function searchBritannica(
     engine: "duckduckgo",
     origin: "generic_search",
     confidence: 0.74,
+    language: "en",
     modifiedAt: null,
     dateSource: "search_result"
   };
+}
+
+function inferEvidenceLanguage(text: string, url: string): WeatherLanguage | "unknown" {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    if (hostname.startsWith("fr.")) {
+      return "fr";
+    }
+    if (hostname.startsWith("en.") || hostname.endsWith("britannica.com")) {
+      return "en";
+    }
+  } catch {
+    // Continue with lightweight text detection.
+  }
+
+  const normalized = normalizeLooseText(text);
+  const frenchHits = (
+    normalized.match(
+      /\b(?:le|la|les|des|une|est|sont|avec|dans|pour|jeu|joueur|regle|points)\b/g
+    ) ?? []
+  ).length;
+  const englishHits = (
+    normalized.match(
+      /\b(?:the|a|an|is|are|with|in|for|game|player|rule|score)\b/g
+    ) ?? []
+  ).length;
+  if (frenchHits >= englishHits + 2) {
+    return "fr";
+  }
+  if (englishHits >= frenchHits + 2) {
+    return "en";
+  }
+  return "unknown";
 }
 
 async function searchGenericFactSources(
@@ -1558,6 +1666,7 @@ async function searchGenericFactSources(
       engine: "duckduckgo",
       origin: "generic_search" as const,
       confidence: 0.64,
+      language: inferEvidenceLanguage(`${result.title} ${result.snippet}`, result.url),
       modifiedAt: null,
       dateSource: "search_result" as const
     }));
@@ -1588,6 +1697,36 @@ function evidenceFamily(evidence: GeneralKnowledgeEvidence) {
 function hasReliableGeneralKnowledgeEvidence(evidence: GeneralKnowledgeEvidence[]) {
   const sourceFamilies = new Set(evidence.map(evidenceFamily));
   return sourceFamilies.size >= 2;
+}
+
+function hasIntentAdequateEvidence(evidence: GeneralKnowledgeEvidence[], semanticFrame: SemanticFrame) {
+  if (semanticFrame.intent !== "rules") {
+    return true;
+  }
+  return evidence.some((item) => {
+    const check = sourceMatchesSemanticFrame(
+      semanticFrame,
+      `${item.title} ${item.snippet} ${item.excerpt}`
+    );
+    return check.passed && check.matchedExpectedTerms.length >= 2;
+  });
+}
+
+function evidenceLanguageRank(evidence: GeneralKnowledgeEvidence, requestedLanguage: WeatherLanguage) {
+  if (evidence.language === requestedLanguage) {
+    return 2;
+  }
+  if (!evidence.language || evidence.language === "unknown") {
+    return 1;
+  }
+  return 0;
+}
+
+function evidenceIntentScore(evidence: GeneralKnowledgeEvidence, semanticFrame: SemanticFrame) {
+  return sourceMatchesSemanticFrame(
+    semanticFrame,
+    `${evidence.title} ${evidence.snippet} ${evidence.excerpt}`
+  ).matchedExpectedTerms.length;
 }
 
 function addEvidence(list: GeneralKnowledgeEvidence[], evidence: GeneralKnowledgeEvidence | null) {
@@ -1679,6 +1818,7 @@ async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<L
           engine: "known_endpoint",
           origin: "known_endpoint",
           confidence: 0.88,
+          language: wikipediaLanguage === "fr" ? "fr" : "en",
           modifiedAt: summary.timestamp,
           dateSource: summary.timestamp ? "meta" : "unknown"
         });
@@ -1725,8 +1865,16 @@ async function tryFetchGeneralFactResearch(args: ToolRoutingDecision): Promise<L
     if (subjectEvidence.length === 0) {
       return null;
     }
+    if (!hasIntentAdequateEvidence(subjectEvidence, subjectFrame)) {
+      return null;
+    }
     subjectEvidence
-      .sort((left, right) => right.confidence - left.confidence)
+      .sort(
+        (left, right) =>
+          evidenceIntentScore(right, subjectFrame) - evidenceIntentScore(left, subjectFrame) ||
+          evidenceLanguageRank(right, language) - evidenceLanguageRank(left, language) ||
+          right.confidence - left.confidence
+      )
       .slice(0, comparisonSubjects.length === 2 ? 3 : 5)
       .forEach((item) => addEvidence(evidence, item));
   }

@@ -208,6 +208,53 @@ const CURRENT_TERMS = [
   "cette semaine",
   "maintenant"
 ];
+const RULES_INTENT_TERMS = [
+  "rules",
+  "rule",
+  "game",
+  "play",
+  "player",
+  "scoring",
+  "score",
+  "round",
+  "turn",
+  "sport",
+  "frame",
+  "strike",
+  "spare",
+  "pins",
+  "ball",
+  "regles",
+  "regle",
+  "jeu",
+  "jouer",
+  "joueur",
+  "points",
+  "manche",
+  "tour",
+  "carreau",
+  "quille",
+  "quilles",
+  "boule",
+  "lancer",
+  "abat",
+  "reserve"
+];
+const RULES_REJECTED_SENSE_TERMS = [
+  "surname",
+  "family name",
+  "village",
+  "town",
+  "film",
+  "album",
+  "university",
+  "nom de famille",
+  "village",
+  "commune",
+  "film",
+  "album",
+  "universite"
+];
 
 function unique(values: string[]) {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
@@ -349,10 +396,17 @@ function searchModifiersForDomain(domain: SemanticDomain, language: "fr" | "en" 
 }
 
 function inferIntent(question: string, toolRouting?: ToolRoutingDecision | null) {
+  const normalized = normalizeLooseText(question);
+  if (
+    /\b(?:rules?|gameplay|how do you play|how to play|regles?|comment jouer|comment joue t on)\b/.test(
+      normalized
+    )
+  ) {
+    return "rules";
+  }
   if (toolRouting?.intent && toolRouting.intent !== "none") {
     return toolRouting.intent;
   }
-  const normalized = normalizeLooseText(question);
   if (/\b(?:explain|explique|define|definition|c est quoi|what is)\b/.test(normalized)) {
     return "explain";
   }
@@ -363,6 +417,23 @@ function inferIntent(question: string, toolRouting?: ToolRoutingDecision | null)
     return "recommend";
   }
   return "answer";
+}
+
+function expectedTermsForIntent(intent: string) {
+  return intent === "rules" ? RULES_INTENT_TERMS : [];
+}
+
+function rejectedTermsForIntent(intent: string) {
+  return intent === "rules" ? RULES_REJECTED_SENSE_TERMS : [];
+}
+
+function searchModifiersForIntent(intent: string, language: "fr" | "en" | "unknown") {
+  if (intent !== "rules") {
+    return [];
+  }
+  return language === "fr"
+    ? ["regles", "deroulement du jeu", "comptage des points"]
+    : ["rules", "gameplay", "scoring"];
 }
 
 function buildMissions(frame: Omit<SemanticFrame, "componentMissions">): ComponentMission[] {
@@ -439,15 +510,26 @@ export function buildSemanticFrame(args: {
 }): SemanticFrame {
   const domain = inferDomain(args);
   const language = args.language === "fr" || args.language === "en" ? args.language : "unknown";
-  const expectedSenseTerms = unique(expectedTermsForDomain(domain));
-  const rejectedSenseTerms = unique(rejectedTermsForDomain(domain));
+  const intent = inferIntent(args.question, args.toolRouting);
+  const expectedSenseTerms = unique([
+    ...expectedTermsForDomain(domain),
+    ...expectedTermsForIntent(intent)
+  ]);
+  const rejectedSenseTerms = unique([
+    ...rejectedTermsForDomain(domain),
+    ...rejectedTermsForIntent(intent)
+  ]);
+  const intentSearchModifiers = searchModifiersForIntent(intent, language);
   const frameWithoutMissions = {
     subject: args.subject?.trim() || null,
     domain,
-    intent: inferIntent(args.question, args.toolRouting),
+    intent,
     expectedSenseTerms,
     rejectedSenseTerms,
-    searchModifiers: searchModifiersForDomain(domain, language),
+    searchModifiers:
+      intentSearchModifiers.length > 0
+        ? intentSearchModifiers
+        : searchModifiersForDomain(domain, language),
     ambiguityLevel: expectedSenseTerms.length > 0 && rejectedSenseTerms.length > 0 ? "high" : "medium"
   } satisfies Omit<SemanticFrame, "componentMissions">;
 
@@ -496,11 +578,20 @@ export function buildSemanticSearchCandidates(subject: string, frame: SemanticFr
     return [cleanSubject].filter(Boolean);
   }
 
-  return unique([
-    cleanSubject,
+  const focusedCandidates = [
     `${cleanSubject} ${frame.searchModifiers.slice(0, 2).join(" ")}`,
-    `${cleanSubject} ${frame.searchModifiers[0]}`
-  ]);
+    `${cleanSubject} ${frame.searchModifiers[0]}`,
+    cleanSubject
+  ];
+  return unique(
+    frame.intent === "rules"
+      ? focusedCandidates
+      : [
+          cleanSubject,
+          `${cleanSubject} ${frame.searchModifiers.slice(0, 2).join(" ")}`,
+          `${cleanSubject} ${frame.searchModifiers[0]}`
+        ]
+  );
 }
 
 export function sourceMatchesSemanticFrame(frame: SemanticFrame, text: string): SourceSemanticCheck {
@@ -529,6 +620,16 @@ export function sourceMatchesSemanticFrame(frame: SemanticFrame, text: string): 
       matchedExpectedTerms,
       rejectedTerms,
       reason: "source_matches_rejected_sense"
+    };
+  }
+
+  if (frame.intent === "rules" && matchedExpectedTerms.length === 0) {
+    return {
+      passed: false,
+      score: 0.3,
+      matchedExpectedTerms,
+      rejectedTerms,
+      reason: "source_missing_rules_or_gameplay_evidence"
     };
   }
 

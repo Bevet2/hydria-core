@@ -176,6 +176,12 @@ const DIRECT_FRENCH_MARKERS = [
   "sa",
   "son",
   "ses",
+  "chaque",
+  "joueur",
+  "lance",
+  "quilles",
+  "points",
+  "partie",
   "biographie",
   "explique",
   "raconte"
@@ -207,7 +213,13 @@ const DIRECT_ENGLISH_MARKERS = [
   "is",
   "are",
   "was",
-  "were"
+  "were",
+  "standard",
+  "game",
+  "players",
+  "roll",
+  "pins",
+  "frames"
 ];
 const DIRECT_FRENCH_ACCENT_PATTERN = /[\u00e0\u00e2\u00e7\u00e9\u00e8\u00ea\u00eb\u00ee\u00ef\u00f4\u00f9\u00fb\u00fc\u00ff\u0153]/i;
 
@@ -1208,10 +1220,21 @@ function buildSourceBackedFactualRepair(args: {
       ? args.tooling.routing.extractedArgs.subject
       : "";
   const subjectTerms = new Set(extractTerms(subject, 10));
+  const desiredLanguage = extractedToolLanguage(args.tooling);
+  const candidateFacts = args.tooling.verifiedFacts
+    .map((item) => item.replace(/\s+/g, " ").trim())
+    .filter((item) => item.length >= 40);
+  const languageCompatibleFacts = desiredLanguage
+    ? candidateFacts.filter((item) => {
+        const detectedLanguage = detectDirectLanguage(item);
+        return detectedLanguage === "unknown" || detectedLanguage === desiredLanguage;
+      })
+    : candidateFacts;
+  if (desiredLanguage && candidateFacts.length > 0 && languageCompatibleFacts.length === 0) {
+    return null;
+  }
   const fact =
-    args.tooling.verifiedFacts
-      .map((item) => item.replace(/\s+/g, " ").trim())
-      .filter((item) => item.length >= 40)
+    languageCompatibleFacts
       .sort((left, right) => {
         const rightHits = [...subjectTerms].filter((term) => normalizeText(right).includes(term)).length;
         const leftHits = [...subjectTerms].filter((term) => normalizeText(left).includes(term)).length;
@@ -2368,6 +2391,25 @@ function extractedToolLanguage(tooling: ChatToolMetadata): "fr" | "en" | null {
   return language === "fr" || language === "en" ? language : null;
 }
 
+function detectEvidenceRowLanguage(args: {
+  fact: string;
+  source?: ChatToolMetadata["sources"][number];
+}): "fr" | "en" | "unknown" {
+  const url = args.source?.url ?? "";
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    if (hostname.startsWith("fr.")) {
+      return "fr";
+    }
+    if (hostname.startsWith("en.") || hostname.endsWith("britannica.com")) {
+      return "en";
+    }
+  } catch {
+    // Fall through to text detection.
+  }
+  return detectDirectLanguage(args.fact);
+}
+
 function extractCalculatorResult(facts: string[], summaries: string[]) {
   const combined = [...facts, ...summaries].join("\n");
   const match = combined.match(/(?:computed result|calculator result)\s*:\s*(.+?)\s*=\s*([^\n.]+)\.?/i);
@@ -2483,9 +2525,21 @@ function buildResearchEvidenceFallbackDraft(args: {
   const isEnglish = effectiveLanguage === "en";
   const responseLength = planResponseLength(args.routingQuestion);
   const preserveLongForm = responseLength.mode === "long_form";
-  const facts = args.tooling.verifiedFacts
-    .map((fact, index) => {
-      const sourceTitle = args.tooling.sources[index]?.title?.trim() ?? "";
+  const evidenceRows = args.tooling.verifiedFacts
+    .map((fact, index) => ({
+      fact,
+      source: args.tooling.sources[index]
+    }))
+    .filter(({ fact, source }) => {
+      const detectedLanguage = detectEvidenceRowLanguage({ fact, source });
+      return detectedLanguage === "unknown" || detectedLanguage === effectiveLanguage;
+    });
+  if (evidenceRows.length === 0) {
+    return null;
+  }
+  const facts = evidenceRows
+    .map(({ fact, source }) => {
+      const sourceTitle = source?.title?.trim() ?? "";
       let cleaned = fact
         .replace(/&nbsp;|&#160;/gi, " ")
         .replace(/&amp;/gi, "&")
@@ -2506,10 +2560,12 @@ function buildResearchEvidenceFallbackDraft(args: {
     })
     .filter(Boolean)
     .slice(0, 6);
-  const sources = args.tooling.sources
+  const sources = evidenceRows
+    .map(({ source }) => source)
+    .filter((source): source is NonNullable<typeof source> => Boolean(source))
     .slice(0, 5)
     .map((source) => `${source.title} (${source.url})`);
-  const multiSource = args.tooling.sources.length >= 2;
+  const multiSource = sources.length >= 2;
   const answerText = [
     isEnglish
       ? `The local synthesis could not be validated, so here are the verified ${multiSource ? "multi-source" : "source"} findings without unsupported extrapolation:`

@@ -37,7 +37,7 @@ const WEBSITE_LOOKUP_PATTERN =
 const EXPLICIT_FACTUAL_RESEARCH_PATTERN =
   /\b(?:verify|fact[-\s]?check|source|sources|cite|citation|search the web|search online|look up|lookup|find online|cherche(?:r)? sur internet|recherche web|source fiable|sources fiables|verifie|v(?:e|\u00e9)rifie|cite)\b/i;
 const PUBLIC_RULES_KNOWLEDGE_PATTERN =
-  /(?:\b(?:tu connais|connais[- ]?tu|quelles? sont|explique|donne(?:-|\s)?moi|rappelle(?:-|\s)?moi)\b.{0,35}\b(?:regles?|r[eè]gles?)\b|\b(?:do you know|what are|explain|tell me|give me)\b.{0,35}\brules?\b|\b(?:comment (?:joue[- ]?t[- ]?on|jouer)|how (?:do you play|to play))\b)/i;
+  /(?:\b(?:tu connais|connais[- ]?tu|quelles? sont|explique|donne(?:-|\s)?moi|rappelle(?:-|\s)?moi)\b.{0,35}\b(?:regles?|r(?:e|\u00e8|\u00e9|\ufffd|\u00c3\u00a8|\u00c3\u00a9)gles?)\b|\b(?:do you know|what are|explain|tell me|give me)\b.{0,35}\brules?\b|\b(?:comment (?:joue[- ]?t[- ]?on|jouer)|how (?:do you play|to play))\b)/i;
 const CURRENCY_NAME_PATTERN =
   /\b(?:usd|eur|gbp|cad|aud|jpy|chf|sek|nok|dkk|pln|inr|cny|rmb|btc|eth|bitcoin|ethereum|dollar(?:s)?|euro(?:s)?|pound(?:s)?|yen)\b/i;
 const TIME_PATTERN =
@@ -122,7 +122,7 @@ function isConversationPlanningCategory(category: QuestionCategory | null | unde
 }
 
 function detectQuestionLanguage(question: string) {
-  return /\b(?:fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|tu connais|connais[- ]?tu|r[eè]gles?|comment jouer|comment joue[- ]?t[- ]?on|recap|r(?:e|\u00e9)cap|nouveaut(?:e|\u00e9)s?|sorties?|semaine|quel|quelle|quels|temps|aujourd|meteo|m(?:e|\u00e9|\u00c3\u00a9|\ufffd)t(?:e|\u00e9|\u00c3\u00a9|\ufffd)o|pluie|vent|neige|fait-il|fait il|qui est|qui etait|qui (?:e|\u00e9)tait|biographie|presentation|pr(?:e|\u00e9)sentation|expos(?:e|\u00e9)|calcule|calculer|combien|convertis|convertir|euros?|dollars?|taux|avec|plusieurs|fiables?|limites?|pour)\b/i.test(
+  return /\b(?:fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|tu connais|connais[- ]?tu|r(?:e|\u00e8|\u00e9|\ufffd|\u00c3\u00a8|\u00c3\u00a9)gles?|comment jouer|comment joue[- ]?t[- ]?on|recap|r(?:e|\u00e9)cap|nouveaut(?:e|\u00e9)s?|sorties?|semaine|quel|quelle|quels|temps|aujourd|meteo|m(?:e|\u00e9|\u00c3\u00a9|\ufffd)t(?:e|\u00e9|\u00c3\u00a9|\ufffd)o|pluie|vent|neige|fait-il|fait il|qui est|qui etait|qui (?:e|\u00e9)tait|biographie|presentation|pr(?:e|\u00e9)sentation|expos(?:e|\u00e9)|calcule|calculer|combien|convertis|convertir|euros?|dollars?|taux|avec|plusieurs|fiables?|limites?|pour)\b/i.test(
     question
   )
     ? "fr"
