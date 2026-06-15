@@ -570,6 +570,33 @@ export function buildStudentChatPrompt(input: StudentChatAdapterInput, route = s
       .join("\n");
   }
 
+  if (route.runtimeBudget.profile === "long_form_chat") {
+    return [
+      `Language: ${expectedLanguage(input.activeConstraintCapsule)}`,
+      `Domain: ${input.category}`,
+      `Target length: ${responseLength.targetWords ?? "developed"} words minimum target.`,
+      "Write the complete final answer in clear sections.",
+      "Resolve ambiguous terms from the subject, domain, and surrounding requested dimensions. Do not switch to an unrelated lexical sense.",
+      "Explain mechanisms, causal links, tradeoffs, and limitations instead of paraphrasing source excerpts.",
+      "Use every relevant verified fact, cite the supplied sources, and never invent a claim that depends on missing evidence.",
+      semanticMissionContext,
+      toolContext,
+      knowledgeContext,
+      input.runtimeMode === "conversation" ? "Active context:" : "",
+      input.runtimeMode === "conversation" ? formatCompactCapsule(input.activeConstraintCapsule) : "",
+      input.runtimeMode === "conversation" && recentMessages ? "Recent conversation turns:" : "",
+      input.runtimeMode === "conversation" ? recentMessages : "",
+      ...retryLines,
+      input.routingQuestion !== input.userMessage ? "Resolved current task:" : "",
+      input.routingQuestion !== input.userMessage ? input.routingQuestion : "",
+      "Current user message:",
+      input.userMessage,
+      "Return plain final text only."
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
   return [
     `Language: ${expectedLanguage(input.activeConstraintCapsule)}`,
     `Language rule: answer only in ${expectedLanguage(input.activeConstraintCapsule)} unless the user explicitly asks for another language.`,

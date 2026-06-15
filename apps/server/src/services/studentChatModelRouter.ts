@@ -868,14 +868,26 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
     return route;
   }
 
+  const keepSpecialist =
+    route.specialistRole === "code_specialist" || route.specialistRole === "writing_business";
+  const longFormModel = keepSpecialist ? route.modelName : QWEN_3B;
   const timeoutMs = Math.max(
     route.runtimeBudget.timeoutMs,
-    Math.min(600000, 90000 + responseLength.maxOutputTokens * 180)
+    Math.min(600000, 90000 + responseLength.maxOutputTokens * 220)
   );
   return {
     ...route,
+    capabilityId: keepSpecialist ? route.capabilityId : "qwen-3b-standard-light",
+    displayName: keepSpecialist ? route.displayName : "Qwen 3B Long-form Writer",
+    modelName: longFormModel,
+    specialistRole: keepSpecialist ? route.specialistRole : "primary_brain",
     routingReason: `${route.routingReason} The user explicitly requested a developed long-form answer.`,
-    pipeline: [...route.pipeline, `response_length:long_form_${responseLength.targetWords ?? "developed"}_words`],
+    pipeline: [
+      ...route.pipeline,
+      `long_form_writer:${longFormModel}`,
+      `response_length:long_form_${responseLength.targetWords ?? "developed"}_words`
+    ],
+    fallbackModelNames: [longFormModel],
     timeoutMs,
     runtimeBudget: {
       ...route.runtimeBudget,
@@ -886,7 +898,7 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
       maxLatencyMs: timeoutMs,
       maxOutputTokens: responseLength.maxOutputTokens,
       maxConcurrent: env.MODEL_RUNTIME_HEAVY_MAX_CONCURRENCY,
-      fallbackDepth: Math.max(1, route.runtimeBudget.fallbackDepth),
+      fallbackDepth: 0,
       concurrencyKey: "heavy_local_chat"
     }
   };

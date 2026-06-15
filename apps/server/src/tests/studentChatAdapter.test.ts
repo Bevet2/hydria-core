@@ -1084,6 +1084,7 @@ test("student chat adapter allocates a long-form budget when the user requests 9
   let selectedModel = "";
   let maxTokens = 0;
   let numCtx = 0;
+  let prompt = "";
   const state = createInitialState();
   const question =
     "Explique en profondeur, en au moins 900 mots, comment PostgreSQL assure la durabilite, la concurrence et la reprise apres incident.";
@@ -1104,7 +1105,8 @@ test("student chat adapter allocates a long-form budget when the user requests 9
     getConfiguredModelName() {
       return "qwen2.5:14b";
     },
-    async testPrompt(_prompt, _system, options) {
+    async testPrompt(inputPrompt, _system, options) {
+      prompt = inputPrompt;
       selectedModel = options?.modelName ?? "";
       maxTokens = options?.numPredict ?? 0;
       numCtx = options?.numCtx ?? 0;
@@ -1138,8 +1140,9 @@ test("student chat adapter allocates a long-form budget when the user requests 9
     knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata
   });
 
-  assert.ok(selectedModel.length > 0);
+  assert.equal(selectedModel, "qwen2.5:3b");
   assert.equal(result.runtimeBudget?.profile, "long_form_chat");
+  assert.equal(result.runtimeBudget?.fallbackDepth, 0);
   assert.ok((result.runtimeBudget?.maxOutputTokens ?? 0) >= 1600);
   assert.equal(maxTokens, result.runtimeBudget?.maxOutputTokens);
   assert.ok(numCtx >= 8192);
@@ -1147,6 +1150,61 @@ test("student chat adapter allocates a long-form budget when the user requests 9
     result.specialist.pipeline.some((step) => step.includes("response_length:long_form_900_words")),
     true
   );
+  assert.match(prompt, /Resolve ambiguous terms/i);
+  assert.doesNotMatch(prompt, /AgenticOrchestrationPlan:/i);
+});
+
+test("student chat adapter does not chain local models after a long-form timeout", async () => {
+  const attemptedModels: string[] = [];
+  const question =
+    "Explique en profondeur, en au moins 300 mots, les garanties et limites de PostgreSQL.";
+  const state = createInitialState();
+  const capsule = buildActiveConstraintCapsule(state, question);
+  const policy = decideMultiTurnAnswerPolicy({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    newUserMessage: question,
+    category: "technical_explanation",
+    toolRouting: null,
+    lastAssistantAnswer: ""
+  });
+  const evidenceCapsule = buildEvidenceCapsule({
+    question,
+    category: "technical_explanation"
+  });
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "qwen2.5:14b";
+    },
+    async testPrompt(_prompt, _system, options) {
+      attemptedModels.push(options?.modelName ?? "");
+      throw new Error("local timeout");
+    }
+  });
+
+  const result = await adapter.answer({
+    question,
+    routingQuestion: question,
+    userMessage: question,
+    runtimeMode: "direct",
+    category: "technical_explanation",
+    recentMessages: [],
+    activeConstraintCapsule: capsule,
+    answerPolicy: policy,
+    evidenceCapsule,
+    agenticPlan: buildAgenticPlan({
+      question,
+      category: "technical_explanation",
+      evidenceCapsule
+    }),
+    requiresExternalGrounding: false,
+    tooling: defaultChatToolMetadata,
+    knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata
+  });
+
+  assert.deepEqual(attemptedModels, ["qwen2.5:3b"]);
+  assert.equal(result.runtimeBudget?.fallbackDepth, 0);
+  assert.equal(result.provider, "fallback");
 });
 
 test("student chat adapter does not call cloud fallback when local generation fails", async () => {
