@@ -83,10 +83,11 @@ const COMMON_ALIAS_CANONICALS: Record<string, string> = {
   cleopatra: "Cleopatra VII",
   "cleopatre vii": "Cleopatra VII",
   "cleopatra vii": "Cleopatra VII",
-  "napoleon bonaparte": "Napoleon Bonaparte"
+  "napoleon bonaparte": "Napoleon I"
 };
 
 const SPECIAL_CANDIDATE_ALIASES: Record<string, string[]> = {
+  "napoleon i": ["Napoleon I", "Napoleon Ier", "Napoleon Bonaparte", "Napoleon"],
   "cleopatra vii": ["Cleopatra VII", "Cleopatre VII", "Cléopâtre VII", "Cleopatra", "Cleopatre"],
   "napoleon bonaparte": ["Napoleon Bonaparte", "Napoléon Ier", "Napoleon I", "Napoleon"]
 };

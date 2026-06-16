@@ -552,6 +552,101 @@ test("local research fact-check tool uses Wikipedia summary for stable biographi
   assert.equal(result?.sources?.length, 2);
 });
 
+test("local research fact-check tool resolves Napoleon Bonaparte to Napoleon I", async (t) => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    const decoded = decodeURIComponent(url);
+    if (url.includes("fr.wikipedia.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          query: {
+            search: [
+              {
+                title: "Pierre-Napol\u00e9on Bonaparte",
+                snippet: "Prince Bonaparte."
+              },
+              {
+                title: "Napol\u00e9on Ier",
+                snippet: "Napol\u00e9on Bonaparte, empereur des Fran\u00e7ais."
+              }
+            ]
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (decoded.includes("fr.wikipedia.org/api/rest_v1/page/summary/Napol\u00e9on_Ier")) {
+      return new Response(
+        JSON.stringify({
+          title: "Napol\u00e9on Ier",
+          description: "militaire, homme d'Etat et monarque fran\u00e7ais",
+          extract:
+            "Napol\u00e9on Bonaparte, n\u00e9 le 15 ao\u00fbt 1769 \u00e0 Ajaccio et mort le 5 mai 1821 \u00e0 Sainte-H\u00e9l\u00e8ne, est un militaire et homme d'Etat fran\u00e7ais, premier empereur des Fran\u00e7ais.",
+          timestamp: "2026-05-01T12:00:00Z",
+          content_urls: {
+            desktop: {
+              page: "https://fr.wikipedia.org/wiki/Napol%C3%A9on_Ier"
+            }
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (decoded.includes("fr.wikipedia.org/api/rest_v1/page/summary/Pierre-Napol\u00e9on_Bonaparte")) {
+      return new Response(
+        JSON.stringify({
+          title: "Pierre-Napol\u00e9on Bonaparte",
+          description: "prince Bonaparte",
+          extract: "Pierre-Napol\u00e9on Bonaparte est un membre de la famille Bonaparte.",
+          timestamp: "2026-05-01T12:00:00Z",
+          content_urls: {
+            desktop: {
+              page: "https://fr.wikipedia.org/wiki/Pierre-Napol%C3%A9on_Bonaparte"
+            }
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("wikidata.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          search: [
+            {
+              id: "Q517",
+              label: "Napol\u00e9on Ier",
+              description: "militaire, homme d'Etat et monarque fran\u00e7ais",
+              concepturi: "https://www.wikidata.org/wiki/Q517"
+            },
+            {
+              id: "Q3335927",
+              label: "Napol\u00e9on Bonaparte",
+              description: "French cruiseferry built in 1996",
+              concepturi: "https://www.wikidata.org/wiki/Q3335927"
+            }
+          ]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const service = new LocalToolExecutionService();
+  const result = await service.tryExecute(buildFactCheckRouting("Napoleon Bonaparte"));
+
+  assert.equal(result?.resultLabel, "Napoleon I");
+  assert.match(result?.verifiedFacts.join(" "), /empereur des Fran/);
+  assert.doesNotMatch(result?.verifiedFacts.join(" "), /Pierre-Napol|cruiseferry|ferry/i);
+  assert.equal(result?.sources?.length, 2);
+});
+
 test("local research fact-check tool cleans presentation biography subjects before Wikipedia lookup", async (t) => {
   const originalFetch = globalThis.fetch;
   const requestedUrls: string[] = [];

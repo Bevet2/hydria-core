@@ -1313,9 +1313,16 @@ function entityTitleKey(value: string) {
     .trim();
 }
 
+function normalizeOrdinalTitleKey(value: string) {
+  return value
+    .replace(/\b(?:ier|1er)\b/g, " i ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function subjectTitleScore(subject: string, title: string) {
-  const subjectKey = entityTitleKey(subject);
-  const titleKey = entityTitleKey(title);
+  const subjectKey = normalizeOrdinalTitleKey(entityTitleKey(subject));
+  const titleKey = normalizeOrdinalTitleKey(entityTitleKey(title));
   if (!subjectKey || !titleKey) {
     return 0;
   }

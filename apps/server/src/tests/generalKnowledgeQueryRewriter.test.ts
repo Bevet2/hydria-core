@@ -60,6 +60,17 @@ test("general knowledge rewriter strips narrative history request wrappers", () 
   assert.equal(charlemagne.canonicalSubject, "Charlemagne");
 });
 
+test("general knowledge rewriter resolves Napoleon Bonaparte to the historical emperor", () => {
+  const napoleon = rewriteGeneralKnowledgeQuery({
+    question: "Biographie courte de Napoleon Bonaparte.",
+    language: "fr"
+  });
+
+  assert.equal(napoleon.canonicalSubject, "Napoleon I");
+  assert.ok(napoleon.candidates.includes("Napoleon Ier"));
+  assert.ok(napoleon.candidates.includes("Napoleon Bonaparte"));
+});
+
 test("general knowledge rewriter extracts the grammatical subject from long-form research instructions", () => {
   const subject = extractSalientResearchSubject(
     "Explique en profondeur, en au moins 300 mots, comment PostgreSQL assure la durabilite, la concurrence et la reprise apres incident. Structure la reponse et cite plusieurs sources fiables."
