@@ -1595,7 +1595,7 @@ async function fetchWikidataEntity(
   language: string,
   semanticFrame: SemanticFrame,
   expectedSubject: string
-): Promise<GeneralKnowledgeEvidence | null> {
+): Promise<GeneralKnowledgeEvidence[]> {
   const url = new URL("https://www.wikidata.org/w/api.php");
   url.searchParams.set("action", "wbsearchentities");
   url.searchParams.set("search", searchQuery);
@@ -1608,7 +1608,7 @@ async function fetchWikidataEntity(
   const body = await fetchJson<WikidataSearchResponse>(url);
   const matches = body?.search ?? [];
   if (matches.length === 0) {
-    return null;
+    return [];
   }
 
   const candidates = matches
@@ -1649,11 +1649,32 @@ async function fetchWikidataEntity(
         description,
         id,
         excerpt,
-        semanticCheck
+        semanticCheck,
+        descriptorCount: evidenceDescriptorTerms(
+          {
+            title: label,
+            url: match.concepturi ?? `https://www.wikidata.org/wiki/${id}`,
+            snippet: description,
+            excerpt,
+            engine: "known_endpoint",
+            origin: "known_endpoint",
+            confidence: Math.max(0.72, semanticCheck.score),
+            language: language === "fr" ? "fr" : "en",
+            modifiedAt: null,
+            dateSource: "unknown"
+          },
+          expectedSubject
+        ).length
       };
     })
     .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
     .sort((left, right) => {
+      if (isOrdinalOrShortAmbiguousSubject(expectedSubject)) {
+        const descriptorDelta = right.descriptorCount - left.descriptorCount;
+        if (descriptorDelta !== 0) {
+          return descriptorDelta;
+        }
+      }
       const titleDelta = subjectTitleScore(expectedSubject, right.label) - subjectTitleScore(expectedSubject, left.label);
       if (titleDelta !== 0) {
         return titleDelta;
@@ -1663,23 +1684,18 @@ async function fetchWikidataEntity(
       return expectedDelta !== 0 ? expectedDelta : right.semanticCheck.score - left.semanticCheck.score;
     });
 
-  const best = candidates[0];
-  if (!best) {
-    return null;
-  }
-
-  return {
-    title: `Wikidata: ${best.label}`,
-    url: best.match.concepturi ?? `https://www.wikidata.org/wiki/${best.id}`,
-    snippet: best.description,
-    excerpt: best.excerpt,
-    engine: "known_endpoint",
-    origin: "known_endpoint",
-    confidence: Math.max(0.72, best.semanticCheck.score),
-    language: language === "fr" ? "fr" : "en",
+  return candidates.map((candidate) => ({
+    title: `Wikidata: ${candidate.label}`,
+    url: candidate.match.concepturi ?? `https://www.wikidata.org/wiki/${candidate.id}`,
+    snippet: candidate.description,
+    excerpt: candidate.excerpt,
+    engine: "known_endpoint" as const,
+    origin: "known_endpoint" as const,
+    confidence: Math.max(0.72, candidate.semanticCheck.score),
+    language: language === "fr" ? "fr" as const : "en" as const,
     modifiedAt: null,
-    dateSource: "unknown"
-  };
+    dateSource: "unknown" as const
+  }));
 }
 
 function isDisambiguationEvidence(text: string) {
@@ -1831,7 +1847,9 @@ function evidenceFamily(evidence: GeneralKnowledgeEvidence) {
   }
 }
 
-function inferEvidenceEntityKind(evidence: GeneralKnowledgeEvidence): "person" | "place" | "organization" | "game" | "unknown" {
+type EvidenceEntityKind = "person" | "place" | "organization" | "game" | "work_or_artifact" | "unknown";
+
+function inferEvidenceEntityKind(evidence: GeneralKnowledgeEvidence): EvidenceEntityKind {
   const text = normalizeLooseText(`${evidence.title} ${evidence.snippet} ${evidence.excerpt}`);
   if (
     /\b(?:city|town|village|municipality|commune|ville|municipalite|quebec|canada|department|province)\b/.test(text)
@@ -1839,7 +1857,12 @@ function inferEvidenceEntityKind(evidence: GeneralKnowledgeEvidence): "person" |
     return "place";
   }
   if (
-    /\b(?:king|queen|emperor|pope|scientist|writer|mathematician|roi|reine|empereur|imperatrice|souverain|ne le|nee le|mort le|dynastie|carolingien|human|person)\b/.test(text)
+    /\b(?:film|album|opera|song|novel|book|painting|tableau|peinture|ferry|ship|cruiseferry|navire|bateau|vehicle|vehicule|jeu video)\b/.test(text)
+  ) {
+    return "work_or_artifact";
+  }
+  if (
+    /\b(?:king|queen|emperor|pope|scientist|writer|mathematician|landgrave|duke|roi|reine|empereur|imperatrice|souverain|landgrave|duc|duchesse|ne le|nee le|mort le|dynastie|carolingien|human|person)\b/.test(text)
   ) {
     return "person";
   }
@@ -1856,7 +1879,7 @@ function inferEvidenceEntityKind(evidence: GeneralKnowledgeEvidence): "person" |
   return "unknown";
 }
 
-function evidenceEntityKindsCompatible(left: "person" | "place" | "organization" | "game" | "unknown", right: "person" | "place" | "organization" | "game" | "unknown") {
+function evidenceEntityKindsCompatible(left: EvidenceEntityKind, right: EvidenceEntityKind) {
   return left === "unknown" || right === "unknown" || left === right;
 }
 
@@ -1865,6 +1888,145 @@ function hasCompatibleEntityKind(existing: GeneralKnowledgeEvidence[], candidate
     .map(inferEvidenceEntityKind)
     .find((kind) => kind !== "unknown") ?? "unknown";
   return evidenceEntityKindsCompatible(anchorKind, inferEvidenceEntityKind(candidate));
+}
+
+const EVIDENCE_DESCRIPTOR_STOPWORDS = new Set([
+  "wikipedia",
+  "wikidata",
+  "source",
+  "sources",
+  "page",
+  "entity",
+  "wiki",
+  "http",
+  "https",
+  "dans",
+  "avec",
+  "pour",
+  "des",
+  "les",
+  "une",
+  "the",
+  "and",
+  "with",
+  "from",
+  "that",
+  "this",
+  "also",
+  "called",
+  "aussi",
+  "appele",
+  "appelee",
+  "ne",
+  "nee",
+  "mort",
+  "morte"
+]);
+
+const EVIDENCE_DESCRIPTOR_ALLOWLIST = new Set([
+  "roi",
+  "king",
+  "reine",
+  "queen",
+  "empereur",
+  "emperor",
+  "france",
+  "francs",
+  "french",
+  "francais",
+  "francaise",
+  "canonise",
+  "catholique",
+  "eglise",
+  "militaire",
+  "monarque",
+  "scientist",
+  "scientifique",
+  "physicienne",
+  "physicist",
+  "chimiste",
+  "chemist",
+  "mathematician",
+  "mathematicienne",
+  "writer",
+  "astronomer",
+  "engineer",
+  "processus",
+  "plantes",
+  "organismes",
+  "technologie",
+  "technology",
+  "societe",
+  "company",
+  "corporation",
+  "fabricant",
+  "manufacturer",
+  "gpu",
+  "semiconductor"
+]);
+
+function evidenceDescriptorTerms(evidence: GeneralKnowledgeEvidence, expectedSubject = "") {
+  const subjectTerms = new Set(normalizeLooseText(expectedSubject).split(/\s+/).filter(Boolean));
+  return normalizeLooseText(`${evidence.title} ${evidence.snippet} ${evidence.excerpt}`)
+    .split(/\s+/)
+    .map((token) => token.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, ""))
+    .filter((token) => {
+      if (!token || subjectTerms.has(token) || EVIDENCE_DESCRIPTOR_STOPWORDS.has(token)) {
+        return false;
+      }
+      return token.length >= 5 || EVIDENCE_DESCRIPTOR_ALLOWLIST.has(token) || /\b\d{3,4}\b/.test(token);
+    });
+}
+
+function evidenceDescriptorOverlapCount(
+  left: GeneralKnowledgeEvidence,
+  right: GeneralKnowledgeEvidence,
+  expectedSubject = ""
+) {
+  const leftTerms = new Set(evidenceDescriptorTerms(left, expectedSubject));
+  return evidenceDescriptorTerms(right, expectedSubject).filter((term) => leftTerms.has(term)).length;
+}
+
+function isOrdinalOrShortAmbiguousSubject(subject: string) {
+  const terms = normalizeLooseText(subject).split(/\s+/).filter(Boolean);
+  return terms.some((term) => /^[ivxlcdm]+$/.test(term) || /^\d+(?:er)?$/.test(term)) || terms.length <= 2;
+}
+
+function hasCompatibleEvidenceMeaning(
+  existing: GeneralKnowledgeEvidence[],
+  candidate: GeneralKnowledgeEvidence,
+  expectedSubject = ""
+) {
+  if (!hasCompatibleEntityKind(existing, candidate)) {
+    return false;
+  }
+  if (isDisambiguationEvidence(`${candidate.title} ${candidate.snippet} ${candidate.excerpt}`)) {
+    return false;
+  }
+  if (!expectedSubject) {
+    return true;
+  }
+  const anchor = existing[0];
+  if (!anchor) {
+    return true;
+  }
+  const candidateTitle = candidate.title.replace(/^Wikidata:\s*/i, "");
+  const ambiguousSubject = isOrdinalOrShortAmbiguousSubject(expectedSubject);
+  if (expectedSubject && subjectTitleScore(expectedSubject, candidateTitle) >= 3 && !ambiguousSubject) {
+    return true;
+  }
+  const anchorKind = inferEvidenceEntityKind(anchor);
+  const candidateKind = inferEvidenceEntityKind(candidate);
+  const needsDescriptorCorroboration =
+    ambiguousSubject ||
+    (anchorKind === "person" && candidateKind === "person") ||
+    candidateKind === "work_or_artifact";
+  if (!needsDescriptorCorroboration) {
+    return true;
+  }
+  const requiredOverlap =
+    anchorKind === "person" && candidateKind === "person" && isOrdinalOrShortAmbiguousSubject(expectedSubject) ? 2 : 1;
+  return evidenceDescriptorOverlapCount(anchor, candidate, expectedSubject) >= requiredOverlap;
 }
 
 function isLowTrustGenericSource(url: string) {
@@ -1927,11 +2089,15 @@ function evidenceIntentScore(evidence: GeneralKnowledgeEvidence, semanticFrame: 
   ).matchedExpectedTerms.length;
 }
 
-function addEvidence(list: GeneralKnowledgeEvidence[], evidence: GeneralKnowledgeEvidence | null) {
+function addEvidence(
+  list: GeneralKnowledgeEvidence[],
+  evidence: GeneralKnowledgeEvidence | null,
+  expectedSubject = ""
+) {
   if (!evidence) {
     return;
   }
-  if (!hasCompatibleEntityKind(list, evidence)) {
+  if (!hasCompatibleEvidenceMeaning(list, evidence, expectedSubject)) {
     return;
   }
   if (!list.some((current) => evidenceKey(current) === evidenceKey(evidence))) {
@@ -2052,7 +2218,7 @@ async function tryFetchGeneralFactResearch(
       question,
       semanticFrame: subjectFrame
     })) {
-      addEvidence(subjectEvidence, officialEvidence);
+      addEvidence(subjectEvidence, officialEvidence, subjectRewrite.canonicalSubject);
     }
 
     for (const candidate of researchCandidates) {
@@ -2066,18 +2232,22 @@ async function tryFetchGeneralFactResearch(
         if (!summary) {
           continue;
         }
-        addEvidence(subjectEvidence, {
-          title: `Wikipedia: ${summary.title}`,
-          url: summary.url,
-          snippet: summary.description || summary.excerpt.slice(0, 180),
-          excerpt: `${summary.title}: ${summary.excerpt}`,
-          engine: "known_endpoint",
-          origin: "known_endpoint",
-          confidence: 0.88,
-          language: wikipediaLanguage === "fr" ? "fr" : "en",
-          modifiedAt: summary.timestamp,
-          dateSource: summary.timestamp ? "meta" : "unknown"
-        });
+        addEvidence(
+          subjectEvidence,
+          {
+            title: `Wikipedia: ${summary.title}`,
+            url: summary.url,
+            snippet: summary.description || summary.excerpt.slice(0, 180),
+            excerpt: `${summary.title}: ${summary.excerpt}`,
+            engine: "known_endpoint",
+            origin: "known_endpoint",
+            confidence: 0.88,
+            language: wikipediaLanguage === "fr" ? "fr" : "en",
+            modifiedAt: summary.timestamp,
+            dateSource: summary.timestamp ? "meta" : "unknown"
+          },
+          subjectRewrite.canonicalSubject
+        );
         break;
       }
       if (subjectEvidence.length > 0) {
@@ -2086,10 +2256,17 @@ async function tryFetchGeneralFactResearch(
     }
 
     for (const candidate of researchCandidates) {
-      addEvidence(
-        subjectEvidence,
-        await fetchWikidataEntity(candidate, language, subjectFrame, subjectRewrite.canonicalSubject)
-      );
+      for (const wikidataEvidence of await fetchWikidataEntity(
+        candidate,
+        language,
+        subjectFrame,
+        subjectRewrite.canonicalSubject
+      )) {
+        addEvidence(subjectEvidence, wikidataEvidence, subjectRewrite.canonicalSubject);
+        if (subjectEvidence.length >= 2) {
+          break;
+        }
+      }
       if (subjectEvidence.length >= 2) {
         break;
       }
@@ -2099,7 +2276,8 @@ async function tryFetchGeneralFactResearch(
       for (const candidate of researchCandidates) {
         addEvidence(
           subjectEvidence,
-          await searchBritannica(candidate, subjectFrame, subjectRewrite.canonicalSubject)
+          await searchBritannica(candidate, subjectFrame, subjectRewrite.canonicalSubject),
+          subjectRewrite.canonicalSubject
         );
         if (subjectEvidence.length >= 2) {
           break;
@@ -2110,7 +2288,7 @@ async function tryFetchGeneralFactResearch(
     if (subjectEvidence.length < 2) {
       for (const candidate of researchCandidates) {
         for (const item of await searchGenericFactSources(candidate, subjectFrame, subjectRewrite.canonicalSubject)) {
-          addEvidence(subjectEvidence, item);
+          addEvidence(subjectEvidence, item, subjectRewrite.canonicalSubject);
         }
         if (subjectEvidence.length >= 2) {
           break;

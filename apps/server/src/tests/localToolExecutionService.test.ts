@@ -800,6 +800,81 @@ test("local research fact-check tool rejects Wikidata disambiguation corroborati
   assert.equal(result?.sources?.[1]?.url, "https://www.wikidata.org/wiki/Q346");
 });
 
+test("local research fact-check tool requires descriptor overlap for ordinal homonyms", async (t) => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    const decoded = decodeURIComponent(url);
+    if (url.includes("fr.wikipedia.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          query: {
+            search: [
+              {
+                title: "Jean II le Bon",
+                snippet: "Roi de France."
+              }
+            ]
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (decoded.includes("fr.wikipedia.org/api/rest_v1/page/summary/Jean_II_le_Bon")) {
+      return new Response(
+        JSON.stringify({
+          title: "Jean II le Bon",
+          description: "roi de France",
+          extract:
+            "Jean II le Bon est un roi de France de la dynastie des Valois, ne en 1319 et mort en 1364.",
+          timestamp: "2026-05-01T12:00:00Z",
+          content_urls: {
+            desktop: {
+              page: "https://fr.wikipedia.org/wiki/Jean_II_le_Bon"
+            }
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("wikidata.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          search: [
+            {
+              id: "Q123",
+              label: "Jean II",
+              description: "roi de Chypre",
+              concepturi: "https://www.wikidata.org/wiki/Q123"
+            },
+            {
+              id: "Q1693",
+              label: "Jean II le Bon",
+              description: "roi de France de la dynastie des Valois",
+              concepturi: "https://www.wikidata.org/wiki/Q1693"
+            }
+          ]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const service = new LocalToolExecutionService();
+  const result = await service.tryExecute(buildFactCheckRouting("Jean II"));
+
+  assert.equal(result?.resultLabel, "Jean II");
+  assert.match(result?.verifiedFacts.join(" "), /roi de France/);
+  assert.doesNotMatch(result?.verifiedFacts.join(" "), /Chypre/i);
+  assert.equal(result?.sources?.[1]?.url, "https://www.wikidata.org/wiki/Q1693");
+});
+
 test("local research fact-check tool rejects same-brand wrong-sense source pages", async (t) => {
   const originalFetch = globalThis.fetch;
   const requestedSearches: string[] = [];
