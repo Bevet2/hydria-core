@@ -38,6 +38,12 @@ const RECOMMENDATION_MARKER =
   /\b(?:recommend|recommande|recommander|recommendations?|recommandations?|propose|proposer|proposal|decision|d[eé]cision|choose|choisis|choisir|option|go with|partir sur|prioritise|priorise|tranche|trancher|arbitrate|arbitrer|arbitre)\b/i;
 const NATURAL_COMMITMENT_MARKER =
   /\b(?:i would (?:keep|reject|choose|answer|allow|make)|je (?:garde|refuse|traite|choisis|recommande|propose|fais primer)|j[' ]?accepte)\b/i;
+// A model can commit to a decision without using any of the RECOMMENDATION_MARKER words at all
+// (e.g. a plain imperative like "Narrow the beta."). The structured labels the runtime itself asks
+// for in decision prompts ("next action" / "revise if" and their French equivalents) are independent,
+// reliable evidence that a concrete decision was made, regardless of which words carried it.
+const STRUCTURED_DECISION_LABEL_MARKER =
+  /\b(?:next action|prochaine etape|action suivante|revise if|revise si|reviser si)\s*:/i;
 const CONCRETE_ACTION_MARKER =
   /\b(?:start by|begin by|check|verify|measure|instrument|run|lancer|commencer par|verifier|mesurer|instrumenter|tester)\b/i;
 const FRENCH_MARKER =
@@ -119,7 +125,11 @@ function violatesActiveBrevityConstraint(input: ConversationQualityGateInput) {
 }
 
 function hasRecommendationSignal(answer: string) {
-  return RECOMMENDATION_MARKER.test(answer) || NATURAL_COMMITMENT_MARKER.test(answer);
+  return (
+    RECOMMENDATION_MARKER.test(answer) ||
+    NATURAL_COMMITMENT_MARKER.test(answer) ||
+    STRUCTURED_DECISION_LABEL_MARKER.test(answer)
+  );
 }
 
 function hasGenericShape(answer: string, contextValues: string[] = []) {

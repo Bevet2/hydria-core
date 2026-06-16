@@ -302,6 +302,31 @@ test("conversation quality gate rejects answers that exceed active brevity const
   assert.equal(result.recommendedAction, "revise");
 });
 
+test("conversation quality gate recognizes a decision stated as a plain imperative with structured labels", () => {
+  const state = stateWithContext();
+  const capsule = buildActiveConstraintCapsule(state, "So what do you recommend?");
+  const policy = decideMultiTurnAnswerPolicy({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    newUserMessage: "So what do you recommend?",
+    category: "architecture_design",
+    toolRouting: null
+  });
+
+  const result = analyzeConversationQuality({
+    conversationState: state,
+    activeConstraintCapsule: capsule,
+    policy,
+    newUserMessage: "So what do you recommend?",
+    answer:
+      "Narrow the beta. Given the weak signal from mid-market only and no additional budget for a broad launch, focusing on a narrower beta strategy manages risk. Next action: run a focused beta test with selected mid-market customers. Revise if: initial results show strong demand beyond mid-market.",
+    lastAssistantAnswer: "",
+    toolRouting: null
+  });
+
+  assert.equal(result.issues.includes("missing_recommendation_when_requested"), false);
+});
+
 test("active constraint capsule discards old assumptions after contradiction", () => {
   const previous = updateConversationState(
     createInitialState(),
