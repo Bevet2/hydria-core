@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { LocalToolExecutionService } from "../services/tools/localToolExecutionService.js";
+import { fetchWikipediaFocusedExtract, LocalToolExecutionService } from "../services/tools/localToolExecutionService.js";
 import { buildSemanticFrame } from "../services/orchestration/semanticMissionPlanner.js";
 import type { ToolRoutingDecision } from "../types/arena.js";
 
@@ -1931,4 +1931,60 @@ test("local research extracts gameplay evidence and rejects homonym corroboratio
   assert.match(evidence, /strike|spare/i);
   assert.doesNotMatch(evidence, /nom de famille/i);
   assert.equal(result?.sources?.some((source) => source.url.includes("/Q1")), false);
+});
+
+test("focused Wikipedia extract prefers the article's own rules section over an unrelated keyword-rich paragraph", async (t) => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = new URL(String(input));
+
+    if (
+      url.hostname === "fr.wikipedia.org" &&
+      url.pathname.endsWith("/w/api.php") &&
+      url.searchParams.get("prop") === "extracts"
+    ) {
+      return new Response(
+        JSON.stringify({
+          query: {
+            pages: {
+              "1": {
+                extract: [
+                  "Les echecs sont un jeu de societe opposant deux joueurs sur un echiquier de 64 cases.",
+                  "",
+                  "Valeur des pieces",
+                  "",
+                  "Pour evaluer une position, on attribue un certain nombre de points a chaque piece : 1 point pour chaque pion, 3 points pour un cavalier ou un fou, 5 points pour une tour et 9 points pour la dame.",
+                  "",
+                  "Regles du jeu",
+                  "",
+                  "Chaque joueur deplace une piece a tour de role. Le but du jeu est de mettre le roi adverse en echec et mat, c'est a dire de menacer sa capture sans qu'il puisse l'eviter."
+                ].join("\n")
+              }
+            }
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const question = "Quelles sont les regles des echecs ?";
+  const semanticFrame = buildSemanticFrame({
+    question,
+    category: "other",
+    subject: "Echecs",
+    language: "fr"
+  });
+
+  const excerpt = await fetchWikipediaFocusedExtract("Echecs", "fr", semanticFrame);
+
+  assert.match(excerpt ?? "", /echec et mat/i);
+  assert.doesNotMatch(excerpt ?? "", /1 point pour chaque pion/i);
 });

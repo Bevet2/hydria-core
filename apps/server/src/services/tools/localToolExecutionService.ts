@@ -1448,7 +1448,24 @@ async function fetchWikipediaSummary(
   return null;
 }
 
-function scoreFocusedWikipediaParagraph(paragraph: string, semanticFrame: SemanticFrame) {
+// Generic Wikipedia section-title convention for "how this works", not tied to any specific
+// game/sport: most game and activity articles in French and English carry a section under one
+// of these headings. Matching the article's OWN structure generalizes to any game, unlike a
+// keyword list tuned against a couple of example sports.
+const RULES_SECTION_HEADING_PATTERN =
+  /\b(?:r(?:e|è|é)gles?(?:\s+du\s+jeu)?|principes?\s+du\s+jeu|d(?:e|é)roulement(?:\s+du\s+jeu)?|comment\s+jouer|rules?(?:\s+of\s+(?:the\s+)?game)?|gameplay|how\s+to\s+play)\b/i;
+
+function isLikelyHeadingLine(line: string) {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.length > 70) {
+    return false;
+  }
+  // Wikipedia plaintext extracts render section titles as their own short line with no
+  // terminal punctuation, distinct from prose paragraphs.
+  return !/[.!?;:,]$/.test(trimmed);
+}
+
+function scoreFocusedWikipediaParagraph(paragraph: string, semanticFrame: SemanticFrame, underRulesHeading: boolean) {
   const normalized = normalizeLooseText(paragraph);
   const tokens = new Set(normalized.split(/\s+/).filter(Boolean));
   const matchedTerms = semanticFrame.expectedSenseTerms.filter((term) => {
@@ -1457,20 +1474,12 @@ function scoreFocusedWikipediaParagraph(paragraph: string, semanticFrame: Semant
       ? normalized.includes(normalizedTerm)
       : tokens.has(normalizedTerm);
   });
-  const scoringDetailHits = (
-    normalized.match(
-      /\b(?:scoring|score|points|frame|frames|strike|spare|carreau|carreaux|abat|reserve|lancer supplementaire|dix jeux?)\b/g
-    ) ?? []
-  ).length;
-  const sectionHeadingBonus =
-    /\b(?:deroulement du jeu|comptage des points|gameplay|scoring|how to play)\b/.test(normalized)
-      ? 5
-      : 0;
   const numericBonus = /\b\d+\b/.test(paragraph) ? 1 : 0;
-  return matchedTerms.length * 2 + Math.min(10, scoringDetailHits * 2) + sectionHeadingBonus + numericBonus;
+  const rulesSectionBonus = underRulesHeading ? 20 : 0;
+  return matchedTerms.length * 2 + numericBonus + rulesSectionBonus;
 }
 
-async function fetchWikipediaFocusedExtract(
+export async function fetchWikipediaFocusedExtract(
   title: string,
   language: string,
   semanticFrame: SemanticFrame
@@ -1489,15 +1498,28 @@ async function fetchWikipediaFocusedExtract(
     return null;
   }
 
-  const paragraphs = extract
-    .split(/\n{2,}/)
-    .map((paragraph) => normalizeSpaces(paragraph))
-    .filter((paragraph) => paragraph.length >= 80);
-  const ranked = paragraphs
-    .map((paragraph, index) => ({
-      paragraph,
+  let currentHeading = "";
+  const sectionedParagraphs: { paragraph: string; underRulesHeading: boolean }[] = [];
+  for (const rawChunk of extract.split(/\n{2,}/)) {
+    const chunk = normalizeSpaces(rawChunk);
+    if (isLikelyHeadingLine(rawChunk)) {
+      currentHeading = chunk;
+      continue;
+    }
+    if (chunk.length < 80) {
+      continue;
+    }
+    sectionedParagraphs.push({
+      paragraph: chunk,
+      underRulesHeading: RULES_SECTION_HEADING_PATTERN.test(currentHeading)
+    });
+  }
+
+  const ranked = sectionedParagraphs
+    .map((entry, index) => ({
+      ...entry,
       index,
-      score: scoreFocusedWikipediaParagraph(paragraph, semanticFrame)
+      score: scoreFocusedWikipediaParagraph(entry.paragraph, semanticFrame, entry.underRulesHeading)
     }))
     .sort((left, right) => right.score - left.score || left.index - right.index);
   const best = ranked[0];
