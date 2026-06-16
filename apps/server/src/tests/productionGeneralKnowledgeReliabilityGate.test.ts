@@ -216,6 +216,68 @@ test("production general knowledge gate rejects ambiguous Cleopatra opera source
   assert.ok(result.issues.includes("source_subject_mismatch:Cleopatra VII"));
 });
 
+test("production general knowledge gate rejects Napoleon wrong-sense sources", () => {
+  const testCase: GeneralKnowledgeReliabilityCase = {
+    id: "bio_napoleon_fr",
+    message: "Biographie courte de Napoleon Bonaparte.",
+    category: "other",
+    expected: {
+      kind: "source_backed",
+      term: "Napoleon I"
+    }
+  };
+
+  const result = inspectProductionGeneralKnowledgeCase(testCase, {
+    assistantMessage: {
+      content:
+        "Pierre-Napoleon Bonaparte est un membre de la famille Bonaparte. Napoleon Bonaparte est aussi le nom d'un ferry construit en 1996."
+    },
+    evidenceCapsule: {
+      answerabilityMode: "source_backed",
+      missingEvidence: [],
+      sourceBound: true
+    },
+    generation: {
+      provider: "tool",
+      model: "research_multi_source_fallback",
+      usedStaticFallback: false
+    },
+    conversationQuality: {
+      passed: true,
+      issues: []
+    },
+    tooling: {
+      used: true,
+      route: "used",
+      routing: {
+        toolType: "research",
+        intent: "fact_check",
+        toolRequired: true,
+        toolResultUsed: true
+      },
+      sources: [
+        researchSource(
+          "https://fr.wikipedia.org/wiki/Pierre-Napol%C3%A9on_Bonaparte",
+          "Pierre-Napoleon Bonaparte",
+          "Prince Bonaparte."
+        ),
+        researchSource(
+          "https://www.wikidata.org/wiki/Q3335927",
+          "Napoleon Bonaparte",
+          "French cruiseferry built in 1996."
+        )
+      ]
+    },
+    orchestrationTrace: {
+      steps: [{ id: "answerability", status: "passed", summary: "source_backed" }]
+    }
+  });
+
+  assert.equal(result.passed, false);
+  assert.ok(result.issues.includes("missing_expected_term:Napoleon I"));
+  assert.ok(result.issues.includes("source_subject_mismatch:Napoleon I"));
+});
+
 test("production general knowledge gate rejects tools for direct practical tasks", () => {
   const testCase: GeneralKnowledgeReliabilityCase = {
     id: "direct_tiramisu_fr",

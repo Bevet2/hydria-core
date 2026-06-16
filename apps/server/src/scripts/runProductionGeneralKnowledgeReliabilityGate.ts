@@ -238,18 +238,32 @@ function termLooksPresent(value: string, term: string) {
   if (!normalizedTerm) {
     return true;
   }
-  if (normalizedValue.includes(normalizedTerm)) {
+  const fullVariants = gateFullTermVariants(normalizedTerm);
+  if (fullVariants.some((variant) => normalizedValue.includes(variant))) {
     return true;
   }
-  const tokens = normalizedTerm.split(" ").filter((token) => token.length > 1);
+  if (fullVariants.length > 1) {
+    return false;
+  }
+  const tokens = normalizedTerm.split(" ").filter((token) => token.length > 1 || /^[ivxlcdm]+$/.test(token));
   return tokens.length > 0 && tokens.every((token) =>
     gateTermVariants(token).some((variant) => normalizedValue.includes(variant))
   );
 }
 
+function gateFullTermVariants(normalizedTerm: string) {
+  if (normalizedTerm === "napoleon i") {
+    return ["napoleon i", "napoleon ier", "napoleon 1er"];
+  }
+  return [normalizedTerm];
+}
+
 function gateTermVariants(token: string) {
   if (token === "cleopatra" || token === "cleopatre") {
     return ["cleopatra", "cleopatre"];
+  }
+  if (token === "i") {
+    return ["i", "ier", "1er"];
   }
   return [token];
 }

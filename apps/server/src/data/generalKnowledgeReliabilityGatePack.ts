@@ -28,7 +28,7 @@ const biographies = [
   ["charlemagne_fr", "Raconte l'histoire de Charlemagne.", "Charlemagne"],
   ["ada_lovelace_en", "Who was Ada Lovelace?", "Ada Lovelace"],
   ["galileo_en", "Tell me about Galileo Galilei.", "Galileo Galilei"],
-  ["napoleon_fr", "Biographie courte de Napoleon Bonaparte.", "Napoleon"],
+  ["napoleon_fr", "Biographie courte de Napoleon Bonaparte.", "Napoleon I"],
   ["cleopatra_fr", "Qui etait Cleopatre ?", "Cleopatra VII"],
   ["newton_en", "Who was Isaac Newton?", "Isaac Newton"],
   ["einstein_fr", "Fais une fiche simple sur Albert Einstein.", "Albert Einstein"],
