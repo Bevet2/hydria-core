@@ -847,8 +847,8 @@ export class HydriaPublicApiV1Service {
         "workspace slide operations"
       ],
       modelRoles: [
-        { role: "fast_router", model: "phi3:mini", provider: "ollama" },
-        { role: "concise_standard", model: "qwen2.5:3b", provider: "ollama" },
+        { role: "fast_router", model: "gemma3n:e4b", provider: "ollama" },
+        { role: "concise_standard", model: "gemma3n:e4b", provider: "ollama" },
         { role: "primary_reasoning", model: "qwen2.5:14b", provider: "ollama" },
         { role: "code_debug", model: "qwen2.5-coder:7b", provider: "ollama" },
         { role: "deep_reasoning", model: "deepseek-r1:14b", provider: "ollama" },

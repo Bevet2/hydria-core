@@ -16,7 +16,7 @@ const baseRecord = {
   routing: {
     orchestrator: "chat_runtime",
     provider: "ollama",
-    model: "qwen2.5:3b",
+    model: "gemma3n:e4b",
     category: "technical_explanation",
     toolUsed: false
   },

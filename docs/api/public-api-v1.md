@@ -85,7 +85,7 @@ Response shape:
     "provider": "tool",
     "model": "research_fact_check",
     "specialistRole": "source_research",
-    "attempts": ["qwen2.5:3b"]
+    "attempts": ["gemma3n:e4b"]
   },
   "memory": {
     "sessionId": "conversation uuid",
@@ -195,7 +195,7 @@ curl -fsS https://app.hydria.click/api/v1/ask \
           "doc.insert_section",
           "doc.replace_block",
           "doc.append_paragraph",
-          "doc.insert_table",
+          "doc.insert_table", 
           "doc.delete_section",
           "doc.insert_list",
           "doc.insert_link",

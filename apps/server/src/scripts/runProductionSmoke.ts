@@ -242,7 +242,7 @@ async function runProductionSmoke(args = parseArgs()): Promise<ProductionSmokeRe
   await runCheck(checks, "student_chat_specialist_routing", async () => {
     const studentChat = health?.studentChat ?? {};
     const specialists = studentChat.specialists ?? {};
-    const expectedModels = ["qwen2.5:14b", "qwen2.5-coder:7b", "deepseek-r1:14b", "mistral:7b", "phi3:mini"];
+    const expectedModels = ["qwen2.5:14b", "qwen2.5-coder:7b", "deepseek-r1:14b", "mistral:7b", "gemma3n:e4b"];
     const configuredModels = Object.values(specialists).map(String);
     const missing = expectedModels.filter((model) => !configuredModels.includes(model));
 

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { env } from "../utils/env.js";
 import { classifyQuestionDetailed } from "./questionClassifier.js";
 import {
   analyzeConversationQuality,
@@ -543,11 +544,20 @@ function classifyChatTurn(previousState: ConversationState, updatedState: Conver
   return contextualClassification.category;
 }
 
-function formatThread(messages: ChatMessage[]) {
-  return messages
-    .slice(-8)
-    .map((message) => `${message.role === "user" ? "User" : "Assistant"}: ${compact(message.content, 320)}`)
-    .join("\n");
+export function formatThread(messages: ChatMessage[]) {
+  const budgetChars = env.CHAT_PRIOR_THREAD_BUDGET_CHARS;
+  const lines: string[] = [];
+  let usedChars = 0;
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]!;
+    const line = `${message.role === "user" ? "User" : "Assistant"}: ${compact(message.content, 560)}`;
+    if (lines.length > 0 && usedChars + line.length > budgetChars) {
+      break;
+    }
+    lines.unshift(line);
+    usedChars += line.length;
+  }
+  return lines.join("\n");
 }
 
 function lastUserMessage(messages: ChatMessage[]) {
@@ -2215,7 +2225,7 @@ function buildDeterministicRuntimeDraft(args: {
       provider: "tool",
       model: args.model,
       specialist: {
-        capabilityId: "phi-mini-router",
+        capabilityId: "gemma-e4b-router",
         role: "fast_router",
         displayName: args.displayName,
         routingReason: args.routingReason,
@@ -2914,7 +2924,7 @@ function buildDeterministicVerifiedToolDraft(args: {
         provider: "tool",
         model: "time",
         specialist: {
-          capabilityId: "phi-mini-router",
+          capabilityId: "gemma-e4b-router",
           role: "fast_router",
           displayName: "Verified tool answer",
           routingReason: "Time/date tool returned an exact verified result; no model call was needed.",
@@ -2977,7 +2987,7 @@ function buildDeterministicVerifiedToolDraft(args: {
       provider: "tool",
       model: "calculator",
       specialist: {
-        capabilityId: "phi-mini-router",
+        capabilityId: "gemma-e4b-router",
         role: "fast_router",
         displayName: "Verified tool answer",
         routingReason: "Calculator returned an exact verified result; no model call was needed.",
@@ -3636,7 +3646,7 @@ export class ChatRuntimeService {
             provider: "tool",
             model: "research_fact_check",
             specialist: {
-              capabilityId: "qwen-3b-standard-light",
+              capabilityId: "gemma-e4b-standard-light",
               role: "primary_brain",
               displayName: "Source-backed factual repair",
               routingReason:
@@ -3726,7 +3736,7 @@ export class ChatRuntimeService {
           provider: "tool",
           model: "runtime_product_knowledge",
           specialist: {
-            capabilityId: "qwen-3b-standard-light",
+            capabilityId: "gemma-e4b-standard-light",
             role: "primary_brain",
             displayName: "Runtime product knowledge",
             routingReason:
@@ -3772,7 +3782,7 @@ export class ChatRuntimeService {
           provider: "tool",
           model: "runtime_technical_concept",
           specialist: {
-            capabilityId: "qwen-3b-standard-light",
+            capabilityId: "gemma-e4b-standard-light",
             role: "primary_brain",
             displayName: "Runtime stable concept repair",
             routingReason:

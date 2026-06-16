@@ -50,7 +50,7 @@ function chatResponse(overrides: Record<string, unknown> = {}) {
       },
       attempts: [
         {
-          model: "qwen2.5:3b"
+          model: "gemma3n:e4b"
         }
       ]
     },
@@ -191,11 +191,11 @@ test("public API v1 injects active Sheet data when the user asks for commentary"
           },
           generation: {
             provider: "ollama",
-            model: "qwen2.5:3b",
+            model: "gemma3n:e4b",
             specialist: {
               role: "workspace_analysis"
             },
-            attempts: [{ model: "qwen2.5:3b" }]
+            attempts: [{ model: "gemma3n:e4b" }]
           }
         });
       },
@@ -1582,11 +1582,11 @@ test("public API v1 does not fast-path source-sensitive Word document requests",
           },
           generation: {
             provider: "ollama",
-            model: "qwen2.5:3b",
+            model: "gemma3n:e4b",
             specialist: {
               role: "source_backed_runtime"
             },
-            attempts: [{ model: "qwen2.5:3b" }]
+            attempts: [{ model: "gemma3n:e4b" }]
           }
         });
       },

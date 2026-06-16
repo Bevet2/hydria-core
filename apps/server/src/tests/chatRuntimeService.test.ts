@@ -1,10 +1,47 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ChatRuntimeService } from "../services/chatRuntimeService.js";
+import { ChatRuntimeService, formatThread } from "../services/chatRuntimeService.js";
 import type { StudentChatAdapterInput, StudentChatAdapterResult } from "../services/studentChatAdapter.js";
 import { defaultToolRoutingDecision, type ToolRoutingDecision } from "../types/arena.js";
 import type { ChatKnowledgeRetrievalMetadata } from "../types/knowledgeRetrieval.js";
+import type { ChatMessage } from "../types/chat.js";
 import type { StudentAnswer } from "../types/student.js";
+
+function buildThreadMessage(role: "user" | "assistant", content: string, index: number): ChatMessage {
+  return {
+    id: `message-${index}`,
+    role,
+    content,
+    createdAt: new Date(2026, 0, 1, 0, index).toISOString()
+  };
+}
+
+test("formatThread keeps an early established fact across a long conversation", () => {
+  const messages: ChatMessage[] = [
+    buildThreadMessage("user", "Je m'appelle Charlotte et je travaille chez Hydria.", 0),
+    buildThreadMessage("assistant", "Enchante Charlotte, comment puis-je vous aider ?", 1)
+  ];
+  for (let turn = 0; turn < 6; turn += 1) {
+    messages.push(buildThreadMessage("user", `Question de suivi numero ${turn}.`, messages.length));
+    messages.push(buildThreadMessage("assistant", `Reponse de suivi numero ${turn}.`, messages.length));
+  }
+
+  const priorThread = formatThread(messages);
+
+  assert.match(priorThread, /Charlotte/);
+});
+
+test("formatThread stops once the character budget is exhausted", () => {
+  const longMessage = "x".repeat(600);
+  const messages: ChatMessage[] = Array.from({ length: 40 }, (_, index) =>
+    buildThreadMessage(index % 2 === 0 ? "user" : "assistant", longMessage, index)
+  );
+
+  const priorThread = formatThread(messages);
+
+  assert.ok(priorThread.length <= 8000);
+  assert.ok(priorThread.length > 0);
+});
 
 function buildAnswer(answer: string): StudentAnswer {
   return {
@@ -27,7 +64,7 @@ function buildAdapterResult(answer: string, usedRetry = false): StudentChatAdapt
       role: "writing_business",
       displayName: "Mistral/Mixtral",
       routingReason: "test route",
-      pipeline: ["fast_router:phi3:mini", "writing_business:test"]
+      pipeline: ["fast_router:gemma3n:e4b", "writing_business:test"]
     },
     raw: "{}",
     validationIssues: []
@@ -453,8 +490,8 @@ test("chat runtime synthesizes from source-backed facts when the local model fal
             "Je n'ai pas reussi a generer une reponse fiable pour ce tour. Reformule la question ou donne un peu plus de contexte."
           ),
           provider: "fallback" as const,
-          model: "qwen2.5:3b",
-          validationIssues: ["student_chat_generation_failed", "qwen2.5:3b: timeout"]
+          model: "gemma3n:e4b",
+          validationIssues: ["student_chat_generation_failed", "gemma3n:e4b: timeout"]
         };
       }
     },
@@ -533,8 +570,8 @@ test("chat runtime keeps deterministic research fallback in the requested langua
             "Je n'ai pas reussi a generer une reponse fiable pour ce tour. Reformule la question."
           ),
           provider: "fallback" as const,
-          model: "qwen2.5:3b",
-          validationIssues: ["student_chat_generation_failed", "qwen2.5:3b: timeout"]
+          model: "gemma3n:e4b",
+          validationIssues: ["student_chat_generation_failed", "gemma3n:e4b: timeout"]
         };
       }
     },
@@ -607,8 +644,8 @@ test("chat runtime formats source-backed general facts as a user answer when loc
             "Je n'ai pas reussi a generer une reponse fiable pour ce tour. Reformule la question."
           ),
           provider: "fallback" as const,
-          model: "qwen2.5:3b",
-          validationIssues: ["student_chat_generation_failed", "qwen2.5:3b: timeout"]
+          model: "gemma3n:e4b",
+          validationIssues: ["student_chat_generation_failed", "gemma3n:e4b: timeout"]
         };
       }
     },
@@ -679,7 +716,7 @@ test("chat runtime drops incomplete fragments from source-backed deterministic a
         return {
           ...buildAdapterResult("Je n'ai pas reussi a generer une reponse fiable."),
           provider: "fallback" as const,
-          model: "qwen2.5:3b",
+          model: "gemma3n:e4b",
           validationIssues: ["student_chat_generation_failed"]
         };
       }
@@ -747,7 +784,7 @@ test("chat runtime does not end compacted source facts on dangling connectors", 
         return {
           ...buildAdapterResult("Je n'ai pas reussi a generer une reponse fiable."),
           provider: "fallback" as const,
-          model: "qwen2.5:3b",
+          model: "gemma3n:e4b",
           validationIssues: ["student_chat_generation_failed"]
         };
       }
@@ -1115,8 +1152,8 @@ test("chat runtime repairs source-backed factual fallbacks inside a conversation
             "Je n'ai pas reussi a generer une reponse fiable pour ce tour. Reformule la question ou donne un peu plus de contexte."
           ),
           provider: "fallback" as const,
-          model: "qwen2.5:3b",
-          validationIssues: ["student_chat_generation_failed", "qwen2.5:3b: timeout"]
+          model: "gemma3n:e4b",
+          validationIssues: ["student_chat_generation_failed", "gemma3n:e4b: timeout"]
         };
       }
     },
@@ -1276,8 +1313,8 @@ test("chat runtime converts strategic fallback repairs into governed runtime dec
           "Je n'ai pas reussi a generer une reponse fiable pour ce tour. Reformule la question ou donne un peu plus de contexte."
         ),
         provider: "fallback" as const,
-        model: "qwen2.5:3b",
-        validationIssues: ["student_chat_generation_failed", "qwen2.5:3b: timeout"]
+        model: "gemma3n:e4b",
+        validationIssues: ["student_chat_generation_failed", "gemma3n:e4b: timeout"]
       };
     }
   });
@@ -1312,8 +1349,8 @@ test("chat runtime answers Hydria Core self-knowledge without waiting for model 
           "Je n'ai pas reussi a generer une reponse fiable pour ce tour. Reformule la question ou donne un peu plus de contexte."
         ),
         provider: "fallback" as const,
-        model: "qwen2.5:3b",
-        validationIssues: ["student_chat_generation_failed", "qwen2.5:3b: timeout"]
+        model: "gemma3n:e4b",
+        validationIssues: ["student_chat_generation_failed", "gemma3n:e4b: timeout"]
       };
     }
   });
@@ -2030,16 +2067,16 @@ test("chat runtime repairs concise stable concept timeouts instead of returning 
           },
           usedRetry: true,
           provider: "fallback",
-          model: "qwen2.5:3b",
+          model: "gemma3n:e4b",
           specialist: {
-            capabilityId: "qwen-3b-router",
+            capabilityId: "gemma-e4b-router",
             role: "fast_router",
-            displayName: "Qwen 3B",
+            displayName: "Gemma 3n E4B",
             routingReason: "test timeout",
-            pipeline: ["fast_router:phi3:mini", "concise_answer:qwen2.5:3b"]
+            pipeline: ["fast_router:gemma3n:e4b", "concise_answer:gemma3n:e4b"]
           },
           raw: "Je n'ai pas reussi a generer une reponse fiable pour ce tour.",
-          validationIssues: ["student_chat_generation_failed", "qwen2.5:3b: timeout"],
+          validationIssues: ["student_chat_generation_failed", "gemma3n:e4b: timeout"],
           runtimeBudget: {
             profile: "concise_chat",
             label: "Concise fast chat",
@@ -2173,8 +2210,8 @@ test("chat runtime repairs a timed-out memory-grounded recommendation from activ
           "Je n'ai pas reussi a generer une reponse fiable pour ce tour. Reformule la question ou donne un peu plus de contexte."
         ),
         provider: "fallback" as const,
-        model: "qwen2.5:3b",
-        validationIssues: ["student_chat_generation_failed", "qwen2.5:3b: timeout"]
+        model: "gemma3n:e4b",
+        validationIssues: ["student_chat_generation_failed", "gemma3n:e4b: timeout"]
       };
     }
   });

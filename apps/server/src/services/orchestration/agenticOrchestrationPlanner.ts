@@ -193,7 +193,7 @@ export class AgenticOrchestrationPlanner {
     const missions: AgenticMission[] = [
       mission({
         id: "intent_router",
-        component: "phi3:mini",
+        component: "gemma3n:e4b",
         role: "fast_router",
         objective: "Classify intent, language, domain, and tool need before any answer is drafted.",
         required: true,

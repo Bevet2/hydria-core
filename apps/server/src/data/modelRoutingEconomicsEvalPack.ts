@@ -85,7 +85,7 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
       requiresExternalGrounding: false
     },
     expected: {
-      capabilityId: "qwen-3b-standard-light",
+      capabilityId: "gemma-e4b-standard-light",
       role: "primary_brain",
       maxCostTier: "low",
       maxEstimatedCostUnits: 1,
@@ -170,6 +170,36 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
     }
   },
   {
+    id: "chat_strategic_decision_phrased_as_writing_request",
+    surface: "chat_route",
+    priority: "critical",
+    description: "A bounded strategic decision phrased with a writing verb (redige) must still escalate to the deep reasoner instead of being short-circuited by the writing route.",
+    tags: ["chat", "deep_reasoning", "strategic_conflict", "writing_signal_guard"],
+    chat: {
+      routingQuestion: "On-prem obligatoire, budget bloque. Redige ta recommandation : tu recommandes quoi ?",
+      category: "architecture_design",
+      language: "fr",
+      runtimeMode: "conversation",
+      requiresExternalGrounding: false,
+      userGoal: "Choisir une architecture de deploiement",
+      topConstraints: [
+        "environment: on-prem",
+        "budget: no additional budget"
+      ],
+      decisionNeeded: true,
+      recommendedDirection: "Choisir une option on-prem minimale et reversible."
+    },
+    expected: {
+      capabilityId: "qwen-14b-instruct-main",
+      role: "deep_reasoner",
+      maxCostTier: "medium",
+      maxEstimatedCostUnits: 1,
+      localOnly: true,
+      allowDeepReasoning: true,
+      forbiddenCapabilityIds: ["gemma-e4b-standard-light", "mistral-mixtral-business"]
+    }
+  },
+  {
     id: "chat_business_writing_mistral",
     surface: "chat_route",
     priority: "high",
@@ -183,7 +213,7 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
       requiresExternalGrounding: false
     },
     expected: {
-      capabilityId: "qwen-3b-standard-light",
+      capabilityId: "gemma-e4b-standard-light",
       role: "writing_business",
       maxCostTier: "low",
       maxEstimatedCostUnits: 1,
@@ -196,7 +226,7 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
     id: "provider_fast_router_phi",
     surface: "provider_plan",
     priority: "critical",
-    description: "Cheap routing/extraction must stay on Phi mini with a low budget profile.",
+    description: "Cheap routing/extraction must stay on Gemma 3n E4B with a low budget profile.",
     tags: ["provider", "fast_router", "cost_control"],
     providerPlan: {
       purpose: "fast_routing",
@@ -213,7 +243,7 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
       }
     },
     expected: {
-      capabilityId: "phi-mini-router",
+      capabilityId: "gemma-e4b-router",
       role: "fast_router",
       maxCostTier: "low",
       maxEstimatedCostUnits: 1,

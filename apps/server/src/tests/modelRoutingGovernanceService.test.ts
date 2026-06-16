@@ -29,7 +29,7 @@ test("model routing governance keeps API definitions off the code specialist", (
   );
 
   assert.equal(result.status, "passed");
-  assert.equal(result.selectedCapabilityId, "qwen-3b-standard-light");
+  assert.equal(result.selectedCapabilityId, "gemma-e4b-standard-light");
   assert.equal(result.selectedRole, "primary_brain");
   assert.equal(result.issues.includes("forbidden_capability_selected:qwen-coder-code"), false);
 });
@@ -43,6 +43,19 @@ test("model routing governance keeps simple rollback explanations off the deep r
   assert.equal(result.status, "passed");
   assert.equal(result.selectedCapabilityId, "qwen-14b-instruct-main");
   assert.equal(result.selectedRole, "primary_brain");
+});
+
+test("model routing governance escalates a writing-phrased strategic decision to the deep reasoner", () => {
+  const service = new ModelRoutingGovernanceService();
+  const result = service.evaluateCase(
+    modelRoutingEconomicsEvalPack.find(
+      (caseDef) => caseDef.id === "chat_strategic_decision_phrased_as_writing_request"
+    )!
+  );
+
+  assert.equal(result.status, "passed");
+  assert.equal(result.selectedCapabilityId, "qwen-14b-instruct-main");
+  assert.equal(result.selectedRole, "deep_reasoner");
 });
 
 test("model routing governance detects estimated cost budget violations", () => {

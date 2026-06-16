@@ -22,9 +22,9 @@ test("local model stream reconstructs Ollama JSONL tokens in order", async () =>
   const received: string[] = [];
   const response = new Response(
     [
-      JSON.stringify({ model: "qwen2.5:3b", response: "Bonjour", done: false }),
-      JSON.stringify({ model: "qwen2.5:3b", response: " Hydria", done: false }),
-      JSON.stringify({ model: "qwen2.5:3b", response: ".", done: true })
+      JSON.stringify({ model: "gemma3n:e4b", response: "Bonjour", done: false }),
+      JSON.stringify({ model: "gemma3n:e4b", response: " Hydria", done: false }),
+      JSON.stringify({ model: "gemma3n:e4b", response: ".", done: true })
     ].join("\n"),
     {
       headers: {

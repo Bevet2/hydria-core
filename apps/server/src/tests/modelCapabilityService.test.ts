@@ -14,8 +14,8 @@ test("model manifest registers the specialized LLM families", () => {
   assert.equal(ids.has("mistral-mixtral-business"), true);
   assert.equal(ids.has("bge-m3-embedding"), true);
   assert.equal(ids.has("bge-reranker-retrieval"), true);
-  assert.equal(ids.has("phi-mini-router"), true);
-  assert.equal(ids.has("qwen-3b-router"), true);
+  assert.equal(ids.has("gemma-e4b-router"), true);
+  assert.equal(ids.has("gemma-e4b-standard-light"), true);
 });
 
 test("model router selects Qwen as the main reasoning brain", () => {
@@ -27,7 +27,7 @@ test("model router selects Qwen as the main reasoning brain", () => {
   });
 
   assert.equal(decision.selected.id, "qwen-14b-instruct-main");
-  assert.equal(decision.pipeline.some((model) => model.id === "phi-mini-router"), true);
+  assert.equal(decision.pipeline.some((model) => model.id === "gemma-e4b-router"), true);
 });
 
 test("model router escalates main reasoning quality to Qwen 32B", () => {
@@ -95,6 +95,6 @@ test("model router selects tiny routing models for low latency routing", () => {
     latencyPreference: "low"
   });
 
-  assert.equal(decision.selected.id, "phi-mini-router");
-  assert.equal(decision.fallbacks[0]?.id, "qwen-3b-router");
+  assert.equal(decision.selected.id, "gemma-e4b-router");
+  assert.equal(decision.fallbacks[0]?.id, "gemma-e4b-standard-light");
 });

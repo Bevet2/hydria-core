@@ -126,7 +126,7 @@ test("interaction log store persists questions, answers, and analysis metadata",
       routing: {
         orchestrator: "student_learning",
         provider: "ollama",
-        model: "qwen2.5:3b",
+        model: "gemma3n:e4b",
         category: "technical_explanation",
         toolUsed: false
       },

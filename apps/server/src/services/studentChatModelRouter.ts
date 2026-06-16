@@ -19,9 +19,8 @@ export type StudentChatSpecialistRole =
 
 export type StudentChatModelRoute = {
   capabilityId:
-    | "phi-mini-router"
-    | "qwen-3b-router"
-    | "qwen-3b-standard-light"
+    | "gemma-e4b-router"
+    | "gemma-e4b-standard-light"
     | "qwen-14b-instruct-main"
     | "qwen-coder-code"
     | "deepseek-r1-distill-qwen-reasoner"
@@ -49,11 +48,10 @@ type StudentChatModelRoutingInput = {
 };
 
 const QWEN_MAIN = "qwen2.5:14b";
-const QWEN_3B = "qwen2.5:3b";
 const QWEN_CODER = "qwen2.5-coder:7b";
 const DEEPSEEK_REASONER = "deepseek-r1:14b";
 const MISTRAL_BUSINESS = "mistral:7b";
-const PHI_ROUTER = "phi3:mini";
+const GEMMA_E4B = "gemma3n:e4b";
 
 function normalizeText(value: string) {
   return value
@@ -99,13 +97,19 @@ function containsCodeSignal(text: string, category: QuestionCategory) {
   return explicitImplementationSignal || technologyWithImplementationSignal || apiImplementationSignal;
 }
 
-function containsWritingSignal(text: string, category: QuestionCategory) {
-  if (category === "operational_writing") {
-    return true;
+function containsWritingSignal(input: StudentChatModelRoutingInput, text: string) {
+  const matchesWritingWording =
+    input.category === "operational_writing" ||
+    /\b(?:write|rewrite|draft|email|mail|message|copy|pitch|memo|summary|summarize|redige|rediger|reecris|resume|synthese|business|stakeholder)\b/.test(
+      text
+    );
+  if (!matchesWritingWording) {
+    return false;
   }
-  return /\b(?:write|rewrite|draft|email|mail|message|copy|pitch|memo|summary|summarize|redige|rediger|reecris|resume|synthese|business|stakeholder)\b/.test(
-    text
-  );
+  if (containsBoundedStrategicDecisionSignal(input, text) || containsDeepReasoningSignal(input, text)) {
+    return false;
+  }
+  return true;
 }
 
 function containsPracticalLifestyleSignal(text: string) {
@@ -291,13 +295,13 @@ function containsBoundedStrategicDecisionSignal(input: StudentChatModelRoutingIn
 function buildFallbacks(primary: string, role: StudentChatSpecialistRole) {
   const roleFallbacks =
     role === "fast_router"
-      ? [PHI_ROUTER, QWEN_3B, MISTRAL_BUSINESS, QWEN_MAIN]
+      ? [GEMMA_E4B, MISTRAL_BUSINESS, QWEN_MAIN]
     : role === "code_specialist"
       ? [QWEN_CODER, QWEN_MAIN, MISTRAL_BUSINESS]
       : role === "deep_reasoner"
         ? [DEEPSEEK_REASONER, QWEN_MAIN, MISTRAL_BUSINESS]
         : role === "primary_brain"
-          ? [QWEN_MAIN, QWEN_3B, MISTRAL_BUSINESS]
+          ? [QWEN_MAIN, GEMMA_E4B, MISTRAL_BUSINESS]
         : [MISTRAL_BUSINESS, QWEN_MAIN];
 
   return unique([
@@ -319,7 +323,7 @@ function buildSpecialistOnlyFallbacks(primary: string) {
 function buildDeepReasoningFallbacks(primary: string) {
   return unique([
     primary,
-    QWEN_3B,
+    GEMMA_E4B,
     env.STUDENT_CHAT_LOCAL_MODEL_NAME,
     env.LOCAL_MODEL_NAME
   ]);
@@ -328,7 +332,7 @@ function buildDeepReasoningFallbacks(primary: string) {
 function buildPracticalWritingFallbacks(primary: string) {
   return unique([
     primary,
-    QWEN_3B,
+    GEMMA_E4B,
     env.STUDENT_CHAT_LOCAL_MODEL_NAME,
     env.LOCAL_MODEL_NAME
   ]);
@@ -347,7 +351,7 @@ function buildStandardLightFallbacks(primary: string) {
 function buildStableFactFallbacks(primary: string) {
   return unique([
     primary,
-    QWEN_3B,
+    GEMMA_E4B,
     env.STUDENT_CHAT_LOCAL_MODEL_NAME,
     env.LOCAL_MODEL_NAME
   ]);
@@ -498,18 +502,18 @@ function governedKnowledgeContextPath(input: StudentChatModelRoutingInput) {
 
 function selectBaseStudentChatModelRoute(input: StudentChatModelRoutingInput): StudentChatModelRoute {
   const text = normalizeText(`${input.routingQuestion}\n${input.userMessage}`);
-  const basePipeline = [`fast_router:${PHI_ROUTER}`];
+  const basePipeline = [`fast_router:${GEMMA_E4B}`];
 
   if (verifiedToolFastPath(input)) {
     const reason = "Verified calculator/time result can be verbalized through the fast local model budget.";
     return {
-      capabilityId: "phi-mini-router",
-      displayName: "Phi mini",
-      modelName: PHI_ROUTER,
+      capabilityId: "gemma-e4b-router",
+      displayName: "Gemma 3n E4B Router",
+      modelName: GEMMA_E4B,
       specialistRole: "fast_router",
       routingReason: reason,
-      pipeline: [...basePipeline, `verified_tool_answer:${PHI_ROUTER}`],
-      fallbackModelNames: buildFallbacks(PHI_ROUTER, "fast_router"),
+      pipeline: [...basePipeline, `verified_tool_answer:${GEMMA_E4B}`],
+      fallbackModelNames: buildFallbacks(GEMMA_E4B, "fast_router"),
       timeoutMs: env.MODEL_RUNTIME_FAST_TIMEOUT_MS,
       runtimeBudget: buildRuntimeBudget("fast_tool", reason)
     };
@@ -561,13 +565,13 @@ function selectBaseStudentChatModelRoute(input: StudentChatModelRoutingInput): S
       )
     );
     return {
-      capabilityId: "qwen-3b-standard-light",
-      displayName: "Qwen 3B Standard Light",
-      modelName: QWEN_3B,
+      capabilityId: "gemma-e4b-standard-light",
+      displayName: "Gemma 3n E4B Standard Light",
+      modelName: GEMMA_E4B,
       specialistRole: "primary_brain",
       routingReason: reason,
-      pipeline: [...basePipeline, `verified_context_answer:${QWEN_3B}`],
-      fallbackModelNames: buildSpecialistOnlyFallbacks(QWEN_3B),
+      pipeline: [...basePipeline, `verified_context_answer:${GEMMA_E4B}`],
+      fallbackModelNames: buildSpecialistOnlyFallbacks(GEMMA_E4B),
       timeoutMs: sourceSynthesisTimeoutMs,
       runtimeBudget: {
         ...budget,
@@ -587,13 +591,13 @@ function selectBaseStudentChatModelRoute(input: StudentChatModelRoutingInput): S
       "Governed knowledge retrieval hit is available; use the CPU-aware 3B route to answer from injected context without heavy-model fallback.";
     const budget = buildRuntimeBudget("standard_light_chat", reason);
     return {
-      capabilityId: "qwen-3b-standard-light",
-      displayName: "Qwen 3B Standard Light",
-      modelName: QWEN_3B,
+      capabilityId: "gemma-e4b-standard-light",
+      displayName: "Gemma 3n E4B Standard Light",
+      modelName: GEMMA_E4B,
       specialistRole: "primary_brain",
       routingReason: reason,
-      pipeline: [...basePipeline, `knowledge_retrieval_answer:${QWEN_3B}`],
-      fallbackModelNames: buildSpecialistOnlyFallbacks(QWEN_3B),
+      pipeline: [...basePipeline, `knowledge_retrieval_answer:${GEMMA_E4B}`],
+      fallbackModelNames: buildSpecialistOnlyFallbacks(GEMMA_E4B),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
     };
@@ -604,13 +608,13 @@ function selectBaseStudentChatModelRoute(input: StudentChatModelRoutingInput): S
       "Strategic context-setting turn without an explicit decision request; use the fast local route and reserve heavy reasoning for the actual recommendation turn.";
     const budget = buildRuntimeBudget("concise_chat", reason);
     return {
-      capabilityId: "qwen-3b-standard-light",
-      displayName: "Qwen 3B Standard Light",
-      modelName: QWEN_3B,
+      capabilityId: "gemma-e4b-standard-light",
+      displayName: "Gemma 3n E4B Standard Light",
+      modelName: GEMMA_E4B,
       specialistRole: "primary_brain",
       routingReason: reason,
-      pipeline: [...basePipeline, `strategic_context:${QWEN_3B}`],
-      fallbackModelNames: buildFallbacks(QWEN_3B, "primary_brain"),
+      pipeline: [...basePipeline, `strategic_context:${GEMMA_E4B}`],
+      fallbackModelNames: buildFallbacks(GEMMA_E4B, "primary_brain"),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: {
         ...budget,
@@ -661,16 +665,16 @@ function selectBaseStudentChatModelRoute(input: StudentChatModelRoutingInput): S
     };
   }
 
-  if (containsWritingSignal(text, input.category)) {
+  if (containsWritingSignal(input, text)) {
     const french = isFrenchWritingRoute(input, text);
-    const selectedModel = french ? QWEN_3B : MISTRAL_BUSINESS;
+    const selectedModel = french ? GEMMA_E4B : MISTRAL_BUSINESS;
     const reason = french
-      ? "French writing route; use Qwen 3B for stronger language consistency on the CPU public chat path."
+      ? "French writing route; use Gemma 3n E4B for stronger language consistency on the CPU public chat path."
       : "English writing or business synthesis route; use Mistral with a CPU-safe timeout.";
     const budget = buildRuntimeBudget("writing_chat", reason);
     return {
-      capabilityId: french ? "qwen-3b-standard-light" : "mistral-mixtral-business",
-      displayName: french ? "Qwen 3B" : "Mistral/Mixtral",
+      capabilityId: french ? "gemma-e4b-standard-light" : "mistral-mixtral-business",
+      displayName: french ? "Gemma 3n E4B" : "Mistral/Mixtral",
       modelName: selectedModel,
       specialistRole: "writing_business",
       routingReason: reason,
@@ -711,13 +715,13 @@ function selectBaseStudentChatModelRoute(input: StudentChatModelRoutingInput): S
       "Conceptual architecture or streaming explanation without a decision request; use the CPU-aware 3B route instead of deep strategic synthesis.";
     const budget = buildRuntimeBudget("standard_light_chat", reason);
     return {
-      capabilityId: "qwen-3b-standard-light",
-      displayName: "Qwen 3B Standard Light",
-      modelName: QWEN_3B,
+      capabilityId: "gemma-e4b-standard-light",
+      displayName: "Gemma 3n E4B Standard Light",
+      modelName: GEMMA_E4B,
       specialistRole: "primary_brain",
       routingReason: reason,
-      pipeline: [...basePipeline, `conceptual_system_explanation:${QWEN_3B}`],
-      fallbackModelNames: buildSpecialistOnlyFallbacks(QWEN_3B),
+      pipeline: [...basePipeline, `conceptual_system_explanation:${GEMMA_E4B}`],
+      fallbackModelNames: buildSpecialistOnlyFallbacks(GEMMA_E4B),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
     };
@@ -744,13 +748,13 @@ function selectBaseStudentChatModelRoute(input: StudentChatModelRoutingInput): S
     const reason = "Explicit short-answer constraint; use the fast 3B local chat route instead of heavier specialists.";
     const budget = buildRuntimeBudget("concise_chat", reason);
     return {
-      capabilityId: "qwen-3b-router",
-      displayName: "Qwen 3B",
-      modelName: QWEN_3B,
+      capabilityId: "gemma-e4b-router",
+      displayName: "Gemma 3n E4B",
+      modelName: GEMMA_E4B,
       specialistRole: "fast_router",
       routingReason: reason,
-      pipeline: [...basePipeline, `concise_answer:${QWEN_3B}`],
-      fallbackModelNames: buildFallbacks(QWEN_3B, "fast_router"),
+      pipeline: [...basePipeline, `concise_answer:${GEMMA_E4B}`],
+      fallbackModelNames: buildFallbacks(GEMMA_E4B, "fast_router"),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
     };
@@ -760,13 +764,13 @@ function selectBaseStudentChatModelRoute(input: StudentChatModelRoutingInput): S
     const reason = "Lightweight context-setting turn; use the fast 3B local chat route instead of the 14B primary brain.";
     const budget = buildRuntimeBudget("concise_chat", reason);
     return {
-      capabilityId: "qwen-3b-router",
-      displayName: "Qwen 3B",
-      modelName: QWEN_3B,
+      capabilityId: "gemma-e4b-router",
+      displayName: "Gemma 3n E4B",
+      modelName: GEMMA_E4B,
       specialistRole: "fast_router",
       routingReason: reason,
-      pipeline: [...basePipeline, `context_setup:${QWEN_3B}`],
-      fallbackModelNames: buildFallbacks(QWEN_3B, "fast_router"),
+      pipeline: [...basePipeline, `context_setup:${GEMMA_E4B}`],
+      fallbackModelNames: buildFallbacks(GEMMA_E4B, "fast_router"),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
     };
@@ -782,7 +786,7 @@ function selectBaseStudentChatModelRoute(input: StudentChatModelRoutingInput): S
       modelName: MISTRAL_BUSINESS,
       specialistRole: "writing_business",
       routingReason: reason,
-      pipeline: [...basePipeline, `stable_fact_writer:${MISTRAL_BUSINESS}`, `stable_fact_light_fallback:${QWEN_3B}`],
+      pipeline: [...basePipeline, `stable_fact_writer:${MISTRAL_BUSINESS}`, `stable_fact_light_fallback:${GEMMA_E4B}`],
       fallbackModelNames: buildStableFactFallbacks(MISTRAL_BUSINESS),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
@@ -794,13 +798,13 @@ function selectBaseStudentChatModelRoute(input: StudentChatModelRoutingInput): S
       "Simple stable educational definition or concept question; use the CPU-aware 3B route instead of the 14B primary brain.";
     const budget = buildRuntimeBudget("standard_light_chat", reason);
     return {
-      capabilityId: "qwen-3b-standard-light",
-      displayName: "Qwen 3B Standard Light",
-      modelName: QWEN_3B,
+      capabilityId: "gemma-e4b-standard-light",
+      displayName: "Gemma 3n E4B Standard Light",
+      modelName: GEMMA_E4B,
       specialistRole: "primary_brain",
       routingReason: reason,
-      pipeline: [...basePipeline, `standard_light:${QWEN_3B}`],
-      fallbackModelNames: buildStandardLightFallbacks(QWEN_3B),
+      pipeline: [...basePipeline, `standard_light:${GEMMA_E4B}`],
+      fallbackModelNames: buildStandardLightFallbacks(GEMMA_E4B),
       timeoutMs: budget.timeoutMs,
       runtimeBudget: budget
     };
@@ -886,15 +890,15 @@ export function selectStudentChatModelRoute(input: StudentChatModelRoutingInput)
 
   const keepSpecialist =
     route.specialistRole === "code_specialist" || route.specialistRole === "writing_business";
-  const longFormModel = keepSpecialist ? route.modelName : QWEN_3B;
+  const longFormModel = keepSpecialist ? route.modelName : GEMMA_E4B;
   const timeoutMs = Math.max(
     route.runtimeBudget.timeoutMs,
     Math.min(600000, 90000 + responseLength.maxOutputTokens * 220)
   );
   return {
     ...route,
-    capabilityId: keepSpecialist ? route.capabilityId : "qwen-3b-standard-light",
-    displayName: keepSpecialist ? route.displayName : "Qwen 3B Long-form Writer",
+    capabilityId: keepSpecialist ? route.capabilityId : "gemma-e4b-standard-light",
+    displayName: keepSpecialist ? route.displayName : "Gemma 3n E4B Long-form Writer",
     modelName: longFormModel,
     specialistRole: keepSpecialist ? route.specialistRole : "primary_brain",
     routingReason: `${route.routingReason} The user explicitly requested a developed long-form answer.`,

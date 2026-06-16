@@ -513,7 +513,7 @@ function searchModifiersForIntent(intent: string, language: "fr" | "en" | "unkno
 function buildMissions(frame: Omit<SemanticFrame, "componentMissions">): ComponentMission[] {
   const missions: ComponentMission[] = [
     {
-      component: "phi3:mini",
+      component: "gemma3n:e4b",
       role: "fast_router",
       mission: "Classify the request, detect language, decide whether tools are required, and avoid unnecessary heavy routes.",
       required: true
@@ -559,7 +559,7 @@ function buildMissions(frame: Omit<SemanticFrame, "componentMissions">): Compone
       required: ["strategy_decision", "general", "science", "history_biography"].includes(frame.domain)
     },
     {
-      component: "qwen2.5:3b",
+      component: "gemma3n:e4b",
       role: "concise_synthesizer",
       mission: "Compress verified facts into a short response when the evidence is already strong.",
       required: frame.expectedSenseTerms.length > 0

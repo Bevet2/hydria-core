@@ -180,7 +180,7 @@ export class ModelCapabilityService {
     purpose: ModelSelectionPurpose,
     input: ModelSelectionInput
   ) {
-    const router = this.getManifest("phi-mini-router");
+    const router = this.getManifest("gemma-e4b-router");
     const qwenBrain = input.latencyPreference === "quality"
       ? this.getManifest("qwen-32b-instruct-main")
       : this.getManifest("qwen-14b-instruct-main");

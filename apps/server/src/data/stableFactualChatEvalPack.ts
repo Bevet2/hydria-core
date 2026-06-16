@@ -33,7 +33,7 @@ export type StableFactualChatEvalCase = {
 
 const stableFactRoute = {
   expectedProvider: "ollama" as const,
-  expectedModel: ["mistral:7b", "qwen2.5:3b"],
+  expectedModel: ["mistral:7b", "gemma3n:e4b"],
   expectedBudgetProfile: "stable_fact_chat" as const,
   minWords: 12,
   maxLatencyMs: 90000
@@ -41,7 +41,7 @@ const stableFactRoute = {
 
 const standardLightRoute = {
   expectedProvider: "ollama" as const,
-  expectedModel: "qwen2.5:3b",
+  expectedModel: "gemma3n:e4b",
   expectedBudgetProfile: "standard_light_chat" as const,
   minWords: 12,
   maxLatencyMs: 50000
