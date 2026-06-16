@@ -38,7 +38,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 MODEL="${MODEL:-$(read_env_value LOCAL_MODEL_NAME)}"
-MODEL="${MODEL:-gemma3n:e4b}"
+MODEL="${MODEL:-qwen2.5:3b}"
 OLLAMA_HOST_VALUE="${OLLAMA_HOST_VALUE:-$(read_env_value OLLAMA_PROJECT_HOST)}"
 OLLAMA_HOST_VALUE="${OLLAMA_HOST_VALUE:-127.0.0.1:11435}"
 MODELS_DIR="${MODELS_DIR:-$(read_env_value OLLAMA_PROJECT_MODELS_DIR)}"
@@ -104,7 +104,7 @@ cat > "$CONFIG_PATH" <<JSON
 {
   "provider": "ollama",
   "runtimeModel": "$MODEL",
-  "upstreamModel": "google/gemma-3n-e4b-it",
+  "upstreamModel": "Qwen/Qwen2.5-3B-Instruct",
   "host": "$OLLAMA_HOST_VALUE",
   "baseUrl": "$BASE_URL",
   "modelsDir": "$models_dir_for_config",

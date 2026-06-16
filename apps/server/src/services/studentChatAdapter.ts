@@ -287,7 +287,7 @@ function shouldUseCompactConstraintDecisionPrompt(
 ) {
   return (
     input.runtimeMode === "conversation" &&
-    (route.modelName === "qwen2.5:14b" || route.modelName === "gemma3n:e4b") &&
+    (route.modelName === "qwen2.5:14b" || route.modelName === "qwen2.5:3b") &&
     route.specialistRole === "deep_reasoner" &&
     !input.requiresExternalGrounding &&
     !input.tooling.used &&
@@ -958,7 +958,7 @@ function keepAliveForRoute(route: StudentChatModelRoute) {
     return "10m";
   }
   if (
-    route.modelName === "gemma3n:e4b" ||
+    route.modelName === "qwen2.5:3b" ||
     route.runtimeBudget.profile === "stable_fact_chat" ||
     route.runtimeBudget.profile === "writing_chat" ||
     route.runtimeBudget.profile === "standard_light_chat" ||

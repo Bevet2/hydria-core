@@ -47,15 +47,15 @@ const warmupCases: WarmupCase[] = [
     expectedBudgetProfile: "fast_tool"
   },
   {
-    id: "gemma_standard_light",
+    id: "qwen_standard_light",
     message: "Explique simplement ce qu'est une API.",
-    expectedModel: "gemma3n:e4b",
+    expectedModel: "qwen2.5:3b",
     expectedBudgetProfile: "standard_light_chat"
   },
   {
     id: "source_backed_stable_fact",
     message: "Qui est Marie Curie ?",
-    expectedModel: "gemma3n:e4b",
+    expectedModel: "qwen2.5:3b",
     expectedBudgetProfile: "standard_light_chat"
   }
 ];

@@ -187,11 +187,11 @@ function buildChatRuntimeStub(caseItem: GateCase) {
         },
         generation: {
           provider: "ollama",
-          model: "gemma3n:e4b",
+          model: "qwen2.5:3b",
           specialist: {
             role: "workspace_runtime"
           },
-          attempts: [{ model: "gemma3n:e4b" }]
+          attempts: [{ model: "qwen2.5:3b" }]
         },
         conversationQuality: {
           passed: true,

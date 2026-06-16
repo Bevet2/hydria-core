@@ -135,7 +135,7 @@ function capsuleFromFixture(fixture: ChatRoutingFixture) {
 }
 
 function chatPipelineCapabilityIds(route: StudentChatModelRoute) {
-  const ids: ModelCapabilityId[] = ["gemma-e4b-router", route.capabilityId];
+  const ids: ModelCapabilityId[] = ["qwen-3b-router", route.capabilityId];
   if (route.capabilityId === "deepseek-r1-distill-qwen-reasoner") {
     ids.push("qwen-14b-instruct-main");
   }

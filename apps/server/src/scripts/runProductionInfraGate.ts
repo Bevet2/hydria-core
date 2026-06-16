@@ -47,7 +47,7 @@ const currentFilePath = fileURLToPath(import.meta.url);
 const projectRoot = resolve(dirname(currentFilePath), "../../../../");
 const defaultOutput = resolve(projectRoot, "storage", "training", "hydria-production-infra-gate-v1.json");
 const defaultRequiredModels = [
-  "gemma3n:e4b",
+  "qwen2.5:3b",
   "qwen2.5:14b",
   "qwen2.5-coder:7b",
   "deepseek-r1:14b",

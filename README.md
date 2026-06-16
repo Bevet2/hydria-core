@@ -27,7 +27,7 @@ Current production baseline:
 - PostgreSQL persistence on schema `hydria_prod`
 - public chat served by local Ollama models, not OpenRouter
 - OpenRouter reserved for controlled training/evaluation
-- multi-model local routing through Qwen, Qwen-Coder, DeepSeek-R1, Mistral, Gemma, and BGE roles
+- multi-model local routing through Qwen, Qwen-Coder, DeepSeek-R1, Mistral, and BGE roles
 - governed tools, source-backed answerability, model telemetry, execution audit, and knowledge scheduler
 - GraphRAG v1 and DSPy-like optimization v1 added as gated contract layers
 
@@ -58,7 +58,7 @@ The current codebase already includes:
 - a `skill system` for reusable validated procedures
 - a `tool candidate system` for detecting missing capabilities and proposing governed tool manifests
 - a `specialized agent system` that groups validated skills into domain-specific agent recommendations
-- a `model capability manifest` for routing Qwen, DeepSeek, Mistral/Mixtral, BGE, and Gemma router roles
+- a `model capability manifest` for routing Qwen, DeepSeek, Mistral/Mixtral, BGE, and Qwen-router roles
 - a `GraphRAG v1` contract with persistent typed graph nodes, typed edges, and hybrid graph/lexical retrieval
 - a `DSPy-like optimization v1` contract with traces, policy variants, A/B gate, and zero-regression promotion rules
 - dry-run execution governance contracts for browser/acquisition, sandbox commands, and dev-agent plans
@@ -176,20 +176,20 @@ This path is still based on the local student identity and `StudentAnswer` schem
 
 Local chat specialist routing:
 
-- `gemma3n:e4b`: fast routing trace, CPU-aware standard-light route for short definitions, simple conceptual answers, French writing, and stable factual fallback
+- `qwen2.5:3b`: fast routing trace, CPU-aware standard-light route for short definitions, simple conceptual answers, French writing, and stable factual fallback
 - `qwen2.5:14b`: main reasoning brain for complex standard synthesis and multi-constraint answers
 - `qwen2.5-coder:7b`: code and debug specialist
 - `deepseek-r1:14b`: deep reasoning / conflict arbitration
-- `mistral:7b`: English writing/business, practical recipe/how-to answers, and stable biographical/history answers, with Gemma 3n E4B as the stable factual light fallback
+- `mistral:7b`: English writing/business, practical recipe/how-to answers, and stable biographical/history answers, with Qwen 3B as the stable factual light fallback
 
 The public chat path is guarded by **Model Runtime Governor v1**. Each turn receives a runtime budget profile:
 
 - `fast_tool`: verified deterministic tool answers, short timeout, small output budget
-- `standard_light_chat`: CPU-aware stable definitions and simple conceptual answers on the Gemma 3n E4B route
-- `stable_fact_chat`: Mistral factual writing for stable biographies/history, with a CPU-safe `gemma3n:e4b` fallback and no 14B fallback
+- `standard_light_chat`: CPU-aware stable definitions and simple conceptual answers on the 3B route
+- `stable_fact_chat`: Mistral factual writing for stable biographies/history, with a CPU-safe `qwen2.5:3b` fallback and no 14B fallback
 - `standard_chat`: primary-brain chat, capped timeout and serialized heavy-model concurrency
 - `code_chat`: code/debug specialist budget
-- `writing_chat`: business/writing/practical-response budget using Gemma 3n E4B for French writing and Mistral for English or recipe/how-to turns
+- `writing_chat`: business/writing/practical-response budget using Qwen 3B for French writing and Mistral for English or recipe/how-to turns
 - `deep_reasoning`: explicit deep-reasoning escalation budget
 
 The governor records profile, timeout, queue time, budget-exceeded status, and provider/model attempts into the chat trace and model ops telemetry.
@@ -358,9 +358,9 @@ Registered roles:
 - DeepSeek-R1-Distill-Qwen: guarded deep reasoning target for GPU/provider execution
 - Mistral/Mixtral: stable factual prose and future business/writing capacity on stronger backends
 - BGE-M3 and BGE Reranker: memory retrieval and reranking
-- Gemma 3n E4B: fast routing, extraction, and CPU-aware standard-light definitions
+- Qwen 3B: fast routing, extraction, and CPU-aware standard-light definitions
 
-The OVH CPU backend currently runs the practical local subset through Ollama: `gemma3n:e4b`, `qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `bge-m3`, and `mistral:7b`. Public chat uses CPU-safe routing: deterministic tool answers for exact weather/finance/time/calculator/current-status facts, Gemma 3n E4B for standard-light definitions and French writing, Mistral for English writing and stable factual turns, Qwen-Coder for code/debug, and Qwen 14B for strategic deep reasoning. `deepseek-r1:14b` stays installed but guarded for public chat until a GPU/provider backend makes it reliable enough. Larger targets such as Qwen 32B and Mixtral are reserved for a GPU/vLLM layer.
+The OVH CPU backend currently runs the practical local subset through Ollama: `qwen2.5:3b`, `qwen2.5:14b`, `qwen2.5-coder:7b`, `deepseek-r1:14b`, `bge-m3`, and `mistral:7b`. Public chat uses CPU-safe routing: deterministic tool answers for exact weather/finance/time/calculator/current-status facts, Qwen 3B for standard-light definitions and French writing, Mistral for English writing and stable factual turns, Qwen-Coder for code/debug, and Qwen 14B for strategic deep reasoning. `deepseek-r1:14b` stays installed but guarded for public chat until a GPU/provider backend makes it reliable enough. Larger targets such as Qwen 32B and Mixtral are reserved for a GPU/vLLM layer.
 
 The API exposes:
 
@@ -404,7 +404,7 @@ Stable factual chat validation:
 npm run prod:stable-factual-gate -- --base-url=https://app.hydria.click --timeout-ms=180000
 ```
 
-This writes `storage/training/stable-factual-chat-gate-v1.json` and `storage/training/stable-factual-chat-diagnostics-v1.json`. The gate checks stable biographies, history, and technical concepts with expected factual anchors plus forbidden confusion claims, so a route can fail even when the selected model and quality gate look healthy. Stable factual biographies should use Mistral first and may retry once on `gemma3n:e4b`; they must not fall through to a static fallback.
+This writes `storage/training/stable-factual-chat-gate-v1.json` and `storage/training/stable-factual-chat-diagnostics-v1.json`. The gate checks stable biographies, history, and technical concepts with expected factual anchors plus forbidden confusion claims, so a route can fail even when the selected model and quality gate look healthy. Stable factual biographies should use Mistral first and may retry once on `qwen2.5:3b`; they must not fall through to a static fallback.
 
 Full chat capability coverage:
 

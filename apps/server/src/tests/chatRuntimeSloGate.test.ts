@@ -74,7 +74,7 @@ test("chat runtime SLO report blocks fallback, trace loss, and latency regressio
             prompt: "Question",
             answer: "Je n'ai pas reussi a generer une reponse fiable.",
             provider: "fallback",
-            model: "gemma3n:e4b",
+            model: "qwen2.5:3b",
             budgetProfile: "standard_light_chat",
             runtimeMode: "direct",
             durationMs: 70000,

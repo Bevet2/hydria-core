@@ -6,7 +6,7 @@ import {
 } from "../scripts/runProductionInfraGate.js";
 
 const requiredModels = [
-  "gemma3n:e4b",
+  "qwen2.5:3b",
   "qwen2.5:14b",
   "qwen2.5-coder:7b",
   "deepseek-r1:14b",
@@ -31,7 +31,7 @@ const healthyHealth = {
     availableModels: [
       "bge-m3:latest",
       "deepseek-r1:14b",
-      "gemma3n:e4b",
+      "qwen2.5:3b",
       "mistral:7b",
       "qwen2.5-coder:7b",
       "qwen2.5:14b"
@@ -103,7 +103,7 @@ test("production infra gate blocks Ollama residency drift and missing models", (
       ...healthyHealth,
       localModel: {
         ...healthyHealth.localModel,
-        availableModels: ["gemma3n:e4b"]
+        availableModels: ["qwen2.5:3b"]
       }
     },
     persistence: healthyPersistence,

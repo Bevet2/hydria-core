@@ -185,7 +185,7 @@ test("production general knowledge gate rejects ambiguous Cleopatra opera source
     },
     generation: {
       provider: "ollama",
-      model: "gemma3n:e4b",
+      model: "qwen2.5:3b",
       usedStaticFallback: false
     },
     conversationQuality: {

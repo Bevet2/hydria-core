@@ -85,7 +85,7 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
       requiresExternalGrounding: false
     },
     expected: {
-      capabilityId: "gemma-e4b-standard-light",
+      capabilityId: "qwen-3b-standard-light",
       role: "primary_brain",
       maxCostTier: "low",
       maxEstimatedCostUnits: 1,
@@ -196,7 +196,7 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
       maxEstimatedCostUnits: 1,
       localOnly: true,
       allowDeepReasoning: true,
-      forbiddenCapabilityIds: ["gemma-e4b-standard-light", "mistral-mixtral-business"]
+      forbiddenCapabilityIds: ["qwen-3b-standard-light", "mistral-mixtral-business"]
     }
   },
   {
@@ -213,7 +213,7 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
       requiresExternalGrounding: false
     },
     expected: {
-      capabilityId: "gemma-e4b-standard-light",
+      capabilityId: "qwen-3b-standard-light",
       role: "writing_business",
       maxCostTier: "low",
       maxEstimatedCostUnits: 1,
@@ -226,7 +226,7 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
     id: "provider_fast_router_phi",
     surface: "provider_plan",
     priority: "critical",
-    description: "Cheap routing/extraction must stay on Gemma 3n E4B with a low budget profile.",
+    description: "Cheap routing/extraction must stay on Qwen 3B with a low budget profile.",
     tags: ["provider", "fast_router", "cost_control"],
     providerPlan: {
       purpose: "fast_routing",
@@ -243,7 +243,7 @@ export const modelRoutingEconomicsEvalPack: ModelRoutingEconomicsEvalCase[] = [
       }
     },
     expected: {
-      capabilityId: "gemma-e4b-router",
+      capabilityId: "qwen-3b-router",
       role: "fast_router",
       maxCostTier: "low",
       maxEstimatedCostUnits: 1,

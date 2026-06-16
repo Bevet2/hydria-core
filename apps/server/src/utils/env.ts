@@ -210,7 +210,7 @@ const envSchema = z.object({
     .min(1)
     .default(projectPath("storage", "fixtures", "research-eval-fixtures-v1.json")),
   LOCAL_MODEL_PROVIDER: z.literal("ollama").default("ollama"),
-  LOCAL_MODEL_NAME: z.string().min(1).default("gemma3n:e4b"),
+  LOCAL_MODEL_NAME: z.string().min(1).default("qwen2.5:3b"),
   LOCAL_MODEL_BASE_URL: z.string().url().default("http://127.0.0.1:11435"),
   LOCAL_STUDENT_FALLBACK_MODEL: z.string().min(1).default("openai/gpt-5.4-mini"),
   LOCAL_MODEL_TIMEOUT_MS: z.coerce.number().int().min(1000).default(45000),

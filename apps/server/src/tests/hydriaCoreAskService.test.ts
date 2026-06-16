@@ -69,8 +69,8 @@ test("core ask forwards native chat tokens while keeping the validated final ans
           },
           generation: {
             provider: "ollama",
-            model: "gemma3n:e4b",
-            attempts: [{ model: "gemma3n:e4b" }]
+            model: "qwen2.5:3b",
+            attempts: [{ model: "qwen2.5:3b" }]
           },
           tooling: { used: false }
         };
@@ -110,7 +110,7 @@ test("core ask routes student preview through the student draft path", async () 
           trace: {
             student: {
               finalProvider: "ollama",
-              finalModel: "gemma3n:e4b"
+              finalModel: "qwen2.5:3b"
             }
           }
         };

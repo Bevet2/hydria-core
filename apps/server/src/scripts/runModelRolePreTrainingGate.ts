@@ -157,7 +157,7 @@ export const modelRolePreTrainingGateCases: RoleGateCase[] = [
       }
     },
     expected: {
-      selectedId: "gemma-e4b-router",
+      selectedId: "qwen-3b-router",
       role: "fast_router",
       localTargetRequired: true
     }

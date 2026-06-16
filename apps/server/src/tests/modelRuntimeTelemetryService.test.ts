@@ -95,8 +95,8 @@ test("model runtime telemetry filters summaries by time window before applying t
         scope: "public_chat",
         status: "success",
         provider: "ollama",
-        model: "gemma3n:e4b",
-        capabilityId: "gemma-e4b-router",
+        model: "qwen2.5:3b",
+        capabilityId: "qwen-3b-router",
         specialistRole: "fast_router",
         category: "other",
         runtimeMode: "direct",
@@ -119,7 +119,7 @@ test("model runtime telemetry filters summaries by time window before applying t
     assert.equal(summary.window.eventCount, 1);
     assert.equal(summary.window.since, "2026-05-12T10:30:00.000Z");
     assert.equal(summary.totals.staticFallbackRate, 0);
-    assert.equal(summary.recentEvents[0]?.model, "gemma3n:e4b");
+    assert.equal(summary.recentEvents[0]?.model, "qwen2.5:3b");
   });
 });
 

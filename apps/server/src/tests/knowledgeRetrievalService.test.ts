@@ -71,11 +71,11 @@ function buildAdapterResult(answer: string): StudentChatAdapterResult {
     provider: "ollama",
     model: "test",
     specialist: {
-      capabilityId: "gemma-e4b-standard-light",
+      capabilityId: "qwen-3b-standard-light",
       role: "primary_brain",
-      displayName: "Gemma 3n E4B Standard Light",
+      displayName: "Qwen 3B Standard Light",
       routingReason: "test route",
-      pipeline: ["fast_router:gemma3n:e4b", "standard_light:test"]
+      pipeline: ["fast_router:qwen2.5:3b", "standard_light:test"]
     },
     raw: answer,
     validationIssues: []
@@ -280,7 +280,7 @@ test("chat runtime answers from governed knowledge when local model falls back",
           return {
             ...buildAdapterResult("Local fallback"),
             provider: "fallback",
-            model: "gemma3n:e4b",
+            model: "qwen2.5:3b",
             validationIssues: ["local_timeout"]
           };
         }

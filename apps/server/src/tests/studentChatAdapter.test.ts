@@ -94,7 +94,7 @@ test("student chat adapter routes stable biographies through the Mistral factual
   let usedSystem = "";
   const adapter = new StudentChatAdapter({
     getConfiguredModelName() {
-      return "gemma3n:e4b";
+      return "qwen2.5:3b";
     },
     async testPrompt(_prompt, system, options) {
       timeoutMs = options?.timeoutMs ?? 0;
@@ -104,7 +104,7 @@ test("student chat adapter routes stable biographies through the Mistral factual
       usedSystem = system ?? "";
       return {
         provider: "ollama",
-        model: selectedModel || "gemma3n:e4b",
+        model: selectedModel || "qwen2.5:3b",
         response: "Charlemagne est un roi des Francs et empereur carolingien.",
         durationMs: 12
       };
@@ -149,7 +149,7 @@ test("student chat adapter retries stable factual chat on the light local model 
   const selectedModels: string[] = [];
   const adapter = new StudentChatAdapter({
     getConfiguredModelName() {
-      return "gemma3n:e4b";
+      return "qwen2.5:3b";
     },
     async testPrompt(_prompt, _system, options) {
       const selectedModel = options?.modelName ?? "";
@@ -168,9 +168,9 @@ test("student chat adapter retries stable factual chat on the light local model 
 
   const result = await adapter.answer(buildInput());
 
-  assert.deepEqual(selectedModels, ["mistral:7b", "gemma3n:e4b"]);
+  assert.deepEqual(selectedModels, ["mistral:7b", "qwen2.5:3b"]);
   assert.equal(result.provider, "ollama");
-  assert.equal(result.model, "gemma3n:e4b");
+  assert.equal(result.model, "qwen2.5:3b");
   assert.equal(result.usedRetry, true);
   assert.equal(result.runtimeBudget?.profile, "stable_fact_chat");
   assert.equal(result.validationIssues.some((issue) => issue.includes("mistral timeout")), true);
@@ -189,7 +189,7 @@ test("student chat adapter routes simple stable definitions through standard-lig
   };
   const adapter = new StudentChatAdapter({
     getConfiguredModelName() {
-      return "gemma3n:e4b";
+      return "qwen2.5:3b";
     },
     async testPrompt(_prompt, _system, options) {
       selectedModel = options?.modelName ?? "";
@@ -211,7 +211,7 @@ test("student chat adapter routes simple stable definitions through standard-lig
 
   const result = await adapter.answer(input);
 
-  assert.equal(selectedModel, "gemma3n:e4b");
+  assert.equal(selectedModel, "qwen2.5:3b");
   assert.equal(result.specialist.role, "primary_brain");
   assert.equal(result.runtimeBudget?.profile, "standard_light_chat");
   assert.equal(result.runtimeBudget?.fallbackDepth, 1);
@@ -245,7 +245,7 @@ test("student chat adapter keeps conceptual streaming architecture explanations 
 
   const result = await adapter.answer(input);
 
-  assert.equal(selectedModel, "gemma3n:e4b");
+  assert.equal(selectedModel, "qwen2.5:3b");
   assert.equal(result.specialist.role, "primary_brain");
   assert.equal(result.runtimeBudget?.profile, "standard_light_chat");
   assert.match(result.specialist.routingReason, /Conceptual architecture/i);
@@ -265,7 +265,7 @@ test("student chat adapter reserves qwen 14B for complex standard reasoning", as
   };
   const adapter = new StudentChatAdapter({
     getConfiguredModelName() {
-      return "gemma3n:e4b";
+      return "qwen2.5:3b";
     },
     async testPrompt(_prompt, _system, options) {
       selectedModel = options?.modelName ?? "";
@@ -304,7 +304,7 @@ test("student chat adapter routes code questions to the local code specialist", 
   };
   const adapter = new StudentChatAdapter({
     getConfiguredModelName() {
-      return "gemma3n:e4b";
+      return "qwen2.5:3b";
     },
     async testPrompt(_prompt, system, options) {
       selectedModel = options?.modelName ?? "";
@@ -344,7 +344,7 @@ test("student chat adapter routes concise direct answers to the fast 3B speciali
   };
   const adapter = new StudentChatAdapter({
     getConfiguredModelName() {
-      return "gemma3n:e4b";
+      return "qwen2.5:3b";
     },
     async testPrompt(_prompt, _system, options) {
       selectedModel = options?.modelName ?? "";
@@ -365,7 +365,7 @@ test("student chat adapter routes concise direct answers to the fast 3B speciali
 
   const result = await adapter.answer(input);
 
-  assert.equal(selectedModel, "gemma3n:e4b");
+  assert.equal(selectedModel, "qwen2.5:3b");
   assert.equal(result.specialist.role, "fast_router");
   assert.match(result.specialist.routingReason, /short-answer constraint/i);
   assert.equal(result.runtimeBudget?.profile, "concise_chat");
@@ -405,7 +405,7 @@ test("student chat adapter keeps short conceptual Docker questions on the concis
 
   const result = await adapter.answer(input);
 
-  assert.equal(selectedModel, "gemma3n:e4b");
+  assert.equal(selectedModel, "qwen2.5:3b");
   assert.equal(result.specialist.role, "fast_router");
   assert.equal(result.runtimeBudget?.profile, "concise_chat");
 });
@@ -449,7 +449,7 @@ test("student chat adapter keeps short conceptual PostgreSQL explanations off th
 
   const result = await adapter.answer(input);
 
-  assert.equal(selectedModel, "gemma3n:e4b");
+  assert.equal(selectedModel, "qwen2.5:3b");
   assert.notEqual(result.specialist.role, "code_specialist");
   assert.notEqual(result.runtimeBudget?.profile, "code_chat");
 });
@@ -519,7 +519,7 @@ test("student chat adapter routes French writing tasks through plain Qwen 3B wit
 
   const result = await adapter.answer(input);
 
-  assert.equal(selectedModel, "gemma3n:e4b");
+  assert.equal(selectedModel, "qwen2.5:3b");
   assert.equal(result.specialist.role, "writing_business");
   assert.equal(result.runtimeBudget?.profile, "writing_chat");
   assert.equal(result.runtimeBudget?.fallbackDepth, 2);
@@ -747,9 +747,9 @@ test("student chat adapter retries practical recipes on Qwen 3B before static fa
 
   const result = await adapter.answer(input);
 
-  assert.deepEqual(selectedModels, ["mistral:7b", "gemma3n:e4b"]);
+  assert.deepEqual(selectedModels, ["mistral:7b", "qwen2.5:3b"]);
   assert.equal(result.provider, "ollama");
-  assert.equal(result.model, "gemma3n:e4b");
+  assert.equal(result.model, "qwen2.5:3b");
   assert.equal(result.usedRetry, true);
   assert.equal(result.runtimeBudget?.profile, "writing_chat");
   assert.equal(result.validationIssues.some((issue) => issue.includes("mistral timeout")), true);
@@ -770,7 +770,7 @@ test("student chat adapter routes lightweight context-setting turns to the fast 
   };
   const adapter = new StudentChatAdapter({
     getConfiguredModelName() {
-      return "gemma3n:e4b";
+      return "qwen2.5:3b";
     },
     async testPrompt(_prompt, _system, options) {
       selectedModel = options?.modelName ?? "";
@@ -791,7 +791,7 @@ test("student chat adapter routes lightweight context-setting turns to the fast 
 
   const result = await adapter.answer(input);
 
-  assert.equal(selectedModel, "gemma3n:e4b");
+  assert.equal(selectedModel, "qwen2.5:3b");
   assert.equal(result.specialist.role, "fast_router");
   assert.match(result.specialist.routingReason, /context-setting turn/i);
   assert.equal(result.runtimeBudget?.profile, "concise_chat");
@@ -849,7 +849,7 @@ test("student chat adapter uses fast budget for verified calculator tool answers
 
   const result = await adapter.answer(input);
 
-  assert.equal(selectedModel, "gemma3n:e4b");
+  assert.equal(selectedModel, "qwen2.5:3b");
   assert.equal(result.specialist.role, "fast_router");
   assert.equal(result.runtimeBudget?.profile, "fast_tool");
   assert.equal(timeoutMs <= 12000, true);
@@ -907,7 +907,7 @@ test("student chat adapter gives source-backed research synthesis a longer singl
 
   const result = await adapter.answer(input);
 
-  assert.equal(selectedModel, "gemma3n:e4b");
+  assert.equal(selectedModel, "qwen2.5:3b");
   assert.equal(result.runtimeBudget?.profile, "standard_light_chat");
   assert.equal(result.runtimeBudget?.fallbackDepth, 0);
   assert.equal(timeoutMs >= 90000, true);
@@ -934,7 +934,7 @@ test("student chat adapter routes bounded strategic decisions to the light local
   });
   const adapter = new StudentChatAdapter({
     getConfiguredModelName() {
-      return "gemma3n:e4b";
+      return "qwen2.5:3b";
     },
     async testPrompt(inputPrompt, inputSystem, options) {
       prompt = inputPrompt;
@@ -1099,8 +1099,8 @@ test("student chat adapter falls back from an unavailable 14B route to Qwen 3B",
 
   const result = await adapter.answer(input);
 
-  assert.deepEqual(attemptedModels, ["qwen2.5:14b", "gemma3n:e4b"]);
-  assert.equal(result.model, "gemma3n:e4b");
+  assert.deepEqual(attemptedModels, ["qwen2.5:14b", "qwen2.5:3b"]);
+  assert.equal(result.model, "qwen2.5:3b");
   assert.match(result.answer.answer, /strong consistency/i);
 });
 
@@ -1163,7 +1163,7 @@ test("student chat adapter routes strategic setup turns to the fast local path",
     knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata
   });
 
-  assert.equal(selectedModel, "gemma3n:e4b");
+  assert.equal(selectedModel, "qwen2.5:3b");
   assert.equal(result.specialist.role, "primary_brain");
   assert.equal(result.runtimeBudget?.profile, "concise_chat");
   assert.equal(result.runtimeBudget?.fallbackDepth, 1);
@@ -1229,7 +1229,7 @@ test("student chat adapter allocates a long-form budget when the user requests 9
     knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata
   });
 
-  assert.equal(selectedModel, "gemma3n:e4b");
+  assert.equal(selectedModel, "qwen2.5:3b");
   assert.equal(result.runtimeBudget?.profile, "long_form_chat");
   assert.equal(result.runtimeBudget?.fallbackDepth, 0);
   assert.ok((result.runtimeBudget?.maxOutputTokens ?? 0) >= 1600);
@@ -1291,7 +1291,7 @@ test("student chat adapter does not chain local models after a long-form timeout
     knowledgeRetrieval: defaultChatKnowledgeRetrievalMetadata
   });
 
-  assert.deepEqual(attemptedModels, ["gemma3n:e4b"]);
+  assert.deepEqual(attemptedModels, ["qwen2.5:3b"]);
   assert.equal(result.runtimeBudget?.fallbackDepth, 0);
   assert.equal(result.provider, "fallback");
 });
@@ -1299,7 +1299,7 @@ test("student chat adapter does not chain local models after a long-form timeout
 test("student chat adapter does not call cloud fallback when local generation fails", async () => {
   const adapter = new StudentChatAdapter({
     getConfiguredModelName() {
-      return "gemma3n:e4b";
+      return "qwen2.5:3b";
     },
     async testPrompt() {
       throw new Error("local timeout");

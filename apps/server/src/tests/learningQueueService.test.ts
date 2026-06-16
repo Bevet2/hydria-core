@@ -25,11 +25,11 @@ function adapterResult(text: string, provider: "ollama" | "fallback" = "fallback
     answer: answer(text),
     usedRetry: provider === "fallback",
     provider,
-    model: "gemma3n:e4b",
+    model: "qwen2.5:3b",
     specialist: {
-      capabilityId: "gemma-e4b-standard-light",
+      capabilityId: "qwen-3b-standard-light",
       role: "primary_brain",
-      displayName: "Gemma 3n E4B",
+      displayName: "Qwen 3B",
       routingReason: "test",
       pipeline: ["test"]
     },
@@ -94,11 +94,11 @@ function response(overrides: Partial<ChatMessageResponse> = {}): ChatMessageResp
     },
     generation: {
       provider: "fallback",
-      model: "gemma3n:e4b",
+      model: "qwen2.5:3b",
       specialist: {
-        capabilityId: "gemma-e4b-standard-light",
+        capabilityId: "qwen-3b-standard-light",
         role: "primary_brain",
-        displayName: "Gemma 3n E4B",
+        displayName: "Qwen 3B",
         routingReason: "test",
         pipeline: ["test"]
       },
@@ -167,7 +167,7 @@ test("learning queue captures governed chat failure candidates and validates wit
         routing: {
           orchestrator: "chat_runtime",
           provider: "fallback",
-          model: "gemma3n:e4b",
+          model: "qwen2.5:3b",
           category: "technical_explanation",
           toolUsed: false
         },

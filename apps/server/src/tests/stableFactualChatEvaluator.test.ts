@@ -51,7 +51,7 @@ test("stable factual evaluator accepts planned light fallback for stable fact ro
     "Charlemagne est un roi des Francs qui regne de 768 a 814. Il devient empereur en 800 et son pouvoir donne son nom a l'Empire carolingien.",
     {
       provider: "ollama",
-      model: "gemma3n:e4b",
+      model: "qwen2.5:3b",
       budgetProfile: "stable_fact_chat",
       usedRetry: true,
       latencyMs: 72000,
@@ -128,7 +128,7 @@ test("stable factual diagnostics aggregates factual failure modes", () => {
     "Charlemagne, aussi appele Charles le Chauve, est un souverain.",
     {
       provider: "fallback",
-      model: "gemma3n:e4b",
+      model: "qwen2.5:3b",
       budgetProfile: "standard_light_chat",
       usedRetry: true,
       usedStaticFallback: true,
@@ -150,7 +150,7 @@ test("stable factual diagnostics aggregates factual failure modes", () => {
         answer: "Charlemagne, aussi appele Charles le Chauve, est un souverain.",
         runtime: {
           provider: "fallback",
-          model: "gemma3n:e4b",
+          model: "qwen2.5:3b",
           budgetProfile: "standard_light_chat",
           usedRetry: true,
           usedStaticFallback: true,

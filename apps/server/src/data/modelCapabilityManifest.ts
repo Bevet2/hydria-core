@@ -31,8 +31,8 @@ export type ModelCapabilityId =
   | "mistral-mixtral-business"
   | "bge-m3-embedding"
   | "bge-reranker-retrieval"
-  | "gemma-e4b-router"
-  | "gemma-e4b-standard-light";
+  | "qwen-3b-router"
+  | "qwen-3b-standard-light";
 
 export type ModelCapabilityRole =
   | "primary_brain"
@@ -328,17 +328,17 @@ export const modelCapabilityManifest = [
     ]
   },
   {
-    id: "gemma-e4b-router",
-    displayName: "Gemma 3n E4B Router",
-    family: "Gemma",
+    id: "qwen-3b-router",
+    displayName: "Qwen 3B Router",
+    family: "Qwen",
     role: "fast_router",
     purposes: ["fast_routing"],
     categories: allReasoningCategories,
     providerKinds: ["ollama", "vllm", "openrouter", "openai_compatible"],
     providerModelIds: {
-      ollama: "gemma3n:e4b",
-      vllm: "google/gemma-3n-e4b-it",
-      openrouter: "google/gemma-3n-e4b-it"
+      ollama: "qwen2.5:3b",
+      vllm: "Qwen/Qwen2.5-3B-Instruct",
+      openrouter: "qwen/qwen-2.5-3b-instruct"
     },
     runtimeStatus: "candidate",
     priority: 10,
@@ -350,8 +350,7 @@ export const modelCapabilityManifest = [
     strengths: [
       "Fast classification",
       "Cheap routing decisions",
-      "Low-latency extraction",
-      "Simple classification with more context than the previous Phi mini route"
+      "Low-latency extraction"
     ],
     avoidFor: [
       "Final complex answers",
@@ -360,17 +359,17 @@ export const modelCapabilityManifest = [
     ]
   },
   {
-    id: "gemma-e4b-standard-light",
-    displayName: "Gemma 3n E4B Standard Light",
-    family: "Gemma",
+    id: "qwen-3b-standard-light",
+    displayName: "Qwen 3B Standard Light",
+    family: "Qwen",
     role: "primary_brain",
     purposes: ["fast_routing"],
     categories: allReasoningCategories,
     providerKinds: ["ollama", "vllm", "openrouter", "openai_compatible"],
     providerModelIds: {
-      ollama: "gemma3n:e4b",
-      vllm: "google/gemma-3n-e4b-it",
-      openrouter: "google/gemma-3n-e4b-it"
+      ollama: "qwen2.5:3b",
+      vllm: "Qwen/Qwen2.5-3B-Instruct",
+      openrouter: "qwen/qwen-2.5-3b-instruct"
     },
     runtimeStatus: "candidate",
     priority: 7,

@@ -135,14 +135,14 @@ const defaultOutput = resolve(projectRoot, "storage", "training", "production-ch
 
 const standardLightExpectation: TurnExpectation = {
   provider: "ollama",
-  model: "gemma3n:e4b",
+  model: "qwen2.5:3b",
   budgetProfile: "standard_light_chat",
   maxLatencyMs: 45000
 };
 
 const conciseExpectation: TurnExpectation = {
   provider: "ollama",
-  model: "gemma3n:e4b",
+  model: "qwen2.5:3b",
   budgetProfile: "concise_chat",
   maxLatencyMs: 50000
 };
@@ -156,14 +156,14 @@ const contextAckExpectation: TurnExpectation = {
 
 const writingExpectation: TurnExpectation = {
   provider: "ollama",
-  model: ["mistral:7b", "gemma3n:e4b"],
+  model: ["mistral:7b", "qwen2.5:3b"],
   budgetProfile: "writing_chat",
   maxLatencyMs: 70000
 };
 
 const stableFactExpectation: TurnExpectation = {
   provider: "ollama",
-  model: "gemma3n:e4b",
+  model: "qwen2.5:3b",
   budgetProfile: "standard_light_chat",
   toolType: "research",
   maxLatencyMs: 90000,
@@ -351,7 +351,7 @@ const cases: RoutingGateCase[] = [
         message: "Donne moi une recette de tiramisu.",
         expect: {
           ...writingExpectation,
-          model: ["qwen2.5:14b", "gemma3n:e4b"],
+          model: ["qwen2.5:14b", "qwen2.5:3b"],
           maxLatencyMs: 150000,
           allowRetry: true
         }

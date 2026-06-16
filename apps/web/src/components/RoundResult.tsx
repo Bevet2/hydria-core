@@ -181,7 +181,7 @@ export function RoundResult({ round }: RoundResultProps) {
       <section className="panel">
         <div className="panel__header">
           <h3>Local Student</h3>
-          <span className="pill">gemma3n:e4b</span>
+          <span className="pill">qwen2.5:3b</span>
         </div>
         <p>{round.outputs.localStudent.student_answer}</p>
         <h4>Student summary</h4>

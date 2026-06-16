@@ -233,7 +233,7 @@ test("economic model provider v2 keeps the selected specialist as primary on equ
     }
   });
 
-  assert.equal(plan.selection.selected.id, "gemma-e4b-router");
-  assert.equal(plan.target?.modelId, "gemma3n:e4b");
-  assert.equal(plan.target?.capabilityId, "gemma-e4b-router");
+  assert.equal(plan.selection.selected.id, "qwen-3b-router");
+  assert.equal(plan.target?.modelId, "qwen2.5:3b");
+  assert.equal(plan.target?.capabilityId, "qwen-3b-router");
 });

@@ -85,7 +85,7 @@ Response shape:
     "provider": "tool",
     "model": "research_fact_check",
     "specialistRole": "source_research",
-    "attempts": ["gemma3n:e4b"]
+    "attempts": ["qwen2.5:3b"]
   },
   "memory": {
     "sessionId": "conversation uuid",

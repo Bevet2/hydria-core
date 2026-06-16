@@ -2225,7 +2225,7 @@ function buildDeterministicRuntimeDraft(args: {
       provider: "tool",
       model: args.model,
       specialist: {
-        capabilityId: "gemma-e4b-router",
+        capabilityId: "qwen-3b-router",
         role: "fast_router",
         displayName: args.displayName,
         routingReason: args.routingReason,
@@ -2924,7 +2924,7 @@ function buildDeterministicVerifiedToolDraft(args: {
         provider: "tool",
         model: "time",
         specialist: {
-          capabilityId: "gemma-e4b-router",
+          capabilityId: "qwen-3b-router",
           role: "fast_router",
           displayName: "Verified tool answer",
           routingReason: "Time/date tool returned an exact verified result; no model call was needed.",
@@ -2987,7 +2987,7 @@ function buildDeterministicVerifiedToolDraft(args: {
       provider: "tool",
       model: "calculator",
       specialist: {
-        capabilityId: "gemma-e4b-router",
+        capabilityId: "qwen-3b-router",
         role: "fast_router",
         displayName: "Verified tool answer",
         routingReason: "Calculator returned an exact verified result; no model call was needed.",
@@ -3646,7 +3646,7 @@ export class ChatRuntimeService {
             provider: "tool",
             model: "research_fact_check",
             specialist: {
-              capabilityId: "gemma-e4b-standard-light",
+              capabilityId: "qwen-3b-standard-light",
               role: "primary_brain",
               displayName: "Source-backed factual repair",
               routingReason:
@@ -3736,7 +3736,7 @@ export class ChatRuntimeService {
           provider: "tool",
           model: "runtime_product_knowledge",
           specialist: {
-            capabilityId: "gemma-e4b-standard-light",
+            capabilityId: "qwen-3b-standard-light",
             role: "primary_brain",
             displayName: "Runtime product knowledge",
             routingReason:
@@ -3782,7 +3782,7 @@ export class ChatRuntimeService {
           provider: "tool",
           model: "runtime_technical_concept",
           specialist: {
-            capabilityId: "gemma-e4b-standard-light",
+            capabilityId: "qwen-3b-standard-light",
             role: "primary_brain",
             displayName: "Runtime stable concept repair",
             routingReason:

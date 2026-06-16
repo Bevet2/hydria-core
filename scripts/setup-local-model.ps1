@@ -32,7 +32,7 @@ if (-not $Model) {
   $Model = Get-EnvValue -Path $envPath -Name "LOCAL_MODEL_NAME"
 }
 if (-not $Model) {
-  $Model = "gemma3n:e4b"
+  $Model = "qwen2.5:3b"
 }
 
 if (-not $OllamaHost) {
@@ -117,7 +117,7 @@ try {
 $config = @{
   provider = "ollama"
   runtimeModel = $Model
-  upstreamModel = "google/gemma-3n-e4b-it"
+  upstreamModel = "Qwen/Qwen2.5-3B-Instruct"
   host = $OllamaHost
   baseUrl = $baseUrl
   modelsDir = $modelsDirForConfig

@@ -50,7 +50,7 @@ export function LocalModelPanel({
       </p>
       <div className="meta-stack">
         <span>Provider: {health?.provider ?? "ollama"}</span>
-        <span>Model: {health?.model ?? "gemma3n:e4b"}</span>
+        <span>Model: {health?.model ?? "qwen2.5:3b"}</span>
         <span>Endpoint: {health?.baseUrl ?? "http://127.0.0.1:11435"}</span>
       </div>
       <textarea

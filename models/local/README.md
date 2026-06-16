@@ -4,11 +4,11 @@ Hydria Core uses a dedicated Ollama endpoint on `http://127.0.0.1:11435` with it
 
 Selected runtime model:
 
-- `gemma3n:e4b`
+- `qwen2.5:3b`
 
 Upstream open-weight training target for future LoRA/SFT:
 
-- `google/gemma-3n-e4b-it`
+- `Qwen/Qwen2.5-3B-Instruct`
 
 Why this choice:
 

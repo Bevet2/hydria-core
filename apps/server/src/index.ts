@@ -227,8 +227,8 @@ app.get("/api/health", async (_request, response) => {
         code: "qwen2.5-coder:7b",
         deepReasoning: "deepseek-r1:14b",
         writingBusiness: "mistral:7b",
-        fastRouter: "gemma3n:e4b",
-        conciseFastChat: "gemma3n:e4b"
+        fastRouter: "qwen2.5:3b",
+        conciseFastChat: "qwen2.5:3b"
       },
       timeoutMs: env.STUDENT_CHAT_LOCAL_TIMEOUT_MS,
       runtimeGovernor: {

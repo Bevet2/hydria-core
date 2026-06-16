@@ -44,9 +44,9 @@ function fakeChatResponse(message: string) {
     },
     generation: {
       provider: "ollama",
-      model: "gemma3n:e4b",
+      model: "qwen2.5:3b",
       specialist: { role: "scenario_gate_stub" },
-      attempts: [{ model: "gemma3n:e4b" }]
+      attempts: [{ model: "qwen2.5:3b" }]
     },
     conversationQuality: {
       passed: true,

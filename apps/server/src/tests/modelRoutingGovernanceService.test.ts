@@ -29,7 +29,7 @@ test("model routing governance keeps API definitions off the code specialist", (
   );
 
   assert.equal(result.status, "passed");
-  assert.equal(result.selectedCapabilityId, "gemma-e4b-standard-light");
+  assert.equal(result.selectedCapabilityId, "qwen-3b-standard-light");
   assert.equal(result.selectedRole, "primary_brain");
   assert.equal(result.issues.includes("forbidden_capability_selected:qwen-coder-code"), false);
 });
