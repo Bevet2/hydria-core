@@ -1320,6 +1320,22 @@ function normalizeOrdinalTitleKey(value: string) {
     .trim();
 }
 
+function ordinalTitleMarkers(value: string) {
+  return normalizeOrdinalTitleKey(entityTitleKey(value))
+    .split(/\s+/)
+    .filter((term) => /^[ivxlcdm]+$/.test(term) || /^\d+(?:er)?$/.test(term));
+}
+
+function hasConflictingOrdinalMarker(expectedSubject: string, title: string) {
+  const expectedMarkers = ordinalTitleMarkers(expectedSubject);
+  const titleMarkers = ordinalTitleMarkers(title);
+  return (
+    expectedMarkers.length > 0 &&
+    titleMarkers.length > 0 &&
+    !expectedMarkers.some((marker) => titleMarkers.includes(marker))
+  );
+}
+
 function subjectTitleScore(subject: string, title: string) {
   const subjectKey = normalizeOrdinalTitleKey(entityTitleKey(subject));
   const titleKey = normalizeOrdinalTitleKey(entityTitleKey(title));
@@ -1341,6 +1357,9 @@ function requiresStrictSourceTitle(subject: string) {
 }
 
 function sourceTitleMatchesResolvedSubject(expectedSubject: string, title: string) {
+  if (hasConflictingOrdinalMarker(expectedSubject, title)) {
+    return false;
+  }
   const titleScore = subjectTitleScore(expectedSubject, title);
   if (titleScore >= 3) {
     return true;

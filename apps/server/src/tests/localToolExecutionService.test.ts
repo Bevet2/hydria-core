@@ -615,6 +615,12 @@ test("local research fact-check tool resolves Napoleon Bonaparte to Napoleon I",
         JSON.stringify({
           search: [
             {
+              id: "Q7723",
+              label: "Napol\u00e9on II",
+              description: "empereur des Fran\u00e7ais",
+              concepturi: "https://www.wikidata.org/wiki/Q7723"
+            },
+            {
               id: "Q517",
               label: "Napol\u00e9on Ier",
               description: "militaire, homme d'Etat et monarque fran\u00e7ais",
@@ -643,7 +649,7 @@ test("local research fact-check tool resolves Napoleon Bonaparte to Napoleon I",
 
   assert.equal(result?.resultLabel, "Napoleon I");
   assert.match(result?.verifiedFacts.join(" "), /empereur des Fran/);
-  assert.doesNotMatch(result?.verifiedFacts.join(" "), /Pierre-Napol|cruiseferry|ferry/i);
+  assert.doesNotMatch(result?.verifiedFacts.join(" "), /Pierre-Napol|Napol\\u00e9on II|Napol\u00e9on II|cruiseferry|ferry/i);
   assert.equal(result?.sources?.length, 2);
 });
 
