@@ -17,9 +17,9 @@ test("general knowledge rewriter normalizes regnal digit and word aliases", () =
     language: "fr"
   });
 
-  assert.equal(digit.canonicalSubject, "Louis IX");
+  assert.equal(digit.canonicalSubject, "Louis IX de France");
+  assert.equal(word.canonicalSubject, "Louis IX de France");
   assert.ok(word.candidates.includes("Louis IX"));
-  assert.ok(word.candidates.includes("Louis IX France"));
 });
 
 test("general knowledge source matching rejects off-subject snippets", () => {
@@ -47,7 +47,7 @@ test("general knowledge rewriter normalizes common acronyms and hyphenated subje
   });
 
   assert.equal(dna.canonicalSubject, "DNA");
-  assert.equal(saintLouis.canonicalSubject, "Louis IX");
+  assert.equal(saintLouis.canonicalSubject, "Louis IX de France");
   assert.ok(saintLouis.candidates.includes("Saint Louis"));
 });
 

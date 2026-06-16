@@ -715,9 +715,14 @@ test("local research fact-check tool cleans presentation biography subjects befo
   );
 
   assert.equal(result?.toolType, "research");
-  assert.equal(result?.resultLabel, "Louis IX");
+  assert.equal(result?.resultLabel, "Louis IX de France");
   assert.match(result?.verifiedFacts.join(" "), /Saint Louis/);
-  assert.equal(requestedUrls.some((url) => decodeURIComponent(url.replace(/\+/g, " ")).includes("srsearch=Louis IX")), true);
+  assert.equal(
+    requestedUrls.some((url) =>
+      decodeURIComponent(url.replace(/\+/g, " ")).includes("srsearch=Louis IX de France")
+    ),
+    true
+  );
   assert.equal(result?.sources?.[0]?.retrievalEngine, "known_endpoint");
 });
 
@@ -789,7 +794,7 @@ test("local research fact-check tool rejects Wikidata disambiguation corroborati
   const service = new LocalToolExecutionService();
   const result = await service.tryExecute(buildFactCheckRouting("Louis IX"));
 
-  assert.equal(result?.resultLabel, "Louis IX");
+  assert.equal(result?.resultLabel, "Louis IX de France");
   assert.match(result?.verifiedFacts.join(" "), /roi de France/);
   assert.doesNotMatch(result?.verifiedFacts.join(" "), /homonymie/i);
   assert.equal(result?.sources?.[1]?.url, "https://www.wikidata.org/wiki/Q346");

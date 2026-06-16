@@ -83,10 +83,13 @@ const COMMON_ALIAS_CANONICALS: Record<string, string> = {
   cleopatra: "Cleopatra VII",
   "cleopatre vii": "Cleopatra VII",
   "cleopatra vii": "Cleopatra VII",
+  "louis ix": "Louis IX de France",
+  "louis ix france": "Louis IX de France",
   "napoleon bonaparte": "Napoleon I"
 };
 
 const SPECIAL_CANDIDATE_ALIASES: Record<string, string[]> = {
+  "louis ix de france": ["Louis IX de France", "Louis IX", "Saint Louis"],
   "napoleon i": ["Napoleon I", "Napoleon Ier", "Napoleon Bonaparte", "Napoleon"],
   "cleopatra vii": ["Cleopatra VII", "Cleopatre VII", "Cléopâtre VII", "Cleopatra", "Cleopatre"],
   "napoleon bonaparte": ["Napoleon Bonaparte", "Napoléon Ier", "Napoleon I", "Napoleon"]
@@ -188,7 +191,7 @@ function titleCaseSubject(value: string) {
 }
 
 function withoutCountrySuffix(value: string) {
-  return normalizeSpace(value.replace(COUNTRY_SUFFIX_PATTERN, " "));
+  return normalizeSpace(value.replace(COUNTRY_SUFFIX_PATTERN, " ").replace(/\b(?:de|du|of)\s*$/i, " "));
 }
 
 function candidateWithSimpleSingular(value: string) {
@@ -205,7 +208,7 @@ function contextualCanonicalAlias(args: { question: string; subject: string }) {
     /\bsaint louis\b/.test(combined) &&
     !/\b(?:senegal|s[eé]n[eé]gal|missouri|ville|city|commune|fleuve|river|st louis)\b/.test(combined);
   if (refersToSaintLouis && /\b(?:qui|who|roi|king|histor|biograph|france|personne|person)\b/.test(combined)) {
-    return "Louis IX";
+    return "Louis IX de France";
   }
   return null;
 }
