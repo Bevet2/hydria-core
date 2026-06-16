@@ -37,7 +37,7 @@ import {
   LocalToolExecutionService,
   type LocalToolExecutionResult
 } from "./tools/localToolExecutionService.js";
-import { isPublicRulesKnowledgeLookup, ToolRoutingService } from "./tools/toolRoutingService.js";
+import { isFallbackEligibleKnowledgeLookup, ToolRoutingService } from "./tools/toolRoutingService.js";
 import type { ModelRuntimeTelemetryService } from "./models/modelRuntimeTelemetryService.js";
 import type { InteractionLogStore } from "./interactionLogStore.js";
 import { KnowledgeRetrievalService } from "./knowledgeRetrievalService.js";
@@ -4496,7 +4496,7 @@ export class ChatRuntimeService {
         ? "recent_updates"
         : "fact_check",
       confidence: 0.81,
-      fallbackAllowed: isPublicRulesKnowledgeLookup(args.question),
+      fallbackAllowed: isFallbackEligibleKnowledgeLookup(args.question),
       reason: "Answerability planner requires source-backed research before generation.",
       extractedArgs: {
         query: args.question,

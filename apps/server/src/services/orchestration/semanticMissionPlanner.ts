@@ -652,10 +652,14 @@ export function buildSemanticSearchCandidates(subject: string, frame: SemanticFr
     return [cleanSubject].filter(Boolean);
   }
 
+  // Bare subject first: a modifier-augmented query (e.g. "X regles deroulement du jeu") changes
+  // which page wins full-text search and can surface a same-word wrong-sense page (e.g. a
+  // championship/results article) ahead of the canonical subject page. The modifiers still get
+  // used afterward to pull a focused section out of whichever page the bare-subject lookup finds.
   const focusedCandidates = [
-    `${cleanSubject} ${frame.searchModifiers.slice(0, 2).join(" ")}`,
+    cleanSubject,
     `${cleanSubject} ${frame.searchModifiers[0]}`,
-    cleanSubject
+    `${cleanSubject} ${frame.searchModifiers.slice(0, 2).join(" ")}`
   ];
   return unique(
     frame.intent === "rules"

@@ -728,8 +728,25 @@ function isSourceBackedConceptLookup(question: string) {
   return asksShortDefinition && termCount <= 10 && !asksScenarioExplanation;
 }
 
-export function isPublicRulesKnowledgeLookup(question: string) {
+function isPublicRulesKnowledgeLookup(question: string) {
   return PUBLIC_RULES_KNOWLEDGE_PATTERN.test(question);
+}
+
+/**
+ * Distinguishes two risk tiers of "this question would benefit from a source":
+ * - High stakes (no fallback): claims about a specific real, identifiable entity
+ *   (a person, dated event, current state) where a confidently wrong answer is a
+ *   real factual error, or the user explicitly asked for verification/citations.
+ * - Low stakes (fallback to direct model knowledge if research is unavailable):
+ *   stable, impersonal, non-controversial knowledge that a base model already
+ *   knows well — generic concept definitions, game/activity rules, how-to
+ *   explanations. Getting research is still preferred (better, citable answers),
+ *   but failing to find a source should not block answering at all.
+ * This is a risk-tier classification, not a topic allowlist: it must hold for any
+ * concept/rules-style question, not just the specific examples used to derive it.
+ */
+export function isFallbackEligibleKnowledgeLookup(question: string) {
+  return isPublicRulesKnowledgeLookup(question) || isSourceBackedConceptLookup(question);
 }
 
 function shouldUseGeneralFactResearch(question: string, category: QuestionCategory | null | undefined) {
@@ -740,21 +757,20 @@ function shouldUseGeneralFactResearch(question: string, category: QuestionCatego
   if (WRITING_OR_BRAINSTORM_PATTERN.test(question)) {
     return false;
   }
-  return (
-    isIdentityOrBiographyLookup(question) ||
-    isSourceBackedConceptLookup(question) ||
-    explicitlyRequestsSources
-  );
+  return isIdentityOrBiographyLookup(question) || explicitlyRequestsSources;
 }
 
-function shouldUseRulesKnowledgeResearch(question: string, category: QuestionCategory | null | undefined) {
+function shouldUseStableConceptResearchWithFallback(
+  question: string,
+  category: QuestionCategory | null | undefined
+) {
   if (isConversationPlanningCategory(category)) {
     return false;
   }
   if (WRITING_OR_BRAINSTORM_PATTERN.test(question)) {
     return false;
   }
-  return isPublicRulesKnowledgeLookup(question);
+  return isFallbackEligibleKnowledgeLookup(question);
 }
 
 function forbidsExternalTools(question: string) {
@@ -1197,7 +1213,7 @@ export class ToolRoutingService {
       });
     }
 
-    if (shouldUseRulesKnowledgeResearch(question, args.category)) {
+    if (shouldUseStableConceptResearchWithFallback(question, args.category)) {
       return buildDecision({
         toolRequired: true,
         toolType: "research",
@@ -1205,7 +1221,7 @@ export class ToolRoutingService {
         confidence: 0.78,
         fallbackAllowed: true,
         reason:
-          "Game or activity rules benefit from source-backed research, but this is stable, low-stakes knowledge that the model can answer directly if research is unavailable.",
+          "Stable, impersonal knowledge (a concept definition or activity rules) benefits from source-backed research, but the model can answer directly if research is unavailable.",
         extractedArgs: buildFactCheckArgs(question, args.category)
       });
     }

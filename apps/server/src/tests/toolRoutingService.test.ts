@@ -166,7 +166,7 @@ test("tool router routes simple stable concept explanations to source-backed res
   assert.equal(decision.toolRequired, true);
   assert.equal(decision.toolType, "research");
   assert.equal(decision.intent, "fact_check");
-  assert.equal(decision.fallbackAllowed, false);
+  assert.equal(decision.fallbackAllowed, true);
   assert.equal(decision.extractedArgs.subject, "API");
 });
 
