@@ -2,6 +2,11 @@ import type { QuestionCategory } from "../types/arena.js";
 import type { ChatKnowledgeRetrievalMetadata, KnowledgeRetrievalHit } from "../types/knowledgeRetrieval.js";
 import type { KnowledgeObject, KnowledgeObjectState } from "../types/knowledgeObjects.js";
 import { KnowledgeObjectStore } from "./knowledgeObjectStore.js";
+import {
+  buildSemanticFrame,
+  sourceMatchesSemanticFrame,
+  type SemanticFrame
+} from "./orchestration/semanticMissionPlanner.js";
 
 type KnowledgeRetrievalServiceOptions = {
   knowledgeObjectStore?: Pick<KnowledgeObjectStore, "load">;
@@ -190,12 +195,16 @@ function scoreObject(args: {
   object: KnowledgeObject;
   terms: string[];
   category: QuestionCategory | null;
+  semanticFrame: SemanticFrame;
 }): ScoredObject | null {
   const title = normalize(args.object.title);
   const summary = normalize(args.object.summary);
   const text = objectText(args.object);
   const matchedTerms = args.terms.filter((term) => textContainsTerm(text, term));
   if (matchedTerms.length === 0) {
+    return null;
+  }
+  if (!sourceMatchesSemanticFrame(args.semanticFrame, text).passed) {
     return null;
   }
 
@@ -308,10 +317,11 @@ export class KnowledgeRetrievalService {
       };
     }
 
+    const semanticFrame = buildSemanticFrame({ question: args.query, category: args.category ?? null });
     const file = await this.knowledgeObjectStore.load();
     const scored = (file?.objects ?? [])
       .filter(isRetrievable)
-      .map((object) => scoreObject({ object, terms, category: args.category ?? null }))
+      .map((object) => scoreObject({ object, terms, category: args.category ?? null, semanticFrame }))
       .filter((item): item is ScoredObject => Boolean(item))
       .filter((item) => item.score >= this.minScore)
       .sort(

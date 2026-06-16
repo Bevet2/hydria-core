@@ -298,6 +298,7 @@ export function extractSalientResearchSubject(question: string, fallbackSubject 
 
   const stripped = normalizeSpace(
     fallbackSubject
+      .replace(/\b(?:dis(?:-|\s)?moi|dis(?:-|\s)?donc|tu connais|connais(?:-|\s)?tu|tu sais|sais(?:-|\s)?tu)\b/gi, " ")
       .replace(
         /\b(?:en profondeur|in depth|deep dive|de facon detaillee|de mani[eè]re detaillee|detailed|comprehensive)\b/gi,
         " "

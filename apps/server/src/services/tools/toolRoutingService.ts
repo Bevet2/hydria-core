@@ -37,7 +37,7 @@ const WEBSITE_LOOKUP_PATTERN =
 const EXPLICIT_FACTUAL_RESEARCH_PATTERN =
   /\b(?:verify|fact[-\s]?check|source|sources|cite|citation|search the web|search online|look up|lookup|find online|cherche(?:r)? sur internet|recherche web|source fiable|sources fiables|verifie|v(?:e|\u00e9)rifie|cite)\b/i;
 const PUBLIC_RULES_KNOWLEDGE_PATTERN =
-  /(?:\b(?:tu connais|connais[- ]?tu|quelles? sont|explique|donne(?:-|\s)?moi|rappelle(?:-|\s)?moi)\b.{0,35}\b(?:regles?|r(?:e|\u00e8|\u00e9|\?|\ufffd|\u00c3\u00a8|\u00c3\u00a9)gles?)\b|\b(?:do you know|what are|explain|tell me|give me)\b.{0,35}\brules?\b|\b(?:comment (?:joue[- ]?t[- ]?on|jouer)|how (?:do you play|to play))\b)/i;
+  /(?:\b(?:tu connais|connais[- ]?tu|quelles? sont|explique|donne(?:-|\s)?moi|rappelle(?:-|\s)?moi|dis(?:-|\s)?moi|dis(?:-|\s)?donc)\b.{0,35}\b(?:regles?|r(?:e|\u00e8|\u00e9|\?|\ufffd|\u00c3\u00a8|\u00c3\u00a9)gles?)\b|\b(?:do you know|what are|explain|tell me|give me)\b.{0,35}\brules?\b|\b(?:comment (?:joue[- ]?t[- ]?on|jouer)|how (?:do you play|to play))\b)/i;
 const CURRENCY_NAME_PATTERN =
   /\b(?:usd|eur|gbp|cad|aud|jpy|chf|sek|nok|dkk|pln|inr|cny|rmb|btc|eth|bitcoin|ethereum|dollar(?:s)?|euro(?:s)?|pound(?:s)?|yen)\b/i;
 const TIME_PATTERN =
@@ -280,7 +280,7 @@ function extractEntitySubject(question: string) {
   const stripped = normalizeSpace(
     question
       .replace(/[?]/g, " ")
-      .replace(/\b(?:who is|what is|what are|show me|find|lookup|look up|tell me|give me|make me|explain|define|definition|qui est|quel est|quelle est|quels sont|quelles sont|qu'est[- ]ce que|quest ce que|c'est quoi|c est quoi|ce qu'est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi)\b/gi, " ")
+      .replace(/\b(?:who is|what is|what are|show me|find|lookup|look up|tell me|give me|make me|explain|define|definition|qui est|quel est|quelle est|quels sont|quelles sont|qu'est[- ]ce que|quest ce que|c'est quoi|c est quoi|ce qu'est|explique|definis|d(?:e|\u00e9)finis|d(?:e|\u00e9)finition|fai[st](?:-|\s)?moi|donne(?:-|\s)?moi|raconte(?:-|\s)?moi|prepare(?:-|\s)?moi|pr(?:e|\u00e9)pare(?:-|\s)?moi|dis(?:-|\s)?moi|dis(?:-|\s)?donc|tu connais|connais(?:-|\s)?tu|tu sais|sais(?:-|\s)?tu|rappelle(?:-|\s)?moi)\b/gi, " ")
       .replace(/\b(?:simply|simplement)\b/gi, " ")
       .replace(/\b(?:complete|compl(?:e|\u00e8)te|complet|presentation|pr(?:e|\u00e9)sentation|expose|expos(?:e|\u00e9)|diaporama|slides?)\b/gi, " ")
       .replace(/\b(?:current|currently|actuel|actuelle|latest|official|github|repository|repo|website|site|ceo|president|pr(?:e|\u00e9)sident|version|release|announcements?|docs?|documentation)\b/gi, " ")
@@ -728,7 +728,7 @@ function isSourceBackedConceptLookup(question: string) {
   return asksShortDefinition && termCount <= 10 && !asksScenarioExplanation;
 }
 
-function isPublicRulesKnowledgeLookup(question: string) {
+export function isPublicRulesKnowledgeLookup(question: string) {
   return PUBLIC_RULES_KNOWLEDGE_PATTERN.test(question);
 }
 
@@ -743,9 +743,18 @@ function shouldUseGeneralFactResearch(question: string, category: QuestionCatego
   return (
     isIdentityOrBiographyLookup(question) ||
     isSourceBackedConceptLookup(question) ||
-    isPublicRulesKnowledgeLookup(question) ||
     explicitlyRequestsSources
   );
+}
+
+function shouldUseRulesKnowledgeResearch(question: string, category: QuestionCategory | null | undefined) {
+  if (isConversationPlanningCategory(category)) {
+    return false;
+  }
+  if (WRITING_OR_BRAINSTORM_PATTERN.test(question)) {
+    return false;
+  }
+  return isPublicRulesKnowledgeLookup(question);
 }
 
 function forbidsExternalTools(question: string) {
@@ -1185,6 +1194,19 @@ export class ToolRoutingService {
           temporalFocus: temporalProfile.focus,
           language: detectQuestionLanguage(question)
         }
+      });
+    }
+
+    if (shouldUseRulesKnowledgeResearch(question, args.category)) {
+      return buildDecision({
+        toolRequired: true,
+        toolType: "research",
+        intent: "fact_check",
+        confidence: 0.78,
+        fallbackAllowed: true,
+        reason:
+          "Game or activity rules benefit from source-backed research, but this is stable, low-stakes knowledge that the model can answer directly if research is unavailable.",
+        extractedArgs: buildFactCheckArgs(question, args.category)
       });
     }
 

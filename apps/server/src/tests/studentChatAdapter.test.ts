@@ -528,6 +528,37 @@ test("student chat adapter routes French writing tasks through plain Qwen 3B wit
   assert.match(result.answer.answer, /retard/);
 });
 
+test("student chat adapter warns against fabricated citations in free writing mode", async () => {
+  let usedSystem = "";
+  const input = {
+    ...buildInput(),
+    category: "operational_writing" as const,
+    routingQuestion: "Redige un message client annoncant un retard.",
+    userMessage: "Redige un message client annoncant un retard.",
+    question: "Redige un message client annoncant un retard.",
+    runtimeMode: "direct" as const,
+    requiresExternalGrounding: false
+  };
+  const adapter = new StudentChatAdapter({
+    getConfiguredModelName() {
+      return "mistral:7b";
+    },
+    async testPrompt(_prompt, system, options) {
+      usedSystem = system ?? "";
+      return {
+        provider: "ollama",
+        model: options?.modelName ?? "",
+        response: "Bonjour, nous vous informons que la livraison aura un retard.",
+        durationMs: 12
+      };
+    }
+  });
+
+  await adapter.answer(input);
+
+  assert.match(usedSystem, /do not invent specific statistics|fabricated number/i);
+});
+
 test("student chat adapter removes writing instructions and repeated final text", async () => {
   const adapter = new StudentChatAdapter({
     getConfiguredModelName() {

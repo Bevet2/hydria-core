@@ -182,14 +182,15 @@ test("tool router keeps French language on what-is concept lookups", () => {
   assert.equal(decision.extractedArgs.language, "fr");
 });
 
-test("tool router routes public rules and gameplay questions to source-backed research", () => {
+test("tool router routes public rules and gameplay questions to source-backed research with a knowledge fallback", () => {
   const cases = [
     ["Tu connais les r\ufffdgles du bowling ?", "Bowling", "fr"],
     ["Tu connais les r?gles du bowling ?", "Bowling", "fr"],
     ["Tu connais les règles du bowling ?", "Bowling", "fr"],
     ["Quelles sont les règles des échecs ?", "Échecs", "fr"],
     ["How do you play Go?", "Go", "en"],
-    ["What are the rules of handball?", "Handball", "en"]
+    ["What are the rules of handball?", "Handball", "en"],
+    ["Dis-moi les regles de la petanque", "Petanque", "fr"]
   ] as const;
 
   for (const [question, subject, language] of cases) {
@@ -201,7 +202,7 @@ test("tool router routes public rules and gameplay questions to source-backed re
     assert.equal(decision.toolRequired, true, question);
     assert.equal(decision.toolType, "research", question);
     assert.equal(decision.intent, "fact_check", question);
-    assert.equal(decision.fallbackAllowed, false, question);
+    assert.equal(decision.fallbackAllowed, true, question);
     assert.equal(decision.extractedArgs.subject, subject, question);
     assert.equal(decision.extractedArgs.language, language, question);
   }
