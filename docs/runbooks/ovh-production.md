@@ -731,10 +731,10 @@ storage/training/chat-runtime-slo-gate-v1.json
 It validates public chat runtime observability and operational SLOs: orchestration trace coverage, local-only runtime, static fallback rate, cloud runtime rate, wrong language rate, quality failures, retry rate, and p95 latency. Default thresholds are production-safe for the current CPU VPS:
 
 ```text
-max p95 latency: 60000 ms
+max p95 latency: 150000 ms
 max fast_tool p95 latency: 1500 ms
-max standard_light_chat p95 latency: 45000 ms
-max stable_fact_chat p95 latency: 60000 ms
+max standard_light_chat p95 latency: 130000 ms
+max stable_fact_chat p95 latency: 130000 ms
 max retry rate: 10%
 max static fallback rate: 0%
 max cloud runtime rate: 0%
@@ -743,10 +743,12 @@ max quality failure rate: 0%
 min trace coverage: 100%
 ```
 
+Gemma 3n E4B (6.9B parameters on disk) is meaningfully slower than the previous `qwen2.5:3b`/`phi3:mini` routes on this CPU-only VPS: a single `standard_light_chat` generation can take 90-120 seconds. The thresholds above were widened accordingly; tighten them again with `--max-p95-ms`/`--max-standard-light-p95-ms`/`--max-stable-fact-p95-ms` if this backend moves to a GPU host or a smaller Gemma variant.
+
 Use a stricter latency target while tuning:
 
 ```bash
-npm run prod:chat-slo-gate -- --base-url=https://app.hydria.click --timeout-ms=180000 --max-p95-ms=45000 --max-stable-fact-p95-ms=45000
+npm run prod:chat-slo-gate -- --base-url=https://app.hydria.click --timeout-ms=180000 --max-p95-ms=130000 --max-stable-fact-p95-ms=130000
 ```
 
 The report includes `summary.byBudgetProfile`, which is the first place to inspect when total p95 passes but a specific route drifts.
@@ -992,12 +994,12 @@ LOCAL_STUDENT_FALLBACK_MODEL=openai/gpt-5.4-mini
 LOCAL_MODEL_NAME=gemma3n:e4b
 STUDENT_CHAT_LOCAL_MODEL_NAME=mistral:7b
 HYDRIA_DOCKER_LOCAL_MODEL_BASE_URL=http://host.docker.internal:11435
-LOCAL_MODEL_TIMEOUT_MS=120000
-STUDENT_CHAT_LOCAL_TIMEOUT_MS=45000
-MODEL_ROUTER_LOCAL_TIMEOUT_MS=120000
+LOCAL_MODEL_TIMEOUT_MS=170000
+STUDENT_CHAT_LOCAL_TIMEOUT_MS=160000
+MODEL_ROUTER_LOCAL_TIMEOUT_MS=170000
 MODEL_RUNTIME_GOVERNOR_ENABLED=true
 MODEL_RUNTIME_FAST_TIMEOUT_MS=12000
-MODEL_RUNTIME_STANDARD_TIMEOUT_MS=30000
+MODEL_RUNTIME_STANDARD_TIMEOUT_MS=140000
 MODEL_RUNTIME_CODE_TIMEOUT_MS=45000
 MODEL_RUNTIME_DEEP_TIMEOUT_MS=120000
 MODEL_RUNTIME_FAST_MAX_OUTPUT_TOKENS=96

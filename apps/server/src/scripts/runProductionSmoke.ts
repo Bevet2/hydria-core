@@ -85,7 +85,7 @@ function parseArgs(argv = process.argv.slice(2)): Args {
     allowPublicSchema: hasFlag(argv, "--allow-public-schema"),
     requireLocalModel: hasFlag(argv, "--require-local-model"),
     output: resolve(projectRoot, readOption(argv, "--output") ?? defaultOutput),
-    timeoutMs: Number(readOption(argv, "--timeout-ms") ?? "120000"),
+    timeoutMs: Number(readOption(argv, "--timeout-ms") ?? "200000"),
     apiKey: readOption(argv, "--api-key") ?? process.env.HYDRIA_API_KEY ?? process.env.HYDRIA_PROD_API_KEY ?? ""
   };
 }
