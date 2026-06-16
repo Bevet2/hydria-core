@@ -1620,6 +1620,9 @@ async function fetchWikidataEntity(
         return null;
       }
       const excerpt = normalizeSpaces(`${label}: ${description}.`);
+      if (isDisambiguationEvidence(excerpt)) {
+        return null;
+      }
       if (!sourceTitleMatchesResolvedSubject(expectedSubject, label)) {
         return null;
       }
@@ -1677,6 +1680,12 @@ async function fetchWikidataEntity(
     modifiedAt: null,
     dateSource: "unknown"
   };
+}
+
+function isDisambiguationEvidence(text: string) {
+  return /\b(?:disambiguation page|wikimedia disambiguation|page d homonymie|homonymie de wikimedia|page de desambiguation)\b/i.test(
+    normalizeLooseText(text)
+  );
 }
 
 async function searchBritannica(

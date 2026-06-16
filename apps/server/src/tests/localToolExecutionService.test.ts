@@ -721,6 +721,80 @@ test("local research fact-check tool cleans presentation biography subjects befo
   assert.equal(result?.sources?.[0]?.retrievalEngine, "known_endpoint");
 });
 
+test("local research fact-check tool rejects Wikidata disambiguation corroboration", async (t) => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    if (url.includes("fr.wikipedia.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          query: {
+            search: [
+              {
+                title: "Louis IX",
+                snippet: "Roi de France."
+              }
+            ]
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("fr.wikipedia.org/api/rest_v1/page/summary/Louis_IX")) {
+      return new Response(
+        JSON.stringify({
+          title: "Louis IX",
+          description: "roi de France",
+          extract:
+            "Louis IX, dit Saint Louis, est un roi de France capetien qui regne de 1226 a 1270 et est canonise par l'Eglise catholique.",
+          timestamp: "2026-05-01T12:00:00Z",
+          content_urls: {
+            desktop: {
+              page: "https://fr.wikipedia.org/wiki/Louis_IX"
+            }
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("wikidata.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          search: [
+            {
+              id: "Q409800",
+              label: "Louis IX",
+              description: "page d'homonymie de Wikimedia",
+              concepturi: "https://www.wikidata.org/wiki/Q409800"
+            },
+            {
+              id: "Q346",
+              label: "Louis IX de France",
+              description: "roi de France de 1226 a 1270 canonise par l'Eglise catholique",
+              concepturi: "https://www.wikidata.org/wiki/Q346"
+            }
+          ]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const service = new LocalToolExecutionService();
+  const result = await service.tryExecute(buildFactCheckRouting("Louis IX"));
+
+  assert.equal(result?.resultLabel, "Louis IX");
+  assert.match(result?.verifiedFacts.join(" "), /roi de France/);
+  assert.doesNotMatch(result?.verifiedFacts.join(" "), /homonymie/i);
+  assert.equal(result?.sources?.[1]?.url, "https://www.wikidata.org/wiki/Q346");
+});
+
 test("local research fact-check tool rejects same-brand wrong-sense source pages", async (t) => {
   const originalFetch = globalThis.fetch;
   const requestedSearches: string[] = [];
