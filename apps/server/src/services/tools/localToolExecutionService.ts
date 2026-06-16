@@ -1650,6 +1650,18 @@ async function fetchWikidataEntity(
         id,
         excerpt,
         semanticCheck,
+        entityKind: inferEvidenceEntityKind({
+          title: label,
+          url: match.concepturi ?? `https://www.wikidata.org/wiki/${id}`,
+          snippet: description,
+          excerpt,
+          engine: "known_endpoint",
+          origin: "known_endpoint",
+          confidence: Math.max(0.72, semanticCheck.score),
+          language: language === "fr" ? "fr" : "en",
+          modifiedAt: null,
+          dateSource: "unknown"
+        }),
         descriptorCount: evidenceDescriptorTerms(
           {
             title: label,
@@ -1670,6 +1682,14 @@ async function fetchWikidataEntity(
     .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
     .sort((left, right) => {
       if (isOrdinalOrShortAmbiguousSubject(expectedSubject)) {
+        const leftTitleScore = subjectTitleScore(expectedSubject, left.label);
+        const rightTitleScore = subjectTitleScore(expectedSubject, right.label);
+        if (left.entityKind !== "person" || right.entityKind !== "person") {
+          const titleDelta = rightTitleScore - leftTitleScore;
+          if (titleDelta !== 0) {
+            return titleDelta;
+          }
+        }
         const descriptorDelta = right.descriptorCount - left.descriptorCount;
         if (descriptorDelta !== 0) {
           return descriptorDelta;
@@ -1857,7 +1877,7 @@ function inferEvidenceEntityKind(evidence: GeneralKnowledgeEvidence): EvidenceEn
     return "place";
   }
   if (
-    /\b(?:film|album|opera|song|novel|book|painting|tableau|peinture|ferry|ship|cruiseferry|navire|bateau|vehicle|vehicule|jeu video)\b/.test(text)
+    /\b(?:film|album|opera|song|novel|book|painting|tableau|peinture|statue|monument|artwork|oeuvre|ferry|ship|cruiseferry|navire|bateau|vehicle|vehicule|jeu video)\b/.test(text)
   ) {
     return "work_or_artifact";
   }
@@ -1984,7 +2004,8 @@ function evidenceDescriptorOverlapCount(
   expectedSubject = ""
 ) {
   const leftTerms = new Set(evidenceDescriptorTerms(left, expectedSubject));
-  return evidenceDescriptorTerms(right, expectedSubject).filter((term) => leftTerms.has(term)).length;
+  const rightTerms = new Set(evidenceDescriptorTerms(right, expectedSubject));
+  return [...rightTerms].filter((term) => leftTerms.has(term)).length;
 }
 
 function isOrdinalOrShortAmbiguousSubject(subject: string) {
@@ -2017,6 +2038,19 @@ function hasCompatibleEvidenceMeaning(
   }
   const anchorKind = inferEvidenceEntityKind(anchor);
   const candidateKind = inferEvidenceEntityKind(candidate);
+  const expectedKey = entityTitleKey(expectedSubject);
+  const candidateTitleKey = entityTitleKey(candidateTitle);
+  const anchorTitleKey = entityTitleKey(anchor.title.replace(/^Wikipedia:\s*/i, ""));
+  if (
+    ambiguousSubject &&
+    !["person", "organization"].includes(candidateKind) &&
+    expectedKey &&
+    candidateTitleKey.startsWith(`${expectedKey} `) &&
+    anchorTitleKey.includes(expectedKey) &&
+    candidateTitleKey !== anchorTitleKey
+  ) {
+    return false;
+  }
   const needsDescriptorCorroboration =
     ambiguousSubject ||
     (anchorKind === "person" && candidateKind === "person") ||
@@ -2024,8 +2058,7 @@ function hasCompatibleEvidenceMeaning(
   if (!needsDescriptorCorroboration) {
     return true;
   }
-  const requiredOverlap =
-    anchorKind === "person" && candidateKind === "person" && isOrdinalOrShortAmbiguousSubject(expectedSubject) ? 2 : 1;
+  const requiredOverlap = isOrdinalOrShortAmbiguousSubject(expectedSubject) ? 2 : 1;
   return evidenceDescriptorOverlapCount(anchor, candidate, expectedSubject) >= requiredOverlap;
 }
 
@@ -2213,6 +2246,7 @@ async function tryFetchGeneralFactResearch(
       ...subjectRewrite.candidates
     ]);
     const subjectEvidence: GeneralKnowledgeEvidence[] = [];
+    const resolvedSourceTitles: string[] = [];
     for (const officialEvidence of await fetchOfficialTechnicalEvidence({
       subject: subjectRewrite.canonicalSubject,
       question,
@@ -2232,6 +2266,7 @@ async function tryFetchGeneralFactResearch(
         if (!summary) {
           continue;
         }
+        resolvedSourceTitles.push(summary.title);
         addEvidence(
           subjectEvidence,
           {
@@ -2255,7 +2290,8 @@ async function tryFetchGeneralFactResearch(
       }
     }
 
-    for (const candidate of researchCandidates) {
+    const corroborationCandidates = uniqueStrings([...resolvedSourceTitles, ...researchCandidates]);
+    for (const candidate of corroborationCandidates) {
       for (const wikidataEvidence of await fetchWikidataEntity(
         candidate,
         language,
@@ -2273,7 +2309,7 @@ async function tryFetchGeneralFactResearch(
     }
 
     if (subjectEvidence.length < 2) {
-      for (const candidate of researchCandidates) {
+      for (const candidate of corroborationCandidates) {
         addEvidence(
           subjectEvidence,
           await searchBritannica(candidate, subjectFrame, subjectRewrite.canonicalSubject),
@@ -2286,7 +2322,7 @@ async function tryFetchGeneralFactResearch(
     }
 
     if (subjectEvidence.length < 2) {
-      for (const candidate of researchCandidates) {
+      for (const candidate of corroborationCandidates) {
         for (const item of await searchGenericFactSources(candidate, subjectFrame, subjectRewrite.canonicalSubject)) {
           addEvidence(subjectEvidence, item, subjectRewrite.canonicalSubject);
         }

@@ -672,6 +672,74 @@ test("chat runtime formats source-backed general facts as a user answer when loc
   assert.doesNotMatch(response.answer.answer, /synthese locale|local synthesis|reformule/i);
 });
 
+test("chat runtime drops incomplete fragments from source-backed deterministic answers", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return {
+          ...buildAdapterResult("Je n'ai pas reussi a generer une reponse fiable."),
+          provider: "fallback" as const,
+          model: "qwen2.5:3b",
+          validationIssues: ["student_chat_generation_failed"]
+        };
+      }
+    },
+    undefined,
+    {
+      async tryExecute(routing: ToolRoutingDecision) {
+        if (routing.toolType !== "research" || routing.intent !== "fact_check") {
+          return null;
+        }
+        return {
+          toolType: "research" as const,
+          intent: "fact_check",
+          summary: ["Recherche factuelle v2: 2 sources pertinentes trouvees pour Louis IX."],
+          verifiedFacts: [
+            "Louis IX: Louis IX, dit Saint Louis, est un roi de France capetien ne en 1214 et mort en 1270. Il est canonise par l...",
+            "Louis IX: Louis IX regne sur le royaume de France de 1226 a 1270."
+          ],
+          sources: [
+            {
+              title: "Wikipedia: Louis IX",
+              url: "https://fr.wikipedia.org/wiki/Louis_IX",
+              snippet: "Louis IX, dit Saint Louis, est roi de France.",
+              excerpt: "Louis IX, dit Saint Louis, est roi de France.",
+              publishedAt: null,
+              modifiedAt: null,
+              effectiveDate: null,
+              dateSource: null,
+              retrievalChannel: "live" as const,
+              retrievalOrigin: "known_endpoint" as const,
+              retrievalEngine: "known_endpoint" as const
+            },
+            {
+              title: "Wikidata: Louis IX",
+              url: "http://www.wikidata.org/entity/Q346",
+              snippet: "roi de France de 1226 a 1270",
+              excerpt: "Louis IX regne sur le royaume de France de 1226 a 1270.",
+              publishedAt: null,
+              modifiedAt: null,
+              effectiveDate: null,
+              dateSource: null,
+              retrievalChannel: "live" as const,
+              retrievalOrigin: "known_endpoint" as const,
+              retrievalEngine: "known_endpoint" as const
+            }
+          ],
+          confidenceScore: 0.94,
+          resultLabel: "Louis IX"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "Fais-moi une biographie courte de Louis 9." });
+
+  assert.equal(response.generation.provider, "tool");
+  assert.match(response.answer.answer, /roi de France/i);
+  assert.doesNotMatch(response.answer.answer, /l\.\.\./i);
+});
+
 test("chat runtime prioritizes verified multi-source research over unrelated memory on model fallback", async () => {
   let retrievalCalls = 0;
   const service = new ChatRuntimeService(

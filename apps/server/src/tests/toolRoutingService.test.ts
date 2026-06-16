@@ -145,7 +145,7 @@ test("tool router extracts French presentation biography subjects and ordinal al
   assert.equal(decision.toolType, "research");
   assert.equal(decision.intent, "fact_check");
   assert.equal(decision.fallbackAllowed, false);
-  assert.equal(decision.extractedArgs.subject, "Louis IX");
+  assert.equal(decision.extractedArgs.subject, "Louis IX de France");
   assert.equal(decision.extractedArgs.language, "fr");
 
   const wordDecision = service.route({
@@ -154,7 +154,7 @@ test("tool router extracts French presentation biography subjects and ordinal al
   });
   assert.equal(wordDecision.toolRequired, true);
   assert.equal(wordDecision.toolType, "research");
-  assert.equal(wordDecision.extractedArgs.subject, "Louis IX France");
+  assert.equal(wordDecision.extractedArgs.subject, "Louis IX de France");
 });
 
 test("tool router routes simple stable concept explanations to source-backed research", () => {

@@ -849,6 +849,12 @@ test("local research fact-check tool requires descriptor overlap for ordinal hom
               concepturi: "https://www.wikidata.org/wiki/Q123"
             },
             {
+              id: "Q29222675",
+              label: "Jean II le Bon, roi de France",
+              description: "statue monument historique situee a Saint-Denis",
+              concepturi: "https://www.wikidata.org/wiki/Q29222675"
+            },
+            {
               id: "Q1693",
               label: "Jean II le Bon",
               description: "roi de France de la dynastie des Valois",
@@ -872,7 +878,84 @@ test("local research fact-check tool requires descriptor overlap for ordinal hom
   assert.equal(result?.resultLabel, "Jean II");
   assert.match(result?.verifiedFacts.join(" "), /roi de France/);
   assert.doesNotMatch(result?.verifiedFacts.join(" "), /Chypre/i);
+  assert.doesNotMatch(result?.verifiedFacts.join(" "), /statue|monument/i);
   assert.equal(result?.sources?.[1]?.url, "https://www.wikidata.org/wiki/Q1693");
+});
+
+test("local research fact-check tool prefers exact concept corroboration over narrower subtopics", async (t) => {
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: Parameters<typeof fetch>[0]) => {
+    const url = String(input);
+    const decoded = decodeURIComponent(url);
+    if (url.includes("fr.wikipedia.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          query: {
+            search: [
+              {
+                title: "Photosynthèse",
+                snippet: "Processus biologique chez les plantes."
+              }
+            ]
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (decoded.includes("fr.wikipedia.org/api/rest_v1/page/summary/Photosynthèse")) {
+      return new Response(
+        JSON.stringify({
+          title: "Photosynthèse",
+          description: "processus biologique",
+          extract:
+            "La photosynthèse est le processus biologique par lequel des organismes produisent de la matière organique avec l'énergie lumineuse, l'eau et le dioxyde de carbone.",
+          timestamp: "2026-05-01T12:00:00Z",
+          content_urls: {
+            desktop: {
+              page: "https://fr.wikipedia.org/wiki/Photosynthèse"
+            }
+          }
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    if (url.includes("wikidata.org/w/api.php")) {
+      return new Response(
+        JSON.stringify({
+          search: [
+            {
+              id: "Q654623",
+              label: "photosynthèse artificielle",
+              description:
+                "procédé chimique qui imite la photosynthèse naturelle des plantes afin de transformer l'énergie solaire en énergie électrique",
+              concepturi: "https://www.wikidata.org/wiki/Q654623"
+            },
+            {
+              id: "Q11982",
+              label: "photosynthèse",
+              description: "processus effectué par les plantes pour produire de la matière organique avec la lumière",
+              concepturi: "https://www.wikidata.org/wiki/Q11982"
+            }
+          ]
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return new Response("not found", { status: 404 });
+  }) as typeof fetch;
+
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const service = new LocalToolExecutionService();
+  const result = await service.tryExecute(buildFactCheckRouting("Photosynthese"));
+
+  assert.equal(result?.resultLabel, "Photosynthese");
+  assert.match(result?.verifiedFacts.join(" "), /processus biologique/);
+  assert.doesNotMatch(result?.verifiedFacts.join(" "), /artificielle/i);
+  assert.equal(result?.sources?.[1]?.url, "https://www.wikidata.org/wiki/Q11982");
 });
 
 test("local research fact-check tool rejects same-brand wrong-sense source pages", async (t) => {

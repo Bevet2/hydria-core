@@ -51,6 +51,11 @@ const TECHNOLOGY_TERMS = [
   "web",
   "server",
   "database",
+  "data",
+  "transaction",
+  "transactions",
+  "log",
+  "logging",
   "network",
   "protocol",
   "interface",
@@ -71,6 +76,9 @@ const TECHNOLOGY_TERMS = [
   "serveur",
   "base",
   "donnees",
+  "transaction",
+  "transactions",
+  "journal",
   "reseau",
   "protocole",
   "interface",
@@ -126,6 +134,14 @@ const SCIENCE_TERMS = [
   "astronomy",
   "medicine",
   "climate",
+  "plant",
+  "plants",
+  "organism",
+  "organisms",
+  "photosynthesis",
+  "chlorophyll",
+  "light",
+  "energy",
   "cell",
   "atom",
   "molecule",
@@ -136,10 +152,37 @@ const SCIENCE_TERMS = [
   "astronomie",
   "medecine",
   "climat",
+  "plante",
+  "plantes",
+  "vegetal",
+  "vegetaux",
+  "organisme",
+  "organismes",
+  "photosynthese",
+  "chlorophylle",
+  "chlorophyllien",
+  "chlorophylliens",
+  "lumiere",
+  "energie",
   "cellule",
   "atome",
   "molecule",
   "evolution"
+];
+
+const SCIENCE_REJECTED_SENSE_TERMS = [
+  "emulator",
+  "installer",
+  "download",
+  "windows app",
+  "app store",
+  "software download",
+  "emulateur",
+  "installer",
+  "telecharger",
+  "telechargement",
+  "application windows",
+  "logiciel a installer"
 ];
 
 const HISTORY_TERMS = [
@@ -161,6 +204,13 @@ const HISTORY_TERMS = [
   "revolution",
   "biographie"
 ];
+
+function hasHistoricalOrdinalName(text: string) {
+  return (
+    /\b(?:qui est|qui etait|who is|who was|biograph|biographie|roi|reine|king|queen|empereur|emperor)\b/i.test(text) &&
+    /\b[A-Za-z]+\s+(?:[ivxlcdm]+|\d{1,2})(?:er)?\b/i.test(text)
+  );
+}
 
 const WRITING_TERMS = ["write", "rewrite", "draft", "email", "summary", "redige", "reformule", "ecris", "resume"];
 const STRATEGY_TERMS = [
@@ -318,6 +368,8 @@ function inferDomain(args: {
     "software",
     "computing"
   ]);
+  const hasScienceSignal = hasAny(text, SCIENCE_TERMS);
+  const hasHistorySignal = hasAny(text, HISTORY_TERMS) || hasHistoricalOrdinalName(`${args.question} ${args.subject ?? ""}`);
   if (args.toolRouting?.toolType === "weather") {
     return "weather";
   }
@@ -341,8 +393,14 @@ function inferDomain(args: {
   if (args.category === "operational_writing") {
     return "writing";
   }
+  if (hasScienceSignal && !hasTechnologySignal) {
+    return "science";
+  }
+  if (hasHistorySignal && !hasTechnologySignal) {
+    return "history_biography";
+  }
   if (
-    args.category === "technical_explanation" ||
+    (args.category === "technical_explanation" && hasTechnologySignal) ||
     (hasTechnologySignal && !hasAny(text, STRONG_STRATEGY_TERMS))
   ) {
     return "software_technology";
@@ -356,10 +414,10 @@ function inferDomain(args: {
   if (hasAny(text, WRITING_TERMS)) {
     return "writing";
   }
-  if (hasAny(text, SCIENCE_TERMS)) {
+  if (hasScienceSignal) {
     return "science";
   }
-  if (hasAny(text, HISTORY_TERMS)) {
+  if (hasHistorySignal) {
     return "history_biography";
   }
   return "general";
@@ -381,6 +439,9 @@ function expectedTermsForDomain(domain: SemanticDomain) {
 function rejectedTermsForDomain(domain: SemanticDomain) {
   if (domain === "software_technology" || domain === "code_debug") {
     return NON_TECH_DOCK_LABOR_TERMS;
+  }
+  if (domain === "science") {
+    return SCIENCE_REJECTED_SENSE_TERMS;
   }
   return [];
 }
@@ -620,9 +681,12 @@ export function sourceMatchesSemanticFrame(frame: SemanticFrame, text: string): 
     };
   }
 
+  const strictRejectedSenseDomains: SemanticDomain[] = ["software_technology", "code_debug", "science", "history_biography"];
   if (
     rejectedTerms.length > 0 &&
-    (matchedExpectedTerms.length === 0 || frame.intent === "rules")
+    (matchedExpectedTerms.length === 0 ||
+      frame.intent === "rules" ||
+      (strictRejectedSenseDomains.includes(frame.domain) && matchedExpectedTerms.length < 2))
   ) {
     return {
       passed: false,
@@ -640,6 +704,20 @@ export function sourceMatchesSemanticFrame(frame: SemanticFrame, text: string): 
       matchedExpectedTerms,
       rejectedTerms,
       reason: "source_missing_rules_or_gameplay_evidence"
+    };
+  }
+
+  if (
+    ["software_technology", "code_debug", "science", "history_biography"].includes(frame.domain) &&
+    expectedTerms.length > 0 &&
+    matchedExpectedTerms.length === 0
+  ) {
+    return {
+      passed: false,
+      score: 0.32,
+      matchedExpectedTerms,
+      rejectedTerms,
+      reason: "source_missing_expected_domain_evidence"
     };
   }
 

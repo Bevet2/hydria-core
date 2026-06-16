@@ -288,6 +288,16 @@ function detectDirectLanguage(value: string): "fr" | "en" | "unknown" {
   return "unknown";
 }
 
+function looksLikeGermanText(value: string) {
+  const normalized = normalizeText(value);
+  const germanHits = (
+    normalized.match(
+      /\b(?:deutsch|auch|wird|werden|durch|hilfe|lichtenergie|zusammensetzung|erzeugung|stoffe|pflanzen|manchen|betrieben)\b/g
+    ) ?? []
+  ).length;
+  return germanHits >= 2 || /[äöüß]/i.test(value);
+}
+
 function extractTerms(value: string, limit = 8) {
   const normalized = normalizeText(value);
   const rawTerms = normalized.match(/[a-z0-9]{3,}/g) ?? [];
@@ -1059,6 +1069,11 @@ function analyzeDirectChatQuality(args: {
   if (expectedLanguage === "fr" && answerLanguage === "en") {
     issues.push("wrong_language_expected_fr");
     penalties.push("answer is in English while the user is asking in French");
+  }
+
+  if (expectedLanguage === "fr" && answerLanguage === "unknown" && looksLikeGermanText(args.answer)) {
+    issues.push("wrong_language_expected_fr");
+    penalties.push("answer appears to be in German while the user is asking in French");
   }
 
   if (expectedLanguage === "en" && answerLanguage === "fr") {
@@ -2528,6 +2543,16 @@ function cleanEvidenceSentence(sentence: string) {
     .trim();
 }
 
+function isCompleteEvidenceSentence(sentence: string) {
+  const trimmed = sentence.trim();
+  return (
+    trimmed.length >= 30 &&
+    !/[.â€¦]{2,}/.test(trimmed) &&
+    !/(?:\b[lLdD]['â€™]|\b(?:de|du|des|le|la|les|un|une|et|of|the|and|with|from|par|pour))$/i.test(trimmed) &&
+    /[.!?]$/.test(trimmed)
+  );
+}
+
 function isUsefulRulesSentence(sentence: string) {
   const normalized = normalizeText(sentence);
   return (
@@ -2582,8 +2607,9 @@ function buildGeneralEvidenceFallbackText(args: {
   const selected = args.facts
     .flatMap((fact) => splitFactualSentences(fact))
     .map(cleanEvidenceSentence)
-    .map((sentence) => compactToCompleteSentence(sentence, 360))
     .filter(Boolean)
+    .filter(isCompleteEvidenceSentence)
+    .map((sentence) => compactToCompleteSentence(sentence, 360))
     .filter((sentence, index, all) => {
       const normalized = normalizeText(sentence);
       return all.findIndex((candidate) => normalizeText(candidate) === normalized) === index;
@@ -2654,7 +2680,7 @@ function buildResearchEvidenceFallbackDraft(args: {
           .join(" ");
         cleaned = `${beforeTitle} ${afterTitle}`.replace(/\s+/g, " ").trim();
       }
-      return compact(cleaned, preserveLongForm ? 1400 : 320);
+      return compactToCompleteSentence(cleaned, preserveLongForm ? 1400 : 420);
     })
     .filter(Boolean)
     .slice(0, 6);

@@ -88,6 +88,38 @@ test("semantic frame keeps technical crash recovery explanations out of strategy
   assert.equal(frame.domain, "software_technology");
 });
 
+test("semantic frame lets the subject domain override broad technical categories", () => {
+  const scienceFrame = buildSemanticFrame({
+    question: "Qu'est-ce que la photosynthese ?",
+    category: "technical_explanation",
+    subject: "Photosynthese",
+    language: "fr"
+  });
+  const appSource = sourceMatchesSemanticFrame(
+    scienceFrame,
+    "Lorsque l'emulateur est installe, recherchez Photosynthese dans l'application puis cliquez sur installer."
+  );
+  const scienceSource = sourceMatchesSemanticFrame(
+    scienceFrame,
+    "La photosynthese est un processus biologique par lequel les plantes utilisent la lumiere pour produire de la matiere organique."
+  );
+
+  assert.equal(scienceFrame.domain, "science");
+  assert.equal(scienceFrame.expectedSenseTerms.includes("plantes"), true);
+  assert.equal(appSource.passed, false);
+  assert.equal(scienceSource.passed, true);
+
+  const historyFrame = buildSemanticFrame({
+    question: "Qui est Jean II ?",
+    category: "technical_explanation",
+    subject: "Jean II",
+    language: "fr"
+  });
+
+  assert.equal(historyFrame.domain, "history_biography");
+  assert.equal(historyFrame.expectedSenseTerms.includes("roi"), true);
+});
+
 test("post-answer verifier flags answers that use a rejected source sense", () => {
   const semanticFrame = buildSemanticFrame({
     question: "Explique Docker simplement.",
