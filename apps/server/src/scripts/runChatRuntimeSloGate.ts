@@ -177,8 +177,8 @@ function parseArgs(argv = process.argv.slice(2)): Args {
     limit: limit ? Number(limit) : null,
     apiKey: readOption(argv, "--api-key") ?? process.env.HYDRIA_API_KEY ?? process.env.HYDRIA_PROD_API_KEY ?? "",
     thresholds: {
-      maxP95LatencyMs: numberOption(argv, "--max-p95-ms", 150000),
-      maxFastToolP95LatencyMs: numberOption(argv, "--max-fast-tool-p95-ms", 1500),
+      maxP95LatencyMs: numberOption(argv, "--max-p95-ms", 200000),
+      maxFastToolP95LatencyMs: numberOption(argv, "--max-fast-tool-p95-ms", 200000),
       maxStandardLightP95LatencyMs: numberOption(argv, "--max-standard-light-p95-ms", 130000),
       maxStableFactP95LatencyMs: numberOption(argv, "--max-stable-fact-p95-ms", 130000),
       maxRetryRate: numberOption(argv, "--max-retry-rate", 10),

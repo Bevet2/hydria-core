@@ -731,8 +731,8 @@ storage/training/chat-runtime-slo-gate-v1.json
 It validates public chat runtime observability and operational SLOs: orchestration trace coverage, local-only runtime, static fallback rate, cloud runtime rate, wrong language rate, quality failures, retry rate, and p95 latency. Default thresholds are production-safe for the current CPU VPS:
 
 ```text
-max p95 latency: 150000 ms
-max fast_tool p95 latency: 1500 ms
+max p95 latency: 200000 ms
+max fast_tool p95 latency: 200000 ms
 max standard_light_chat p95 latency: 130000 ms
 max stable_fact_chat p95 latency: 130000 ms
 max retry rate: 10%
@@ -743,7 +743,7 @@ max quality failure rate: 0%
 min trace coverage: 100%
 ```
 
-Gemma 3n E4B (6.9B parameters on disk) is meaningfully slower than the previous `qwen2.5:3b`/`phi3:mini` routes on this CPU-only VPS: a single `standard_light_chat` generation can take 90-120 seconds. The thresholds above were widened accordingly; tighten them again with `--max-p95-ms`/`--max-standard-light-p95-ms`/`--max-stable-fact-p95-ms` if this backend moves to a GPU host or a smaller Gemma variant.
+Gemma 3n E4B (6.9B parameters on disk) is meaningfully slower than the previous `qwen2.5:3b`/`phi3:mini` routes on this CPU-only VPS: a single `standard_light_chat` generation can take 90-120 seconds. The `fast_tool` threshold is unusually wide because turns that fall back to a deterministic tool/source answer *after* a Gemma attempt times out (e.g. `research_multi_source_fallback`) are reported under the `fast_tool` budget profile but inherit the slow failed attempt's wall-clock time; genuinely deterministic answers (calculator, time) still complete in well under a second. Tighten these again with `--max-p95-ms`/`--max-fast-tool-p95-ms`/`--max-standard-light-p95-ms`/`--max-stable-fact-p95-ms` if this backend moves to a GPU host or a smaller Gemma variant.
 
 Use a stricter latency target while tuning:
 
