@@ -740,6 +740,73 @@ test("chat runtime drops incomplete fragments from source-backed deterministic a
   assert.doesNotMatch(response.answer.answer, /l\.\.\./i);
 });
 
+test("chat runtime does not end compacted source facts on dangling connectors", async () => {
+  const service = new ChatRuntimeService(
+    {
+      async answer() {
+        return {
+          ...buildAdapterResult("Je n'ai pas reussi a generer une reponse fiable."),
+          provider: "fallback" as const,
+          model: "qwen2.5:3b",
+          validationIssues: ["student_chat_generation_failed"]
+        };
+      }
+    },
+    undefined,
+    {
+      async tryExecute(routing: ToolRoutingDecision) {
+        if (routing.toolType !== "research" || routing.intent !== "fact_check") {
+          return null;
+        }
+        return {
+          toolType: "research" as const,
+          intent: "fact_check",
+          summary: ["Recherche factuelle v2: 2 sources pertinentes trouvees pour NVIDIA."],
+          verifiedFacts: [
+            "Nvidia: Nvidia Corporation est une societe americaine de technologie qui concoit des processeurs graphiques, des interfaces de programmation pour la science des donnees et le calcul intensif, ainsi que des systemes sur une puce pour les marches de l'informatique mobile, de l'automobile et du calcul accelere.",
+            "Nvidia: fabricant americain de cartes graphiques et accelerateurs d'IA."
+          ],
+          sources: [
+            {
+              title: "Wikipedia: Nvidia",
+              url: "https://fr.wikipedia.org/wiki/Nvidia",
+              snippet: "Nvidia Corporation est une societe de technologie.",
+              excerpt: "Nvidia Corporation est une societe de technologie.",
+              publishedAt: null,
+              modifiedAt: null,
+              effectiveDate: null,
+              dateSource: null,
+              retrievalChannel: "live" as const,
+              retrievalOrigin: "known_endpoint" as const,
+              retrievalEngine: "known_endpoint" as const
+            },
+            {
+              title: "Wikidata: Nvidia",
+              url: "http://www.wikidata.org/entity/Q182477",
+              snippet: "fabricant americain de cartes graphiques",
+              excerpt: "fabricant americain de cartes graphiques",
+              publishedAt: null,
+              modifiedAt: null,
+              effectiveDate: null,
+              dateSource: null,
+              retrievalChannel: "live" as const,
+              retrievalOrigin: "known_endpoint" as const,
+              retrievalEngine: "known_endpoint" as const
+            }
+          ],
+          confidenceScore: 0.94,
+          resultLabel: "NVIDIA"
+        };
+      }
+    }
+  );
+
+  const response = await service.sendMessage({ message: "Qu'est-ce que NVIDIA ?" });
+
+  assert.equal(response.generation.provider, "tool");
+  assert.doesNotMatch(response.answer.answer, /\b(?:pour|de|du|des|le|la|les|et|avec)\./i);
+});
+
 test("chat runtime prioritizes verified multi-source research over unrelated memory on model fallback", async () => {
   let retrievalCalls = 0;
   const service = new ChatRuntimeService(

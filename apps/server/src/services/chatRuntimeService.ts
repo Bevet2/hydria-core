@@ -381,7 +381,15 @@ function compactToCompleteSentence(value: string, maxChars: number) {
   if (lastSentenceEnd >= Math.floor(maxChars * 0.45)) {
     return bounded.slice(0, lastSentenceEnd + 1).trim();
   }
-  return `${bounded.replace(/\s+\S*$/, "").replace(/[,:;]+$/g, "").trim()}.`;
+  let compacted = bounded.replace(/\s+\S*$/, "").replace(/[,:;]+$/g, "").trim();
+  while (
+    /\b(?:a|de|du|des|le|la|les|un|une|et|en|of|to|the|and|with|from|for|in|on|sur|par|pour)\b$/i.test(
+      compacted
+    )
+  ) {
+    compacted = compacted.replace(/\s+\S+$/, "").replace(/[,:;]+$/g, "").trim();
+  }
+  return `${compacted}.`;
 }
 
 function isBrevityMetaSentence(sentence: string) {
