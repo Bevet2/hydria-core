@@ -1,6 +1,13 @@
 import { randomUUID } from "node:crypto";
 import type { ChatRuntimeService } from "../chatRuntimeService.js";
 import {
+  isLongFormRequest,
+  LongFormGenerationService,
+  buildSourcesBlock
+} from "./longFormGenerationService.js";
+import { WorkspaceSessionMemoryService } from "./workspaceSessionMemoryService.js";
+import { WorkspaceKnowledgeExtractorService } from "./workspaceKnowledgeExtractorService.js";
+import {
   publicApiAskResponseSchema,
   publicApiCapabilitiesResponseSchema,
   publicApiSessionResetResponseSchema,
@@ -89,8 +96,26 @@ function shouldInjectWorkspaceContext(request: PublicApiAskRequest) {
   if (!active?.contentPreview) {
     return false;
   }
+
+  // Always inject when the active object is a data-bearing type — the user
+  // almost certainly needs the content regardless of the exact phrasing.
+  const kind = normalizeText(active.kind ?? "");
+  const family = normalizeText(active.workspaceFamilyId ?? "");
+  if (
+    kind === "dataset" ||
+    kind === "spreadsheet" ||
+    family === "data_spreadsheet" ||
+    family === "crm_sales"
+  ) {
+    return true;
+  }
+
   const question = normalizeText(resolveQuestion(request));
-  return /\b(comment|commente|commenter|analyse|analyser|explique|explain|resume|résume|synthese|synthèse|insight|tendance|chiffres?|numbers?|donnees|données|tableau|sheet|excel)\b/.test(question);
+  return /\b(comment|commente|commenter|analyse|analyser|explique|explain|resume|synthese|insight|tendance|chiffres?|numbers?|donnees|tableau|sheet|excel)\b/.test(question) ||
+    // Report / summary vocabulary (with or without accents, already stripped by normalizeText)
+    /\b(compte.?rendu|bilan|rapport|performance[s]?|recapitulatif|recap|synthese|panorama|etat.?des.?lieux|revue|reporting|apercu|dashboard|briefing)\b/.test(question) ||
+    // Action verbs that imply reading the active content
+    /\b(lis|lire|consulte|consulter|parcours|parcourir|verifie|verifier|compare|comparer|detaille|detailler|presente|presenter|decris|decrire|donne.?moi|dis.?moi)\b/.test(question);
 }
 
 function parseNumber(value: unknown) {
@@ -212,26 +237,90 @@ function buildWorkspaceDataAnswer(request: PublicApiAskRequest) {
   return `${columnName} ${trend} from ${first.label} (${formatNumber(first.value)}) to ${last.label} (${formatNumber(last.value)}); peak at ${max.label} (${formatNumber(max.value)}), low at ${min.label} (${formatNumber(min.value)}), total ${formatNumber(total)}.`;
 }
 
-function buildRuntimeQuestion(request: PublicApiAskRequest) {
+// Detects when a workspace question needs external knowledge in addition to local data
+function shouldUseHybridMode(request: PublicApiAskRequest): boolean {
+  const active = request.workspaceContext?.activeWorkObject;
+  if (!active?.contentPreview) return false;
+  const q = normalizeText(resolveQuestion(request));
+  return /\b(pourquoi|comment.?(ameliorer|optimiser)|benchmark|meilleures?.?pratiques?|best.?practice|contextualise|comparer.*(secteur|march[eé]|industrie)|tendances?|optimis|strategi|recommandation|explication|qu[' ]?est.?ce.?que.?cela.?signifie?|que.?veut.?dire)\b/.test(q);
+}
+
+// Returns response-format instruction calibrated to the workspace object type
+function buildResponseCalibration(request: PublicApiAskRequest, hasAdditional: boolean): string {
+  const kind = normalizeText(request.workspaceContext?.activeWorkObject?.kind ?? "");
+  const family = normalizeText(request.workspaceContext?.activeWorkObject?.workspaceFamilyId ?? "");
+  const isData = kind === "dataset" || kind === "spreadsheet" || family === "data_spreadsheet" || family === "crm_sales";
+  if (hasAdditional) {
+    return "Format: structure ta reponse avec des titres par source, puis une synthese. Bullet points pour les differences cles.";
+  }
+  if (isData) {
+    return "Format: reponse concise et structuree. Bullet points pour plusieurs elements. Maximum 3-4 paragraphes.";
+  }
+  return "Format: adapte la longueur a la complexite de la question. Garde la reponse actionnable.";
+}
+
+function buildRuntimeQuestion(
+  request: PublicApiAskRequest,
+  sessionMemoryBlock?: string | null,
+  priorActionsBlock?: string | null
+) {
   const question = resolveQuestion(request);
-  if (!shouldInjectWorkspaceContext(request)) {
+  const hasWorkspaceContext = shouldInjectWorkspaceContext(request);
+  const hybrid = shouldUseHybridMode(request);
+
+  if (!hasWorkspaceContext && !sessionMemoryBlock && !priorActionsBlock) {
     return question;
   }
 
   const active = request.workspaceContext?.activeWorkObject;
-  return [
-    "Question utilisateur:",
-    question,
-    "",
-    "Contexte workspace actif a utiliser pour repondre:",
-    `- titre: ${active?.title || active?.id || "objet actif"}`,
-    `- type: ${active?.kind || "unknown"}`,
-    `- fichier: ${active?.entryPath || "unknown"}`,
-    "- contenu/aperçu:",
-    compact(active?.contentPreview, 4000),
-    "",
-    "Instruction: reponds a la question utilisateur en utilisant les donnees du workspace actif. Ne pretends pas que les donnees manquent si elles sont dans l'aperçu. Garde la langue de l'utilisateur."
-  ].filter((line): line is string => Boolean(line)).join("\n");
+  const additionalSources = request.workspaceContext?.additionalSources ?? [];
+
+  const parts: string[] = ["Question utilisateur:", question, ""];
+
+  if (sessionMemoryBlock) {
+    parts.push(sessionMemoryBlock, "");
+  }
+
+  if (priorActionsBlock) {
+    parts.push(priorActionsBlock, "");
+  }
+
+  if (hasWorkspaceContext && active) {
+    parts.push(
+      "Contexte workspace actif a utiliser pour repondre:",
+      `- titre: ${active.title || active.id || "objet actif"}`,
+      `- type: ${active.kind || "unknown"}`,
+      `- fichier: ${active.entryPath || "unknown"}`,
+      "- contenu/aperçu:",
+      compact(active.contentPreview, 4000) ?? "",
+      ""
+    );
+  }
+
+  if (additionalSources.length > 0) {
+    parts.push("Sources additionnelles a croiser:");
+    for (const src of additionalSources.slice(0, 4)) {
+      if (src.contentPreview) {
+        parts.push(`\n[${src.title || src.kind || src.id}]:`);
+        parts.push(compact(src.contentPreview, 2000) ?? "");
+      }
+    }
+    parts.push("");
+  }
+
+  const calibration = buildResponseCalibration(request, additionalSources.length > 0);
+
+  let instruction: string;
+  if (hybrid) {
+    instruction = `Instruction hybride: reponds en combinant les donnees du workspace ci-dessus ET tes connaissances generales / une recherche externe sur le sujet. Commence par contextualiser avec des references generales, puis applique au cas specifique de l'utilisateur. ${calibration} Garde la langue de l'utilisateur.`;
+  } else if (additionalSources.length > 0) {
+    instruction = `Instruction: reponds en croisant toutes les sources disponibles. Ne pretends pas que les donnees manquent si elles sont dans les aperçus. Identifie les convergences et differences entre sources. ${calibration} Garde la langue de l'utilisateur.`;
+  } else {
+    instruction = `Instruction: reponds a la question utilisateur en utilisant les donnees du workspace actif. Ne pretends pas que les donnees manquent si elles sont dans l'aperçu. ${calibration} Garde la langue de l'utilisateur.`;
+  }
+
+  parts.push(instruction);
+  return parts.filter((line): line is string => Boolean(line)).join("\n");
 }
 
 function sourceList(result: Awaited<ReturnType<ChatRuntimeService["sendMessage"]>>) {
@@ -307,6 +396,30 @@ function summarizeWorkspaceContext(request: PublicApiAskRequest) {
         executionPolicy: request.workspaceContext?.executionPolicy ?? null
       }
     : null;
+}
+
+// In-memory session action tracker (bounded to 120 sessions, FIFO eviction)
+const SESSION_ACTION_STORE = new Map<string, string[]>();
+const SESSION_ACTION_LIMIT = 120;
+
+function recordSessionAction(sessionId: string, summary: string) {
+  if (!SESSION_ACTION_STORE.has(sessionId)) {
+    if (SESSION_ACTION_STORE.size >= SESSION_ACTION_LIMIT) {
+      const oldest = SESSION_ACTION_STORE.keys().next().value;
+      if (oldest) SESSION_ACTION_STORE.delete(oldest);
+    }
+    SESSION_ACTION_STORE.set(sessionId, []);
+  }
+  const actions = SESSION_ACTION_STORE.get(sessionId)!;
+  actions.push(summary);
+  if (actions.length > 12) actions.shift();
+}
+
+function buildPriorActionsBlock(sessionId: string | undefined): string | null {
+  if (!sessionId) return null;
+  const actions = SESSION_ACTION_STORE.get(sessionId);
+  if (!actions || actions.length === 0) return null;
+  return `Actions déjà effectuées dans cette session (ne pas reproduire):\n${actions.map((a) => `- ${a}`).join("\n")}`;
 }
 
 export class HydriaPublicApiV1Service {
@@ -642,8 +755,96 @@ export class HydriaPublicApiV1Service {
       return response;
     }
 
+    const question = resolveQuestion(request);
+    const hasAdditionalSources = (request.workspaceContext?.additionalSources ?? []).length > 0;
+    const sourcesBlock = buildSourcesBlock(request);
+    const longForm =
+      isLongFormRequest(question) && (sourcesBlock.length > 0 || hasAdditionalSources || question.length > 80);
+
+    // Pre-load workspace session memory for this user (fire-and-forget safe, returns null on error)
+    const wsMemory = new WorkspaceSessionMemoryService();
+    const sessionMemoryBlock = request.userId
+      ? await wsMemory.buildContextBlock(request.userId).catch(() => null)
+      : null;
+    const priorActionsBlock = buildPriorActionsBlock(request.sessionId);
+
+    if (longForm) {
+      const lfService = new LongFormGenerationService(this.deps.chatRuntimeService);
+      const lfResult = await lfService.generate(request);
+      const lfCreatedAt = new Date().toISOString();
+      const lfSessionId = lfResult.sessionId ?? request.sessionId ?? randomUUID();
+      const language = inferLanguage(question);
+      const proposedActions = verifyPublicApiProposedActions({
+        request,
+        actions: planPublicApiProposedActions({
+          requestId,
+          createdAt: lfCreatedAt,
+          request,
+          answer: lfResult.content
+        })
+      });
+      const lfResponse = publicApiAskResponseSchema.parse({
+        id: requestId,
+        object: "hydria.answer",
+        createdAt: lfCreatedAt,
+        sessionId: lfSessionId,
+        answer: lfResult.content,
+        language,
+        category: "long_form_generation",
+        confidence: lfResult.sectionCount > 0 ? 80 : 60,
+        sources: [],
+        tools: {
+          used: true,
+          route: "long_form",
+          type: "long_form_generation",
+          intent: "sectioned_document_generation",
+          sourceCount: (request.workspaceContext?.additionalSources ?? []).length
+        },
+        models: {
+          provider: "local",
+          model: "long_form_sectioned_v1",
+          specialistRole: "document_writer",
+          attempts: ["long_form_plan", ...Array.from({ length: lfResult.sectionCount }, (_, i) => `section_${i + 1}`)]
+        },
+        memory: {
+          sessionId: lfSessionId,
+          userGoal: question,
+          activeConstraints: [],
+          contextTracked: sourcesBlock.length > 0
+        },
+        quality: {
+          passed: true,
+          issues: [],
+          retryUsed: false,
+          durationMs: 0
+        },
+        proposedActions,
+        payload: {
+          runtimeMode: "long_form_generation",
+          documentType: lfResult.documentType,
+          sectionCount: lfResult.sectionCount,
+          planParsed: lfResult.plan !== null,
+          hasAdditionalSources: hasAdditionalSources,
+          sourceCount: sourcesBlock.length > 0 ? (request.workspaceContext?.additionalSources?.length ?? 0) + (request.workspaceContext?.activeWorkObject?.contentPreview ? 1 : 0) : 0,
+          workspaceContext: summarizeWorkspaceContext(request)
+        },
+        ...(request.options.includeDiagnostics
+          ? {
+              diagnostics: {
+                runtimeMode: "long_form_generation",
+                documentType: lfResult.documentType,
+                sectionCount: lfResult.sectionCount,
+                planParsed: lfResult.plan !== null
+              }
+            }
+          : {})
+      });
+      await this.persistAskAudit(request, lfResponse);
+      return lfResponse;
+    }
+
     const result = await this.deps.chatRuntimeService.sendMessage({
-      message: buildRuntimeQuestion(request),
+      message: buildRuntimeQuestion(request, sessionMemoryBlock, priorActionsBlock),
       ...(request.sessionId ? { sessionId: request.sessionId } : {})
     });
     const includeSources = request.options.includeSources;
@@ -712,7 +913,43 @@ export class HydriaPublicApiV1Service {
     });
     this.triggerOfficeWorkspaceShadow(request, response);
     const finalResponse = await this.attachExecutedWorkspaceActions(request, response);
+    // Track executed actions for multi-turn coherence
+    if (finalResponse.sessionId) {
+      for (const action of finalResponse.executedActions ?? []) {
+        if (action.status === "executed") {
+          const summary = `${action.actionType ?? action.actionId} sur ${action.workObject?.id ?? action.artifact?.id ?? "objet"}`;
+          recordSessionAction(finalResponse.sessionId, summary);
+        }
+      }
+      for (const action of finalResponse.proposedActions ?? []) {
+        if (!action.dryRun && action.type !== "reply") {
+          recordSessionAction(finalResponse.sessionId, `proposé: ${action.type} — ${compact(action.title, 80) ?? action.id}`);
+        }
+      }
+    }
     await this.persistAskAudit(request, finalResponse);
+    // Save workspace session memory + extract KOs (fire-and-forget)
+    if (request.userId && request.workspaceContext?.activeWorkObject) {
+      const active = request.workspaceContext.activeWorkObject;
+      void wsMemory.save({
+        userId: request.userId,
+        workObjectId: active.id,
+        workObjectTitle: active.title ?? null,
+        workObjectKind: active.kind ?? null,
+        workspaceFamilyId: active.workspaceFamilyId ?? null,
+        userGoal: question.slice(0, 400)
+      }).catch(() => undefined);
+
+      if (active.contentPreview) {
+        void new WorkspaceKnowledgeExtractorService().extract({
+          workObjectId: active.id,
+          workObjectTitle: active.title ?? active.id,
+          workObjectKind: active.kind ?? "",
+          workspaceFamilyId: active.workspaceFamilyId ?? "",
+          contentPreview: active.contentPreview
+        }).catch(() => undefined);
+      }
+    }
     return finalResponse;
   }
 

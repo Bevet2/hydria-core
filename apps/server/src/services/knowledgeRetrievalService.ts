@@ -28,77 +28,18 @@ const RETRIEVABLE_STATES = new Set<KnowledgeObjectState>([
 ]);
 
 const STOPWORDS = new Set([
-  "about",
-  "after",
-  "avec",
-  "avoir",
-  "biographie",
-  "cette",
-  "comment",
-  "connais",
-  "connait",
-  "contexte",
-  "dans",
-  "dire",
-  "does",
-  "donc",
-  "donne",
-  "explain",
-  "explique",
-  "fait",
-  "give",
-  "how",
-  "les",
-  "moi",
-  "nouveaute",
-  "nouveautes",
-  "peux",
-  "plutot",
-  "plus",
-  "pour",
-  "quoi",
-  "recap",
-  "recent",
-  "recente",
-  "recentes",
-  "semaine",
-  "sorties",
-  "sont",
-  "sur",
-  "that",
-  "the",
-  "this",
-  "toutes",
-  "tous",
-  "une",
-  "what",
-  "with",
-  "who",
-  "qui",
-  "est",
-  "son",
-  "ses",
-  "suis",
-  "sait",
-  "savoir",
-  "raconte",
-  "detail",
-  "details",
-  "more",
-  "tell",
-  "les",
-  "leur",
-  "moi",
-  "pour",
-  "quoi",
-  "sont",
-  "sur",
-  "that",
-  "the",
-  "this",
-  "une",
-  "what",
-  "with"
+  // English
+  "about", "after", "also", "does", "explain", "give", "how", "more",
+  "that", "the", "this", "tell", "what", "with", "who",
+  // French — question words & filler
+  "avec", "avoir", "cette", "comment", "connais", "connait", "contexte",
+  "dans", "detail", "details", "dire", "donc", "donne", "est", "explique",
+  "fait", "leur", "les", "moi", "nouveaute", "nouveautes", "peux", "plutot",
+  "plus", "pour", "quoi", "qui", "raconte", "recap", "recent", "recente",
+  "recentes", "sait", "savoir", "semaine", "ses", "son", "sont", "sorties",
+  "suis", "sur", "tous", "toutes", "une",
+  // French — generic task verbs
+  "biographie"
 ]);
 
 function compact(value: string, maxChars = 320) {
@@ -132,6 +73,8 @@ function unique<T>(values: T[]) {
 
 function termVariants(term: string) {
   const variants = [term];
+
+  // English plural / gerund stemming
   if (term.endsWith("s") && term.length > 4) {
     variants.push(term.slice(0, -1));
   }
@@ -140,7 +83,35 @@ function termVariants(term: string) {
   }
   if (term.endsWith("ing") && term.length > 6) {
     variants.push(term.slice(0, -3));
+    variants.push(term.slice(0, -3) + "e");
   }
+  if (term.endsWith("ed") && term.length > 5) {
+    variants.push(term.slice(0, -2));
+    variants.push(term.slice(0, -1));
+  }
+
+  // French plural / feminine stemming
+  if (term.endsWith("aux") && term.length > 5) {
+    variants.push(term.slice(0, -3) + "al");
+  }
+  if (term.endsWith("eurs") && term.length > 6) {
+    variants.push(term.slice(0, -1));  // eurs → eur
+    variants.push(term.slice(0, -4) + "eur");
+  }
+  if (term.endsWith("ions") && term.length > 6) {
+    variants.push(term.slice(0, -1));  // ions → ion
+  }
+  if (term.endsWith("tion") && term.length > 6) {
+    variants.push(term + "s");         // tion → tions
+    variants.push(term.slice(0, -4) + "tionnel");
+  }
+  if (term.endsWith("ment") && term.length > 6) {
+    variants.push(term + "s");         // ment → ments
+  }
+  if (term.endsWith("ements") && term.length > 8) {
+    variants.push(term.slice(0, -1));  // ements → ement
+  }
+
   return unique(variants);
 }
 
