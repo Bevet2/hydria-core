@@ -1,0 +1,1394 @@
+{
+  "version": "hydria-knowledge-objects-v1",
+  "generatedAt": "2026-06-17T11:03:44.231Z",
+  "sourceStats": {
+    "objectCount": 29,
+    "activeCount": 2,
+    "guardedCount": 9,
+    "archivedCount": 1,
+    "byType": {
+      "pattern": 8,
+      "tool_rule": 1,
+      "fact": 14,
+      "failure_pattern": 6
+    },
+    "byClass": {
+      "stable": 9,
+      "experimental": 1,
+      "dynamic": 7,
+      "guarded": 12
+    },
+    "byDomain": {
+      "other": 5,
+      "operational_writing": 3,
+      "technical_explanation": 1,
+      "research_archives": 3,
+      "general_knowledge": 3,
+      "software_engineering": 4,
+      "ai": 5,
+      "cybersecurity": 4,
+      "reasoning": 1
+    }
+  },
+  "objects": [
+    {
+      "objectId": "ko::interaction::10kfyxe",
+      "title": "answer pattern for other",
+      "type": "pattern",
+      "knowledgeClass": "stable",
+      "state": "active",
+      "domain": "other",
+      "category": "other",
+      "content": "Reuse successful chat answer patterns for other only as contextual guidance, not memorized answers. Recommended action: Use as weak contextual guidance only when the category and source match.",
+      "summary": "Reuse successful chat answer patterns for other only as contextual guidance, not memorized answers.",
+      "tags": [
+        "interaction-learning",
+        "chat",
+        "chat_turn",
+        "chat",
+        "other",
+        "pattern"
+      ],
+      "confidence": 0.85,
+      "riskLevel": "medium",
+      "evidenceCount": 6,
+      "sources": [
+        {
+          "sourceType": "interaction_learning",
+          "sourceId": "interaction::17frru9",
+          "sourceUri": "storage/learning/hydria-interaction-learning-v1.json",
+          "evidenceRecordIds": [
+            "4cd1e55b-50a9-4f7a-9f9a-c8bd4a90e748",
+            "2ea8c00d-343d-417e-b674-cb15c414cdf8",
+            "f2c6437d-5c6b-49ec-8a6e-ae6d0d90a032",
+            "674db637-cfbb-4447-b918-248ce81e50a1",
+            "fa3c8689-407e-40be-8cc4-3e0313cf96e4",
+            "7ed3f00d-c37b-449a-b294-2cbdf8d0393e"
+          ]
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "slow",
+        "validFrom": "2026-06-17T11:03:44.216Z",
+        "expiresAt": null,
+        "rationale": "Stable interaction-derived pattern; monitor through future learning cycles."
+      },
+      "createdAt": "2026-06-17T11:02:44.859Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::interaction::1dfz01x",
+      "title": "answer pattern for operational writing",
+      "type": "pattern",
+      "knowledgeClass": "stable",
+      "state": "active",
+      "domain": "operational_writing",
+      "category": "operational_writing",
+      "content": "Reuse successful chat answer patterns for operational writing only as contextual guidance, not memorized answers. Recommended action: Use as weak contextual guidance only when the category and source match.",
+      "summary": "Reuse successful chat answer patterns for operational writing only as contextual guidance, not memorized answers.",
+      "tags": [
+        "interaction-learning",
+        "chat",
+        "chat_turn",
+        "chat",
+        "operational_writing",
+        "pattern"
+      ],
+      "confidence": 0.825,
+      "riskLevel": "medium",
+      "evidenceCount": 5,
+      "sources": [
+        {
+          "sourceType": "interaction_learning",
+          "sourceId": "interaction::u9d86q",
+          "sourceUri": "storage/learning/hydria-interaction-learning-v1.json",
+          "evidenceRecordIds": [
+            "4c9412fc-00a0-4b9a-9820-70460d769c26",
+            "13666109-b59d-4065-8006-88a53db9135f",
+            "d2440eee-7d35-4ac6-9215-31e8971db527",
+            "55aa85ea-ea8f-4bb7-8e6a-1ef41930065c",
+            "6bada05b-61c0-41d7-9352-5178f2a0171a"
+          ]
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "slow",
+        "validFrom": "2026-06-17T11:03:44.216Z",
+        "expiresAt": null,
+        "rationale": "Stable interaction-derived pattern; monitor through future learning cycles."
+      },
+      "createdAt": "2026-06-17T11:02:44.859Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::interaction::1mt95yk",
+      "title": "tool routing signal for technical explanation",
+      "type": "tool_rule",
+      "knowledgeClass": "experimental",
+      "state": "validated",
+      "domain": "technical_explanation",
+      "category": "technical_explanation",
+      "content": "When technical explanation interactions require a verified tool, preserve the tool result and answer in the user's language. Recommended action: Use as routing evidence when the same tool/category condition repeats.",
+      "summary": "When technical explanation interactions require a verified tool, preserve the tool result and answer in the user's language.",
+      "tags": [
+        "interaction-learning",
+        "chat",
+        "chat_turn",
+        "chat",
+        "technical_explanation",
+        "tool_rule"
+      ],
+      "confidence": 0.741,
+      "riskLevel": "low",
+      "evidenceCount": 1,
+      "sources": [
+        {
+          "sourceType": "interaction_learning",
+          "sourceId": "interaction::1ffak3v",
+          "sourceUri": "storage/learning/hydria-interaction-learning-v1.json",
+          "evidenceRecordIds": [
+            "8bd1cb0f-5fc6-47bc-8aef-c9b161add1d2"
+          ]
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "standard",
+        "validFrom": "2026-06-17T11:03:44.216Z",
+        "expiresAt": null,
+        "rationale": "Experimental memory should decay unless repeated evidence confirms it."
+      },
+      "createdAt": "2026-06-17T11:02:44.859Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::source-acquisition::1l2538s",
+      "title": "A relational model of data for large shared data banks",
+      "type": "fact",
+      "knowledgeClass": "stable",
+      "state": "validated",
+      "domain": "research_archives",
+      "category": "mixed_reasoning",
+      "content": "A relational model of data for large shared data banks DOI: 10.1145/362384.362685. Publication: Communications of the ACM. Publisher: Association for Computing Machinery (ACM). Published at 1970-06-01T00:00:00.000Z. Future users of large data banks must be protected from having to know how the data is organized in the machine (the internal representation). A prompting service which supplies such information is not a satisfactory solution. Activities of users at terminals and most application programs should remain unaffected when the internal representation of data is changed and even when some aspects of the external representation are changed. Changes in data representation will often be needed as a result of changes in query, update, and report traffic and natural growth in the types of stored information. Existing noninferential, formatted data systems provide users with tree-structured files or slightly more genera...",
+      "summary": "Future users of large data banks must be protected from having to know how the data is organized in the machine (the internal representation). A prompting service which supplies such information is not a satisfactory solution. Activities of users at terminals and most application programs should remain unaffected wh...",
+      "tags": [
+        "source-acquisition",
+        "quality-gated",
+        "quality-promotable",
+        "stable-research-source-pack",
+        "stable",
+        "mixed_reasoning",
+        "corroborated",
+        "source-pack",
+        "stable-research-source-pack",
+        "source-pack",
+        "old-watcher",
+        "stable-research",
+        "citations",
+        "stable-knowledge",
+        "json-source",
+        "crossref"
+      ],
+      "confidence": 0.7,
+      "riskLevel": "low",
+      "evidenceCount": 2,
+      "sources": [
+        {
+          "sourceType": "source_acquisition",
+          "sourceId": "source-acquisition::stable-research-source-pack::s08xyx",
+          "sourceUri": "https://api.crossref.org/works/10.1145/362384.362685",
+          "evidenceRecordIds": []
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "slow",
+        "validFrom": "2026-05-18T21:56:02.266Z",
+        "expiresAt": null,
+        "rationale": "Stable source-acquired knowledge decays slowly and still needs review."
+      },
+      "createdAt": "2026-05-18T21:56:02.266Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::source-acquisition::1mkltm8",
+      "title": "A relational model of data for large shared data banks",
+      "type": "fact",
+      "knowledgeClass": "stable",
+      "state": "validated",
+      "domain": "research_archives",
+      "category": "mixed_reasoning",
+      "content": "A relational model of data for large shared data banks DOI: 10.1145/362384.362685. Publication year: 1970. OpenAlex cited-by count: 5224. Future users of large data banks must be protected from having to know how the data is organized in the machine (the internal representation). A prompting service which supplies such information is not a satisfactory solution. Activities of users at terminals and most application programs should remain unaffected when the internal representation of data is changed and even when some aspects of the external representation are changed. Changes in data representation will often be needed as a result of changes in query, update, and report traffic and natural growth in the types of stored information. Existing noninferential, formatted data systems provide users with tree-structured files or slightly more genera...",
+      "summary": "Future users of large data banks must be protected from having to know how the data is organized in the machine (the internal representation). A prompting service which supplies such information is not a satisfactory solution. Activities of users at terminals and most application programs should remain unaffected wh...",
+      "tags": [
+        "source-acquisition",
+        "quality-gated",
+        "quality-promotable",
+        "stable-research-source-pack",
+        "stable",
+        "mixed_reasoning",
+        "corroborated",
+        "source-pack",
+        "stable-research-source-pack",
+        "source-pack",
+        "old-watcher",
+        "stable-research",
+        "citations",
+        "stable-knowledge",
+        "json-source",
+        "openalex"
+      ],
+      "confidence": 0.7,
+      "riskLevel": "low",
+      "evidenceCount": 2,
+      "sources": [
+        {
+          "sourceType": "source_acquisition",
+          "sourceId": "source-acquisition::stable-research-source-pack::trxpj4",
+          "sourceUri": "https://api.openalex.org/works/doi:10.1145/362384.362685",
+          "evidenceRecordIds": []
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "slow",
+        "validFrom": "2026-05-18T21:56:02.266Z",
+        "expiresAt": null,
+        "rationale": "Stable source-acquired knowledge decays slowly and still needs review."
+      },
+      "createdAt": "2026-05-18T21:56:02.266Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::source-acquisition::1ruvapx",
+      "title": "Douglas Adams",
+      "type": "fact",
+      "knowledgeClass": "stable",
+      "state": "validated",
+      "domain": "general_knowledge",
+      "category": "other",
+      "content": "Douglas Adams Wikidata ID: Q42. English writer and humourist (1952–2001) Douglas Noël Adams was an English author, humourist, and screenwriter. He was best known as the creator of The Hitchhiker's Guide to the Galaxy, a 1978 radio comedy series which he adapted into a \"trilogy\" of five books that sold over 14 million copies in his lifetime. He also adapted it into a 1981 television series, a 1984 video game and a 2005 feature film.",
+      "summary": "English writer and humourist (1952–2001). Douglas Noël Adams was an English author, humourist, and screenwriter. He was best known as the creator of The Hitchhiker's Guide to the Galaxy, a 1978 radio comedy series which he adapted into a \"trilogy\" of five books that sold over 14 million copies in his lifetime. He al...",
+      "tags": [
+        "source-acquisition",
+        "quality-gated",
+        "quality-promotable",
+        "wikidata-general-knowledge-source-pack",
+        "stable",
+        "other",
+        "corroborated",
+        "source-pack",
+        "wikidata-general-knowledge-source-pack",
+        "source-pack",
+        "wikidata",
+        "structured-knowledge",
+        "entity-grounding",
+        "guarded",
+        "json-source",
+        "wikipedia-summary"
+      ],
+      "confidence": 0.7,
+      "riskLevel": "medium",
+      "evidenceCount": 2,
+      "sources": [
+        {
+          "sourceType": "source_acquisition",
+          "sourceId": "source-acquisition::wikidata-general-knowledge-source-pack::1hapr2",
+          "sourceUri": "https://en.wikipedia.org/api/rest_v1/page/summary/Douglas_Adams",
+          "evidenceRecordIds": []
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "slow",
+        "validFrom": "2026-05-18T21:56:02.266Z",
+        "expiresAt": null,
+        "rationale": "Stable source-acquired knowledge decays slowly and still needs review."
+      },
+      "createdAt": "2026-05-18T21:56:02.266Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::source-acquisition::kujfxp",
+      "title": "Douglas Adams",
+      "type": "fact",
+      "knowledgeClass": "stable",
+      "state": "validated",
+      "domain": "general_knowledge",
+      "category": "other",
+      "content": "Douglas Adams (Q42) British science fiction writer and humorist (1952–2001) Date of birth: 1952-03-11T00:00:00Z. Date of death: 2001-05-11T00:00:00Z.",
+      "summary": "British science fiction writer and humorist (1952–2001); born 1952-03-11T00:00:00Z; died 2001-05-11T00:00:00Z",
+      "tags": [
+        "source-acquisition",
+        "quality-gated",
+        "quality-promotable",
+        "wikidata-general-knowledge-source-pack",
+        "stable",
+        "other",
+        "corroborated",
+        "source-pack",
+        "wikidata-general-knowledge-source-pack",
+        "source-pack",
+        "wikidata",
+        "structured-knowledge",
+        "entity-grounding",
+        "guarded",
+        "json-source",
+        "wikidata"
+      ],
+      "confidence": 0.7,
+      "riskLevel": "medium",
+      "evidenceCount": 2,
+      "sources": [
+        {
+          "sourceType": "source_acquisition",
+          "sourceId": "source-acquisition::wikidata-general-knowledge-source-pack::lo8vgt",
+          "sourceUri": "https://www.wikidata.org/wiki/Special:EntityData/Q42.json",
+          "evidenceRecordIds": []
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "slow",
+        "validFrom": "2026-05-18T21:56:02.266Z",
+        "expiresAt": null,
+        "rationale": "Stable source-acquired knowledge decays slowly and still needs review."
+      },
+      "createdAt": "2026-05-18T21:56:02.266Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::source-acquisition::1or1lzr",
+      "title": "Node.js 22.22.3 (LTS)",
+      "type": "fact",
+      "knowledgeClass": "dynamic",
+      "state": "candidate",
+      "domain": "software_engineering",
+      "category": "debug_diagnostic",
+      "content": "Node.js 22.22.3 (LTS) Published at 2026-05-13T18:45:03.000Z. Source URL: https://nodejs.org/en/blog/release/v22.22.3. Node.js release feed published Node.js 22.22.3 (LTS)",
+      "summary": "Node.js release feed published Node.js 22.22.3 (LTS)",
+      "tags": [
+        "source-acquisition",
+        "quality-gated",
+        "quality-candidate",
+        "code-runtime-source-pack",
+        "recent",
+        "debug_diagnostic",
+        "candidate",
+        "source-pack",
+        "code-runtime-source-pack",
+        "source-pack",
+        "code",
+        "runtime",
+        "releases",
+        "deployment",
+        "feed-source",
+        "rss-item"
+      ],
+      "confidence": 0.486,
+      "riskLevel": "medium",
+      "evidenceCount": 1,
+      "sources": [
+        {
+          "sourceType": "source_acquisition",
+          "sourceId": "source-acquisition::code-runtime-source-pack::aj1rpl",
+          "sourceUri": "https://nodejs.org/en/feed/blog.xml",
+          "evidenceRecordIds": []
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "standard",
+        "validFrom": "2026-05-18T21:56:02.266Z",
+        "expiresAt": "2026-07-02T21:56:02.266Z",
+        "rationale": "Recent release knowledge expires unless refreshed from source."
+      },
+      "createdAt": "2026-05-18T21:56:02.266Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::source-acquisition::1ctce8b",
+      "title": "Coding Agent Horror Stories: The Security Crisis Threatening Developer Infrastructure",
+      "type": "fact",
+      "knowledgeClass": "dynamic",
+      "state": "candidate",
+      "domain": "software_engineering",
+      "category": "debug_diagnostic",
+      "content": "Coding Agent Horror Stories: The Security Crisis Threatening Developer Infrastructure Published at 2026-05-18T13:00:00.000Z. Source URL: https://www.docker.com/blog/ai-coding-agent-horror-stories-security-risks/. This is issue 1 of a new series called Coding Agent Horror Stories where we examine critical security failures in the AI coding agent ecosystem and how Docker Sandboxes provide enterprise-grade protection against these threats. AI coding agents are everywhere. According to Anthropic's 2026 Agentic Coding Trends Report, developers are now using AI in roughly...",
+      "summary": "This is issue 1 of a new series called Coding Agent Horror Stories where we examine critical security failures in the AI coding agent ecosystem and how Docker Sandboxes provide enterprise-grade protection against these threats. AI coding agents are everywhere. According to Anthropic's 2026 Agentic Coding Trends Repo...",
+      "tags": [
+        "source-acquisition",
+        "quality-gated",
+        "quality-candidate",
+        "code-runtime-source-pack",
+        "recent",
+        "debug_diagnostic",
+        "candidate",
+        "source-pack",
+        "code-runtime-source-pack",
+        "source-pack",
+        "code",
+        "runtime",
+        "releases",
+        "deployment",
+        "feed-source",
+        "rss-item"
+      ],
+      "confidence": 0.42,
+      "riskLevel": "medium",
+      "evidenceCount": 1,
+      "sources": [
+        {
+          "sourceType": "source_acquisition",
+          "sourceId": "source-acquisition::code-runtime-source-pack::1vl0g7u",
+          "sourceUri": "https://www.docker.com/blog/feed/",
+          "evidenceRecordIds": []
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "standard",
+        "validFrom": "2026-05-18T21:56:02.266Z",
+        "expiresAt": "2026-07-02T21:56:02.266Z",
+        "rationale": "Recent release knowledge expires unless refreshed from source."
+      },
+      "createdAt": "2026-05-18T21:56:02.266Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::watcher::16tgm5h",
+      "title": "AI model and benchmark source pack",
+      "type": "pattern",
+      "knowledgeClass": "dynamic",
+      "state": "candidate",
+      "domain": "ai",
+      "category": "technical_explanation",
+      "content": "Use Hugging Face, Papers with Code, arXiv, and model cards before Hydria treats recent model capabilities, benchmarks, or context-window claims as current.",
+      "summary": "Creates a live acquisition path for open-weight model releases, benchmark movement, model cards, and paper signals.",
+      "tags": [
+        "watcher",
+        "external-watcher",
+        "external-knowledge-expansion-v1",
+        "source_profile",
+        "live",
+        "technical_explanation",
+        "pattern",
+        "external-watcher",
+        "ai-model-research-source-pack",
+        "source-pack",
+        "ai",
+        "models",
+        "benchmarks",
+        "dynamic-knowledge"
+      ],
+      "confidence": 0.378,
+      "riskLevel": "medium",
+      "evidenceCount": 0,
+      "sources": [
+        {
+          "sourceType": "watcher",
+          "sourceId": "watcher-candidate::external-knowledge-expansion-v1::1h4cz0i",
+          "sourceUri": "storage/learning/hydria-watchers-v1.json",
+          "evidenceRecordIds": []
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "fast",
+        "validFrom": "2026-06-17T11:03:44.216Z",
+        "expiresAt": null,
+        "rationale": "Dynamic watcher-derived knowledge must be refreshed before promotion."
+      },
+      "createdAt": "2026-05-18T21:56:02.149Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::watcher::1oac7x2",
+      "title": "Cyber vulnerability source pack",
+      "type": "pattern",
+      "knowledgeClass": "guarded",
+      "state": "candidate",
+      "domain": "cybersecurity",
+      "category": "incident_response",
+      "content": "Use CISA KEV, NVD, and OSV as governed source streams before Hydria treats current vulnerability, exploitation, or remediation claims as known.",
+      "summary": "Creates a guarded acquisition path for exploited CVEs, package advisories, affected versions, and mitigation evidence.",
+      "tags": [
+        "watcher",
+        "external-watcher",
+        "external-knowledge-expansion-v1",
+        "source_profile",
+        "live",
+        "incident_response",
+        "pattern",
+        "guarded",
+        "external-watcher",
+        "cyber-vulnerability-source-pack",
+        "source-pack",
+        "cyber",
+        "cve",
+        "osv",
+        "dynamic-knowledge",
+        "guarded"
+      ],
+      "confidence": 0.378,
+      "riskLevel": "high",
+      "evidenceCount": 0,
+      "sources": [
+        {
+          "sourceType": "watcher",
+          "sourceId": "watcher-candidate::external-knowledge-expansion-v1::65zi9y",
+          "sourceUri": "storage/learning/hydria-watchers-v1.json",
+          "evidenceRecordIds": []
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "standard",
+        "validFrom": "2026-06-17T11:03:44.216Z",
+        "expiresAt": null,
+        "rationale": "Guarded signal must be revalidated before active promotion."
+      },
+      "createdAt": "2026-05-18T21:56:02.149Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::watcher::bfsj6m",
+      "title": "Stable research archive source pack",
+      "type": "pattern",
+      "knowledgeClass": "stable",
+      "state": "candidate",
+      "domain": "research_archives",
+      "category": "mixed_reasoning",
+      "content": "Use OpenAlex, arXiv, Semantic Scholar, and Crossref as stable acquisition bases for long-lived scientific, architecture, and reasoning knowledge.",
+      "summary": "Creates a stable validation path for older durable knowledge where recency matters less than source quality and citation context.",
+      "tags": [
+        "watcher",
+        "external-watcher",
+        "external-knowledge-expansion-v1",
+        "source_profile",
+        "stable",
+        "mixed_reasoning",
+        "pattern",
+        "external-watcher",
+        "stable-research-source-pack",
+        "source-pack",
+        "old-watcher",
+        "stable-research",
+        "citations",
+        "stable-knowledge"
+      ],
+      "confidence": 0.378,
+      "riskLevel": "low",
+      "evidenceCount": 0,
+      "sources": [
+        {
+          "sourceType": "watcher",
+          "sourceId": "watcher-candidate::external-knowledge-expansion-v1::e1fm3v",
+          "sourceUri": "storage/learning/hydria-watchers-v1.json",
+          "evidenceRecordIds": []
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "slow",
+        "validFrom": "2026-06-17T11:03:44.216Z",
+        "expiresAt": null,
+        "rationale": "Stable interaction-derived pattern; monitor through future learning cycles."
+      },
+      "createdAt": "2026-05-18T21:56:02.149Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::watcher::dwz74r",
+      "title": "AI model release watcher",
+      "type": "fact",
+      "knowledgeClass": "dynamic",
+      "state": "candidate",
+      "domain": "ai",
+      "category": "technical_explanation",
+      "content": "Track current open-weight model releases, context windows, tool-use support, quantization profiles, and benchmark deltas before treating new model capabilities as known.",
+      "summary": "Hydria should acquire fresh AI model release knowledge from authoritative source streams instead of relying on the frozen base model.",
+      "tags": [
+        "watcher",
+        "external-watcher",
+        "external-knowledge-expansion-v1",
+        "trend_signal",
+        "live",
+        "technical_explanation",
+        "fact",
+        "external-watcher",
+        "ai",
+        "model-releases",
+        "dynamic-knowledge"
+      ],
+      "confidence": 0.378,
+      "riskLevel": "medium",
+      "evidenceCount": 0,
+      "sources": [
+        {
+          "sourceType": "watcher",
+          "sourceId": "watcher-candidate::external-knowledge-expansion-v1::hvn740",
+          "sourceUri": "storage/learning/hydria-watchers-v1.json",
+          "evidenceRecordIds": []
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "fast",
+        "validFrom": "2026-06-17T11:03:44.216Z",
+        "expiresAt": null,
+        "rationale": "Dynamic watcher-derived knowledge must be refreshed before promotion."
+      },
+      "createdAt": "2026-05-13T23:44:44.132Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::watcher::g4v5nv",
+      "title": "Cyber vulnerability watcher",
+      "type": "fact",
+      "knowledgeClass": "dynamic",
+      "state": "candidate",
+      "domain": "cybersecurity",
+      "category": "incident_response",
+      "content": "Track active vulnerability advisories, exploited CVEs, and mitigation guidance before Hydria gives security-sensitive recommendations.",
+      "summary": "Hydria should maintain guarded dynamic security knowledge and require corroboration before active promotion.",
+      "tags": [
+        "watcher",
+        "external-watcher",
+        "external-knowledge-expansion-v1",
+        "trend_signal",
+        "live",
+        "incident_response",
+        "fact",
+        "external-watcher",
+        "cyber",
+        "cve",
+        "guarded"
+      ],
+      "confidence": 0.378,
+      "riskLevel": "medium",
+      "evidenceCount": 0,
+      "sources": [
+        {
+          "sourceType": "watcher",
+          "sourceId": "watcher-candidate::external-knowledge-expansion-v1::mlw7uy",
+          "sourceUri": "storage/learning/hydria-watchers-v1.json",
+          "evidenceRecordIds": []
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "fast",
+        "validFrom": "2026-06-17T11:03:44.216Z",
+        "expiresAt": null,
+        "rationale": "Dynamic watcher-derived knowledge must be refreshed before promotion."
+      },
+      "createdAt": "2026-05-13T23:44:44.132Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::watcher::idk67m",
+      "title": "Code platform release watcher",
+      "type": "fact",
+      "knowledgeClass": "dynamic",
+      "state": "candidate",
+      "domain": "software_engineering",
+      "category": "debug_diagnostic",
+      "content": "Track framework, runtime, Docker, Node, database, and security release changes that affect coding and deployment advice.",
+      "summary": "Hydria should collect current platform release facts for code/debug answers where stale model knowledge causes wrong guidance.",
+      "tags": [
+        "watcher",
+        "external-watcher",
+        "external-knowledge-expansion-v1",
+        "dynamic_knowledge",
+        "live",
+        "debug_diagnostic",
+        "fact",
+        "external-watcher",
+        "code",
+        "releases",
+        "deployment"
+      ],
+      "confidence": 0.378,
+      "riskLevel": "medium",
+      "evidenceCount": 0,
+      "sources": [
+        {
+          "sourceType": "watcher",
+          "sourceId": "watcher-candidate::external-knowledge-expansion-v1::rf0j2n",
+          "sourceUri": "storage/learning/hydria-watchers-v1.json",
+          "evidenceRecordIds": []
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "fast",
+        "validFrom": "2026-06-17T11:03:44.216Z",
+        "expiresAt": null,
+        "rationale": "Dynamic watcher-derived knowledge must be refreshed before promotion."
+      },
+      "createdAt": "2026-05-13T23:44:44.132Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::watcher::isoyab",
+      "title": "Reasoning archive watcher",
+      "type": "pattern",
+      "knowledgeClass": "stable",
+      "state": "candidate",
+      "domain": "reasoning",
+      "category": "mixed_reasoning",
+      "content": "Collect stable reasoning, decision-analysis, incident-response, and architecture-design patterns that improve Hydria without chasing news.",
+      "summary": "Hydria should separate stable deep knowledge from volatile news and expose it as validated Knowledge Objects only after review.",
+      "tags": [
+        "watcher",
+        "external-watcher",
+        "external-knowledge-expansion-v1",
+        "stable_knowledge",
+        "stable",
+        "mixed_reasoning",
+        "pattern",
+        "external-watcher",
+        "old-watcher",
+        "stable-knowledge",
+        "reasoning"
+      ],
+      "confidence": 0.378,
+      "riskLevel": "low",
+      "evidenceCount": 0,
+      "sources": [
+        {
+          "sourceType": "watcher",
+          "sourceId": "watcher-candidate::external-knowledge-expansion-v1::saa0hv",
+          "sourceUri": "storage/learning/hydria-watchers-v1.json",
+          "evidenceRecordIds": []
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "slow",
+        "validFrom": "2026-06-17T11:03:44.216Z",
+        "expiresAt": null,
+        "rationale": "Stable interaction-derived pattern; monitor through future learning cycles."
+      },
+      "createdAt": "2026-05-13T23:44:44.132Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::watcher::jjttlj",
+      "title": "Structured general knowledge source pack",
+      "type": "pattern",
+      "knowledgeClass": "stable",
+      "state": "candidate",
+      "domain": "general_knowledge",
+      "category": "other",
+      "content": "Use Wikidata, Wikipedia dumps, and DBpedia as governed structured references for entity, date, relationship, and canonical-name grounding.",
+      "summary": "Creates a structured acquisition path for general facts without copying bulk dumps directly into active runtime memory.",
+      "tags": [
+        "watcher",
+        "external-watcher",
+        "external-knowledge-expansion-v1",
+        "source_profile",
+        "stable",
+        "other",
+        "pattern",
+        "external-watcher",
+        "wikidata-general-knowledge-source-pack",
+        "source-pack",
+        "wikidata",
+        "structured-knowledge",
+        "entity-grounding",
+        "guarded"
+      ],
+      "confidence": 0.378,
+      "riskLevel": "medium",
+      "evidenceCount": 0,
+      "sources": [
+        {
+          "sourceType": "watcher",
+          "sourceId": "watcher-candidate::external-knowledge-expansion-v1::v5jl9g",
+          "sourceUri": "storage/learning/hydria-watchers-v1.json",
+          "evidenceRecordIds": []
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "slow",
+        "validFrom": "2026-06-17T11:03:44.216Z",
+        "expiresAt": null,
+        "rationale": "Stable interaction-derived pattern; monitor through future learning cycles."
+      },
+      "createdAt": "2026-05-18T21:56:02.149Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::watcher::k4evni",
+      "title": "Code and runtime release source pack",
+      "type": "pattern",
+      "knowledgeClass": "dynamic",
+      "state": "candidate",
+      "domain": "software_engineering",
+      "category": "debug_diagnostic",
+      "content": "Use official runtime, container, database, and orchestration release streams before Hydria gives version-sensitive code or deployment guidance.",
+      "summary": "Creates acquisition tasks for Node.js, Docker, PostgreSQL, and Kubernetes release knowledge that open-weight models often lack.",
+      "tags": [
+        "watcher",
+        "external-watcher",
+        "external-knowledge-expansion-v1",
+        "source_profile",
+        "recent",
+        "debug_diagnostic",
+        "pattern",
+        "external-watcher",
+        "code-runtime-source-pack",
+        "source-pack",
+        "code",
+        "runtime",
+        "releases",
+        "deployment"
+      ],
+      "confidence": 0.378,
+      "riskLevel": "medium",
+      "evidenceCount": 0,
+      "sources": [
+        {
+          "sourceType": "watcher",
+          "sourceId": "watcher-candidate::external-knowledge-expansion-v1::16tf706",
+          "sourceUri": "storage/learning/hydria-watchers-v1.json",
+          "evidenceRecordIds": []
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "fast",
+        "validFrom": "2026-06-17T11:03:44.216Z",
+        "expiresAt": null,
+        "rationale": "Dynamic watcher-derived knowledge must be refreshed before promotion."
+      },
+      "createdAt": "2026-05-18T21:56:02.149Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::watcher::c17uyg",
+      "title": "Repair signal: operational_writing high",
+      "type": "failure_pattern",
+      "knowledgeClass": "guarded",
+      "state": "guarded",
+      "domain": "operational_writing",
+      "category": "operational_writing",
+      "content": "Reduce recurring off_topic_direct_answer failures in operational writing interactions before promotion. Action: Keep as guarded repair signal; require repeated evidence before changing policy.",
+      "summary": "Reduce recurring off_topic_direct_answer failures in operational writing interactions before promotion.",
+      "tags": [
+        "watcher",
+        "internal-watcher",
+        "internal-gap-control-v1",
+        "gap_repair",
+        "recent",
+        "operational_writing",
+        "failure_pattern",
+        "guarded",
+        "internal-watcher",
+        "quality-control",
+        "repair-signal",
+        "operational_writing",
+        "high"
+      ],
+      "confidence": 0.375,
+      "riskLevel": "high",
+      "evidenceCount": 6,
+      "sources": [
+        {
+          "sourceType": "watcher",
+          "sourceId": "watcher-candidate::internal-gap-control-v1::xf6q2a",
+          "sourceUri": "storage/learning/hydria-watchers-v1.json",
+          "evidenceRecordIds": [
+            "0141a037-7146-44d7-a3f9-a0a8756a915a",
+            "f0181f75-5f3a-46d2-8dd8-79b5ba555b29",
+            "c1456545-ff6f-4e55-8dfc-c6d0d287eda5"
+          ]
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "standard",
+        "validFrom": "2026-06-17T11:03:44.216Z",
+        "expiresAt": null,
+        "rationale": "Guarded signal must be revalidated before active promotion."
+      },
+      "createdAt": "2026-06-17T11:02:45.212Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::interaction::xf6q2a",
+      "title": "repair signal for operational writing",
+      "type": "failure_pattern",
+      "knowledgeClass": "guarded",
+      "state": "guarded",
+      "domain": "operational_writing",
+      "category": "operational_writing",
+      "content": "Reduce recurring off_topic_direct_answer failures in operational writing interactions before promotion. Recommended action: Keep as guarded repair signal; require repeated evidence before changing policy.",
+      "summary": "Reduce recurring off_topic_direct_answer failures in operational writing interactions before promotion.",
+      "tags": [
+        "interaction-learning",
+        "chat",
+        "chat_turn",
+        "chat",
+        "operational_writing",
+        "failure_pattern",
+        "guarded"
+      ],
+      "confidence": 0.375,
+      "riskLevel": "high",
+      "evidenceCount": 3,
+      "sources": [
+        {
+          "sourceType": "interaction_learning",
+          "sourceId": "interaction::123sg6t",
+          "sourceUri": "storage/learning/hydria-interaction-learning-v1.json",
+          "evidenceRecordIds": [
+            "0141a037-7146-44d7-a3f9-a0a8756a915a",
+            "f0181f75-5f3a-46d2-8dd8-79b5ba555b29",
+            "c1456545-ff6f-4e55-8dfc-c6d0d287eda5"
+          ]
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "standard",
+        "validFrom": "2026-06-17T11:03:44.216Z",
+        "expiresAt": null,
+        "rationale": "Guarded signal must be revalidated before active promotion."
+      },
+      "createdAt": "2026-06-17T11:02:44.859Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::watcher::1bl8w1w",
+      "title": "Repair signal: other high",
+      "type": "failure_pattern",
+      "knowledgeClass": "guarded",
+      "state": "guarded",
+      "domain": "other",
+      "category": "other",
+      "content": "Reduce recurring off_topic_direct_answer failures in other interactions before promotion. Action: Keep as guarded repair signal; require repeated evidence before changing policy.",
+      "summary": "Reduce recurring off_topic_direct_answer failures in other interactions before promotion.",
+      "tags": [
+        "watcher",
+        "internal-watcher",
+        "internal-gap-control-v1",
+        "gap_repair",
+        "recent",
+        "other",
+        "failure_pattern",
+        "guarded",
+        "internal-watcher",
+        "quality-control",
+        "repair-signal",
+        "other",
+        "high"
+      ],
+      "confidence": 0.35,
+      "riskLevel": "high",
+      "evidenceCount": 4,
+      "sources": [
+        {
+          "sourceType": "watcher",
+          "sourceId": "watcher-candidate::internal-gap-control-v1::1rbcv5e",
+          "sourceUri": "storage/learning/hydria-watchers-v1.json",
+          "evidenceRecordIds": [
+            "25ca4625-e34c-4a54-9bd2-55b6e42bc207",
+            "2a3b3915-59a1-42c4-aa02-94fea75fb84d"
+          ]
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "standard",
+        "validFrom": "2026-06-17T11:03:44.216Z",
+        "expiresAt": null,
+        "rationale": "Guarded signal must be revalidated before active promotion."
+      },
+      "createdAt": "2026-06-17T11:02:45.212Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::interaction::1rbcv5e",
+      "title": "repair signal for other",
+      "type": "failure_pattern",
+      "knowledgeClass": "guarded",
+      "state": "guarded",
+      "domain": "other",
+      "category": "other",
+      "content": "Reduce recurring off_topic_direct_answer failures in other interactions before promotion. Recommended action: Keep as guarded repair signal; require repeated evidence before changing policy.",
+      "summary": "Reduce recurring off_topic_direct_answer failures in other interactions before promotion.",
+      "tags": [
+        "interaction-learning",
+        "chat",
+        "chat_turn",
+        "chat",
+        "other",
+        "failure_pattern",
+        "guarded"
+      ],
+      "confidence": 0.35,
+      "riskLevel": "high",
+      "evidenceCount": 2,
+      "sources": [
+        {
+          "sourceType": "interaction_learning",
+          "sourceId": "interaction::1q7ztna",
+          "sourceUri": "storage/learning/hydria-interaction-learning-v1.json",
+          "evidenceRecordIds": [
+            "25ca4625-e34c-4a54-9bd2-55b6e42bc207",
+            "2a3b3915-59a1-42c4-aa02-94fea75fb84d"
+          ]
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "standard",
+        "validFrom": "2026-06-17T11:03:44.216Z",
+        "expiresAt": null,
+        "rationale": "Guarded signal must be revalidated before active promotion."
+      },
+      "createdAt": "2026-06-17T11:02:44.859Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::source-acquisition::1iug65p",
+      "title": "KokosDev/gemma-4-e4b-it-vlm-plt-l37-l41",
+      "type": "fact",
+      "knowledgeClass": "guarded",
+      "state": "guarded",
+      "domain": "ai",
+      "category": "technical_explanation",
+      "content": "Hugging Face model: KokosDev/gemma-4-e4b-it-vlm-plt-l37-l41. Tags: mechanistic-interpretability, vision-language-models, transcoders, gemma, sparse-features, license:apache-2.0, region:us. Last modified at 2026-05-18T21:55:57.000Z.",
+      "summary": "mechanistic-interpretability; vision-language-models; transcoders; gemma",
+      "tags": [
+        "source-acquisition",
+        "quality-gated",
+        "quality-guarded",
+        "ai-model-research-source-pack",
+        "live",
+        "technical_explanation",
+        "candidate",
+        "source-pack",
+        "ai-model-research-source-pack",
+        "source-pack",
+        "ai",
+        "models",
+        "benchmarks",
+        "dynamic-knowledge",
+        "json-source",
+        "huggingface-model"
+      ],
+      "confidence": 0.305,
+      "riskLevel": "medium",
+      "evidenceCount": 1,
+      "sources": [
+        {
+          "sourceType": "source_acquisition",
+          "sourceId": "source-acquisition::ai-model-research-source-pack::wqzpdz",
+          "sourceUri": "https://huggingface.co/api/models?sort=lastModified&direction=-1&limit=1&full=false",
+          "evidenceRecordIds": []
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "fast",
+        "validFrom": "2026-05-18T21:56:02.266Z",
+        "expiresAt": "2026-05-25T21:56:02.266Z",
+        "rationale": "Live source-acquired knowledge must be refreshed before runtime promotion."
+      },
+      "createdAt": "2026-05-18T21:56:02.266Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::interaction::191tuec",
+      "title": "repair signal for other",
+      "type": "failure_pattern",
+      "knowledgeClass": "guarded",
+      "state": "candidate",
+      "domain": "other",
+      "category": "other",
+      "content": "Reduce recurring wrong_language_expected_fr failures in other interactions before promotion. Recommended action: Keep as guarded repair signal; require repeated evidence before changing policy.",
+      "summary": "Reduce recurring wrong_language_expected_fr failures in other interactions before promotion.",
+      "tags": [
+        "interaction-learning",
+        "chat",
+        "chat_turn",
+        "chat",
+        "other",
+        "failure_pattern",
+        "guarded"
+      ],
+      "confidence": 0.299,
+      "riskLevel": "high",
+      "evidenceCount": 1,
+      "sources": [
+        {
+          "sourceType": "interaction_learning",
+          "sourceId": "interaction::jnp3do",
+          "sourceUri": "storage/learning/hydria-interaction-learning-v1.json",
+          "evidenceRecordIds": [
+            "fb532bf5-2f61-4daa-8a65-b02db5096adf"
+          ]
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "standard",
+        "validFrom": "2026-06-17T11:03:44.216Z",
+        "expiresAt": null,
+        "rationale": "Guarded signal must be revalidated before active promotion."
+      },
+      "createdAt": "2026-06-17T11:02:44.859Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::watcher::jv1doo",
+      "title": "Repair signal: other medium",
+      "type": "failure_pattern",
+      "knowledgeClass": "guarded",
+      "state": "guarded",
+      "domain": "other",
+      "category": "other",
+      "content": "Reduce recurring wrong_language_expected_fr failures in other interactions before promotion. Action: Keep as guarded repair signal; require repeated evidence before changing policy.",
+      "summary": "Reduce recurring wrong_language_expected_fr failures in other interactions before promotion.",
+      "tags": [
+        "watcher",
+        "internal-watcher",
+        "internal-gap-control-v1",
+        "gap_repair",
+        "recent",
+        "other",
+        "failure_pattern",
+        "guarded",
+        "internal-watcher",
+        "quality-control",
+        "repair-signal",
+        "other",
+        "medium"
+      ],
+      "confidence": 0.293,
+      "riskLevel": "high",
+      "evidenceCount": 2,
+      "sources": [
+        {
+          "sourceType": "watcher",
+          "sourceId": "watcher-candidate::internal-gap-control-v1::191tuec",
+          "sourceUri": "storage/learning/hydria-watchers-v1.json",
+          "evidenceRecordIds": [
+            "fb532bf5-2f61-4daa-8a65-b02db5096adf"
+          ]
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "standard",
+        "validFrom": "2026-06-17T11:03:44.216Z",
+        "expiresAt": null,
+        "rationale": "Guarded signal must be revalidated before active promotion."
+      },
+      "createdAt": "2026-06-17T11:02:45.212Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::source-acquisition::vjalep",
+      "title": "Fine-Tuning NVIDIA Cosmos Predict 2.5 with LoRA/DoRA for Robot Video Generation",
+      "type": "fact",
+      "knowledgeClass": "guarded",
+      "state": "guarded",
+      "domain": "ai",
+      "category": "technical_explanation",
+      "content": "Fine-Tuning NVIDIA Cosmos Predict 2.5 with LoRA/DoRA for Robot Video Generation Published at 2026-05-18T16:00:21.000Z. Source URL: https://huggingface.co/blog/nvidia/cosmos-fine-tuning-for-robot-video-generation. Hugging Face blog feed published Fine-Tuning NVIDIA Cosmos Predict 2.5 with LoRA/DoRA for Robot Video Generation",
+      "summary": "Hugging Face blog feed published Fine-Tuning NVIDIA Cosmos Predict 2.5 with LoRA/DoRA for Robot Video Generation",
+      "tags": [
+        "source-acquisition",
+        "quality-gated",
+        "quality-guarded",
+        "ai-model-research-source-pack",
+        "live",
+        "technical_explanation",
+        "candidate",
+        "source-pack",
+        "ai-model-research-source-pack",
+        "source-pack",
+        "ai",
+        "models",
+        "benchmarks",
+        "dynamic-knowledge",
+        "feed-source",
+        "rss-item"
+      ],
+      "confidence": 0.273,
+      "riskLevel": "medium",
+      "evidenceCount": 1,
+      "sources": [
+        {
+          "sourceType": "source_acquisition",
+          "sourceId": "source-acquisition::ai-model-research-source-pack::1muuam0",
+          "sourceUri": "https://huggingface.co/blog/feed.xml",
+          "evidenceRecordIds": []
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "fast",
+        "validFrom": "2026-05-18T21:56:02.266Z",
+        "expiresAt": "2026-05-25T21:56:02.266Z",
+        "rationale": "Live source-acquired knowledge must be refreshed before runtime promotion."
+      },
+      "createdAt": "2026-05-18T21:56:02.266Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::source-acquisition::ahsau3",
+      "title": "CVE-2026-42897 - Microsoft Microsoft - Microsoft Exchange Server Cross-Site Scripting Vulnerability",
+      "type": "fact",
+      "knowledgeClass": "guarded",
+      "state": "guarded",
+      "domain": "cybersecurity",
+      "category": "incident_response",
+      "content": "CVE: CVE-2026-42897 Product: Microsoft Microsoft Known ransomware use: Unknown Required action: Apply mitigations per vendor instructions, follow applicable BOD 22-01 guidance for cloud services, or discontinue use of the product if mitigations are unavailable.",
+      "summary": "Microsoft Exchange Server contains a cross-site scripting vulnerability during web page generation in Outlook Web Access and when certain interaction conditions are met, arbitrary JavaScript can be executed in the browser context.",
+      "tags": [
+        "source-acquisition",
+        "quality-gated",
+        "quality-guarded",
+        "cyber-vulnerability-source-pack",
+        "live",
+        "incident_response",
+        "guarded",
+        "guarded",
+        "source-pack",
+        "cyber-vulnerability-source-pack",
+        "source-pack",
+        "cyber",
+        "cve",
+        "osv",
+        "dynamic-knowledge",
+        "guarded"
+      ],
+      "confidence": 0.163,
+      "riskLevel": "high",
+      "evidenceCount": 1,
+      "sources": [
+        {
+          "sourceType": "source_acquisition",
+          "sourceId": "source-acquisition::cyber-vulnerability-source-pack::1ulxs2u",
+          "sourceUri": "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+          "evidenceRecordIds": []
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "fast",
+        "validFrom": "2026-05-18T21:56:02.266Z",
+        "expiresAt": "2026-05-25T21:56:02.266Z",
+        "rationale": "Live source-acquired knowledge must be refreshed before runtime promotion."
+      },
+      "createdAt": "2026-05-18T21:56:02.266Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::source-acquisition::1q9llv9",
+      "title": "CVE-1999-0095 - The debug command in Sendmail is enabled, allowing attackers to execute commands as root.",
+      "type": "fact",
+      "knowledgeClass": "guarded",
+      "state": "guarded",
+      "domain": "cybersecurity",
+      "category": "incident_response",
+      "content": "The debug command in Sendmail is enabled, allowing attackers to execute commands as root.",
+      "summary": "The debug command in Sendmail is enabled, allowing attackers to execute commands as root.",
+      "tags": [
+        "source-acquisition",
+        "quality-gated",
+        "quality-guarded",
+        "cyber-vulnerability-source-pack",
+        "live",
+        "incident_response",
+        "guarded",
+        "guarded",
+        "source-pack",
+        "cyber-vulnerability-source-pack",
+        "source-pack",
+        "cyber",
+        "cve",
+        "osv",
+        "dynamic-knowledge",
+        "guarded"
+      ],
+      "confidence": 0.136,
+      "riskLevel": "high",
+      "evidenceCount": 1,
+      "sources": [
+        {
+          "sourceType": "source_acquisition",
+          "sourceId": "source-acquisition::cyber-vulnerability-source-pack::gc8xj8",
+          "sourceUri": "https://services.nvd.nist.gov/rest/json/cves/2.0",
+          "evidenceRecordIds": []
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "fast",
+        "validFrom": "2026-05-18T21:56:02.266Z",
+        "expiresAt": "2026-05-25T21:56:02.266Z",
+        "rationale": "Live source-acquired knowledge must be refreshed before runtime promotion."
+      },
+      "createdAt": "2026-05-18T21:56:02.266Z",
+      "updatedAt": "2026-06-17T11:03:44.216Z"
+    },
+    {
+      "objectId": "ko::source-acquisition::33x14j",
+      "title": "SS3M/kltn-ien-experiments",
+      "type": "fact",
+      "knowledgeClass": "guarded",
+      "state": "archived",
+      "domain": "ai",
+      "category": "technical_explanation",
+      "content": "Hugging Face model: SS3M/kltn-ien-experiments. Tags: region:us. Last modified at 2026-05-18T21:54:27.000Z.",
+      "summary": "region:us",
+      "tags": [
+        "source-acquisition",
+        "quality-gated",
+        "quality-guarded",
+        "ai-model-research-source-pack",
+        "live",
+        "technical_explanation",
+        "candidate",
+        "source-pack",
+        "ai",
+        "models",
+        "benchmarks",
+        "dynamic-knowledge",
+        "json-source",
+        "huggingface-model",
+        "quality-archived"
+      ],
+      "confidence": 0.12,
+      "riskLevel": "medium",
+      "evidenceCount": 1,
+      "sources": [
+        {
+          "sourceType": "source_acquisition",
+          "sourceId": "source-acquisition::ai-model-research-source-pack::136nbqc",
+          "sourceUri": "https://huggingface.co/api/models?sort=lastModified&direction=-1&limit=1&full=false",
+          "evidenceRecordIds": []
+        }
+      ],
+      "relations": [],
+      "decay": {
+        "policy": "fast",
+        "validFrom": "2026-05-18T21:54:31.688Z",
+        "expiresAt": "2026-05-25T21:54:31.688Z",
+        "rationale": "Live source-acquired knowledge must be refreshed before runtime promotion."
+      },
+      "createdAt": "2026-05-18T21:54:31.688Z",
+      "updatedAt": "2026-05-18T21:56:10.131Z"
+    }
+  ]
+}
