@@ -30,6 +30,7 @@ import {
   toRespondentOutput,
   toStudentTrace
 } from "./studentShared.js";
+import { applySelfCheck, detectFactualCue } from "./studentSelfCheckService.js";
 
 export type StudentPreviewPreparation = {
   startedAtIso: string;
@@ -456,6 +457,17 @@ export class StudentPreparationService {
           fallbackUsed: research.agentRouting.fallbackToCore
         };
       }
+    }
+
+    // Self-check: apply deterministic confidence corrections before returning.
+    // Zero extra LLM calls — structural signal analysis only.
+    const selfCheck = applySelfCheck(finalStudentAnswer, {
+      category: args.category,
+      research: research ?? null,
+      factualCue: detectFactualCue(args.question)
+    });
+    if (selfCheck.corrections.length > 0) {
+      finalStudentAnswer = selfCheck.answer;
     }
 
     return {

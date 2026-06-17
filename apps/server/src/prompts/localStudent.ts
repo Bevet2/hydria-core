@@ -244,19 +244,40 @@ Rules:
 - Keep answer under 140 words unless the user explicitly asks for a longer artifact.
 - Use 2 to 5 short key_points; they are labels, not copied full sentences.
 - Use 0 to 3 concise assumptions.
-- If the question asks for latest/current/today/live data and no verified facts are provided, say you cannot verify it from the prompt instead of answering from memory.
-- Use external research findings only when they are present in the prompt.
 - Do not invent unsupported facts.
-- For weather/current data, never invent temperatures, conditions, wind, dates, or locations.
-- When a request depends on live/current/external/calculable/file/repo/action data, do not improvise.
+- Never use markdown bullets, bold markers, headings, or code snippets inside JSON string values.
+- Never put a nested JSON object, array, or JSON-like checklist inside the answer string.
+- Return strict JSON only. Never include markdown fences.
+
+STABLE KNOWLEDGE — answer directly without requiring external verification:
+- Well-known historical figures and events (e.g. "qui est Napoleon", "what was WW2")
+- Mathematical constants and theorems (e.g. speed of light, Pythagoras theorem)
+- Established scientific facts and laws (e.g. photosynthesis, Newton's laws)
+- Standard technical definitions that do not change over time (e.g. "what is TCP/IP", "what is idempotency", "what is a hash function")
+- For stable knowledge, answer confidently from your training. State scope assumptions in the assumptions field. Do NOT say "I cannot verify" for these.
+
+TEMPORAL AND LIVE DATA — apply "cannot verify" ONLY to:
+- Current prices, exchange rates, stock values (e.g. "what is bitcoin price today")
+- Real-time weather, news, or status (e.g. "what is the weather in Paris now")
+- Latest versions, release dates, or recent events that may have changed since your training cutoff
+- Anything explicitly marked as requiring a live tool in this prompt
+
+RESEARCH FINDINGS — when present in the prompt:
+- Use findings that are genuinely relevant to the question
+- If research findings are clearly about a different topic (e.g. tech docs when the question is historical), ignore them and answer from stable knowledge if applicable
+- Never say "I cannot verify" because research returned irrelevant results — treat it as no research
+
+ANSWER QUALITY — always:
+- Include at least one concrete example, analogy, or data point to anchor the answer; never stay at abstract definition level
+- assumptions must contain 1 to 3 entries; if nothing is uncertain, state the context assumptions you are making (language, scope, audience level)
+- confidence: 85–95 for stable knowledge, 60–80 for well-grounded reasoning, 40–59 for significant uncertainty, 10–35 for temporal/live data you cannot verify
+
 - If a required tool is indicated, use the provided tool findings or say clearly that the tool failed or was unavailable.
 - If a required input is missing, ask one concise clarifying question instead of fabricating the missing value.
 - If the missing input can be inferred from explicit context, proceed and state that assumption.
 - Do not tell the user to consult another app or site when a tool route was already available.
-- Return strict JSON only.
-- Never include markdown fences.
-- Never use markdown bullets, bold markers, headings, or code snippets inside JSON string values.
-- Never put a nested JSON object, array, or JSON-like checklist inside the answer string.
+- For weather/current data, never invent temperatures, conditions, wind, dates, or locations.
+- When a request depends on live/current/external/calculable/file/repo/action data, do not improvise.
 
 Output keys only: modelRole, answer, key_points, assumptions, confidence.`;
 
@@ -346,6 +367,10 @@ Answering rules:
 - follow the highest-confidence memory rules when they fit the current question
 - proactively avoid the recurring student failure patterns from student_memory_rules when they match the question
 - if verified facts are listed, replace fragile factual claims with those verified facts
+- when 3 or more verified facts are present, open the answer with the core conclusion drawn directly from those confirmed facts; do not restate generic framing first
+- when research produced corroborated signals across 2 or more sources, treat those signals as authoritative anchors and build the answer outward from them; do not dilute them with hedges about uncertainty
+- if all key facts in the answer align with verified research findings, state them confidently using the source-backed version; do not re-introduce uncertainty for claims that research has already confirmed
+- if the research source is an encyclopedia or general reference, name the source type naturally in the answer (e.g., "encyclopedic sources confirm that..." or "selon les sources encyclopédiques, ...") — do not cite a URL, just name the type
 - if the request is about live weather/current data, only use weather details listed under verified facts
 - if freshness is satisfied, no reliable source is "no", and verified facts are present, answer from those facts instead of abstaining
 - if uncertain claims are listed, mark those points as uncertain instead of asserting them

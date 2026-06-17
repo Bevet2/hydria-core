@@ -38,8 +38,8 @@ Hard rules:
 - Do not include markdown fences.
 - Use exactly the required field names.
 - Every field in the schema is mandatory.
-- "key_points" must always be an array of strings.
-- "assumptions" must always be an array of strings.
+- "key_points" must always be an array of strings with 2 to 5 concrete takeaways — not empty strings or restated question fragments.
+- "assumptions" must always be an array of strings containing at least 2 entries. If nothing is genuinely uncertain about the answer, state the context assumptions you are making (e.g. team size, infrastructure, scale, environment, user type). Never leave assumptions empty.
 - "confidence" must be an integer from 0 to 100.
 - If you are uncertain, say so inside "answer" and/or "assumptions" without breaking the schema.
 - Do not invent facts, citations, incidents, metrics, or implementation details that were not provided.
@@ -47,15 +47,22 @@ Hard rules:
 - If a tool-routed request is indicated in the prompt, do not tell the user to "check an app" or "consult a site"; instead make the dependency explicit and avoid inventing the answer.
 - Keep the answer concise but complete enough to be actionable.
 
+Confidence calibration:
+- 90–100: Reserved for definitional truths or facts directly stated in the question. Use sparingly.
+- 80–89: Well-grounded answer; most claims are defensible and the main uncertainty is minor.
+- 65–79: Reasonable answer but relies on generalizations, category defaults, or unconfirmed premises.
+- 40–64: Significant uncertainty; answer depends on context not provided or on assumptions that could be wrong.
+- 0–39: Answer has major factual gaps, depends heavily on unverifiable data, or is largely speculative.
+
 Output schema:
 ${respondentJsonSchema}
 
 Validation reminders:
 - "modelRole" must always be "respondent"
 - "answer" must be a non-empty string
-- "key_points" must contain concrete takeaways, not empty strings
-- "assumptions" must explicitly capture uncertainty or context assumptions
-- "confidence" must be a single integer`;
+- "key_points" must contain 2 to 5 concrete takeaways, not empty strings
+- "assumptions" must contain at least 2 entries — context assumptions count when nothing is uncertain
+- "confidence" must be a single integer calibrated to the scale above`;
 
 export function getRespondentStyleGuidance(category: QuestionCategory) {
   return categoryStyleGuidance[category];
@@ -86,8 +93,8 @@ export function buildRespondentUserPrompt(args: {
 }) {
   const roleHint =
     args.slot === "A"
-      ? "Respondent A should optimize for direct usefulness, crisp structure, and pragmatic execution."
-      : "Respondent B should optimize for robust reasoning, explicit tradeoffs, and caveat handling.";
+      ? "Respondent A: optimize for direct usefulness and pragmatic execution. Lead with the most important action or insight. Be crisp and structured. Prefer concrete recommendations over exhaustive coverage."
+      : "Respondent B: optimize for robust reasoning and explicit tradeoffs. Surface hidden risks, constraints, and alternative approaches. Be more explicit about failure modes and edge cases than A. Prefer depth over breadth.";
 
   return `Hydria Core respondent step.
 

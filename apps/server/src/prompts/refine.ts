@@ -72,21 +72,38 @@ const refineCategoryInstructions: Record<QuestionCategory, string> = {
   ].join("\n- ")
 };
 
+const refineCategoryFixesAppliedGuidance: Record<QuestionCategory, string> = {
+  incident_response:
+    "Include 3 to 5 fixes_applied entries. Each entry must name the specific gap closed: e.g. 'Added rollback validation gate before declaring resolved', 'Removed assumption that DB is in clean state after failover'.",
+  architecture_design:
+    "Include 3 to 5 fixes_applied entries. Name specific structural changes: e.g. 'Added failure mode for partition under high write load', 'Replaced generic microservices recommendation with service boundary justified by team size'.",
+  technical_explanation:
+    "Include 2 to 4 fixes_applied entries. Name what was clarified or added: e.g. 'Added contrast with eventual consistency', 'Replaced circular definition of idempotency', 'Added concrete HTTP example'.",
+  debug_diagnostic:
+    "Include 2 to 4 fixes_applied entries. Name hypothesis changes or evidence additions: e.g. 'Reframed root cause as hypothesis H1 pending log evidence', 'Added N+1 query as ranked hypothesis 2'.",
+  product_strategy:
+    "Include 3 to 6 fixes_applied entries describing the real changes made. Do not use generic entries like 'improved clarity' — be specific: e.g. 'Added success gate: 20% DAU in first cohort within 30 days', 'Removed generic stakeholder-alignment language'.",
+  operational_writing:
+    "Include 2 to 4 fixes_applied entries naming structural or wording changes: e.g. 'Assigned owner (on-call SRE) to step 3', 'Replaced passive voice in rollback instruction', 'Added SLA deadline of 2h for customer notification'.",
+  mixed_reasoning:
+    "Include 3 to 5 fixes_applied entries that name which dimension was strengthened and how: e.g. 'Added practical use case linking theory to deployment decision', 'Surfaced tradeoff between consistency and latency missing from original'.",
+  other:
+    "Include 2 to 4 fixes_applied entries naming specific corrections applied."
+};
+
 export function buildRefineSystemPrompt(category: QuestionCategory) {
   return `You are a refinement agent in Hydria Core.
 
 Your role:
-- improve an existing answer
-- correct weaknesses identified by the Red Team
-- preserve the strong parts of the original answer
+- improve an existing answer by correcting weaknesses identified by the Red Team
+- preserve the strong parts of the original answer — do not discard good content
 - remove fragile, vague, or weakly justified claims
 - produce a more robust, clearer, and more useful answer
 
 Mandatory rules:
 - do not invent facts
-- if information is uncertain, state the uncertainty explicitly
-- apply the Red Team criticism in a real way
-- do not merely restate the original answer
+- if information is uncertain, state the uncertainty explicitly in remaining_uncertainties
+- apply the Red Team criticism in a real way — do not merely restate the original answer
 - keep what is good and correct what is weak
 - when the request depends on live/current/external/calculable/file/repo/action data, do not improvise a concrete result
 - when a tool is available in the prompt, use it or state clearly that it failed or was unavailable
@@ -99,6 +116,24 @@ Mandatory rules:
 - remaining_uncertainties must always be an array of strings, even if empty
 - confidence must always be a single integer from 0 to 10
 
+fixes_applied guidance:
+- List only corrections actually applied — not intentions or generic descriptions
+- Each entry must name the specific change: what was added, removed, or reframed
+- Do not use entries like "improved clarity" or "addressed Red Team feedback" — be concrete
+${refineCategoryFixesAppliedGuidance[category]}
+
+remaining_uncertainties guidance:
+- List open questions, unverifiable claims, or context-dependent assumptions that could not be resolved
+- If the answer is fully grounded and no material uncertainty remains, return remaining_uncertainties: []
+- Examples: "Depends on whether the team has on-call rotation", "Cannot verify current API rate limits without live access"
+
+confidence (0–10):
+- 9–10: Answer is well-grounded; all key claims are defensible or stated as assumptions
+- 7–8: Strong improvement with minor residual uncertainty
+- 5–6: Solid but notable gaps or context-dependencies remain
+- 3–4: Significant uncertainty or unresolved Red Team risks remain
+- 0–2: Major gaps; the answer is still fragile despite refinement
+
 Category profile: ${category}
 
 Category-specific refinement priorities:
@@ -107,15 +142,8 @@ Category-specific refinement priorities:
 Output schema:
 ${refineOutputSchema}
 
-Field constraints:
-- modelRole must always be "refiner"
-- improved_answer must be the improved final answer
-- fixes_applied must list real corrections actually applied
-- remaining_uncertainties must list any uncertainty that remains
-- confidence must be an integer from 0 to 10
-
 Goal:
-Produce a response that is better than the original after incorporating the critique.`;
+Produce a response that is demonstrably better than the original after incorporating the critique. Every fix must be real and named.`;
 }
 
 export function buildRefineUserPrompt(args: {
