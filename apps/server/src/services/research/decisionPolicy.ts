@@ -107,7 +107,6 @@ export class ResearchDecisionPolicyService {
       /\bwho are\b/i,
       /\bqui est\b/i,
       /\bqui etait\b/i,
-      /\bqui Ã©tait\b/i,
       /\bqui était\b/i,
       /\bqui sont\b/i
     ]);
@@ -130,8 +129,8 @@ export class ResearchDecisionPolicyService {
       /\bexplique\b/i,
       /\bqu[' ]?est[- ]?ce que\b/i,
       /\bc[' ]?est quoi\b/i,
-      /\bd[eÃ©]finis\b/i,
-      /\bd[eÃ©]finition\b/i,
+      /\bd[eé]finis\b/i,
+      /\bd[eé]finition\b/i,
       /\bdifference between\b/i,
       /\bwhy does\b/i,
       /\bpourquoi\b/i,
