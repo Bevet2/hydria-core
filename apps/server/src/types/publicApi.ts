@@ -59,12 +59,23 @@ export const publicApiWorkspaceContextSchema = z
       )
       .max(20)
       .optional(),
+    additionalSources: z
+      .array(
+        z.object({
+          id: z.string().trim().min(1).max(200),
+          title: z.string().trim().max(300).optional(),
+          kind: z.string().trim().max(80).optional(),
+          contentPreview: z.string().max(4000).optional()
+        })
+      )
+      .max(8)
+      .optional(),
     capabilities: z
       .object({
         actions: z.array(publicApiOsActionTypeSchema).max(20).optional(),
         workObjectKinds: z.array(z.string().trim().min(1).max(80)).max(30).optional(),
         artifactFormats: z.array(z.string().trim().min(1).max(24)).max(30).optional(),
-        workspaceTools: z.array(z.string().trim().min(1).max(120)).max(160).optional()
+        workspaceTools: z.array(z.string().trim().min(1).max(120)).max(320).optional()
       })
       .optional(),
     executionPolicy: z

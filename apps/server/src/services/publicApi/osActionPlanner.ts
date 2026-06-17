@@ -167,9 +167,9 @@ function wantsWorkspaceToolCall(prompt: string) {
   return hasAny(normalizeText(prompt), [
     /=/,
     /\b(formule|formula|calcul|calcule|calculate|complete|remplis|renseigne|somme|sum|total|totaux|montant|amount|resultat|result|moyenne|average|cellules?|cells?|range|plage)\b/,
-    /\b(chart|graphique|validation|filtre|filter|tri|sort|pivot|tcd|lignes?|rows?|colonnes?|columns?|renomme|rename|supprime|delete|remove|format|style|gras|bold|devise|currency|pourcentage|percent)\b/,
-    /\b(insere|insert|redimensionne|resize|fusionne|merge|defusionne|unmerge|note|commentaire|conditional|conditionnel|tableau|table|sparkline|segment|slicer|liste|deroulante|déroulante|dropdown|nommee|nommée|protect|protege|protège|deprotege|déprotège|fige|freeze|zoom|quadrillage|gridlines?|feuille|onglet|sheet|tab)\b/,
-    /\b(section|paragraphe|paragraph|intro|introduction|bloc|block|append|insert|replace|remplace|lien|link|url|image|citation|quote|code|saut de page|page break|toc|sommaire|table|tableau)\b/,
+    /\b(chart|graphique|validation|filtre|filter|tri|sort|pivot|tcd|lignes?|rows?|colonnes?|columns?|renomme|rename|supprime|delete|remove|format|style|gras|bold|devise|currency|pourcentage|percent|italique|italic|souligne|underline|barre|strikethrough|bordure|border|police|font|alignement|alignment|fond|background|paysage|landscape|portrait|case.*cocher|checkbox|signature|filigrane|watermark|mention|animation|transition)\b/,
+    /\b(insere|insert|redimensionne|resize|fusionne|merge|defusionne|unmerge|note|commentaire|conditional|conditionnel|tableau|table|sparkline|segment|slicer|liste|deroulante|déroulante|dropdown|nommee|nommée|protect|protege|protège|deprotege|déprotège|fige|freeze|zoom|quadrillage|gridlines?|feuille|onglet|sheet|tab|hyperlink|lien.{0,10}hypertexte|lien.{0,5}url|couleur|color)\b/,
+    /\b(section|paragraphe|paragraph|intro|introduction|bloc|block|append|insert|replace|remplace|lien|link|url|image|citation|quote|code|saut de page|page break|toc|sommaire|table|tableau|renvoi|cross.?reference|marge|margin|numero.*page|page.*numero)\b/,
     /\b(slide|slides|diapo|diapositive|presentation|deck)\b/,
     /\b(crm|contact|client|company|entreprise|societe|lead|prospect|deal|opportunite|pipeline|tache|task|relance|follow-up)\b/
   ]);
@@ -2281,6 +2281,134 @@ function planSheetWorkspaceToolOperation(request: PublicApiAskRequest, question:
     };
   }
 
+  // --- New formatting / visibility / print ops ---
+  const fmtColumnName = resolvePromptColumnName(question, preview);
+  const fmtTarget = { ...(cell ? { cell } : {}), ...(fmtColumnName ? { columnName: fmtColumnName } : {}) };
+
+  if (/\b(gras|bold)\b/.test(normalized)) {
+    const enable = !/\b(supprime|enleve|enlève|remove|desactive|desactiver|off)\b/.test(normalized);
+    return sheetWorkspacePlan([{ type: "sheet.set_bold", raw: { enable }, range: explicitRange, target: fmtTarget }]);
+  }
+
+  if (/\b(italique|italic)\b/.test(normalized)) {
+    const enable = !/\b(supprime|enleve|enlève|remove|desactive)\b/.test(normalized);
+    return sheetWorkspacePlan([{ type: "sheet.set_italic", raw: { enable }, range: explicitRange, target: fmtTarget }]);
+  }
+
+  if (/\b(souligne|souligner|underline)\b/.test(normalized)) {
+    const enable = !/\b(supprime|enleve|enlève|remove|desactive)\b/.test(normalized);
+    return sheetWorkspacePlan([{ type: "sheet.set_underline", raw: { enable }, range: explicitRange, target: fmtTarget }]);
+  }
+
+  if (/\b(barre|biffee?|barree?|strikethrough)\b/.test(normalized)) {
+    const enable = !/\b(supprime|enleve|enlève|remove|desactive)\b/.test(normalized);
+    return sheetWorkspacePlan([{ type: "sheet.set_strikethrough", raw: { enable }, range: explicitRange, target: fmtTarget }]);
+  }
+
+  if (/\b(couleur.{0,12}texte|couleur.{0,12}police|text.?color|font.?color|couleur.{0,12}ecriture)\b/.test(normalized)) {
+    const colorMatch = question.match(/#[0-9a-fA-F]{3,6}|(?:rouge|red|vert|green|bleu|blue|noir|black|blanc|white|orange|violet|purple|gris|gray|jaune|yellow)/i);
+    const color = colorMatch?.[0]?.startsWith("#") ? colorMatch[0] : { rouge: "#e53935", red: "#e53935", vert: "#43a047", green: "#43a047", bleu: "#1e88e5", blue: "#1e88e5", noir: "#000000", black: "#000000", blanc: "#ffffff", white: "#ffffff", orange: "#fb8c00", violet: "#8e24aa", purple: "#8e24aa", gris: "#9e9e9e", gray: "#9e9e9e", jaune: "#fdd835", yellow: "#fdd835" }[colorMatch?.[0]?.toLowerCase() ?? ""] ?? "#000000";
+    return sheetWorkspacePlan([{ type: "sheet.set_text_color", value: color, range: explicitRange, target: fmtTarget }]);
+  }
+
+  if (/\b(couleur.{0,12}fond|fond.{0,12}couleur|fill.?color|couleur.{0,12}arriere|arriere.?plan|background.?color|surligne|highlight)\b/.test(normalized)) {
+    const colorMatch = question.match(/#[0-9a-fA-F]{3,6}|(?:rouge|red|vert|green|bleu|blue|noir|black|blanc|white|orange|violet|purple|gris|gray|jaune|yellow)/i);
+    const color = colorMatch?.[0]?.startsWith("#") ? colorMatch[0] : { rouge: "#ffcdd2", red: "#ffcdd2", vert: "#c8e6c9", green: "#c8e6c9", bleu: "#bbdefb", blue: "#bbdefb", noir: "#000000", black: "#000000", blanc: "#ffffff", white: "#ffffff", orange: "#ffe0b2", violet: "#e1bee7", purple: "#e1bee7", gris: "#f5f5f5", gray: "#f5f5f5", jaune: "#fff9c4", yellow: "#fff9c4" }[colorMatch?.[0]?.toLowerCase() ?? ""] ?? "#ffffff";
+    return sheetWorkspacePlan([{ type: "sheet.set_fill_color", value: color, range: explicitRange, target: fmtTarget }]);
+  }
+
+  if (/\b(taille.{0,10}police|police.{0,10}taille|font.?size|taille.{0,10}texte)\b/.test(normalized)) {
+    const sizeMatch = question.match(/\b(\d+)\s*(?:pt|px|points?)?\b/);
+    const size = sizeMatch ? Number(sizeMatch[1]) : 12;
+    return sheetWorkspacePlan([{ type: "sheet.set_font_size", value: String(size), range: explicitRange, target: fmtTarget }]);
+  }
+
+  if (/\b(police|font.?family|fontfamille|arial|calibri|times|helvetica|roboto)\b/.test(normalized) && !/\b(taille|size)\b/.test(normalized)) {
+    const familyMatch = question.match(/\b(Arial|Calibri|Times(?: New Roman)?|Helvetica|Roboto|Georgia|Verdana|Courier(?: New)?|Open Sans|Lato)\b/i);
+    const family = familyMatch?.[0] ?? "Arial";
+    return sheetWorkspacePlan([{ type: "sheet.set_font_family", value: family, range: explicitRange, target: fmtTarget }]);
+  }
+
+  if (/\b(alignement|alignment|centrer|aligner|centré|centered?)\b/.test(normalized) && !/\b(section|titre|heading|graphique|chart)\b/.test(normalized)) {
+    const isVertical = /\b(vertical|haut|bas|top|bottom|milieu|middle)\b/.test(normalized);
+    const horizontal = /\b(centre|centrer|center)\b/.test(normalized) ? "center" : /\b(droite|right)\b/.test(normalized) ? "right" : /\b(justifie|justify)\b/.test(normalized) ? "justify" : "left";
+    const vertical = /\b(haut|top)\b/.test(normalized) ? "top" : /\b(bas|bottom)\b/.test(normalized) ? "bottom" : "middle";
+    return sheetWorkspacePlan([{ type: isVertical ? "sheet.set_vertical_alignment" : "sheet.set_horizontal_alignment", value: isVertical ? vertical : horizontal, range: explicitRange, target: fmtTarget }]);
+  }
+
+  if (/\b(bordure|border)\b/.test(normalized)) {
+    const clear = /\b(supprime|enleve|enlève|efface|remove|clear)\b/.test(normalized);
+    if (clear) {
+      return sheetWorkspacePlan([{ type: "sheet.clear_borders", range: explicitRange, target: fmtTarget }]);
+    }
+    const side = /\b(haut|top)\b/.test(normalized) ? "top" : /\b(bas|bottom)\b/.test(normalized) ? "bottom" : /\b(gauche|left)\b/.test(normalized) ? "left" : /\b(droite|right)\b/.test(normalized) ? "right" : "all";
+    const style = /\b(epais|thick)\b/.test(normalized) ? "thick" : /\b(pointille|dashed|tiret)\b/.test(normalized) ? "dashed" : "thin";
+    return sheetWorkspacePlan([{ type: "sheet.set_border", raw: { side, style }, range: explicitRange, target: fmtTarget }]);
+  }
+
+  if (/\b(masque|cache|hide)\b/.test(normalized) && /\b(ligne|row)\b/.test(normalized) && !/\b(sheet|feuille|onglet|tab)\b/.test(normalized)) {
+    return sheetWorkspacePlan([{ type: "sheet.hide_row", target: { rowIndex: extractRowIndex(question) ?? 0 } }]);
+  }
+
+  if (/\b(affiche|montre|show|unhide|revele|révèle)\b/.test(normalized) && /\b(ligne|row)\b/.test(normalized) && !/\b(sheet|feuille|onglet|tab)\b/.test(normalized)) {
+    return sheetWorkspacePlan([{ type: "sheet.unhide_row", target: { rowIndex: extractRowIndex(question) ?? 0 } }]);
+  }
+
+  if (/\b(masque|cache|hide)\b/.test(normalized) && /\b(colonne|column)\b/.test(normalized) && !/\b(sheet|feuille|onglet|tab)\b/.test(normalized)) {
+    return sheetWorkspacePlan([{ type: "sheet.hide_column", target: fmtTarget }]);
+  }
+
+  if (/\b(affiche|montre|show|unhide|revele|révèle)\b/.test(normalized) && /\b(colonne|column)\b/.test(normalized) && !/\b(sheet|feuille|onglet|tab)\b/.test(normalized)) {
+    return sheetWorkspacePlan([{ type: "sheet.unhide_column", target: fmtTarget }]);
+  }
+
+  if (/\b(paysage|landscape)\b/.test(normalized)) {
+    return sheetWorkspacePlan([{ type: "sheet.set_page_orientation", value: "landscape" }]);
+  }
+
+  if (/\b(portrait)\b/.test(normalized) && /\b(orientation|page|impression)\b/.test(normalized)) {
+    return sheetWorkspacePlan([{ type: "sheet.set_page_orientation", value: "portrait" }]);
+  }
+
+  if (/\b(zone.{0,15}impression|impression.{0,15}zone|print.?area|zone.{0,15}imprimer)\b/.test(normalized)) {
+    return sheetWorkspacePlan([{ type: "sheet.set_print_area", range: explicitRange || range }]);
+  }
+
+  if (/\b(saut.{0,10}page|page.?break|nouvelle.{0,5}page)\b/.test(normalized)) {
+    return sheetWorkspacePlan([{ type: "sheet.insert_page_break", target: { rowIndex: extractRowIndex(question) ?? preview.rowCount } }]);
+  }
+
+  if (/\b(case.{0,10}cocher|checkbox|cochee?|tick.?box)\b/.test(normalized)) {
+    return sheetWorkspacePlan([{ type: "sheet.insert_checkbox", target: { cell: cell || "A1" } }]);
+  }
+
+  if (/\b(lien.{0,10}hypertexte|hyperlink|lien.{0,5}web|lien.{0,5}url)\b/.test(normalized)) {
+    const url = extractUrl(question);
+    if (url && cell) {
+      return sheetWorkspacePlan([{ type: "sheet.insert_hyperlink", target: { cell }, raw: { url, label: extractParagraphContent(question) || url } }]);
+    }
+  }
+
+  if (/\b(liste deroulante|liste déroulante|menu deroulant|menu déroulant|dropdown.{0,10}cell|insert.{0,10}dropdown)\b/.test(normalized)) {
+    const values = extractListValues(question);
+    const targetRange = explicitRange || (cell ? "" : range);
+    return sheetWorkspacePlan([{ type: "sheet.insert_dropdown", range: targetRange, target: { ...(cell ? { cell } : {}) }, raw: { items: values } }]);
+  }
+
+  if (/\b(formule nommee|formule nommée|named.?formula|cree.{0,10}formule.{0,10}nom|create.{0,10}named.{0,10}formula)\b/.test(normalized)) {
+    const name = extractObjectTitle(question, /(?:formule|formula|nom|name)/, "formula");
+    const formula = inferFormula(question);
+    if (name && formula) {
+      return sheetWorkspacePlan([{ type: "sheet.create_named_formula", raw: { name, formula } }]);
+    }
+  }
+
+  if (/\b(couleur.{0,10}onglet|couleur.{0,10}feuille|tab.?color|sheet.?color)\b/.test(normalized)) {
+    const colorMatch = question.match(/#[0-9a-fA-F]{3,6}|(?:rouge|red|vert|green|bleu|blue|orange|violet|purple|gris|gray|jaune|yellow)/i);
+    const color = colorMatch?.[0]?.startsWith("#") ? colorMatch[0] : "#2196f3";
+    return sheetWorkspacePlan([{ type: "sheet.set_sheet_color", value: color }]);
+  }
+
   return null;
 }
 
@@ -2577,6 +2705,73 @@ function planDocumentWorkspaceToolOperation(request: PublicApiAskRequest, questi
     };
   }
 
+  // --- New doc formatting / metadata ops ---
+  if (/\b(gras|bold)\b/.test(normalized)) {
+    const text = quotedContent || explicitTarget;
+    if (text) return { toolName: "doc.edit", operations: [{ type: "doc.format_text", raw: { text, format: "bold" } }] };
+  }
+
+  if (/\b(italique|italic)\b/.test(normalized)) {
+    const text = quotedContent || explicitTarget;
+    if (text) return { toolName: "doc.edit", operations: [{ type: "doc.format_text", raw: { text, format: "italic" } }] };
+  }
+
+  if (/\b(souligne|underline)\b/.test(normalized)) {
+    const text = quotedContent || explicitTarget;
+    if (text) return { toolName: "doc.edit", operations: [{ type: "doc.format_text", raw: { text, format: "underline" } }] };
+  }
+
+  if (/\b(filigrane|watermark)\b/.test(normalized)) {
+    const text = quotedContent || explicitTarget || "DRAFT";
+    return { toolName: "doc.edit", operations: [{ type: "doc.insert_watermark", value: text }] };
+  }
+
+  if (/\b(signature|bloc.*signature|signature.*block)\b/.test(normalized)) {
+    const name = extractNamedPart(question, /(?:signature|signe|signed by|signe par)/, "");
+    return { toolName: "doc.edit", operations: [{ type: "doc.insert_signature_block", value: name || "", raw: { name: name || "" } }] };
+  }
+
+  if (/\b(mentions?|@)\b/.test(normalized) && /\b(ajoute|insert|insere|mention)\b/.test(normalized)) {
+    const name = extractNamedPart(question, /(?:mention|@)/, "");
+    if (name) return { toolName: "doc.edit", operations: [{ type: "doc.insert_mention", raw: { name } }] };
+  }
+
+  if (/\b(colonnes?|columns?|mise.{0,10}page.{0,10}col|multi.?column)\b/.test(normalized) && /\b(mise.{0,10}page|page|disposition|layout)\b/.test(normalized)) {
+    const count = extractCountFor(question, "colonnes?|columns?") || 2;
+    return { toolName: "doc.edit", operations: [{ type: "doc.set_columns", value: String(Math.min(6, Math.max(1, count))) }] };
+  }
+
+  if (/\b(paysage|landscape)\b/.test(normalized)) {
+    return { toolName: "doc.edit", operations: [{ type: "doc.set_page_orientation", value: "landscape" }] };
+  }
+
+  if (/\b(portrait)\b/.test(normalized) && /\b(orientation|page|impression)\b/.test(normalized)) {
+    return { toolName: "doc.edit", operations: [{ type: "doc.set_page_orientation", value: "portrait" }] };
+  }
+
+  if (/\b(marge|margin)\b/.test(normalized)) {
+    const num = extractDimensionValue(question);
+    return { toolName: "doc.edit", operations: [{ type: "doc.set_page_margin", raw: { top: num || 2.5, bottom: num || 2.5, left: num || 2.5, right: num || 2.5 } }] };
+  }
+
+  if (/\b(numero.*page|page.*numero|numero.*page|page.?number|numerotation)\b/.test(normalized)) {
+    return { toolName: "doc.edit", operations: [{ type: "doc.insert_page_number", raw: { position: "bottom-center" } }] };
+  }
+
+  if (/\b(date.*dynamique|champ.*date|date.*champ|insert.*date|date.*field)\b/.test(normalized)) {
+    return { toolName: "doc.edit", operations: [{ type: "doc.insert_date_field", value: "YYYY-MM-DD" }] };
+  }
+
+  if (/\b(renvoi|renvois?|reference croisee|cross.?reference)\b/.test(normalized)) {
+    const ref = extractNamedPart(question, /(?:renvoi|reference|section|bookmark)/, "");
+    if (ref) return { toolName: "doc.edit", operations: [{ type: "doc.insert_cross_reference", raw: { ref, label: ref } }] };
+  }
+
+  if (/\b(suivi.*modifications?|track.*changes?|modifications.*suivi)\b/.test(normalized)) {
+    const enable = !/\b(desactive|off|stop|arrete)\b/.test(normalized);
+    return { toolName: "doc.edit", operations: [{ type: "doc.track_changes", raw: { enable } }] };
+  }
+
   return null;
 }
 
@@ -2627,6 +2822,66 @@ function planSlideWorkspaceToolOperation(request: PublicApiAskRequest, question:
         }
       ]
     };
+  }
+
+  if (/\b(supprime|delete|remove)\b/.test(normalized) && /\b(slide|diapo|diapositive)\b/.test(normalized)) {
+    return { toolName: "slide.edit", operations: [{ type: "slide.delete", target: slideIndex !== undefined ? { slideIndex } : { position: "current" } }] };
+  }
+
+  if (/\b(duplique|duplicate|copie|copy)\b/.test(normalized) && /\b(slide|diapo)\b/.test(normalized)) {
+    return { toolName: "slide.edit", operations: [{ type: "slide.duplicate", target: slideIndex !== undefined ? { slideIndex } : { position: "current" } }] };
+  }
+
+  if (/\b(theme|modele|master|gabarit)\b/.test(normalized)) {
+    const themeName = extractNamedPart(question, /(?:theme|modele|master|gabarit)/, "");
+    if (themeName) {
+      return { toolName: "slide.edit", operations: [{ type: "slide.set_theme", value: themeName }] };
+    }
+  }
+
+  if (/\b(fond|background|arriere.?plan)\b/.test(normalized)) {
+    const colorMatch = question.match(/#[0-9a-fA-F]{3,6}|(?:blanc|white|noir|black|bleu|blue|gris|gray|rouge|red|vert|green)/i);
+    const color = colorMatch?.[0]?.startsWith("#") ? colorMatch[0] : "#ffffff";
+    return { toolName: "slide.edit", operations: [{ type: "slide.set_background", value: color, target: slideIndex !== undefined ? { slideIndex } : {} }] };
+  }
+
+  if (/\b(transition)\b/.test(normalized)) {
+    const transitionType = extractNamedPart(question, /(?:transition)/, "fade");
+    return { toolName: "slide.edit", operations: [{ type: "slide.add_transition", value: transitionType, target: slideIndex !== undefined ? { slideIndex } : {} }] };
+  }
+
+  if (/\b(animation)\b/.test(normalized) && !/\b(supprime|remove|delete)\b/.test(normalized)) {
+    const animType = extractNamedPart(question, /(?:animation)/, "fade");
+    return { toolName: "slide.edit", operations: [{ type: "slide.add_animation", raw: { animation: animType }, target: slideIndex !== undefined ? { slideIndex } : {} }] };
+  }
+
+  if (/\b(supprime|remove)\b/.test(normalized) && /\b(animation)\b/.test(normalized)) {
+    return { toolName: "slide.edit", operations: [{ type: "slide.remove_animation", target: slideIndex !== undefined ? { slideIndex } : {} }] };
+  }
+
+  if (/\b(footer|pied.{0,5}page)\b/.test(normalized)) {
+    const text = extractParagraphContent(question);
+    if (text) return { toolName: "slide.edit", operations: [{ type: "slide.set_footer", value: text }] };
+  }
+
+  if (/\b(logo|marque)\b/.test(normalized)) {
+    const url = extractUrl(question);
+    if (url) return { toolName: "slide.edit", operations: [{ type: "slide.add_logo", value: url, raw: { url }, target: slideIndex !== undefined ? { slideIndex } : {} }] };
+  }
+
+  if (/\b(section)\b/.test(normalized) && /\b(ajoute|add|cree|create|insere|insert|nouvelle|new)\b/.test(normalized)) {
+    const name = extractNamedPart(question, /(?:section)/, "Nouvelle section");
+    return { toolName: "slide.edit", operations: [{ type: "slide.create_section", value: name }] };
+  }
+
+  if (/\b(section)\b/.test(normalized) && /\b(renomme|rename)\b/.test(normalized)) {
+    const rename = extractColumnRename(question);
+    if (rename) return { toolName: "slide.edit", operations: [{ type: "slide.rename_section", raw: { oldName: rename.from, newName: rename.to } }] };
+  }
+
+  if (/\b(aspect|ratio|format.{0,10}ecran)\b/.test(normalized) && /\b(16.?9|4.?3)\b/.test(normalized)) {
+    const ratio = /16.?9/.test(normalized) ? "16:9" : "4:3";
+    return { toolName: "slide.edit", operations: [{ type: "slide.set_aspect_ratio", value: ratio }] };
   }
 
   return null;
