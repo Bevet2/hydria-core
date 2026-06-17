@@ -28,7 +28,7 @@ export const CATEGORY_SUFFIX: Record<QuestionCategory, string> = {
   product_strategy: "product strategy adoption metrics prioritization",
   operational_writing: "incident update postmortem engineering communication",
   mixed_reasoning: "tradeoffs decision examples explanation",
-  other: "official guidance examples"
+  other: "reference encyclopedia examples"
 };
 
 export const STOPWORDS = new Set([

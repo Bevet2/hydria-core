@@ -18,6 +18,7 @@ import {
   type ResearchDecisionArgs
 } from "./common.js";
 import { ResearchPlanner } from "./planner.js";
+import { getSuggestedDomains, loadRecentPathsForCategory } from "./researchPathLedger.js";
 import { describeTemporalWindow, detectTemporalQuery } from "./temporal.js";
 
 type KnowledgeInsightLoader = (
@@ -231,6 +232,15 @@ export class ResearchDecisionPolicyService {
       temporalOrOfficialCue || providerSpecific || regulatoryOrStandardCue || hardConstraintCue;
     const studentFactualVerifyFirst = studentStrategy?.strategyId === "factual_verify_first";
     const studentFactualShort = studentStrategy?.strategyId === "factual_short";
+    // Auto-promote to factual_verify_first behavior for technical categories with factual signals
+    // when the student strategy hasn't already selected it. This catches the common case where
+    // technical_explanation and debug_diagnostic questions have verifiable claims but the strategy
+    // hasn't been tuned yet.
+    const autoFactualVerifyBoost =
+      !studentFactualVerifyFirst &&
+      factualCue &&
+      mediumFactualRisk &&
+      (args.category === "technical_explanation" || args.category === "debug_diagnostic");
     const studentOpenLike =
       studentStrategy?.context.questionType === "open" ||
       args.category === "operational_writing" ||
@@ -287,7 +297,7 @@ export class ResearchDecisionPolicyService {
       (explicitMetricCue ? 5 : 0) +
       (uncertaintySignals >= 3 ? 6 : 0) +
       (structuralRiskCount >= 7 ? 6 : 0) +
-      (studentFactualVerifyFirst ? 16 : studentFactualShort ? 6 : 0) -
+      (studentFactualVerifyFirst ? 16 : autoFactualVerifyBoost ? 10 : studentFactualShort ? 6 : 0) -
       (studentOpenLike ? 10 : 0) +
       categoryBias +
       memoryResearchBias +
@@ -364,6 +374,12 @@ export class ResearchDecisionPolicyService {
         `The question asks for ${temporalProfile.focus.replaceAll("_", " ")} information, so claims must be anchored to ${describeTemporalWindow(temporalProfile) ?? temporalProfile.absoluteDateHint ?? "a concrete date"} and checked against dated primary sources.`
       );
     }
+    if (autoFactualVerifyBoost) {
+      addSignal("auto_factual_verify_boost");
+      addReason(
+        `Auto-boost: ${args.category} with factual cue and medium factual risk activates lightweight verify-first behavior (+10 to need score).`
+      );
+    }
     if (studentFactualVerifyFirst) {
       addSignal("student_strategy_factual_verify_first");
       addReason(
@@ -412,6 +428,18 @@ export class ResearchDecisionPolicyService {
       );
     }
 
+    // Adaptive threshold: shift the 38-point base up or down based on observed research ROI
+    // for this category (from the knowledge layer) and recent ledger success rate.
+    const recentPaths = await loadRecentPathsForCategory(args.category, 10);
+    const adaptiveThresholdOffset = this.computeAdaptiveOffset(knowledgeInsight, recentPaths.length);
+
+    if (adaptiveThresholdOffset !== 0) {
+      addSignal(`adaptive_threshold_offset_${adaptiveThresholdOffset > 0 ? "+" : ""}${adaptiveThresholdOffset}`);
+      addReason(
+        `Adaptive threshold: ${adaptiveThresholdOffset > 0 ? "raised" : "lowered"} by ${Math.abs(adaptiveThresholdOffset)} points based on observed research ROI (${knowledgeInsight?.benchmark.positiveResearchImpactRate ?? 0}% positive impact rate, ${recentPaths.length} recent successful paths in ledger).`
+      );
+    }
+
     const shouldUse = this.shouldUseResearch({
       category: args.category,
       falseClaimCount,
@@ -432,14 +460,18 @@ export class ResearchDecisionPolicyService {
       structuralRiskCount,
       baseNeedScore,
       thresholdAdjustment,
+      adaptiveThresholdOffset,
       knowledgeStrategy,
       orchestration,
       studentFactualVerifyFirst,
+      autoFactualVerifyBoost,
       studentOpenLike
     });
+    const ledgerDomains = shouldUse ? await getSuggestedDomains(args.category) : [];
     const plan = shouldUse
-      ? this.planner.buildPlan(args, knowledgeStrategy, orchestration)
+      ? this.planner.buildPlan(args, knowledgeStrategy, orchestration, null, ledgerDomains)
       : null;
+
     const expectedValue =
       shouldUse && (temporalProfile.isTemporal || baseNeedScore >= 55)
         ? "high"
@@ -528,6 +560,8 @@ export class ResearchDecisionPolicyService {
     knowledgeStrategy: KnowledgeCategoryStrategy | null;
     orchestration: OrchestrationPolicyDetails | null;
     studentFactualVerifyFirst?: boolean;
+    autoFactualVerifyBoost?: boolean;
+    adaptiveThresholdOffset?: number;
     studentOpenLike?: boolean;
   }) {
     if (args.temporalProfile.isTemporal) {
@@ -575,6 +609,17 @@ export class ResearchDecisionPolicyService {
       return true;
     }
 
+    // For "other" category factual questions (non-identity), trigger research when the red team
+    // detected at least one suspicious claim, or when both models are uncertain. Without this,
+    // general-knowledge questions stay below the 38-point threshold even with false claims detected.
+    if (
+      args.factualCue &&
+      args.category === "other" &&
+      (args.falseClaimCount >= 1 || (args.uncertaintySignals >= 2 && args.elevatedFactualRisk))
+    ) {
+      return true;
+    }
+
     if (
       args.studentFactualVerifyFirst &&
       (args.falseClaimCount >= 1 ||
@@ -613,7 +658,7 @@ export class ResearchDecisionPolicyService {
       return true;
     }
 
-    const threshold = 38 + args.thresholdAdjustment;
+    const threshold = 38 + args.thresholdAdjustment + (args.adaptiveThresholdOffset ?? 0);
 
     if (
       args.knowledgeStrategy?.toolRecommendation === "avoid" &&
@@ -675,5 +720,46 @@ export class ResearchDecisionPolicyService {
     }
 
     return false;
+  }
+
+  /**
+   * Computes a signed offset (negative = lower threshold = more research,
+   * positive = higher threshold = less research) based on observed research ROI.
+   *
+   * Data sources:
+   *  - insight.benchmark.positiveResearchImpactRate: % of rounds where research improved the score
+   *  - recentPathCount: how many successful paths the ledger has for this category
+   *
+   * Designed to converge: new categories start at 0, then drift toward the right threshold
+   * as evidence accumulates. The offset is clamped to [-16, +10] to avoid over-correction.
+   */
+  private computeAdaptiveOffset(
+    insight: KnowledgeCategoryInsight | null,
+    recentPathCount: number
+  ): number {
+    const positiveRate = insight?.benchmark.positiveResearchImpactRate ?? -1;
+    const sampleSize = insight?.benchmark.sampleSize ?? 0;
+
+    // Not enough data yet → no offset
+    if (positiveRate < 0 || sampleSize < 5) {
+      const ledgerOnlyOffset = recentPathCount >= 5 ? -2 : 0;
+      return ledgerOnlyOffset;
+    }
+
+    // Knowledge-layer rate offset
+    const rateOffset =
+      positiveRate >= 65 ? -12  // strong ROI → aggressively research
+      : positiveRate >= 45 ? -6 // good ROI → lower threshold
+      : positiveRate >= 25 ? 0  // neutral → no change
+      : positiveRate >= 12 ? +6 // weak ROI → be more selective
+      : +10;                    // very weak → avoid unless strong signal
+
+    // Ledger bonus: empirical domain hits confirm research works for this category
+    const ledgerOffset =
+      recentPathCount >= 8 ? -4
+      : recentPathCount >= 4 ? -2
+      : 0;
+
+    return Math.max(-16, Math.min(10, rateOffset + ledgerOffset));
   }
 }

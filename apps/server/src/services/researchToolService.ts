@@ -26,6 +26,13 @@ import { ResearchPlanner } from "./research/planner.js";
 import { type ResearchAcquisitionMode } from "./research/replayStore.js";
 import { buildDefaultTemporalProfile } from "./research/temporal.js";
 import { ResearchVerifier } from "./research/verifier.js";
+import { appendResearchPath } from "./research/researchPathLedger.js";
+import { LedgerKnowledgeExporter } from "./research/ledgerKnowledgeExporter.js";
+import {
+  shouldDoSecondHop,
+  buildFollowUpPlan,
+  mergeHopSources
+} from "./research/multiHopOrchestrator.js";
 import { AgentRoutingService } from "./agents/agentRoutingService.js";
 import { SkillRegistry } from "./skills/skillRegistry.js";
 import { SkillRoutingService } from "./skills/skillRoutingService.js";
@@ -505,17 +512,70 @@ export class ResearchToolService {
     try {
       const acquisition = await this.acquisitionService.collect(plan);
 
-      return this.attachToolGapMetadata(
-        args.question,
-        toolRouting,
-        this.verifier.buildLog({
-          decision,
-          args,
-          searchResults: acquisition.searchResults,
-          sources: acquisition.sources,
-          startedAt
-        })
-      );
+      let firstLog = this.verifier.buildLog({
+        decision,
+        args,
+        searchResults: acquisition.searchResults,
+        sources: acquisition.sources,
+        startedAt
+      });
+
+      // Multi-hop: if the first round left uncertain claims with few verified facts,
+      // do a targeted second search on the gaps before building the final log.
+      const hopDecision = shouldDoSecondHop(firstLog, args.category);
+      let finalSources = acquisition.sources;
+      let finalSearchResults = acquisition.searchResults;
+
+      if (hopDecision.shouldHop && decision.plan) {
+        const followUpPlan = buildFollowUpPlan(firstLog, decision.plan);
+        if (followUpPlan) {
+          try {
+            const hop2 = await this.acquisitionService.collect(followUpPlan);
+            if (hop2.sources.length > 0) {
+              finalSources = mergeHopSources(acquisition.sources, hop2.sources);
+              finalSearchResults = [...acquisition.searchResults, ...hop2.searchResults];
+              // Rebuild the log with combined evidence from both hops
+              firstLog = this.verifier.buildLog({
+                decision,
+                args,
+                searchResults: finalSearchResults,
+                sources: finalSources,
+                startedAt
+              });
+            }
+          } catch (hopError) {
+            logger.warn("Multi-hop second search failed — keeping first-hop result", {
+              question: args.question,
+              hopReason: hopDecision.reason,
+              error: String(hopError)
+            });
+          }
+        }
+      }
+
+      const log = firstLog;
+
+      if (log.used && log.verification.corroboratedSignals.length >= 2 && decision.plan) {
+        const successfulDomains = log.sources
+          .map((s) => {
+            try { return new URL(s.url).hostname.toLowerCase(); } catch { return ""; }
+          })
+          .filter(Boolean);
+
+        void appendResearchPath({
+          category: args.category,
+          keyTerms: decision.plan.requiredTerms.slice(0, 8),
+          usedQuery: log.query ?? decision.plan.queries[0] ?? "",
+          successfulDomains: [...new Set(successfulDomains)],
+          corroboratedSignals: log.verification.corroboratedSignals,
+          intent: log.queryPlan.intent,
+          sourceCount: log.verification.extractedSourceCount,
+          recordedAt: new Date().toISOString()
+        });
+        void new LedgerKnowledgeExporter().maybeExport().catch(() => undefined);
+      }
+
+      return this.attachToolGapMetadata(args.question, toolRouting, log);
     } catch (error) {
       logger.warn("Research tool failed", {
         question: args.question,

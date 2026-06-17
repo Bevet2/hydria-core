@@ -30,7 +30,8 @@ export class ResearchPlanner {
     args: ResearchDecisionArgs,
     strategy: KnowledgeCategoryStrategy | null,
     orchestration: OrchestrationPolicyDetails | null,
-    toolRouting: ToolRoutingDecision | null = null
+    toolRouting: ToolRoutingDecision | null = null,
+    ledgerDomains: string[] = []
   ): SearchPlan {
     const detectedTemporalProfile = detectTemporalQuery(args.question);
     const temporalProfile = this.resolveTemporalProfile(detectedTemporalProfile, toolRouting);
@@ -38,7 +39,8 @@ export class ResearchPlanner {
     const signalHints = this.collectSignalHints(combinedText);
     const preferredDomains = uniqueStrings([
       ...signalHints.flatMap((hint) => hint.domains),
-      ...this.getToolPreferredDomains(toolRouting)
+      ...this.getToolPreferredDomains(toolRouting),
+      ...ledgerDomains
     ]);
     const signalTerms = uniqueStrings(signalHints.map((hint) => hint.canonical));
     const questionTerms = extractTerms(stripQuestionNoise(args.question)).slice(0, 6);
@@ -332,9 +334,11 @@ export class ResearchPlanner {
           mode: orchestrationMode,
           queries: uniqueStrings(
             withDomains(
-              `${coreTopic} official guidance ${factFocusQuery}`,
-              "official guidance"
-            ).concat(preferredDomains.length === 0 ? [`${standardsQuery}`] : [])
+              factFocusQuery
+                ? `${coreTopic} ${factFocusQuery}`
+                : coreTopic,
+              "reference"
+            ).concat(preferredDomains.length === 0 ? [`${coreTopic} encyclopedia reference`] : [])
           ).slice(0, 3),
           requiredTerms,
           preferredDomains,
