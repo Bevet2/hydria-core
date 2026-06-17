@@ -1,0 +1,35 @@
+# Hydria Knowledge Vault
+
+Generated from structured Knowledge Objects. The JSON file remains canonical; this vault is a readable graph projection.
+
+## Objects
+
+- [[ko-interaction-10kfyxe]] active pattern other (85%)
+- [[ko-interaction-1dfz01x]] active pattern operational_writing (83%)
+- [[ko-interaction-1mt95yk]] validated tool_rule technical_explanation (74%)
+- [[ko-source-acquisition-1l2538s]] validated fact research_archives (70%)
+- [[ko-source-acquisition-1mkltm8]] validated fact research_archives (70%)
+- [[ko-source-acquisition-1ruvapx]] validated fact general_knowledge (70%)
+- [[ko-source-acquisition-kujfxp]] validated fact general_knowledge (70%)
+- [[ko-source-acquisition-1or1lzr]] candidate fact software_engineering (49%)
+- [[ko-source-acquisition-1ctce8b]] candidate fact software_engineering (42%)
+- [[ko-watcher-16tgm5h]] candidate pattern ai (38%)
+- [[ko-watcher-1oac7x2]] candidate pattern cybersecurity (38%)
+- [[ko-watcher-bfsj6m]] candidate pattern research_archives (38%)
+- [[ko-watcher-dwz74r]] candidate fact ai (38%)
+- [[ko-watcher-g4v5nv]] candidate fact cybersecurity (38%)
+- [[ko-watcher-idk67m]] candidate fact software_engineering (38%)
+- [[ko-watcher-isoyab]] candidate pattern reasoning (38%)
+- [[ko-watcher-jjttlj]] candidate pattern general_knowledge (38%)
+- [[ko-watcher-k4evni]] candidate pattern software_engineering (38%)
+- [[ko-watcher-c17uyg]] guarded failure_pattern operational_writing (38%)
+- [[ko-interaction-xf6q2a]] guarded failure_pattern operational_writing (38%)
+- [[ko-watcher-1bl8w1w]] guarded failure_pattern other (35%)
+- [[ko-interaction-1rbcv5e]] guarded failure_pattern other (35%)
+- [[ko-source-acquisition-1iug65p]] guarded fact ai (31%)
+- [[ko-interaction-191tuec]] candidate failure_pattern other (30%)
+- [[ko-watcher-jv1doo]] guarded failure_pattern other (29%)
+- [[ko-source-acquisition-vjalep]] guarded fact ai (27%)
+- [[ko-source-acquisition-ahsau3]] guarded fact cybersecurity (16%)
+- [[ko-source-acquisition-1q9llv9]] guarded fact cybersecurity (14%)
+- [[ko-source-acquisition-33x14j]] archived fact ai (12%)
