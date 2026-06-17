@@ -758,8 +758,11 @@ export class HydriaPublicApiV1Service {
     const question = resolveQuestion(request);
     const hasAdditionalSources = (request.workspaceContext?.additionalSources ?? []).length > 0;
     const sourcesBlock = buildSourcesBlock(request);
+    // Long-form: trigger on explicit additional sources OR a sufficiently specific topic in the question.
+    // Do NOT rely on the active workspace's sourcesBlock — an irrelevant active slide/sheet would be
+    // injected as a source for an unrelated document (e.g. Napoleon biography using "New Slides" content).
     const longForm =
-      isLongFormRequest(question) && (sourcesBlock.length > 0 || hasAdditionalSources || question.length > 80);
+      isLongFormRequest(question) && (hasAdditionalSources || question.length > 55);
 
     // Pre-load workspace session memory for this user (fire-and-forget safe, returns null on error)
     const wsMemory = new WorkspaceSessionMemoryService();

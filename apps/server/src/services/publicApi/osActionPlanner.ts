@@ -131,7 +131,9 @@ function inferWorkObjectKind(prompt: string, allowedKinds: string[]) {
   const allowed = new Set(allowedKinds.map((kind) => kind.toLowerCase()));
   const match = preferred.find((candidate) => candidate.pattern.test(normalized));
 
-  if (match && (allowed.size === 0 || allowed.has(match.kind))) {
+  // Trust an explicit keyword match unconditionally — the prompt names what the user wants.
+  // allowedKinds is a hint for the no-keyword case, not a hard override of explicit requests.
+  if (match) {
     return match.kind;
   }
 
