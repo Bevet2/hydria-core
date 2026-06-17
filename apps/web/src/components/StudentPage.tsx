@@ -30,6 +30,7 @@ export function StudentPage() {
   const [learningState, setLearningState] = useState<LearningGovernanceState | null>(null);
   const [learningQueueState, setLearningQueueState] = useState<LearningQueueState | null>(null);
   const [persistenceHealth, setPersistenceHealth] = useState<PersistenceHealthReport | null>(null);
+  const [loading, setLoading] = useState(true);
   const [answering, setAnswering] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,14 +88,19 @@ export function StudentPage() {
   }
 
   useEffect(() => {
+    setLoading(true);
     void Promise.all([
       refreshSessions(),
       refreshPersistenceHealth(),
       refreshLearningState(),
       refreshLearningQueueState()
-    ]).catch((cause: unknown) => {
-      setError(cause instanceof Error ? cause.message : "Failed to load student history.");
-    });
+    ])
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : "Failed to load student history.");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, []);
 
   const displayedCategory = preview?.category ?? currentSession?.category ?? null;
@@ -143,6 +149,17 @@ export function StudentPage() {
     } finally {
       setAnalyzing(false);
     }
+  }
+
+  if (loading) {
+    return (
+      <main className="app-shell">
+        <AppNav current="student" />
+        <section className="panel">
+          <p className="muted">Loading Student Lab...</p>
+        </section>
+      </main>
+    );
   }
 
   return (

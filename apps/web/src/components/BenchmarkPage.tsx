@@ -27,6 +27,8 @@ export function BenchmarkPage({ mode = "core" }: BenchmarkPageProps) {
   const [loading, setLoading] = useState(true);
   const [startingRun, setStartingRun] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pollStartedAt, setPollStartedAt] = useState<number | null>(null);
+  const POLL_TIMEOUT_MS = 30 * 60 * 1000;
 
   const pageTitle =
     mode === "tool" ? "Hydria Tool Benchmark" : "Hydria Core Benchmark Summary";
@@ -71,15 +73,25 @@ export function BenchmarkPage({ mode = "core" }: BenchmarkPageProps) {
 
   useEffect(() => {
     if (!activeRunId && summaryData?.run?.status !== "running") {
+      setPollStartedAt(null);
       return;
     }
 
+    if (pollStartedAt === null) {
+      setPollStartedAt(Date.now());
+    }
+
     const interval = window.setInterval(() => {
+      if (pollStartedAt !== null && Date.now() - pollStartedAt > POLL_TIMEOUT_MS) {
+        window.clearInterval(interval);
+        setError("Benchmark run appears stuck — polling stopped after 30 minutes. Refresh to check the latest status.");
+        return;
+      }
       void load(selectedRunId).catch(() => undefined);
     }, 5000);
 
     return () => window.clearInterval(interval);
-  }, [activeRunId, selectedRunId, summaryData?.run?.status]);
+  }, [activeRunId, selectedRunId, summaryData?.run?.status, pollStartedAt]);
 
   async function handleStartBenchmark() {
     setStartingRun(true);

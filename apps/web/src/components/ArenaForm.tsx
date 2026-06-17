@@ -2,8 +2,8 @@ import type { ArenaModels } from "../lib/api";
 import { suggestedModels } from "../lib/api";
 
 type FallbackInfo = {
-  refineFallbackModel: string;
-  localStudentFallbackModel: string;
+  refineFallbackEnabled: boolean;
+  localStudentFallbackEnabled: boolean;
 };
 
 type ArenaFormProps = {
@@ -82,8 +82,8 @@ export function ArenaForm({
 
       {fallbackInfo ? (
         <div className="info-strip">
-          <span>Refine fallback: {fallbackInfo.refineFallbackModel}</span>
-          <span>Local student fallback: {fallbackInfo.localStudentFallbackModel}</span>
+          <span>Refine fallback: {fallbackInfo.refineFallbackEnabled ? "enabled" : "disabled"}</span>
+          <span>Local student fallback: {fallbackInfo.localStudentFallbackEnabled ? "enabled" : "disabled"}</span>
         </div>
       ) : null}
     </section>

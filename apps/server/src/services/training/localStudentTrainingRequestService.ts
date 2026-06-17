@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import {
@@ -27,7 +28,11 @@ function defaultOutputFile(candidateVariantId: string) {
 }
 
 function defaultTrainFile() {
-  return resolve(projectRoot, "storage", "datasets", "student-local-sft-v1.jsonl");
+  // v12 is the combined stable-knowledge gold dataset; the finetune orchestrator
+  // merges multiple JSONL files — this default is used only for standalone requests.
+  const v12 = resolve(projectRoot, "storage", "datasets", "student-local-sft-v12-stable-knowledge.jsonl");
+  const v1 = resolve(projectRoot, "storage", "datasets", "student-local-sft-v1.jsonl");
+  return existsSync(v12) ? v12 : v1;
 }
 
 function defaultOutputDir(candidateVariantId: string) {

@@ -53,6 +53,7 @@ export class ArenaStepExecutor {
 
   runSynthesizerStep(args: {
     question: string;
+    category: string;
     primaryModel: string;
     fallbackModels: string[];
     respondentA: RespondentOutput;

@@ -193,6 +193,7 @@ export class ArenaRunner {
 
     const synthesizerResult = await this.stepExecutor.runSynthesizerStep({
       question: request.question,
+      category: prepared.router.category,
       primaryModel: request.models.synthesizer,
       fallbackModels: this.stepExecutor.resolveSynthesizerFallbackModels(
         request.models.synthesizer,

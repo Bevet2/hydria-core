@@ -47,9 +47,11 @@ export function createLearningRouter(
 
   router.get("/interactions", async (_request, response, next) => {
     try {
-      response.json({
-        digest: interactionLearningDigestService ? await interactionLearningDigestService.load() : null
-      });
+      if (!interactionLearningDigestService) {
+        response.json({ available: false, digest: null });
+        return;
+      }
+      response.json({ available: true, digest: await interactionLearningDigestService.load() });
     } catch (error) {
       next(error);
     }
@@ -57,11 +59,11 @@ export function createLearningRouter(
 
   router.get("/knowledge-objects", async (_request, response, next) => {
     try {
-      response.json({
-        knowledgeObjects: knowledgeConsolidationService
-          ? await knowledgeConsolidationService.loadObjects()
-          : null
-      });
+      if (!knowledgeConsolidationService) {
+        response.json({ available: false, knowledgeObjects: null });
+        return;
+      }
+      response.json({ available: true, knowledgeObjects: await knowledgeConsolidationService.loadObjects() });
     } catch (error) {
       next(error);
     }
@@ -69,9 +71,11 @@ export function createLearningRouter(
 
   router.get("/watchers", async (_request, response, next) => {
     try {
-      response.json({
-        watchers: watcherStore ? await watcherStore.load() : null
-      });
+      if (!watcherStore) {
+        response.json({ available: false, watchers: null });
+        return;
+      }
+      response.json({ available: true, watchers: await watcherStore.load() });
     } catch (error) {
       next(error);
     }
@@ -79,9 +83,11 @@ export function createLearningRouter(
 
   router.get("/source-acquisition", async (_request, response, next) => {
     try {
-      response.json({
-        sourceAcquisition: sourceAcquisitionStore ? await sourceAcquisitionStore.load() : null
-      });
+      if (!sourceAcquisitionStore) {
+        response.json({ available: false, sourceAcquisition: null });
+        return;
+      }
+      response.json({ available: true, sourceAcquisition: await sourceAcquisitionStore.load() });
     } catch (error) {
       next(error);
     }
@@ -89,11 +95,11 @@ export function createLearningRouter(
 
   router.get("/knowledge-scheduler", async (_request, response, next) => {
     try {
-      response.json({
-        scheduler: governedKnowledgeSchedulerService
-          ? await governedKnowledgeSchedulerService.loadReport()
-          : null
-      });
+      if (!governedKnowledgeSchedulerService) {
+        response.json({ available: false, scheduler: null });
+        return;
+      }
+      response.json({ available: true, scheduler: await governedKnowledgeSchedulerService.loadReport() });
     } catch (error) {
       next(error);
     }
@@ -101,9 +107,11 @@ export function createLearningRouter(
 
   router.get("/knowledge-quality", async (_request, response, next) => {
     try {
-      response.json({
-        qualityGate: knowledgeQualityGateService ? await knowledgeQualityGateService.loadReport() : null
-      });
+      if (!knowledgeQualityGateService) {
+        response.json({ available: false, qualityGate: null });
+        return;
+      }
+      response.json({ available: true, qualityGate: await knowledgeQualityGateService.loadReport() });
     } catch (error) {
       next(error);
     }
@@ -111,16 +119,15 @@ export function createLearningRouter(
 
   router.get("/promotion", async (_request, response, next) => {
     try {
-      const [report, trainingQueue] = knowledgePromotionGovernanceService
-        ? await Promise.all([
-            knowledgePromotionGovernanceService.loadReport(),
-            knowledgePromotionGovernanceService.loadTrainingQueue()
-          ])
-        : [null, null];
-      response.json({
-        promotion: report,
-        trainingQueue
-      });
+      if (!knowledgePromotionGovernanceService) {
+        response.json({ available: false, promotion: null, trainingQueue: null });
+        return;
+      }
+      const [report, trainingQueue] = await Promise.all([
+        knowledgePromotionGovernanceService.loadReport(),
+        knowledgePromotionGovernanceService.loadTrainingQueue()
+      ]);
+      response.json({ available: true, promotion: report, trainingQueue });
     } catch (error) {
       next(error);
     }
@@ -135,6 +142,7 @@ export function createLearningRouter(
         trainingQueueValidationService ? trainingQueueValidationService.loadReport() : null
       ]);
       response.json({
+        available: !!(knowledgePromotionGovernanceService || trainingQueueValidationService),
         queue,
         validation
       });
@@ -145,16 +153,15 @@ export function createLearningRouter(
 
   router.get("/queue", async (_request, response, next) => {
     try {
-      const [queue, gate] = learningQueueService
-        ? await Promise.all([
-            learningQueueService.loadQueue(),
-            learningQueueService.loadGateReport()
-          ])
-        : [null, null];
-      response.json({
-        queue,
-        gate
-      });
+      if (!learningQueueService) {
+        response.json({ available: false, queue: null, gate: null });
+        return;
+      }
+      const [queue, gate] = await Promise.all([
+        learningQueueService.loadQueue(),
+        learningQueueService.loadGateReport()
+      ]);
+      response.json({ available: true, queue, gate });
     } catch (error) {
       next(error);
     }

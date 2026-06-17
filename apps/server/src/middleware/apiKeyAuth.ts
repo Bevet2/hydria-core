@@ -49,7 +49,12 @@ function sha256(value: string) {
 function safeEqual(left: string, right: string) {
   const leftBuffer = Buffer.from(left);
   const rightBuffer = Buffer.from(right);
-  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+  const maxLen = Math.max(leftBuffer.length, rightBuffer.length);
+  const paddedLeft = Buffer.alloc(maxLen);
+  const paddedRight = Buffer.alloc(maxLen);
+  leftBuffer.copy(paddedLeft);
+  rightBuffer.copy(paddedRight);
+  return timingSafeEqual(paddedLeft, paddedRight) && leftBuffer.length === rightBuffer.length;
 }
 
 export function isApiKeyAuthorized(apiKey: string | null, config: ApiKeyAuthConfig = getConfiguredApiKeyAuth()) {

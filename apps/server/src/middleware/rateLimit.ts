@@ -43,6 +43,15 @@ export function createRateLimitMiddleware(options: RateLimitOptions) {
 
   return (request: Request, response: Response, next: NextFunction) => {
     const currentTime = now();
+
+    if (store.size > 10000) {
+      for (const [key, bucket] of store) {
+        if (currentTime - bucket.windowStartedAt >= options.windowMs) {
+          store.delete(key);
+        }
+      }
+    }
+
     const identity = options.identityResolver?.(request) ?? resolveRateLimitIdentity(request);
     const key = `${options.keyPrefix}:${identity}`;
     const existing = store.get(key);

@@ -14,6 +14,8 @@ const EMPTY_BENCHMARK_RUNS = {
 };
 
 export class BenchmarkStore {
+  private writeQueue = Promise.resolve();
+
   constructor(private readonly filePath = env.BENCHMARK_RUNS_FILE) {}
 
   async ensureReady() {
@@ -36,23 +38,32 @@ export class BenchmarkStore {
     return runs.find((run) => run.id === runId) ?? null;
   }
 
-  async upsertRun(run: BenchmarkRun) {
-    const data = await this.readRuns();
-    const nextRuns = [...data.runs];
-    const index = nextRuns.findIndex((entry) => entry.id === run.id);
-    const parsedRun = benchmarkRunsFileSchema.shape.runs.element.parse(run);
+  upsertRun(run: BenchmarkRun): Promise<void> {
+    const task = async () => {
+      const data = await this.readRuns();
+      const nextRuns = [...data.runs];
+      const index = nextRuns.findIndex((entry) => entry.id === run.id);
+      const parsedRun = benchmarkRunsFileSchema.shape.runs.element.parse(run);
 
-    if (index >= 0) {
-      nextRuns[index] = parsedRun;
-    } else {
-      nextRuns.unshift(parsedRun);
-    }
+      if (index >= 0) {
+        nextRuns[index] = parsedRun;
+      } else {
+        nextRuns.unshift(parsedRun);
+      }
 
-    await writeFile(
-      this.filePath,
-      JSON.stringify({ runs: nextRuns.slice(0, 30) }, null, 2),
-      "utf8"
+      await writeFile(
+        this.filePath,
+        JSON.stringify({ runs: nextRuns.slice(0, 30) }, null, 2),
+        "utf8"
+      );
+    };
+
+    const pending = this.writeQueue.then(task, task);
+    this.writeQueue = pending.then(
+      () => undefined,
+      () => undefined
     );
+    return pending;
   }
 
   private async readRuns() {

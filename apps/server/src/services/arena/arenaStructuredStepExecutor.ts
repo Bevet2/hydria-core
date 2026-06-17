@@ -160,6 +160,7 @@ export class ArenaStructuredStepExecutor {
 
   async runSynthesizerStep(args: {
     question: string;
+    category: string;
     primaryModel: string;
     fallbackModels: string[];
     respondentA: RespondentOutput;
@@ -182,7 +183,8 @@ export class ArenaStructuredStepExecutor {
           args.refineA,
           args.refineB,
           args.redTeam,
-          args.judge
+          args.judge,
+          args.category
         ),
       buildRepairUserPrompt: ({ previousResponse, validationIssues }) =>
         buildSynthesizerRepairUserPrompt(
@@ -194,7 +196,8 @@ export class ArenaStructuredStepExecutor {
           args.redTeam,
           args.judge,
           previousResponse,
-          validationIssues
+          validationIssues,
+          args.category
         ),
       parse: (raw) =>
         parseSynthesizerOutput({

@@ -51,7 +51,20 @@ async function request<T>(path: string, init?: RequestInit) {
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(body || `Request failed with status ${response.status}`);
+    let message = `Request failed with status ${response.status}`;
+    if (body) {
+      try {
+        const parsed = JSON.parse(body) as unknown;
+        if (parsed && typeof parsed === "object" && "error" in parsed && typeof (parsed as Record<string, unknown>).error === "string") {
+          message = (parsed as { error: string }).error;
+        } else {
+          message = body;
+        }
+      } catch {
+        message = body;
+      }
+    }
+    throw new Error(message);
   }
 
   return (await response.json()) as T;

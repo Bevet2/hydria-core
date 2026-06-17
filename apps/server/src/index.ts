@@ -172,6 +172,16 @@ await studentService.ensureReady();
 await workObjectExecutionService.ensureReady();
 
 const app = express();
+app.set("trust proxy", 1);
+
+app.use((_request, response, next) => {
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  response.setHeader("X-Frame-Options", "DENY");
+  response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.setHeader("X-Permitted-Cross-Domain-Policies", "none");
+  next();
+});
+
 app.use(
   cors({
     origin: env.WEB_ORIGIN
@@ -201,45 +211,21 @@ app.get("/api/health", async (_request, response) => {
       summary: OFFICIAL_BASELINE_SUMMARY
     },
     fallbackConfig: {
-      refineFallbackModel: env.ARENA_REFINE_FALLBACK_MODEL,
-      localStudentFallbackModel: env.LOCAL_STUDENT_FALLBACK_MODEL
+      refineFallbackEnabled: !!env.ARENA_REFINE_FALLBACK_MODEL,
+      localStudentFallbackEnabled: !!env.LOCAL_STUDENT_FALLBACK_MODEL
     },
     trainingEndpoints: {
       enabled: env.TRAINING_ENDPOINTS_ENABLED,
-      requireApiKey: env.TRAINING_ENDPOINTS_REQUIRE_API_KEY,
-      studentLabPublicEnabled: env.STUDENT_LAB_PUBLIC_ENABLED,
-      openRouterScope: "training_evaluation_only"
+      studentLabPublicEnabled: env.STUDENT_LAB_PUBLIC_ENABLED
     },
     publicApi: {
       chatAuthRequired: false,
       externalV1AuthRequired: env.HYDRIA_EXTERNAL_API_AUTH_REQUIRED,
-      protectedRoutesAuthRequired: env.HYDRIA_PUBLIC_API_AUTH_REQUIRED,
-      rateLimitWindowMs: env.HYDRIA_RATE_LIMIT_WINDOW_MS,
-      chatMaxRequestsPerWindow: env.HYDRIA_CHAT_RATE_LIMIT_MAX_REQUESTS,
-      maxRequestsPerWindow: env.HYDRIA_API_RATE_LIMIT_MAX_REQUESTS
+      protectedRoutesAuthRequired: env.HYDRIA_PUBLIC_API_AUTH_REQUIRED
     },
     studentChat: {
       provider: "ollama",
-      model: env.STUDENT_CHAT_LOCAL_MODEL_NAME,
       routing: "local_specialist",
-      specialists: {
-        primaryBrain: "qwen2.5:14b",
-        code: "qwen2.5-coder:7b",
-        deepReasoning: "deepseek-r1:14b",
-        writingBusiness: "mistral:7b",
-        fastRouter: "qwen2.5:3b",
-        conciseFastChat: "qwen2.5:3b"
-      },
-      timeoutMs: env.STUDENT_CHAT_LOCAL_TIMEOUT_MS,
-      runtimeGovernor: {
-        enabled: env.MODEL_RUNTIME_GOVERNOR_ENABLED,
-        fastTimeoutMs: env.MODEL_RUNTIME_FAST_TIMEOUT_MS,
-        standardTimeoutMs: env.MODEL_RUNTIME_STANDARD_TIMEOUT_MS,
-        codeTimeoutMs: env.MODEL_RUNTIME_CODE_TIMEOUT_MS,
-        deepTimeoutMs: env.MODEL_RUNTIME_DEEP_TIMEOUT_MS,
-        standardMaxConcurrency: env.MODEL_RUNTIME_STANDARD_MAX_CONCURRENCY,
-        heavyMaxConcurrency: env.MODEL_RUNTIME_HEAVY_MAX_CONCURRENCY
-      },
       cloudFallbackEnabled: false
     },
     localModel: local,
@@ -383,8 +369,17 @@ app.use((error: unknown, _request: Request, response: Response, _next: NextFunct
   });
 
   response.status(500).json({
-    error: error instanceof Error ? error.message : "Unexpected server error"
+    error: "Internal server error"
   });
+});
+
+process.on("unhandledRejection", (reason) => {
+  logger.error("Unhandled promise rejection", { reason: String(reason) });
+});
+
+process.on("uncaughtException", (error) => {
+  logger.error("Uncaught exception", { error: String(error) });
+  process.exit(1);
 });
 
 app.listen(env.SERVER_PORT, () => {

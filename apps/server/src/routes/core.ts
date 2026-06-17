@@ -129,7 +129,7 @@ export function createCoreRouter(coreAskService: HydriaCoreAskService) {
       if (response.headersSent) {
         writeNdjson(response, {
           type: "error",
-          error: error instanceof Error ? error.message : "Unexpected streaming error"
+          error: "Streaming error"
         });
         response.end();
         return;

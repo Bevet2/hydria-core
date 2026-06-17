@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { DEFAULT_BENCHMARK_PACK_ID, getBenchmarkPack } from "../data/benchmarkPacks.js";
+
+const BENCHMARK_RUN_TIMEOUT_MS = 60 * 60 * 1000;
 import {
   OFFICIAL_BASELINE_FROZEN_AT,
   OFFICIAL_BASELINE_LABEL,
@@ -122,9 +124,19 @@ export class BenchmarkService {
     await this.benchmarkStore.upsertRun(run);
     await this.auditBenchmarkRunStarted(run, `Start benchmark ${pack.name}.`);
     this.activeRunId = run.id;
-    void this.executeRun(run.id, prompts).finally(() => {
+    const timeoutHandle = setTimeout(() => {
+      logger.error("Benchmark run exceeded maximum allowed duration, clearing active lock", { runId: run.id });
       this.activeRunId = null;
-    });
+    }, BENCHMARK_RUN_TIMEOUT_MS);
+
+    void this.executeRun(run.id, prompts)
+      .catch((error) => {
+        logger.error("Benchmark background task threw unexpectedly", { runId: run.id, error: String(error) });
+      })
+      .finally(() => {
+        clearTimeout(timeoutHandle);
+        this.activeRunId = null;
+      });
 
     return run;
   }

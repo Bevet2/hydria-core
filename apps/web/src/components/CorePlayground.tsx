@@ -42,6 +42,7 @@ export function CorePlayground() {
     "Design a pragmatic migration plan from a monolith to a modular Node.js service."
   );
   const [models, setModels] = useState<ArenaModels>(initialModels);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rounds, setRounds] = useState<ArenaRound[]>([]);
@@ -127,15 +128,20 @@ export function CorePlayground() {
   }
 
   useEffect(() => {
+    setInitialLoading(true);
     void Promise.all([
       refreshHistory(),
       refreshAppHealth(),
       refreshExecutionAudit(),
       refreshLearningState(),
       refreshLearningQueueState()
-    ]).catch((cause: unknown) => {
-      setError(cause instanceof Error ? cause.message : "Initial load failed.");
-    });
+    ])
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : "Initial load failed.");
+      })
+      .finally(() => {
+        setInitialLoading(false);
+      });
   }, []);
 
   async function handleSubmit() {
@@ -172,6 +178,17 @@ export function CorePlayground() {
       ...current,
       [key]: value
     }));
+  }
+
+  if (initialLoading) {
+    return (
+      <main className="app-shell">
+        <AppNav current="playground" />
+        <section className="panel">
+          <p className="muted">Loading Playground...</p>
+        </section>
+      </main>
+    );
   }
 
   return (

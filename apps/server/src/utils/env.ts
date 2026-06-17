@@ -98,6 +98,10 @@ const envSchema = z.object({
     .string()
     .min(1)
     .default(projectPath("storage", "history", "hydria-interactions.jsonl")),
+  WORKSPACE_MEMORY_FILE: z
+    .string()
+    .min(1)
+    .default(projectPath("storage", "memory", "workspace-context-v1.jsonl")),
   INTERACTION_LEARNING_FILE: z
     .string()
     .min(1)

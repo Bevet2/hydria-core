@@ -210,37 +210,22 @@ export type AppHealth = {
     summary: BenchmarkSummary;
   };
   fallbackConfig: {
-    refineFallbackModel: string;
-    localStudentFallbackModel: string;
+    refineFallbackEnabled: boolean;
+    localStudentFallbackEnabled: boolean;
   };
   studentChat?: {
     provider: "ollama";
-    model: string;
     routing: string;
-    specialists: Record<string, string>;
-    timeoutMs: number;
-    runtimeGovernor?: {
-      enabled: boolean;
-      fastTimeoutMs: number;
-      standardTimeoutMs: number;
-      codeTimeoutMs: number;
-      deepTimeoutMs: number;
-      standardMaxConcurrency: number;
-      heavyMaxConcurrency: number;
-    };
     cloudFallbackEnabled: boolean;
   };
   trainingEndpoints?: {
     enabled: boolean;
-    requireApiKey: boolean;
-    openRouterScope: string;
+    studentLabPublicEnabled: boolean;
   };
   publicApi?: {
     chatAuthRequired: boolean;
+    externalV1AuthRequired: boolean;
     protectedRoutesAuthRequired: boolean;
-    rateLimitWindowMs: number;
-    chatMaxRequestsPerWindow: number;
-    maxRequestsPerWindow: number;
   };
   localModel: LocalModelHealth;
   persistence: PersistenceHealthSummary;

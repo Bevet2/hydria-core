@@ -79,7 +79,7 @@ export function buildCuratedStudentExamples(
         ...entry.metrics.scoreExplanation.A.improvements,
         ...entry.metrics.scoreExplanation.B.improvements,
         ...(insight?.winningPatterns.slice(0, 3).map((pattern) => pattern.text) ?? [])
-      ]).slice(0, 12);
+      ]).slice(0, 12).map((note) => note.length > 237 ? `${note.slice(0, 237).trim()}...` : note);
 
       return studentCuratedExampleSchema.parse({
         datasetVersion: "hydria-student-curated-v1",

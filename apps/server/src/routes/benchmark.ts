@@ -20,7 +20,7 @@ export function createBenchmarkRouter(benchmarkService: BenchmarkService) {
       response.status(202).json(run);
     } catch (error) {
       if (error instanceof Error && error.message.startsWith("Benchmark run already active")) {
-        response.status(409).json({ error: error.message });
+        response.status(409).json({ error: "A benchmark run is already in progress." });
         return;
       }
 
