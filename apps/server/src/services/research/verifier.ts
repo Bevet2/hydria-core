@@ -146,10 +146,12 @@ export class ResearchVerifier {
         refineChangedBecauseOfTool: false,
         addedFactsCount: 0,
         correctedClaimsCount: 0,
+        // Initial log before any refinement: no "after" text exists yet.
+        // finalizeImpact will overwrite this with the real post-refinement count.
         sourceBackedClaimsCount: this.impactService.countBackedClaims(
           decision.targetClaims,
-          sourceTexts,
-          sourceTexts
+          "",
+          ""
         ),
         costSharePct: 0,
         netImpact: used ? "neutral" : "negative"

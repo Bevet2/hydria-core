@@ -79,7 +79,7 @@ export class ResearchExtractor {
       });
     }
 
-    return sources.slice(0, 4);
+    return sources.slice(0, 5);
   }
 
   private async extractPage(

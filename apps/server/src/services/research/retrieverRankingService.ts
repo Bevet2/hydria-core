@@ -34,24 +34,23 @@ export class ResearchRetrieverRankingService {
       }
     }
 
-    const ranked = [...bestByUrl.values()]
+    const qualifiedEntries = [...bestByUrl.values()]
       .sort(
         (left, right) =>
           right.trustScore - left.trustScore ||
           right.score - left.score ||
           left.candidate.url.localeCompare(right.candidate.url)
       )
-      .filter((entry) => entry.score >= this.minimumCandidateScore(plan))
-      .slice(0, 8)
-      .map((entry) => entry.candidate);
+      .filter((entry) => entry.score >= this.minimumCandidateScore(plan));
 
-    if (ranked.length > 0) {
-      const trustedRanked = ranked.filter((candidate) =>
-        this.isHighTrustDomain(getHostname(candidate.url), plan)
-      );
-      if (trustedRanked.length > 0) {
-        return trustedRanked.slice(0, 5);
-      }
+    // Apply trusted-domain filter before slicing — trusted candidates beyond rank 8
+    // would otherwise be excluded before the high-trust path can consider them.
+    const trustedRanked = qualifiedEntries
+      .filter((entry) => this.isHighTrustDomain(getHostname(entry.candidate.url), plan))
+      .slice(0, 5)
+      .map((entry) => entry.candidate);
+    if (trustedRanked.length > 0) {
+      return trustedRanked;
     }
 
     const relaxed = [...bestByUrl.values()]

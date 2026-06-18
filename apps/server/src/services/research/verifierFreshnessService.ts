@@ -121,7 +121,10 @@ export class ResearchVerifierFreshnessService {
         return undatedCanonicalCurrentStatusSource;
       }
 
-      if (persistentCurrentStatusSource) {
+      // Persistent canonical paths (/about, /team, /leadership) from trusted domains
+      // don't need a recent publish date for general queries — but tight recency
+      // windows ("this week", "today") still require an actually fresh date.
+      if (persistentCurrentStatusSource && (temporalProfile.recencyDays === null || temporalProfile.recencyDays >= 60)) {
         return true;
       }
     }
