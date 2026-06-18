@@ -107,7 +107,7 @@ export class LedgerKnowledgeExporter {
     await this.runExport(currentCount);
   }
 
-  async runExport(currentCount?: number): Promise<{ exported: number }> {
+  async runExport(_currentCount?: number): Promise<{ exported: number }> {
     const all = await loadAllLedgerPaths();
     if (all.length === 0) return { exported: 0 };
 
@@ -141,10 +141,12 @@ export class LedgerKnowledgeExporter {
       });
     }
 
+    // Use all.length (the count we actually loaded) rather than the pre-export snapshot
+    // so that the next maybeExport threshold is computed from a fresh baseline.
     await saveState({
       version: "ledger-export-state-v1",
       lastExportAt: new Date().toISOString(),
-      lastLedgerCount: currentCount ?? all.length
+      lastLedgerCount: all.length
     });
 
     return { exported: created.length };

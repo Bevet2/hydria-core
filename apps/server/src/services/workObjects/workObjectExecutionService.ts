@@ -112,7 +112,7 @@ function safeRelativePath(value: string) {
 
 function assertWithin(rootDir: string, absolutePath: string) {
   const rel = relative(rootDir, absolutePath);
-  if (rel.startsWith("..") || rel === "" || rel.includes("..\\") || rel.includes("../")) {
+  if (rel.startsWith("..") || rel.includes("..\\") || rel.includes("../")) {
     throw new Error("Resolved path escapes work object root");
   }
 }
@@ -718,10 +718,17 @@ export class WorkObjectExecutionService {
     const absolutePath = resolve(root, entryPath);
     assertWithin(root, absolutePath);
     let current = "";
+    const truncationIssues: string[] = [];
     try {
       current = await readFile(absolutePath, "utf8");
     } catch {
-      current = compact(args.action.payload.currentPreview, 4000);
+      const preview = String(args.action.payload.currentPreview ?? "");
+      if (preview.length > 4000) {
+        truncationIssues.push(
+          `currentPreview was truncated from ${preview.length} to 4000 characters because the file could not be read.`
+        );
+      }
+      current = compact(preview, 4000);
     }
 
     const nextContent = updateContentForAction(current, args.action);
@@ -762,7 +769,7 @@ export class WorkObjectExecutionService {
       status: "executed",
       dryRun: false,
       confirmed: Boolean(args.confirmed),
-      issues: [],
+      issues: truncationIssues,
       workObject: nextWorkObject,
       artifact: null,
       summary: `Updated work object ${nextWorkObject.id}.`
