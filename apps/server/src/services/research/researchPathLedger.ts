@@ -3,8 +3,9 @@ import { appendFile, readFile, writeFile } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
 import type { QuestionCategory, ResearchIntent } from "../../types/arena.js";
+import { projectRoot } from "../../utils/env.js";
 
-const LEDGER_PATH = join(process.cwd(), "storage/knowledge/research-path-ledger-v1.jsonl");
+const LEDGER_PATH = join(projectRoot, "storage/knowledge/research-path-ledger-v1.jsonl");
 const MAX_LEDGER_RECORDS = 200;
 
 export type ResearchPathRecord = {

@@ -284,7 +284,7 @@ function cleanNumericTableLabel(value: string) {
 }
 
 function normalizeNumericCell(value: string) {
-  return value.replace(/\s+/g, "").replace(",", ".").trim();
+  return value.replace(/\s+/g, "").replace(/,/g, ".").trim();
 }
 
 function extractNumericTableFromPrompt(prompt: string) {
@@ -911,7 +911,7 @@ function inferImplicitSheetFormulaPlan(request: PublicApiAskRequest, prompt: str
     : inferTargetColumnIndexFromPreview(preview, prompt);
   const targetColumnLetter = explicitTargetColumnLetter || columnIndexToLetter(resolvedTargetColumnIndex);
   const targetColumnIndex = columnLetterToIndex(targetColumnLetter);
-  if (targetColumnIndex <= 0) {
+  if (targetColumnIndex < 0) {
     return null;
   }
 
@@ -2017,7 +2017,7 @@ function planSheetWorkspaceToolOperation(request: PublicApiAskRequest, question:
     return sheetWorkspacePlan([
       {
         type: "sheet.clear_cells",
-        range: explicitRange,
+        range: explicitRange || (cell ? "" : range),
         target: {
           ...(cell ? { cell } : {}),
           ...(resolvePromptColumnName(question, preview) ? { columnName: resolvePromptColumnName(question, preview) } : {})

@@ -254,7 +254,7 @@ export class ResearchDecisionPolicyService {
       mediumFactualRisk ? "medium_factual_risk" : "",
       falseClaimCount > 0 ? "factual_claims" : "",
       providerSpecific ? "provider_specific" : "",
-      regulatoryOrStandardCue ? "provider_specific" : "",
+      regulatoryOrStandardCue ? "regulatory_or_standard" : "",
       hardConstraintCue ? "metric_claims" : "",
       debugDocCue ? "execution_gap" : "",
       explicitMetricCue ? "metric_claims" : "",

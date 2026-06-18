@@ -20,7 +20,7 @@ export type HydriaSheetModel = {
     tables: unknown[];
     pivotTables: unknown[];
     charts: unknown[];
-    sparklines: unknown[];
+    sparklines: Record<string, unknown>;
     slicers: unknown[];
     filterQuery: string;
     filterColumnIndex: number;
@@ -263,7 +263,8 @@ function replaceDocumentBlock(content: string, blockTitle: string, body: string)
   }
 
   const escapedTitle = blockTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const sectionPattern = new RegExp(`(^##?\\s+${escapedTitle}\\s*$)([\\s\\S]*?)(?=^##?\\s+|$)`, "im");
+  // $(?![\s\S]) = true end-of-string in multiline mode (plain $ matches end-of-line with m flag)
+  const sectionPattern = new RegExp(`(^##?\\s+${escapedTitle}\\s*$)([\\s\\S]*?)(?=^##?\\s+|$(?![\\s\\S]))`, "im");
   if (sectionPattern.test(content)) {
     return content.replace(sectionPattern, `$1\n\n${body}\n`);
   }
@@ -363,7 +364,8 @@ function deleteDocumentSection(content: string, title: string) {
     return content.replace(sectionPattern, "").trimEnd();
   }
 
-  const sectionPattern = new RegExp(`\\n*^#{1,6}\\s+.*${escapedHeading}.*\\n[\\s\\S]*?(?=\\n#{1,6}\\s+|$)`, "im");
+  // $(?![\s\S]) = true end-of-string in multiline mode (plain $ matches end-of-line with m flag)
+  const sectionPattern = new RegExp(`\\n*^#{1,6}\\s+.*${escapedHeading}.*\\n[\\s\\S]*?(?=\\n#{1,6}\\s+|$(?![\\s\\S]))`, "im");
   return content.replace(sectionPattern, "").trimEnd();
 }
 
@@ -654,7 +656,7 @@ export function buildHydriaSheetModel(args: {
     tables: [],
     pivotTables: [],
     charts: [],
-    sparklines: [],
+    sparklines: {},
     slicers: [],
     filterQuery: "",
     filterColumnIndex: -1,

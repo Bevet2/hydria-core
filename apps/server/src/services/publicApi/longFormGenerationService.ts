@@ -166,7 +166,10 @@ export class LongFormGenerationService {
         .filter(Boolean)
         .join("\n");
 
-      const sectionResult = await this.chatRuntime.sendMessage({ message: sectionPrompt });
+      const sectionResult = await this.chatRuntime.sendMessage({
+        message: sectionPrompt,
+        ...(planResult.sessionId ? { sessionId: planResult.sessionId } : {})
+      });
       sectionContents.push(
         `## ${section.heading}\n\n${sectionResult.assistantMessage.content.trim()}`
       );

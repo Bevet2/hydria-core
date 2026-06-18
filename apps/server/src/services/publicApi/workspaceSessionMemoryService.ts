@@ -67,8 +67,8 @@ export class WorkspaceSessionMemoryService {
       })
       .filter((entry): entry is WorkspaceMemoryEntry => entry !== null && entry.userId === userId);
 
-    // Return the most recent N
-    return entries.slice(-limit).reverse();
+    // Return the most recent N (newest-first so dedup keeps the freshest entry per object)
+    return entries.reverse().slice(0, limit);
   }
 
   /**
