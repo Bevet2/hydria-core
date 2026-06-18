@@ -339,7 +339,7 @@ function markdownTableFromSheet(columns: string[], rows: string[][]) {
 function parseNumberCell(value: unknown) {
   const normalized = String(value ?? "")
     .replace(/\s+/g, "")
-    .replace(",", ".")
+    .replace(/,/g, ".")
     .replace(/[^\d.-]/g, "");
   if (!normalized || normalized === "-" || normalized === ".") {
     return null;
@@ -725,7 +725,7 @@ function numericSourceLettersFromPreview(preview: ReturnType<typeof sheetPreview
     })
     .filter((column) => column.index < targetColumnIndex)
     .filter((column) => column.semantic !== "total")
-    .filter((column) => column.numericRatio >= 0.6 || column.empty)
+    .filter((column) => column.numericRatio >= 0.6)
     .map((column) => columnIndexToLetter(column.index));
 }
 
