@@ -320,7 +320,8 @@ function buildRuntimeQuestion(
   }
 
   parts.push(instruction);
-  return parts.filter((line): line is string => Boolean(line)).join("\n");
+  // Keep empty strings (blank-line separators between sections) — only strip null/undefined
+  return parts.filter((line): line is string => line !== null && line !== undefined).join("\n");
 }
 
 function sourceList(result: Awaited<ReturnType<ChatRuntimeService["sendMessage"]>>) {
@@ -842,8 +843,23 @@ export class HydriaPublicApiV1Service {
             }
           : {})
       });
-      await this.persistAskAudit(request, lfResponse);
-      return lfResponse;
+      this.triggerOfficeWorkspaceShadow(request, lfResponse);
+      const finalLfResponse = await this.attachExecutedWorkspaceActions(request, lfResponse);
+      if (finalLfResponse.sessionId) {
+        for (const action of finalLfResponse.executedActions ?? []) {
+          if (action.status === "executed") {
+            const summary = `${action.actionType ?? action.actionId} sur ${action.workObject?.id ?? action.artifact?.id ?? "objet"}`;
+            recordSessionAction(finalLfResponse.sessionId, summary);
+          }
+        }
+        for (const action of finalLfResponse.proposedActions ?? []) {
+          if (action.type !== "reply") {
+            recordSessionAction(finalLfResponse.sessionId, `proposé: ${action.type} — ${compact(action.title, 80) ?? action.id}`);
+          }
+        }
+      }
+      await this.persistAskAudit(request, finalLfResponse);
+      return finalLfResponse;
     }
 
     const result = await this.deps.chatRuntimeService.sendMessage({
@@ -982,7 +998,10 @@ export class HydriaPublicApiV1Service {
       return [];
     }
     const limit = Math.max(1, Math.min(500, Math.round(options.limit ?? 100)));
-    const records = await this.deps.interactionLogStore.listRecent(limit);
+    // Fetch more records than limit when filtering by sessionId/scope — otherwise most
+    // fetched records get discarded and the caller receives far fewer than requested.
+    const fetchCount = options.sessionId || options.scope ? Math.min(limit * 10, 2000) : limit;
+    const records = await this.deps.interactionLogStore.listRecent(fetchCount);
     return records
       .filter((record) => !options.sessionId || record.sessionId === options.sessionId)
       .filter((record) => !options.scope || record.scope === options.scope)
