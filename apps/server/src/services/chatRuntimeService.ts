@@ -3605,7 +3605,7 @@ export class ChatRuntimeService {
         toolRouting: tooling.routing
       });
 
-      if (repairedQuality.passed || qualityScore(repairedQuality) <= qualityScore(conversationQuality)) {
+      if (repairedQuality.passed || qualityScore(repairedQuality) < qualityScore(conversationQuality)) {
         draft = repairedDraft;
         conversationQuality = repairedQuality;
         usedRetry = true;
@@ -3952,7 +3952,7 @@ export class ChatRuntimeService {
         recentMessages: session.messages,
         toolRouting: tooling.routing
       });
-      if (acknowledgementQuality.passed || qualityScore(acknowledgementQuality) <= qualityScore(conversationQuality)) {
+      if (acknowledgementQuality.passed || qualityScore(acknowledgementQuality) < qualityScore(conversationQuality)) {
         finalAnswer = userFactAcknowledgement;
         conversationQuality = acknowledgementQuality;
       }
