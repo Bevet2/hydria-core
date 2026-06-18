@@ -190,7 +190,7 @@ function contentTypeForPath(entryPath: string) {
 }
 
 function entryKindForPath(entryPath: string, fallback: WorkObjectKind): WorkObjectKind {
-  if (entryPath === "spec.json") {
+  if (entryPath === "spec.json" || entryPath === "dashboard.json" || entryPath === "workflow.json") {
     return fallback;
   }
   const extension = extname(entryPath).toLowerCase();
@@ -721,7 +721,8 @@ export class WorkObjectExecutionService {
     const truncationIssues: string[] = [];
     try {
       current = await readFile(absolutePath, "utf8");
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       const preview = String(args.action.payload.currentPreview ?? "");
       if (preview.length > 4000) {
         truncationIssues.push(
@@ -798,7 +799,8 @@ export class WorkObjectExecutionService {
     let current = "";
     try {
       current = await readFile(absolutePath, "utf8");
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       current = compact(args.action.payload.currentPreview, 4000);
     }
 
