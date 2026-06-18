@@ -156,7 +156,7 @@ function parseSheetPreview(value: unknown): ParsedSheetPreview | null {
   }
 
   const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  if (lines.length < 2 || !/[;,]/.test(lines[0] ?? "")) {
+  if (lines.length < 2) {
     return null;
   }
   const separator = (lines[0]?.match(/;/g)?.length ?? 0) > (lines[0]?.match(/,/g)?.length ?? 0) ? ";" : ",";
@@ -979,7 +979,7 @@ export class HydriaPublicApiV1Service {
       return [];
     }
     const limit = Math.max(1, Math.min(500, Math.round(options.limit ?? 100)));
-    const records = await this.deps.interactionLogStore.listRecent(Math.max(limit, 100));
+    const records = await this.deps.interactionLogStore.listRecent(limit);
     return records
       .filter((record) => !options.sessionId || record.sessionId === options.sessionId)
       .filter((record) => !options.scope || record.scope === options.scope)

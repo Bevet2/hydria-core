@@ -53,7 +53,7 @@ export function shouldDoSecondHop(
   if (
     !firstLog.used &&
     firstLog.verification.sourceCount > 0 &&
-    firstLog.verification.extractedSourceCount > 0 &&
+    firstLog.verification.extractedSourceCount === 0 &&
     !firstLog.truth.no_reliable_source
   ) {
     return {
@@ -110,7 +110,8 @@ export function buildFollowUpPlan(
   // If we already have some verified facts, exclude them from the query focus to avoid
   // re-fetching the same information
   const firstVerified = verified[0] ?? "";
-  const verifiedExclusion = firstVerified ? ` -"${extractTerms(firstVerified).slice(0, 2).join('" -"')}"` : "";
+  const terms = extractTerms(firstVerified).slice(0, 2);
+  const verifiedExclusion = terms.length > 0 ? ` -"${terms.join('" -"')}"` : "";
   const refinedQuery = verifiedExclusion ? `${domainQuery}${verifiedExclusion}` : domainQuery;
 
   return {

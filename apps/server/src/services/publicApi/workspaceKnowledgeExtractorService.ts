@@ -64,7 +64,7 @@ export class WorkspaceKnowledgeExtractorService {
       }
     }
 
-    if (kind === "document" || kind === "doc") {
+    if (kind !== "spreadsheet" && kind !== "sheet") {
       return this.extractFromDocument(args);
     }
 
@@ -131,7 +131,13 @@ export class WorkspaceKnowledgeExtractorService {
         if ((k === "type" || k === "kind" || k === "category") && typeof value === "string") {
           entityTypes.add(value);
         }
-        if (typeof value === "object") scanObject(value, depth + 1);
+        if (Array.isArray(value)) {
+          for (const item of value) {
+            if (item && typeof item === "object") scanObject(item as Record<string, unknown>, depth + 1);
+          }
+        } else if (value && typeof value === "object") {
+          scanObject(value as Record<string, unknown>, depth + 1);
+        }
       }
     };
 

@@ -663,7 +663,7 @@ function inferFormula(prompt: string) {
     return "";
   }
   if (/\b(somme|sum|total)\b/.test(normalized)) {
-    return normalized.includes("sum") ? `=SUM(${range})` : `=SOMME(${range})`;
+    return normalized.includes("sum") || normalized.includes("total") ? `=SUM(${range})` : `=SOMME(${range})`;
   }
   if (/\b(moyenne|average|avg)\b/.test(normalized)) {
     return normalized.includes("average") || normalized.includes("avg") ? `=AVERAGE(${range})` : `=MOYENNE(${range})`;
@@ -679,7 +679,8 @@ function semanticColumnRole(label: string) {
   if (/\b(prix|price|cost|cout|tarif|rate|taux|taux horaire|hourly rate|unit price|prix unitaire|montant unitaire)\b/.test(normalized)) {
     return "price";
   }
-  if (/\b(total|totaux|montant|amount|subtotal|sous total|revenue|revenu|ventes|sales|chiffre d affaires|valeur totale)\b/.test(normalized)) {
+  // Only clearly-computed aggregate columns are "total" — revenue/ventes/montant are source data, not derived sums
+  if (/\b(total|totaux|subtotal|sous total)\b/.test(normalized)) {
     return "total";
   }
   return "";
@@ -1512,6 +1513,17 @@ function extractColumnRename(prompt: string) {
     : null;
 }
 
+function extractMultipleColumnNames(prompt: string): string[] {
+  const colonMatch = prompt.match(/\b(?:colonnes?|columns?|champs?|fields?)\s*[:\-]\s*([^.!?\n]+)/i);
+  const listText = colonMatch?.[1];
+  if (!listText) return [];
+  return listText
+    .split(/[,;]/)
+    .map((name) => name.replace(/\s*\b(et|and|ou|or)\b\s*/i, "").trim())
+    .filter((name) => name.length > 0 && name.length <= 60)
+    .slice(0, 20);
+}
+
 function extractColumnNameFromAction(prompt: string) {
   const match =
     prompt.match(/\b(?:colonne|column)\s+["'`]?([^"',.;:\n\r]+)/i) ||
@@ -1850,6 +1862,12 @@ function planSheetWorkspaceToolOperation(request: PublicApiAskRequest, question:
   }
 
   if (/\b(ajoute|add|cree|create)\b/.test(normalized) && /\b(colonnes?|columns?|champs?|fields?)\b/.test(normalized)) {
+    const multipleColumns = extractMultipleColumnNames(question);
+    if (multipleColumns.length > 1) {
+      return sheetWorkspacePlan(
+        multipleColumns.map((columnName) => ({ type: "sheet.add_column", columnName, target: { columnName } }))
+      );
+    }
     const columnName = extractColumnNameFromAction(question) || "Nouvelle colonne";
     return sheetWorkspacePlan([
       {

@@ -82,10 +82,16 @@ export function applySelfCheck(
       });
 
     if (newUncertainties.length > 0) {
-      assumptions = uniqueStrings([...assumptions, ...newUncertainties]).slice(0, 3);
-      corrections.push(
-        `Injected ${newUncertainties.length} uncertain claim(s) from research into assumptions.`
-      );
+      const before = assumptions.length;
+      const merged = uniqueStrings([...assumptions, ...newUncertainties]).slice(0, 3);
+      const actuallyInjected = merged.filter((a) => !assumptions.includes(a)).length;
+      assumptions = merged;
+      if (actuallyInjected > 0) {
+        corrections.push(
+          `Injected ${actuallyInjected} uncertain claim(s) from research into assumptions.`
+        );
+      }
+      void before;
     }
   }
 
@@ -116,7 +122,7 @@ export function applySelfCheck(
   }
 
   // Rule 5: No reliable source and confidence is still high → force it down
-  if (noReliableSource && confidence > 50) {
+  if (noReliableSource && confidence >= 50) {
     const adjusted = Math.min(confidence, 45);
     if (adjusted < confidence) {
       corrections.push(
