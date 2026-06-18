@@ -177,8 +177,9 @@ export class WorkspaceKnowledgeExtractorService {
     const domain = slugify(args.workObjectTitle) || "document";
 
     // Extract capitalized terms (2+ consecutive words starting with uppercase = likely named concepts)
+    // Use + not * so single sentence-starters ("Paris", "Budget") are excluded
     const terms = new Set<string>();
-    const termPattern = /\b([A-ZÁÀÂÄÉÈÊËÎÏÔÙÛÜ][a-záàâäéèêëîïôùûü]{2,}(?:\s[A-ZÁÀÂÄÉÈÊËÎÏÔÙÛÜ][a-záàâäéèêëîïôùûü]{2,})*)\b/g;
+    const termPattern = /\b([A-ZÁÀÂÄÉÈÊËÎÏÔÙÛÜ][a-záàâäéèêëîïôùûü]{2,}(?:\s[A-ZÁÀÂÄÉÈÊËÎÏÔÙÛÜ][a-záàâäéèêëîïôùûü]{2,})+)\b/g;
     for (const match of args.contentPreview.matchAll(termPattern)) {
       const term = (match[1] ?? "").trim();
       if (term.length > 3 && term.length < 50) terms.add(term);
