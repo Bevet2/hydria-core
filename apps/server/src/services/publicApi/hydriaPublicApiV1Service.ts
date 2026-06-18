@@ -924,8 +924,11 @@ export class HydriaPublicApiV1Service {
           recordSessionAction(finalResponse.sessionId, summary);
         }
       }
+      // Record ALL non-reply proposed actions — all plans default to dryRun:true, so
+      // the !dryRun guard would silence this block entirely and the coherence feature
+      // would never fire. Track what was proposed regardless of dry-run state.
       for (const action of finalResponse.proposedActions ?? []) {
-        if (!action.dryRun && action.type !== "reply") {
+        if (action.type !== "reply") {
           recordSessionAction(finalResponse.sessionId, `proposé: ${action.type} — ${compact(action.title, 80) ?? action.id}`);
         }
       }
